@@ -69,6 +69,12 @@ Local dev alternative (from repo root):
 python cli.py status
 ```
 
+If `python -m spark.cli` fails because the package isn't installed, run:
+
+```bash
+pip install -e .
+```
+
 ---
 
 ## Configuration
