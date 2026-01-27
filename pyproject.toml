@@ -56,7 +56,7 @@ spark = "spark.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lib*", "hooks*"]
+include = ["lib*", "hooks*", "spark*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.yaml", "*.json"]
