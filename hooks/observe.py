@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.queue import quick_capture, EventType
 from lib.cognitive_learner import get_cognitive_learner
+from lib.feedback import update_skill_effectiveness, update_self_awareness_reliability
 from lib.diagnostics import log_debug
 
 # ===== Prediction Tracking =====
@@ -281,6 +282,18 @@ def main():
     if event_type == EventType.POST_TOOL and tool_name:
         check_for_surprise(session_id, tool_name, success=True)
         learn_from_success(tool_name, tool_input, {})
+        try:
+            update_self_awareness_reliability(tool_name, success=True)
+            query = tool_name
+            if isinstance(tool_input, dict):
+                for k in ("command", "path", "file_path", "filePath"):
+                    v = tool_input.get(k)
+                    if isinstance(v, str) and v:
+                        query = f"{query} {v[:120]}"
+                        break
+            update_skill_effectiveness(query, success=True, limit=2)
+        except Exception:
+            pass
     
     # ===== PostToolUseFailure: Check for surprise + learn =====
     if event_type == EventType.POST_TOOL_FAILURE and tool_name:
@@ -292,6 +305,18 @@ def main():
         )
         check_for_surprise(session_id, tool_name, success=False, error=str(error))
         learn_from_failure(tool_name, error, tool_input)
+        try:
+            update_self_awareness_reliability(tool_name, success=False)
+            query = tool_name
+            if isinstance(tool_input, dict):
+                for k in ("command", "path", "file_path", "filePath"):
+                    v = tool_input.get(k)
+                    if isinstance(v, str) and v:
+                        query = f"{query} {v[:120]}"
+                        break
+            update_skill_effectiveness(query, success=False, limit=2)
+        except Exception:
+            pass
     
     # Queue the event
     data = {
