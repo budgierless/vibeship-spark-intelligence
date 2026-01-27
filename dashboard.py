@@ -13,6 +13,7 @@ from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import threading
 import webbrowser
+from typing import Dict
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
@@ -30,6 +31,12 @@ from lib.dashboard_project import get_active_project, get_project_memory_preview
 from lib.taste_api import add_from_dashboard
 
 PORT = 8585
+SPARK_DIR = Path.home() / ".spark"
+SKILLS_INDEX_FILE = SPARK_DIR / "skills_index.json"
+SKILLS_EFFECTIVENESS_FILE = SPARK_DIR / "skills_effectiveness.json"
+ORCH_DIR = SPARK_DIR / "orchestration"
+ORCH_AGENTS_FILE = ORCH_DIR / "agents.json"
+ORCH_HANDOFFS_FILE = ORCH_DIR / "handoffs.jsonl"
 
 def get_dashboard_data():
     """Gather all status data - fresh from disk each time for real-time updates."""
@@ -157,6 +164,131 @@ def get_dashboard_data():
             "stats": __import__("lib.tastebank", fromlist=["stats"]).stats(),
             "recent": __import__("lib.tastebank", fromlist=["recent"]).recent(limit=5),
         }
+    }
+
+
+def _load_json(path: Path) -> Dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _read_jsonl(path: Path, limit: int | None = None) -> list:
+    if not path.exists():
+        return []
+    items = []
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                raw = line.strip()
+                if not raw:
+                    continue
+                try:
+                    items.append(json.loads(raw))
+                except Exception:
+                    continue
+    except Exception:
+        return []
+
+    if limit and limit > 0:
+        return items[-limit:]
+    return items
+
+
+def get_ops_data() -> Dict:
+    index_data = _load_json(SKILLS_INDEX_FILE)
+    skills = index_data.get("skills") if isinstance(index_data.get("skills"), list) else []
+    categories: Dict[str, int] = {}
+    for s in skills:
+        cat = str(s.get("category") or "uncategorized")
+        categories[cat] = categories.get(cat, 0) + 1
+
+    effectiveness = _load_json(SKILLS_EFFECTIVENESS_FILE)
+    needs_attention = []
+    top_performers = []
+    for s in skills:
+        sid = s.get("skill_id") or s.get("name")
+        if not sid:
+            continue
+        stats = effectiveness.get(sid, {})
+        success = int(stats.get("success", 0))
+        fail = int(stats.get("fail", 0))
+        total = success + fail
+        if total == 0:
+            continue
+        rate = success / max(total, 1)
+        entry = {
+            "skill": sid,
+            "rate": rate,
+            "total": total,
+            "success": success,
+            "fail": fail,
+        }
+        if fail >= 1 and rate < 0.55:
+            needs_attention.append(entry)
+        if total >= 2 and rate >= 0.7:
+            top_performers.append(entry)
+
+    needs_attention.sort(key=lambda x: (x["rate"], -x["fail"]))
+    top_performers.sort(key=lambda x: (-x["rate"], -x["total"]))
+
+    agents_raw = _load_json(ORCH_AGENTS_FILE)
+    if isinstance(agents_raw, dict):
+        agents = list(agents_raw.values())
+    elif isinstance(agents_raw, list):
+        agents = agents_raw
+    else:
+        agents = []
+
+    handoffs = _read_jsonl(ORCH_HANDOFFS_FILE)
+    handoffs_sorted = sorted(handoffs, key=lambda h: h.get("timestamp", 0), reverse=True)
+    recent_handoffs = handoffs_sorted[:8]
+
+    pair_stats: Dict[str, Dict] = {}
+    for h in handoffs:
+        from_agent = h.get("from_agent") or "unknown"
+        to_agent = h.get("to_agent") or "unknown"
+        key = f"{from_agent} -> {to_agent}"
+        stats = pair_stats.setdefault(
+            key,
+            {"pair": key, "from_agent": from_agent, "to_agent": to_agent, "success": 0, "fail": 0, "known": 0, "total": 0},
+        )
+        stats["total"] += 1
+        if h.get("success") is True:
+            stats["success"] += 1
+            stats["known"] += 1
+        elif h.get("success") is False:
+            stats["fail"] += 1
+            stats["known"] += 1
+
+    best_pairs = []
+    risky_pairs = []
+    for stats in pair_stats.values():
+        if stats["known"] < 2:
+            continue
+        rate = stats["success"] / max(stats["known"], 1)
+        stats["rate"] = rate
+        if rate >= 0.7:
+            best_pairs.append(stats)
+        elif rate < 0.4:
+            risky_pairs.append(stats)
+
+    best_pairs.sort(key=lambda x: (-x["rate"], -x["known"]))
+    risky_pairs.sort(key=lambda x: (x["rate"], -x["known"]))
+
+    return {
+        "skills_total": len(skills),
+        "categories": categories,
+        "needs_attention": needs_attention[:8],
+        "top_performers": top_performers[:8],
+        "index_generated_at": index_data.get("generated_at") or "",
+        "agents": agents,
+        "recent_handoffs": recent_handoffs,
+        "best_pairs": best_pairs[:6],
+        "risky_pairs": risky_pairs[:6],
     }
 
 
@@ -416,6 +548,31 @@ def generate_html():
             font-family: var(--font-serif);
             font-size: 1.25rem;
             color: var(--green-dim);
+        }}
+
+        .navbar-links {{
+            margin-left: auto;
+            display: flex;
+            gap: 1rem;
+        }}
+
+        .nav-link {{
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border-bottom: 1px solid transparent;
+            padding-bottom: 2px;
+        }}
+
+        .nav-link:hover {{
+            color: var(--text-primary);
+        }}
+
+        .nav-link.active {{
+            color: var(--text-primary);
+            border-color: var(--green-dim);
         }}
         
         /* Main */
@@ -1096,6 +1253,10 @@ def generate_html():
             <span class="navbar-text">vibeship</span>
             <span class="navbar-product">spark</span>
         </div>
+        <div class="navbar-links">
+            <a class="nav-link active" href="/">Overview</a>
+            <a class="nav-link" href="/ops">Orchestration</a>
+        </div>
     </nav>
     
     <main>
@@ -1383,6 +1544,493 @@ def generate_html():
     return html
 
 
+def generate_ops_html():
+    """Generate orchestration + skills ops page."""
+    data = get_ops_data()
+    skills_total = data.get("skills_total", 0)
+    needs_attention = data.get("needs_attention", [])
+    top_performers = data.get("top_performers", [])
+    categories = data.get("categories", {})
+    agents = data.get("agents", [])
+    recent_handoffs = data.get("recent_handoffs", [])
+    best_pairs = data.get("best_pairs", [])
+    risky_pairs = data.get("risky_pairs", [])
+
+    idx_raw = (data.get("index_generated_at") or "").strip()
+    idx_label = "unknown"
+    if idx_raw:
+        try:
+            idx_label = datetime.fromisoformat(idx_raw).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            idx_label = idx_raw
+
+    def fmt_ts(ts):
+        try:
+            return datetime.fromtimestamp(float(ts)).strftime("%H:%M:%S")
+        except Exception:
+            return "--:--:--"
+
+    needs_html = ""
+    for item in needs_attention:
+        rate = int(item.get("rate", 0) * 100)
+        success = item.get("success", 0)
+        total = item.get("total", 0)
+        needs_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{item.get("skill", "unknown")}</span>
+            <span class="ops-meta">{rate}% ({success}/{total})</span>
+            <span class="pill bad">Needs attention</span>
+        </div>'''
+    if not needs_html:
+        needs_html = '<div class="empty">No skills need attention yet.</div>'
+
+    top_html = ""
+    for item in top_performers:
+        rate = int(item.get("rate", 0) * 100)
+        success = item.get("success", 0)
+        total = item.get("total", 0)
+        top_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{item.get("skill", "unknown")}</span>
+            <span class="ops-meta">{rate}% ({success}/{total})</span>
+            <span class="pill good">Strong</span>
+        </div>'''
+    if not top_html:
+        top_html = '<div class="empty">No strong performers yet.</div>'
+
+    cat_html = ""
+    for cat, count in sorted(categories.items(), key=lambda x: (-x[1], x[0])):
+        cat_html += f'<span class="pill">{cat} <span class="pill-count">{count}</span></span>'
+    if not cat_html:
+        cat_html = '<span class="muted">No skill index found.</span>'
+
+    agents_sorted = sorted(
+        agents,
+        key=lambda a: (a.get("success_rate", 0), a.get("total_tasks", 0)),
+        reverse=True,
+    )[:6]
+    agents_html = ""
+    for a in agents_sorted:
+        name = a.get("name") or a.get("agent_id") or "agent"
+        spec = a.get("specialization") or "general"
+        rate = int(a.get("success_rate", 0) * 100)
+        total = a.get("total_tasks", 0)
+        agents_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{name}</span>
+            <span class="ops-meta">{spec}</span>
+            <span class="pill">{rate}% / {total}</span>
+        </div>'''
+    if not agents_html:
+        agents_html = '<div class="empty">No agents registered yet.</div>'
+
+    best_html = ""
+    for p in best_pairs:
+        rate = int(p.get("rate", 0) * 100)
+        known = p.get("known", 0)
+        best_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{p.get("pair", "unknown")}</span>
+            <span class="ops-meta">{rate}% ({known} known)</span>
+            <span class="pill good">Stable</span>
+        </div>'''
+    if not best_html:
+        best_html = '<div class="empty">No stable pairings yet.</div>'
+
+    risky_html = ""
+    for p in risky_pairs:
+        rate = int(p.get("rate", 0) * 100)
+        known = p.get("known", 0)
+        risky_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{p.get("pair", "unknown")}</span>
+            <span class="ops-meta">{rate}% ({known} known)</span>
+            <span class="pill bad">Risky</span>
+        </div>'''
+    if not risky_html:
+        risky_html = '<div class="empty">No risky pairings yet.</div>'
+
+    recent_html = ""
+    for h in recent_handoffs:
+        status = h.get("success")
+        status_label = "ok" if status is True else "fail" if status is False else "unknown"
+        status_class = "good" if status is True else "bad" if status is False else ""
+        recent_html += f'''
+        <div class="ops-row">
+            <span class="ops-name">{h.get("from_agent", "unknown")} -> {h.get("to_agent", "unknown")}</span>
+            <span class="ops-meta">{fmt_ts(h.get("timestamp"))}</span>
+            <span class="pill {status_class}">{status_label}</span>
+        </div>'''
+    if not recent_html:
+        recent_html = '<div class="empty">No handoffs captured yet.</div>'
+
+    css = """
+        :root {
+            --bg-primary: #0e1016;
+            --bg-secondary: #151820;
+            --bg-tertiary: #1c202a;
+            --text-primary: #e2e4e9;
+            --text-secondary: #9aa3b5;
+            --text-tertiary: #6b7489;
+            --border: #2a3042;
+            --green-dim: #00C49A;
+            --orange: #D97757;
+            --red: #FF4D4D;
+            --font-mono: "JetBrains Mono", monospace;
+            --font-serif: "Instrument Serif", Georgia, serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-mono);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .navbar {
+            height: 52px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+        }
+
+        .navbar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .navbar-text {
+            font-family: var(--font-serif);
+            font-size: 1.25rem;
+            color: var(--text-primary);
+        }
+
+        .navbar-product {
+            font-family: var(--font-serif);
+            font-size: 1.25rem;
+            color: var(--green-dim);
+        }
+
+        .navbar-links {
+            margin-left: auto;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border-bottom: 1px solid transparent;
+            padding-bottom: 2px;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            color: var(--text-primary);
+            border-color: var(--green-dim);
+        }
+
+        main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-serif);
+            font-size: 2.2rem;
+            font-weight: 400;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero h1 span {
+            color: var(--green-dim);
+        }
+
+        .hero-sub {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: var(--font-serif);
+            font-size: 2.2rem;
+            color: var(--green-dim);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            margin-top: 0.5rem;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-tertiary);
+        }
+
+        .card-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+
+        .card-body {
+            padding: 1rem 1.25rem;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1px solid var(--border);
+            padding: 0.2rem 0.5rem;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+
+        .pill.good {
+            border-color: rgba(0, 196, 154, 0.6);
+            color: var(--green-dim);
+        }
+
+        .pill.bad {
+            border-color: rgba(255, 77, 77, 0.6);
+            color: var(--red);
+        }
+
+        .pill-count {
+            color: var(--text-primary);
+        }
+
+        .ops-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.7rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ops-row:last-child {
+            border-bottom: none;
+        }
+
+        .ops-name {
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .ops-meta {
+            color: var(--text-tertiary);
+            font-size: 0.75rem;
+        }
+
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .muted {
+            color: var(--text-tertiary);
+            font-size: 0.75rem;
+        }
+
+        .empty {
+            color: var(--text-tertiary);
+            font-size: 0.8rem;
+            padding: 0.5rem 0;
+        }
+
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 0.7rem;
+        }
+
+        @media (max-width: 860px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .grid-2 { grid-template-columns: 1fr; }
+            .ops-row { grid-template-columns: 1fr; }
+        }
+    """
+
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spark Ops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>{css}</style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-logo">
+            <span class="navbar-text">vibeship</span>
+            <span class="navbar-product">spark</span>
+        </div>
+        <div class="navbar-links">
+            <a class="nav-link" href="/">Overview</a>
+            <a class="nav-link active" href="/ops">Orchestration</a>
+        </div>
+    </nav>
+
+    <main>
+        <div class="hero">
+            <h1>Orchestration <span>& Skills</span></h1>
+            <p class="hero-sub">Utility-first signals for team coordination and skill health.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{skills_total}</div>
+                <div class="stat-label">Skills Indexed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{len(needs_attention)}</div>
+                <div class="stat-label">Needs Attention</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{len(agents)}</div>
+                <div class="stat-label">Agents</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{len(recent_handoffs)}</div>
+                <div class="stat-label">Recent Handoffs</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Skill Health</span>
+                    <span class="muted">Index {idx_label}</span>
+                </div>
+                <div class="card-body">
+                    <div class="muted" style="margin-bottom:0.6rem;">Needs attention</div>
+                    {needs_html}
+                    <div style="height: 1px; background: var(--border); margin: 0.75rem 0;"></div>
+                    <div class="muted" style="margin-bottom:0.6rem;">Strong performers</div>
+                    {top_html}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Skill Coverage</span>
+                    <span class="muted">{len(categories)} categories</span>
+                </div>
+                <div class="card-body">
+                    <div class="pill-row">
+                        {cat_html}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Team Coordination</span>
+                    <span class="muted">Pair stability</span>
+                </div>
+                <div class="card-body">
+                    <div class="muted" style="margin-bottom:0.6rem;">Stable pairs</div>
+                    {best_html}
+                    <div style="height: 1px; background: var(--border); margin: 0.75rem 0;"></div>
+                    <div class="muted" style="margin-bottom:0.6rem;">Risky pairs</div>
+                    {risky_html}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Agent Reliability</span>
+                    <span class="muted">Top agents</span>
+                </div>
+                <div class="card-body">
+                    {agents_html}
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+                <span class="card-title">Recent Handoffs</span>
+                <span class="muted">{len(recent_handoffs)} shown</span>
+            </div>
+            <div class="card-body">
+                {recent_html}
+            </div>
+        </div>
+    </main>
+
+    <div class="footer">
+        <p>Updated {datetime.now().strftime("%H:%M:%S")} · Spark Ops</p>
+    </div>
+</body>
+</html>'''
+    return html
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
@@ -1390,6 +2038,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(generate_html().encode())
+        elif self.path == '/ops' or self.path == '/ops.html':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(generate_ops_html().encode())
         elif self.path == '/api/status':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
