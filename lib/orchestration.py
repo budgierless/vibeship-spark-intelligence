@@ -1,0 +1,149 @@
+"""Lightweight agent orchestration and routing.
+
+KISS: file-based persistence, minimal features, no external deps.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass, asdict, field
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from .skills_router import recommend_skills
+
+
+@dataclass
+class Agent:
+    agent_id: str
+    name: str
+    capabilities: List[str]
+    specialization: str = "general"
+    registered_at: float = field(default_factory=lambda: time.time())
+    success_rate: float = 0.5
+    total_tasks: int = 0
+    success_count: int = 0
+    fail_count: int = 0
+
+
+class SparkOrchestrator:
+    def __init__(self, root_dir: Optional[Path] = None):
+        self.root_dir = root_dir or (Path.home() / ".spark" / "orchestration")
+        self.agents_file = self.root_dir / "agents.json"
+        self.handoffs_file = self.root_dir / "handoffs.jsonl"
+        self.root_dir.mkdir(parents=True, exist_ok=True)
+        self.agents: Dict[str, Agent] = self._load_agents()
+
+    # -------- Persistence --------
+    def _load_agents(self) -> Dict[str, Agent]:
+        if not self.agents_file.exists():
+            return {}
+        try:
+            data = json.loads(self.agents_file.read_text(encoding="utf-8"))
+            return {k: Agent(**v) for k, v in data.items()}
+        except Exception:
+            return {}
+
+    def _save_agents(self) -> None:
+        data = {k: asdict(v) for k, v in self.agents.items()}
+        self.agents_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    # -------- Agents --------
+    def register_agent(self, agent_id: str, name: str, capabilities: List[str], specialization: str = "general") -> bool:
+        if not agent_id:
+            return False
+        self.agents[agent_id] = Agent(
+            agent_id=agent_id,
+            name=name or agent_id,
+            capabilities=capabilities or [],
+            specialization=specialization or "general",
+        )
+        self._save_agents()
+        return True
+
+    def list_agents(self) -> List[Dict]:
+        return [asdict(a) for a in self.agents.values()]
+
+    def update_agent_result(self, agent_id: str, success: bool) -> None:
+        if agent_id not in self.agents:
+            return
+        agent = self.agents[agent_id]
+        agent.total_tasks += 1
+        if success:
+            agent.success_count += 1
+        else:
+            agent.fail_count += 1
+        agent.success_rate = agent.success_count / max(agent.total_tasks, 1)
+        self._save_agents()
+
+    # -------- Routing --------
+    def recommend_agent(self, query: str, task_type: str = "") -> Tuple[Optional[str], str]:
+        q = (query or "").strip()
+        if not q:
+            return None, "No query provided"
+
+        skills = recommend_skills(q, limit=3)
+        if skills:
+            skill_ids = [s.get("skill_id") or s.get("name") for s in skills if (s.get("skill_id") or s.get("name"))]
+            candidates = [
+                a for a in self.agents.values()
+                if any(cap in skill_ids for cap in a.capabilities)
+            ]
+            if candidates:
+                best = max(candidates, key=lambda a: a.success_rate)
+                return best.agent_id, f"Matched skills {', '.join(skill_ids[:2])}"
+
+        # Fallback: match on capability tokens
+        tokens = {t for t in (task_type or q).lower().split() if t}
+        scored = []
+        for a in self.agents.values():
+            caps = " ".join(a.capabilities).lower()
+            score = sum(1 for t in tokens if t in caps)
+            if score:
+                scored.append((score, a))
+        if scored:
+            scored.sort(key=lambda x: (x[0], x[1].success_rate), reverse=True)
+            return scored[0][1].agent_id, "Matched capability tokens"
+
+        return None, "No suitable agent found"
+
+    # -------- Handoffs --------
+    def record_handoff(self, from_agent: str, to_agent: str, context: Dict, success: Optional[bool] = None) -> str:
+        handoff_id = f"handoff_{int(time.time() * 1000)}"
+        entry = {
+            "handoff_id": handoff_id,
+            "from_agent": from_agent,
+            "to_agent": to_agent,
+            "context": context or {},
+            "success": success,
+            "timestamp": time.time(),
+        }
+        with self.handoffs_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+        if success is not None:
+            self.update_agent_result(to_agent, success)
+        return handoff_id
+
+
+# Singleton helpers
+_orch: Optional[SparkOrchestrator] = None
+
+
+def get_orchestrator() -> SparkOrchestrator:
+    global _orch
+    if _orch is None:
+        _orch = SparkOrchestrator()
+    return _orch
+
+
+def register_agent(agent_id: str, name: str, capabilities: List[str], specialization: str = "general") -> bool:
+    return get_orchestrator().register_agent(agent_id, name, capabilities, specialization)
+
+
+def recommend_agent(query: str, task_type: str = "") -> Tuple[Optional[str], str]:
+    return get_orchestrator().recommend_agent(query, task_type)
+
+
+def record_handoff(from_agent: str, to_agent: str, context: Dict, success: Optional[bool] = None) -> str:
+    return get_orchestrator().record_handoff(from_agent, to_agent, context, success)
