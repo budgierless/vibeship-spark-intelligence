@@ -37,6 +37,7 @@ SKILLS_EFFECTIVENESS_FILE = SPARK_DIR / "skills_effectiveness.json"
 ORCH_DIR = SPARK_DIR / "orchestration"
 ORCH_AGENTS_FILE = ORCH_DIR / "agents.json"
 ORCH_HANDOFFS_FILE = ORCH_DIR / "handoffs.jsonl"
+LOGO_FILE = Path(__file__).parent / "logo.png"
 
 def get_dashboard_data():
     """Gather all status data - fresh from disk each time for real-time updates."""
@@ -545,6 +546,13 @@ def generate_html():
             display: flex;
             align-items: center;
             gap: 0.4rem;
+        }}
+
+        .navbar-icon {{
+            width: 22px;
+            height: 22px;
+            object-fit: contain;
+            display: block;
         }}
         
         .navbar-text {{
@@ -1259,6 +1267,7 @@ def generate_html():
 <body>
     <nav class="navbar">
         <div class="navbar-logo">
+            <img src="/logo.png" alt="vibeship" class="navbar-icon" />
             <span class="navbar-text">vibeship</span>
             <span class="navbar-product">spark</span>
         </div>
@@ -1758,6 +1767,13 @@ def generate_ops_html():
             gap: 0.4rem;
         }
 
+        .navbar-icon {
+            width: 22px;
+            height: 22px;
+            object-fit: contain;
+            display: block;
+        }
+
         .navbar-text {
             font-family: var(--font-serif);
             font-size: 1.25rem;
@@ -2172,6 +2188,7 @@ def generate_ops_html():
 <body>
     <nav class="navbar">
         <div class="navbar-logo">
+            <img src="/logo.png" alt="vibeship" class="navbar-icon" />
             <span class="navbar-text">vibeship</span>
             <span class="navbar-product">spark</span>
         </div>
@@ -2349,6 +2366,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self._serve_sse(get_dashboard_data)
         elif self.path == '/api/ops/stream':
             self._serve_sse(get_ops_data)
+        elif self.path == '/logo.png':
+            if not LOGO_FILE.exists():
+                self.send_response(404)
+                self.end_headers()
+                return
+            logo_bytes = LOGO_FILE.read_bytes()
+            self.send_response(200)
+            self.send_header('Content-type', 'image/png')
+            self.send_header('Content-Length', str(len(logo_bytes)))
+            self.end_headers()
+            self.wfile.write(logo_bytes)
         else:
             self.send_response(404)
             self.end_headers()
