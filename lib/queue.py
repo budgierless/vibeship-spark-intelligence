@@ -195,7 +195,7 @@ def rotate_if_needed() -> bool:
             with open(EVENTS_FILE, "w") as f:
                 for line in lines:
                     if line:
-                        f.write(line.rstrip("\n") + "\n")
+                        f.write(line.rstrip("\r\n") + "\n")
 
             print(f"[SPARK] Rotated queue: {count} -> {keep_count} events")
             return True
@@ -305,7 +305,12 @@ def _tail_lines(path: Path, count: int) -> List[str]:
                 lines = [buffer] + lines
 
             # Drop possible trailing empty line
-            out = [ln.decode("utf-8", errors="replace") for ln in lines if ln != b""]
+            # Normalize Windows CRLF to avoid double-CR issues on rewrite.
+            out = [
+                ln.decode("utf-8", errors="replace").rstrip("\r")
+                for ln in lines
+                if ln != b""
+            ]
             return out[-count:]
     except Exception as e:
         log_debug("queue", "_tail_lines failed", e)
