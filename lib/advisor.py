@@ -28,6 +28,7 @@ from dataclasses import dataclass, field, asdict
 # Import existing Spark components
 from .cognitive_learner import get_cognitive_learner, CognitiveCategory
 from .mind_bridge import get_mind_bridge, HAS_REQUESTS
+from .memory_banks import retrieve as bank_retrieve, infer_project_key
 
 
 # ============= Configuration =============
@@ -171,18 +172,24 @@ class SparkAdvisor:
 
         advice_list: List[Advice] = []
 
-        # 1. Query cognitive insights
+        # 1. Query memory banks (fast local)
+        advice_list.extend(self._get_bank_advice(context))
+
+        # 2. Query cognitive insights
         advice_list.extend(self._get_cognitive_advice(tool_name, context))
 
-        # 2. Query Mind if available
+        # 3. Query Mind if available
         if include_mind and HAS_REQUESTS:
             advice_list.extend(self._get_mind_advice(context))
 
-        # 3. Get tool-specific learnings
+        # 4. Get tool-specific learnings
         advice_list.extend(self._get_tool_specific_advice(tool_name))
 
-        # 4. Get surprise-based cautions
+        # 5. Get surprise-based cautions
         advice_list.extend(self._get_surprise_advice(tool_name, context))
+
+        # 6. Get skill-based hints
+        advice_list.extend(self._get_skill_advice(context))
 
         # Sort by relevance (confidence * context_match * effectiveness_boost)
         advice_list = self._rank_advice(advice_list)
@@ -228,6 +235,31 @@ class SparkAdvisor:
                 text=insight.insight,
                 confidence=insight.reliability,
                 source="cognitive",
+                context_match=context_match,
+            ))
+
+        return advice
+
+    def _get_bank_advice(self, context: str) -> List[Advice]:
+        """Get advice from memory banks (project/global)."""
+        advice: List[Advice] = []
+        try:
+            project_key = infer_project_key()
+            memories = bank_retrieve(context, project_key=project_key, limit=5)
+        except Exception:
+            return advice
+
+        for mem in memories:
+            text = (mem.get("text") or "").strip()
+            if not text:
+                continue
+            context_match = self._calculate_context_match(text, context)
+            advice.append(Advice(
+                advice_id=self._generate_advice_id(text),
+                insight_key=f"bank:{mem.get('entry_id', '')}",
+                text=text[:200],
+                confidence=0.65,
+                source="bank",
                 context_match=context_match,
             ))
 
@@ -305,6 +337,33 @@ class SparkAdvisor:
                 ))
         except Exception:
             pass  # aha_tracker might not be available
+
+        return advice
+
+    def _get_skill_advice(self, context: str) -> List[Advice]:
+        """Get hints from relevant skills."""
+        advice: List[Advice] = []
+        try:
+            from .skills_router import recommend_skills
+            skills = recommend_skills(context, limit=3)
+        except Exception:
+            return advice
+
+        for s in skills:
+            sid = s.get("skill_id") or s.get("name") or "unknown-skill"
+            desc = (s.get("description") or "").strip()
+            if desc:
+                text = f"Consider skill [{sid}]: {desc[:120]}"
+            else:
+                text = f"Consider skill [{sid}]"
+            advice.append(Advice(
+                advice_id=self._generate_advice_id(text),
+                insight_key=f"skill:{sid}",
+                text=text,
+                confidence=0.6,
+                source="skill",
+                context_match=0.7,
+            ))
 
         return advice
 
@@ -462,13 +521,13 @@ class SparkAdvisor:
 
     # ============= Context Generation =============
 
-    def generate_context_block(self, tool_name: str, task_context: str = "") -> str:
+    def generate_context_block(self, tool_name: str, task_context: str = "", include_mind: bool = False) -> str:
         """
         Generate a context block that can be injected into prompts.
 
         This is how learnings become actionable in the LLM context.
         """
-        advice_list = self.advise(tool_name, {}, task_context)
+        advice_list = self.advise(tool_name, {}, task_context, include_mind=include_mind)
 
         if not advice_list:
             return ""

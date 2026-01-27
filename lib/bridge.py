@@ -258,6 +258,13 @@ def generate_active_context(query: Optional[str] = None) -> str:
     lessons = get_recent_lessons()
     opinions = get_strong_opinions()
     growth = get_growth_moments()
+    advisor_block = ""
+    if query:
+        try:
+            from lib.advisor import get_advisor
+            advisor_block = get_advisor().generate_context_block("task", query, include_mind=False)
+        except Exception as e:
+            log_debug("bridge", "advisor block failed", e)
     
     lines = [
         "=" * 50,
@@ -301,6 +308,10 @@ def generate_active_context(query: Optional[str] = None) -> str:
                 parts.append(f"delegates: {', '.join(delegates[:2])}")
             suffix = f" ({'; '.join(parts)})" if parts else ""
             lines.append(f"- [{sid}] {desc}{suffix}".rstrip())
+        lines.append("")
+
+    if advisor_block:
+        lines.append(advisor_block.strip())
         lines.append("")
 
     # Micro-personalization (optional)
