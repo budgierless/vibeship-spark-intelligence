@@ -19,6 +19,7 @@ from typing import Optional, Dict, Any, List
 from enum import Enum
 from dataclasses import dataclass, asdict
 
+from lib.diagnostics import log_debug
 
 # ============= Configuration =============
 QUEUE_DIR = Path.home() / ".spark" / "queue"
@@ -97,8 +98,9 @@ def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
 
         return True
         
-    except Exception:
+    except Exception as e:
         # Never fail - just drop the event silently
+        log_debug("queue", "quick_capture failed", e)
         return False
 
 
@@ -125,7 +127,8 @@ def read_events(limit: int = 100, offset: int = 0) -> List[SparkEvent]:
                 except Exception:
                     continue
                 
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "read_events failed", e)
         pass
     
     return events
@@ -147,7 +150,8 @@ def read_recent_events(count: int = 50) -> List[SparkEvent]:
                 continue
         return events
         
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "read_recent_events failed", e)
         return []
 
 
@@ -159,7 +163,8 @@ def count_events() -> int:
     try:
         with open(EVENTS_FILE, "r") as f:
             return sum(1 for _ in f)
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "count_events failed", e)
         return 0
 
 
@@ -195,7 +200,8 @@ def rotate_if_needed() -> bool:
             print(f"[SPARK] Rotated queue: {count} -> {keep_count} events")
             return True
         
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "rotate_if_needed failed", e)
         return False
 
 
@@ -235,7 +241,8 @@ def get_events_by_type(event_type: EventType, limit: int = 100) -> List[SparkEve
                             break
                 except Exception:
                     continue
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "get_events_by_type failed", e)
         pass
     
     return events
@@ -300,7 +307,8 @@ def _tail_lines(path: Path, count: int) -> List[str]:
             # Drop possible trailing empty line
             out = [ln.decode("utf-8", errors="replace") for ln in lines if ln != b""]
             return out[-count:]
-    except Exception:
+    except Exception as e:
+        log_debug("queue", "_tail_lines failed", e)
         return []
 
 
@@ -322,7 +330,8 @@ class _queue_lock:
                 if time.time() - start >= self.timeout_s:
                     return self
                 time.sleep(0.01)
-            except Exception:
+            except Exception as e:
+                log_debug("queue", "lock acquire failed", e)
                 return self
 
     def __exit__(self, exc_type, exc, tb):
@@ -331,5 +340,6 @@ class _queue_lock:
                 os.close(self.fd)
             if LOCK_FILE.exists():
                 LOCK_FILE.unlink()
-        except Exception:
+        except Exception as e:
+            log_debug("queue", "lock release failed", e)
             pass

@@ -27,11 +27,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from lib.queue import quick_capture, EventType
 from lib.cognitive_learner import get_cognitive_learner
+from lib.diagnostics import log_debug
 
 # ===== Prediction Tracking =====
 # We track predictions made at PreToolUse to compare at PostToolUse
 
-PREDICTION_FILE = Path(__file__).parent.parent / ".spark" / "active_predictions.json"
+PREDICTION_FILE = Path.home() / ".spark" / "active_predictions.json"
 
 
 def save_prediction(session_id: str, tool_name: str, prediction: dict):
@@ -58,7 +59,8 @@ def save_prediction(session_id: str, tool_name: str, prediction: dict):
         }
         
         PREDICTION_FILE.write_text(json.dumps(predictions))
-    except Exception:
+    except Exception as e:
+        log_debug("observe", "save_prediction failed", e)
         pass
 
 
@@ -76,7 +78,8 @@ def get_prediction(session_id: str, tool_name: str) -> dict:
         PREDICTION_FILE.write_text(json.dumps(predictions))
         
         return pred
-    except Exception:
+    except Exception as e:
+        log_debug("observe", "get_prediction failed", e)
         return {}
 
 
@@ -175,7 +178,8 @@ def learn_from_failure(tool_name: str, error: str, tool_input: dict):
             task_type=f"{tool_name}_error",
             failure_reason=error[:200]
         )
-    except Exception:
+    except Exception as e:
+        log_debug("observe", "learn_from_failure failed", e)
         pass
 
 
@@ -191,7 +195,8 @@ def learn_from_success(tool_name: str, tool_input: dict, data: dict):
                     why_it_worked="Verifying content before editing prevents mismatch errors",
                     context="File editing workflow"
                 )
-    except Exception:
+    except Exception as e:
+        log_debug("observe", "learn_from_success failed", e)
         pass
 
 
@@ -245,7 +250,8 @@ def check_for_surprise(session_id: str, tool_name: str, success: bool, error: st
                     lesson=f"Underestimated {tool_name} - works better than expected" if confidence < 0.4 else None
                 )
                 
-    except Exception:
+    except Exception as e:
+        log_debug("observe", "check_for_surprise failed", e)
         pass
 
 
@@ -255,7 +261,8 @@ def main():
     """Main hook entry point."""
     try:
         input_data = json.load(sys.stdin)
-    except (json.JSONDecodeError, Exception):
+    except (json.JSONDecodeError, Exception) as e:
+        log_debug("observe", "input JSON decode failed", e)
         sys.exit(0)
     
     session_id = input_data.get("session_id", "unknown")

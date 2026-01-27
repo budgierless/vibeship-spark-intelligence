@@ -6,6 +6,7 @@ The missing link: learnings that actually influence behavior.
 """
 
 import json
+import os
 from datetime import datetime
 import time
 from pathlib import Path
@@ -13,10 +14,11 @@ from typing import List, Dict, Any, Optional
 
 from lib.memory_banks import infer_project_key, retrieve as bank_retrieve
 from lib.tastebank import infer_domain as taste_infer_domain, retrieve as taste_retrieve
+from lib.diagnostics import log_debug
 
 # Paths
 SPARK_DIR = Path(__file__).parent.parent
-WORKSPACE = Path.home() / "clawd"
+WORKSPACE = Path(os.environ.get("SPARK_WORKSPACE", str(Path.home() / "clawd"))).expanduser()
 MEMORY_FILE = WORKSPACE / "MEMORY.md"
 SPARK_CONTEXT_FILE = WORKSPACE / "SPARK_CONTEXT.md"
 
@@ -110,7 +112,8 @@ def infer_current_focus(max_events: int = 25) -> str:
 
         joined = "\n".join(texts).strip()
         return joined[:800]
-    except Exception:
+    except Exception as e:
+        log_debug("bridge", "infer_current_focus failed", e)
         return ""
 
 
@@ -138,7 +141,8 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "reliability": ins.reliability,
                 "validations": ins.times_validated,
             })
-    except Exception:
+    except Exception as e:
+        log_debug("bridge", "get_contextual_insights: cognitive failed", e)
         pass
 
     # 2) Layered memory banks (project + global)
@@ -152,7 +156,8 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "reliability": None,
                 "validations": None,
             })
-    except Exception:
+    except Exception as e:
+        log_debug("bridge", "get_contextual_insights: bank failed", e)
         pass
 
     # 3) TasteBank retrieval (lightweight taste references)
@@ -167,7 +172,8 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                     "reliability": None,
                     "validations": None,
                 })
-    except Exception:
+    except Exception as e:
+        log_debug("bridge", "get_contextual_insights: taste failed", e)
         pass
 
     # 4) Mind retrieval (if available)
@@ -184,7 +190,8 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "reliability": None,
                 "validations": None,
             })
-    except Exception:
+    except Exception as e:
+        log_debug("bridge", "get_contextual_insights: mind failed", e)
         pass
 
     # De-dupe by text

@@ -65,6 +65,15 @@ python -m spark.cli status
 
 ---
 
+## Configuration
+
+Spark keeps defaults minimal. Set these env vars to opt in:
+
+- `SPARK_DEBUG=1` to emit internal debug logs to stderr.
+- `SPARK_WORKSPACE=/path/to/workspace` to override the default `~/clawd` used by the bridge.
+
+---
+
 ## How It Works
 
 ### The Learning Loop
