@@ -554,6 +554,34 @@ def generate_html():
             object-fit: contain;
             display: block;
         }}
+
+        .live-indicator {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: 0.5rem;
+            font-size: 0.6rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+        }}
+
+        .live-dot {{
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+        }}
+
+        .live-indicator.live {{
+            color: var(--green-dim);
+        }}
+
+        .live-indicator.live .live-dot {{
+            background: var(--green-dim);
+            box-shadow: 0 0 8px rgba(0, 196, 154, 0.6);
+            animation: pulse 1.8s infinite;
+        }}
         
         .navbar-text {{
             font-family: var(--font-serif);
@@ -1270,6 +1298,7 @@ def generate_html():
             <img src="/logo.png" alt="vibeship" class="navbar-icon" />
             <span class="navbar-text">vibeship</span>
             <span class="navbar-product">spark</span>
+            <span class="live-indicator" id="live-indicator" title="Live updates"><span class="live-dot"></span></span>
         </div>
         <div class="navbar-links">
             <a class="nav-link active" href="/">Overview</a>
@@ -1470,6 +1499,13 @@ def generate_html():
         }}).join('');
       }}
 
+      function setLive(ok) {{
+        const el = $('live-indicator');
+        if (!el) return;
+        if (ok) el.classList.add('live');
+        else el.classList.remove('live');
+      }}
+
       async function postJSON(url, body) {{
         const res = await fetch(url, {{
           method: 'POST',
@@ -1513,7 +1549,9 @@ def generate_html():
           if (!res.ok) return;
           const data = await res.json();
           applyStatus(data);
+          setLive(true);
         }} catch (e) {{
+          setLive(false);
           // best-effort; keep UI stable
         }}
       }}
@@ -1563,6 +1601,7 @@ def generate_html():
           return;
         }}
         const es = new EventSource('/api/status/stream');
+        es.onopen = () => setLive(true);
         es.onmessage = (event) => {{
           try {{
             const data = JSON.parse(event.data || '{{}}');
@@ -1572,6 +1611,7 @@ def generate_html():
           }}
         }};
         es.onerror = () => {{
+          setLive(false);
           es.close();
           setTimeout(startStream, 3000);
         }};
@@ -1772,6 +1812,34 @@ def generate_ops_html():
             height: 22px;
             object-fit: contain;
             display: block;
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: 0.5rem;
+            font-size: 0.6rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+        }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+        }
+
+        .live-indicator.live {
+            color: var(--green-dim);
+        }
+
+        .live-indicator.live .live-dot {
+            background: var(--green-dim);
+            box-shadow: 0 0 8px rgba(0, 196, 154, 0.6);
+            animation: pulse 1.8s infinite;
         }
 
         .navbar-text {
@@ -1987,6 +2055,13 @@ def generate_ops_html():
         return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       }
 
+      function setLive(ok) {
+        const el = $('live-indicator');
+        if (!el) return;
+        if (ok) el.classList.add('live');
+        else el.classList.remove('live');
+      }
+
       function setHTML(id, html) {
         const el = $(id);
         if (el) el.innerHTML = html;
@@ -2145,7 +2220,9 @@ def generate_ops_html():
           if (!res.ok) return;
           const data = await res.json();
           applyOps(data);
+          setLive(true);
         } catch (e) {
+          setLive(false);
           // ignore
         }
       }
@@ -2157,6 +2234,7 @@ def generate_ops_html():
           return;
         }
         const es = new EventSource('/api/ops/stream');
+        es.onopen = () => setLive(true);
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data || '{}');
@@ -2166,6 +2244,7 @@ def generate_ops_html():
           }
         };
         es.onerror = () => {
+          setLive(false);
           es.close();
           setTimeout(startOpsStream, 3000);
         };
@@ -2191,6 +2270,7 @@ def generate_ops_html():
             <img src="/logo.png" alt="vibeship" class="navbar-icon" />
             <span class="navbar-text">vibeship</span>
             <span class="navbar-product">spark</span>
+            <span class="live-indicator" id="live-indicator" title="Live updates"><span class="live-dot"></span></span>
         </div>
         <div class="navbar-links">
             <a class="nav-link" href="/">Overview</a>
