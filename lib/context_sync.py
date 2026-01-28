@@ -17,6 +17,7 @@ from .output_adapters import (
     write_clawdbot,
     write_exports,
 )
+from .sync_tracker import get_sync_tracker
 
 
 DEFAULT_MIN_RELIABILITY = 0.7
@@ -224,6 +225,13 @@ def sync_context(
         targets["exports"] = "written"
     except Exception:
         targets["exports"] = "error"
+
+    # Record sync stats for dashboard tracking
+    try:
+        tracker = get_sync_tracker()
+        tracker.record_full_sync(targets, items_per_adapter=len(insights))
+    except Exception:
+        pass
 
     return SyncStats(
         targets=targets,

@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from lib.cognitive_learner import CognitiveLearner, CognitiveCategory
 from lib.mind_bridge import MindBridge
-from lib.markdown_writer import MarkdownWriter
+from lib.sync_tracker import get_sync_tracker
 from lib.promoter import Promoter
 from lib.queue import get_queue_stats, read_recent_events, count_events
 from lib.aha_tracker import AhaTracker
@@ -58,8 +58,8 @@ def get_dashboard_data():
     bridge = MindBridge()  # Fresh instance
     mind_stats = bridge.get_stats()
     
-    writer = MarkdownWriter()  # Fresh instance
-    writer_stats = writer.get_stats()
+    sync_tracker = get_sync_tracker()  # Fresh instance
+    sync_stats = sync_tracker.get_stats()
     
     promoter = Promoter()  # Fresh instance
     promo_stats = promoter.get_promotion_status()
@@ -127,9 +127,12 @@ def get_dashboard_data():
             "synced": mind_stats["synced_count"],
             "queue": mind_stats["offline_queue_size"],
         },
-        "markdown": {
-            "learnings": writer_stats["learnings_count"],
-            "errors": writer_stats["errors_count"]
+        "outputs": {
+            "last_sync": sync_stats["last_sync"],
+            "total_syncs": sync_stats["total_syncs"],
+            "adapters_ok": sync_stats["adapters_ok"],
+            "adapters_error": sync_stats["adapters_error"],
+            "adapters": sync_stats["adapters"],
         },
         "promotions": {
             "ready": promo_stats["ready_for_promotion"],
@@ -491,9 +494,28 @@ def generate_html():
             <span class="event-status {status_class}">{icon}</span>
         </div>'''
     
-    # Targets
-    targets = data["promotions"]["by_target"]
-    targets_html = " ".join([f'<span class="target-pill">{t}</span>' for t in targets.keys()]) if targets else '<span class="muted">—</span>'
+    # Output Adapters - build tooltip for hover
+    adapters = data["outputs"]["adapters"]
+    total_adapters = len(adapters)
+    ok_adapters = data["outputs"]["adapters_ok"]
+    error_adapters = data["outputs"]["adapters_error"]
+
+    # Build tooltip content
+    ok_names = [a["name"] for a in adapters if a["status"] == "success"]
+    error_names = [a["name"] for a in adapters if a["status"] == "error"]
+    never_names = [a["name"] for a in adapters if a["status"] == "never"]
+
+    tooltip_parts = []
+    if ok_names:
+        tooltip_parts.append("Synced: " + ", ".join(ok_names))
+    if error_names:
+        tooltip_parts.append("Errors: " + ", ".join(error_names))
+    if never_names:
+        tooltip_parts.append("Never: " + ", ".join(never_names))
+    adapters_tooltip = " | ".join(tooltip_parts) if tooltip_parts else "No adapters"
+
+    # Display "All" if all adapters synced, otherwise show count
+    synced_display = "All" if ok_adapters == total_adapters and ok_adapters > 0 else str(ok_adapters)
     
     mind_status = "live" if data["mind"]["available"] else "offline"
     mind_text = "Connected" if data["mind"]["available"] else "Offline"
@@ -875,7 +897,33 @@ def generate_html():
             border: 1px solid var(--green-dim);
             color: var(--green-dim);
         }}
-        
+
+        /* Tooltip */
+        .has-tooltip {{
+            position: relative;
+            cursor: help;
+        }}
+        .has-tooltip .tooltip {{
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            z-index: 100;
+            transition: opacity 0.15s;
+            margin-bottom: 0.25rem;
+        }}
+        .has-tooltip:hover .tooltip {{
+            visibility: visible;
+            opacity: 1;
+        }}
+
         /* Insight rows */
         .insight-row {{
             display: grid;
@@ -1330,15 +1378,17 @@ def generate_html():
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Output</span>
+                    <span class="muted" style="font-size: 0.7rem;">{data["outputs"]["total_syncs"]} syncs</span>
                 </div>
                 <div class="card-body">
                     <div class="mini-stats">
-                        <div class="mini-stat">
-                            <div class="mini-stat-value">{data["markdown"]["learnings"]}</div>
-                            <div class="mini-stat-label">Learnings</div>
+                        <div class="mini-stat has-tooltip">
+                            <span class="tooltip">{adapters_tooltip}</span>
+                            <div class="mini-stat-value" style="color: var(--green);">{synced_display}</div>
+                            <div class="mini-stat-label">Synced</div>
                         </div>
                         <div class="mini-stat">
-                            <div class="mini-stat-value">{data["markdown"]["errors"]}</div>
+                            <div class="mini-stat-value" style="color: {'var(--red)' if error_adapters > 0 else 'var(--text-muted)'};">{error_adapters}</div>
                             <div class="mini-stat-label">Errors</div>
                         </div>
                         <div class="mini-stat">
@@ -1346,7 +1396,6 @@ def generate_html():
                             <div class="mini-stat-label">Ready</div>
                         </div>
                     </div>
-                    <div style="margin-top: 0.75rem;">{targets_html}</div>
                 </div>
             </div>
         </div>

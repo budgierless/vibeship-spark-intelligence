@@ -627,6 +627,35 @@ class CognitiveLearner:
             self._save_insights()
         return len(to_delete)
 
+    def get_prune_candidates(
+        self,
+        max_age_days: float = 365.0,
+        min_effective: float = 0.2,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Preview which insights would be pruned by decay rules."""
+        candidates: List[Dict[str, Any]] = []
+        for key, insight in self.insights.items():
+            age = self._age_days(insight)
+            if age < max_age_days:
+                continue
+            eff = self.effective_reliability(insight)
+            if eff >= min_effective:
+                continue
+            candidates.append({
+                "key": key,
+                "insight": insight.insight,
+                "category": insight.category.value,
+                "age_days": round(age, 1),
+                "effective_reliability": round(eff, 3),
+                "reliability": round(insight.reliability, 3),
+                "validations": insight.times_validated,
+                "contradictions": insight.times_contradicted,
+            })
+
+        candidates.sort(key=lambda c: (c["age_days"], -c["effective_reliability"]), reverse=True)
+        return candidates[: max(0, int(limit or 0))]
+
     def _topic_key(self, insight: CognitiveInsight) -> str:
         """Group insights into topics for conflict resolution."""
         stop = {

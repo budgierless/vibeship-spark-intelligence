@@ -56,6 +56,12 @@ python cli.py write
 # Promote ready insights
 python cli.py promote
 
+# Sync bootstrap context to platform files
+python cli.py sync-context
+
+# Preview/apply decay-based pruning
+python cli.py decay
+
 # View recent learnings
 python cli.py learnings --limit 20
 ```

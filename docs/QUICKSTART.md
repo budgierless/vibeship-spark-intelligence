@@ -151,6 +151,8 @@ CLAUDE.md                      # Promoted conventions
 | `learnings` | List recent cognitive insights |
 | `write` | Write insights to markdown |
 | `promote` | Auto-promote high-value insights |
+| `sync-context` | Sync bootstrap context to platform files |
+| `decay` | Preview/apply decay-based pruning |
 | `sync` | Sync to Mind (if running) |
 | `queue` | Process offline sync queue |
 | `events` | Show recent captured events |

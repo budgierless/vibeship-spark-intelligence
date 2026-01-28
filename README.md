@@ -87,12 +87,7 @@ scripts\spark-windsurf.bat
 scripts\spark-clawdbot.bat
 ```
 
-Clawdbot path override (optional):
-```bash
-SPARK_CLAWDBOT_CONTEXT_PATH=~/.clawdbot/agents/main/SPARK_CONTEXT.md
-```
-
-Clawdbot workspace override (recommended). By default Spark writes to `USER.md`:
+Clawdbot workspace override (recommended). By default Spark writes to `USER.md` and `SPARK_CONTEXT.md`:
 ```bash
 SPARK_CLAWDBOT_WORKSPACE=~/clawd
 ```
@@ -101,6 +96,11 @@ Clawdbot target override (optional):
 ```bash
 # Comma-separated filenames in the workspace
 SPARK_CLAWDBOT_TARGETS=USER.md,TOOLS.md
+```
+
+Clawdbot path override (advanced):
+```bash
+SPARK_CLAWDBOT_CONTEXT_PATH=~/clawd/SPARK_CONTEXT.md
 ```
 
 Default targets are `USER.md` and `SPARK_CONTEXT.md`.
@@ -237,9 +237,11 @@ And install a ready-to-merge hook file:
 ### With Clawdbot
 
 Spark works automatically with Clawdbot's workspace model. Learnings sync to:
-- `AGENTS.md` — Workflow patterns
-- `TOOLS.md` — Tool-specific insights
-- `SOUL.md` — Behavioral patterns
+- `USER.md` - User preferences and working style
+- `SPARK_CONTEXT.md` - Spark bootstrap context (ready for hook injection)
+
+Override targets with `SPARK_CLAWDBOT_TARGETS=USER.md,TOOLS.md` if needed.
+
 
 ### With Mind
 
@@ -272,8 +274,11 @@ python -m spark.cli learnings
 # Run promotion check
 python -m spark.cli promote
 
-# Extract skills from patterns
-python -m spark.cli extract-skills
+# Sync bootstrap context to platform files
+python -m spark.cli sync-context
+
+# Preview/apply decay-based pruning
+python -m spark.cli decay
 ```
 
 ---

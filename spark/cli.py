@@ -197,6 +197,26 @@ def cmd_sync_context(args):
     }, indent=2))
 
 
+def cmd_decay(args):
+    """Preview or apply decay-based pruning."""
+    cognitive = get_cognitive_learner()
+    if args.apply:
+        pruned = cognitive.prune_stale(max_age_days=args.max_age_days, min_effective=args.min_effective)
+        print(f"[SPARK] Pruned {pruned} stale insights")
+        return
+
+    candidates = cognitive.get_prune_candidates(
+        max_age_days=args.max_age_days,
+        min_effective=args.min_effective,
+        limit=args.limit,
+    )
+    print("[SPARK] Decay dry-run")
+    print(f"  candidates: {len(candidates)} (showing up to {args.limit})")
+    for c in candidates:
+        print(f"- [{c['category']}] {c['insight']}")
+        print(f"  age={c['age_days']}d effective={c['effective_reliability']} raw={c['reliability']} v={c['validations']} x={c['contradictions']}")
+
+
 def cmd_health(args):
     """Health check."""
     print("\n🏥 Health Check\n")
@@ -581,7 +601,14 @@ Examples:
     sync_ctx.add_argument("--min-validations", type=int, default=3, help="Minimum validations")
     sync_ctx.add_argument("--limit", type=int, default=12, help="Max items")
     sync_ctx.add_argument("--no-promoted", action="store_true", help="Skip promoted learnings from docs")
-    
+
+    # decay
+    decay = subparsers.add_parser("decay", help="Preview or apply decay-based pruning")
+    decay.add_argument("--max-age-days", type=float, default=180.0, help="Min age in days to consider stale")
+    decay.add_argument("--min-effective", type=float, default=0.2, help="Min effective reliability to keep")
+    decay.add_argument("--limit", type=int, default=20, help="Max candidates to show in dry-run")
+    decay.add_argument("--apply", action="store_true", help="Actually prune stale insights")
+
     # health
     subparsers.add_parser("health", help="Health check")
     
@@ -660,6 +687,7 @@ Examples:
         "promote": cmd_promote,
         "write": cmd_write,
         "sync-context": cmd_sync_context,
+        "decay": cmd_decay,
         "health": cmd_health,
         "events": cmd_events,
         "capture": cmd_capture,
