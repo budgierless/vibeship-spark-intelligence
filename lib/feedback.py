@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -66,6 +67,7 @@ def update_self_awareness_reliability(tool_name: str, success: bool) -> None:
                 insight.times_contradicted += 1
             else:
                 insight.times_validated += 1
+            insight.last_validated_at = datetime.now().isoformat()
             updated = True
 
     if updated:

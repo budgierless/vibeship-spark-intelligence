@@ -64,6 +64,19 @@ def _boost_confidence(current: float, validated: int) -> float:
     return min(0.99, new_conf)  # Cap at 99%
 
 
+def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
 class CognitiveCategory(Enum):
     """Categories of cognitive learning."""
     SELF_AWARENESS = "self_awareness"
@@ -90,6 +103,7 @@ class CognitiveInsight:
     times_contradicted: int = 0
     promoted: bool = False
     promoted_to: Optional[str] = None
+    last_validated_at: Optional[str] = None
 
     @property
     def reliability(self) -> float:
@@ -113,6 +127,7 @@ class CognitiveInsight:
             "times_contradicted": self.times_contradicted,
             "promoted": self.promoted,
             "promoted_to": self.promoted_to,
+            "last_validated_at": self.last_validated_at,
         }
     
     @classmethod
@@ -130,6 +145,7 @@ class CognitiveInsight:
             times_contradicted=data.get("times_contradicted", 0),
             promoted=data.get("promoted", False),
             promoted_to=data.get("promoted_to"),
+            last_validated_at=data.get("last_validated_at"),
         )
 
 
@@ -165,6 +181,15 @@ class CognitiveLearner:
         data = {key: insight.to_dict() for key, insight in self.insights.items()}
         self.INSIGHTS_FILE.write_text(json.dumps(data, indent=2))
 
+    def _touch_validation(self, insight: CognitiveInsight, validated_delta: int = 0, contradicted_delta: int = 0):
+        """Update validation counters and timestamp."""
+        if validated_delta:
+            insight.times_validated += validated_delta
+        if contradicted_delta:
+            insight.times_contradicted += contradicted_delta
+        if validated_delta or contradicted_delta:
+            insight.last_validated_at = _now_iso()
+
     def _generate_key(self, category: CognitiveCategory, identifier: str) -> str:
         """Generate a unique key for an insight."""
         return f"{category.value}:{identifier[:50]}"
@@ -179,7 +204,7 @@ class CognitiveLearner:
         if predicted_success and not actual_success:
             key = self._generate_key(CognitiveCategory.SELF_AWARENESS, f"overconfident:{task_type}")
             if key in self.insights:
-                self.insights[key].times_contradicted += 1
+                self._touch_validation(self.insights[key], contradicted_delta=1)
                 self.insights[key].evidence.append(context[:200])
                 # Keep only last 10 evidence items
                 self.insights[key].evidence = self.insights[key].evidence[-10:]
@@ -198,7 +223,7 @@ class CognitiveLearner:
         """Learn what types of tasks I struggle with."""
         key = self._generate_key(CognitiveCategory.SELF_AWARENESS, f"struggle:{task_type}")
         if key in self.insights:
-            self.insights[key].times_validated += 1
+            self._touch_validation(self.insights[key], validated_delta=1)
             if failure_reason not in self.insights[key].evidence:
                 self.insights[key].evidence.append(failure_reason[:200])
                 self.insights[key].evidence = self.insights[key].evidence[-10:]
@@ -235,7 +260,7 @@ class CognitiveLearner:
         """Learn about user preferences."""
         key = self._generate_key(CognitiveCategory.USER_UNDERSTANDING, f"pref:{preference_type}")
         if key in self.insights:
-            self.insights[key].times_validated += 1
+            self._touch_validation(self.insights[key], validated_delta=1)
             self.insights[key].evidence.append(evidence[:200])
             self.insights[key].evidence = self.insights[key].evidence[-10:]
         else:
@@ -350,7 +375,7 @@ class CognitiveLearner:
         if key in self.insights:
             # Existing signal - boost confidence and validate
             existing = self.insights[key]
-            existing.times_validated += 1
+            self._touch_validation(existing, validated_delta=1)
             existing.confidence = _boost_confidence(0.6, existing.times_validated)
             # Add the specific observation as evidence
             evidence_entry = f"{signal}: {what_it_indicates}"[:200]
@@ -471,7 +496,7 @@ class CognitiveLearner:
         if key in self.insights:
             # Update existing - boost confidence!
             existing = self.insights[key]
-            existing.times_validated += 1
+            self._touch_validation(existing, validated_delta=1)
             existing.confidence = _boost_confidence(confidence, existing.times_validated)
             if context and context not in existing.evidence:
                 existing.evidence.append(context[:200])
@@ -553,6 +578,108 @@ class CognitiveLearner:
             "promoted_count": promoted_count,
             "unpromoted_count": total - promoted_count,
         }
+
+    # =========================================================================
+    # PHASE 3: DECAY + CONFLICT RESOLUTION
+    # =========================================================================
+
+    def _age_days(self, insight: CognitiveInsight) -> float:
+        """Compute age in days (prefer last validation if present)."""
+        base = _parse_iso(insight.last_validated_at) or _parse_iso(insight.created_at)
+        if not base:
+            return 0.0
+        return max(0.0, (datetime.now() - base).total_seconds() / 86400.0)
+
+    def _half_life_days(self, category: CognitiveCategory) -> float:
+        """Half-life in days by category."""
+        mapping = {
+            CognitiveCategory.USER_UNDERSTANDING: 90.0,   # preferences
+            CognitiveCategory.COMMUNICATION: 90.0,
+            CognitiveCategory.WISDOM: 180.0,            # principles
+            CognitiveCategory.META_LEARNING: 120.0,
+            CognitiveCategory.SELF_AWARENESS: 60.0,
+            CognitiveCategory.REASONING: 60.0,
+            CognitiveCategory.CONTEXT: 45.0,
+            CognitiveCategory.CREATIVITY: 60.0,
+        }
+        return mapping.get(category, 60.0)
+
+    def effective_reliability(self, insight: CognitiveInsight) -> float:
+        """Reliability adjusted by temporal decay."""
+        age_days = self._age_days(insight)
+        half_life = max(1.0, self._half_life_days(insight.category))
+        decay = 0.5 ** (age_days / half_life)
+        return max(0.0, min(1.0, insight.reliability * decay))
+
+    def prune_stale(self, max_age_days: float = 365.0, min_effective: float = 0.2) -> int:
+        """Remove stale insights that have decayed below threshold."""
+        to_delete = []
+        for key, insight in self.insights.items():
+            if self._age_days(insight) < max_age_days:
+                continue
+            if self.effective_reliability(insight) < min_effective:
+                to_delete.append(key)
+
+        for key in to_delete:
+            del self.insights[key]
+
+        if to_delete:
+            self._save_insights()
+        return len(to_delete)
+
+    def _topic_key(self, insight: CognitiveInsight) -> str:
+        """Group insights into topics for conflict resolution."""
+        stop = {
+            "the", "a", "an", "and", "or", "but", "if", "then", "so", "to",
+            "of", "in", "on", "for", "with", "by", "is", "are", "was", "were",
+            "be", "been", "being", "i", "you", "we", "they", "it", "this", "that",
+        }
+        words = re.split(r"\W+", (insight.insight or "").lower())
+        words = [w for w in words if w and w not in stop]
+        key = " ".join(words[:6]) if words else (insight.insight or "")
+        return f"{insight.category.value}:{key[:80]}"
+
+    def resolve_conflicts(self, insights: List[CognitiveInsight]) -> List[CognitiveInsight]:
+        """Choose best insight per topic based on effective reliability and recency."""
+        grouped: Dict[str, List[CognitiveInsight]] = {}
+        for ins in insights:
+            grouped.setdefault(self._topic_key(ins), []).append(ins)
+
+        resolved: List[CognitiveInsight] = []
+        for _, items in grouped.items():
+            def score(i: CognitiveInsight) -> float:
+                eff = self.effective_reliability(i)
+                recency = max(0.0, 1.0 - (self._age_days(i) / 365.0))
+                return eff + (0.05 * i.times_validated) + (0.1 * recency)
+
+            resolved.append(max(items, key=score))
+
+        return resolved
+
+    def get_ranked_insights(
+        self,
+        min_reliability: float = 0.7,
+        min_validations: int = 3,
+        limit: int = 12,
+        resolve_conflicts: bool = True,
+    ) -> List[CognitiveInsight]:
+        """Return insights ranked by effective reliability with decay + conflicts."""
+        eligible = []
+        for ins in self.insights.values():
+            if ins.times_validated < min_validations:
+                continue
+            if self.effective_reliability(ins) < min_reliability:
+                continue
+            eligible.append(ins)
+
+        if resolve_conflicts:
+            eligible = self.resolve_conflicts(eligible)
+
+        eligible.sort(
+            key=lambda i: (self.effective_reliability(i), i.times_validated, i.confidence),
+            reverse=True,
+        )
+        return eligible[: max(0, int(limit or 0))]
 
     def dedupe_signals(self) -> Dict[str, int]:
         """Consolidate duplicate signal entries.

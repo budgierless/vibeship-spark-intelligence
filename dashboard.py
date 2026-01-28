@@ -2410,7 +2410,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 def main():
     print()
     print("  vibeship spark")
-    print("  ─────────────────────────────")
+    print("  -----------------------------")
     print(f"  Dashboard: http://localhost:{PORT}")
     print("  Press Ctrl+C to stop")
     print()

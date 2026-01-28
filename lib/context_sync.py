@@ -71,22 +71,25 @@ def _select_insights(
     min_reliability: float = DEFAULT_MIN_RELIABILITY,
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = DEFAULT_MAX_ITEMS,
+    cognitive: Optional[CognitiveLearner] = None,
 ) -> List[CognitiveInsight]:
-    cognitive = CognitiveLearner()
-    picked: List[CognitiveInsight] = []
-    for insight in cognitive.insights.values():
-        if insight.reliability < min_reliability:
-            continue
-        if insight.times_validated < min_validations:
-            continue
-        if _is_low_value(insight.insight):
-            continue
-        picked.append(insight)
+    cognitive = cognitive or CognitiveLearner()
+
+    # Pull a larger ranked set to allow filtering without starving the output.
+    raw = cognitive.get_ranked_insights(
+        min_reliability=min_reliability,
+        min_validations=min_validations,
+        limit=max(int(limit or 0) * 3, int(limit or 0)),
+        resolve_conflicts=True,
+    )
+
+    picked = [i for i in raw if not _is_low_value(i.insight)]
 
     picked.sort(
-        key=lambda i: (_category_weight(i.category), i.reliability, i.times_validated, i.confidence),
+        key=lambda i: (_category_weight(i.category), cognitive.effective_reliability(i), i.times_validated, i.confidence),
         reverse=True,
     )
+
     # De-dupe by normalized insight text
     seen = set()
     deduped: List[CognitiveInsight] = []
@@ -172,11 +175,17 @@ def sync_context(
     limit: int = DEFAULT_MAX_ITEMS,
     include_promoted: bool = True,
 ) -> SyncStats:
+    cognitive = CognitiveLearner()
+    # Prune stale insights (conservative defaults)
+    cognitive.prune_stale(max_age_days=180.0, min_effective=0.2)
+
     insights = _select_insights(
         min_reliability=min_reliability,
         min_validations=min_validations,
         limit=limit,
+        cognitive=cognitive,
     )
+
     root = project_dir or Path.cwd()
     promoted = _load_promoted_lines(root) if include_promoted else []
     # De-dupe promoted vs selected insights
