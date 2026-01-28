@@ -92,6 +92,11 @@ Clawdbot path override (optional):
 SPARK_CLAWDBOT_CONTEXT_PATH=~/.clawdbot/agents/main/SPARK_CONTEXT.md
 ```
 
+Clawdbot workspace override (recommended). Spark writes to `AGENTS.md` and `SOUL.md` there:
+```bash
+SPARK_CLAWDBOT_WORKSPACE=~/clawd
+```
+
 Optional: set a scheduled task to run `python -m spark.cli sync-context` every
 10–30 minutes for sessions started outside wrappers (see `docs/QUICKSTART.md`).
 

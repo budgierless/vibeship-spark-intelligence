@@ -15,7 +15,7 @@
 
 ---
 
-## Phase 1: Make Learnings Useful (CURRENT PRIORITY)
+## Phase 1: Make Learnings Useful (COMPLETED ✓)
 
 ### Session Bootstrap + Multi-Platform Output Adapters
 
@@ -59,7 +59,17 @@
 
 ---
 
-## Phase 2: Learn Better (NEXT PRIORITY)
+## Phase 2: Learn Better (COMPLETED ✓)
+
+**Implemented 2026-01-28:**
+- `lib/pattern_detection/` - Complete pattern detection layer
+- CorrectionDetector - Detects "no, I meant..." signals (95% confidence)
+- SentimentDetector - Detects satisfaction/frustration signals
+- RepetitionDetector - Detects 3+ similar requests
+- SequenceDetector - Detects tool success/failure patterns
+- PatternAggregator - Combines detectors, triggers learning
+- Integrated into `hooks/observe.py`
+- All tests passing (12/12)
 
 ### Pattern Detection Layer
 
@@ -99,7 +109,7 @@
 
 ---
 
-## Phase 3: Trust What We Learn (QUICK WINS)
+## Phase 3: Trust What We Learn (NEXT PRIORITY - QUICK WINS)
 
 ### Validation + Decay + Conflict Resolution
 

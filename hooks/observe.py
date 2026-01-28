@@ -29,6 +29,7 @@ from lib.queue import quick_capture, EventType
 from lib.cognitive_learner import get_cognitive_learner
 from lib.feedback import update_skill_effectiveness, update_self_awareness_reliability
 from lib.diagnostics import log_debug
+from lib.pattern_detection import get_aggregator
 
 # ===== Prediction Tracking =====
 # We track predictions made at PreToolUse to compare at PostToolUse
@@ -355,6 +356,35 @@ def main():
             kwargs["error"] = str(error)[:500]
     
     quick_capture(event_type, session_id, data, **kwargs)
+
+    # ===== Pattern Detection Layer (Phase 2) =====
+    # Process event through pattern detectors
+    try:
+        aggregator = get_aggregator()
+
+        # Build event dict for pattern detection
+        pattern_event = {
+            "session_id": session_id,
+            "hook_event": hook_event,
+            "tool_name": tool_name,
+            "tool_input": tool_input,
+            "payload": data.get("payload"),
+        }
+
+        if event_type == EventType.POST_TOOL_FAILURE:
+            pattern_event["error"] = kwargs.get("error", "")
+
+        # Detect patterns
+        patterns = aggregator.process_event(pattern_event)
+
+        # Trigger learning for high-confidence patterns
+        if patterns:
+            insights = aggregator.trigger_learning(patterns)
+            if insights:
+                log_debug("observe", f"Created {len(insights)} insights from patterns", None)
+    except Exception as e:
+        log_debug("observe", "pattern detection failed", e)
+
     sys.exit(0)
 
 

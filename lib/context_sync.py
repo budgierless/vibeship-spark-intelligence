@@ -36,6 +36,8 @@ def _normalize_text(text: str) -> str:
     t = (text or "").strip().lower()
     t = re.sub(r"\s*\(\d+\s*calls?\)", "", t)
     t = re.sub(r"\s*\(\d+\)", "", t)
+    t = re.sub(r"\(\s*recovered\s*\d+%?\s*\)", "", t)
+    t = re.sub(r"\brecovered\s*\d+%?\b", "recovered", t)
     t = re.sub(r"\s+\d+$", "", t)
     t = re.sub(r"\s+", " ", t)
     return t.strip()
