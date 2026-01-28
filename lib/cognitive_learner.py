@@ -18,12 +18,50 @@ Learning Categories:
 """
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 from enum import Enum
+
+
+def _normalize_signal(signal: str) -> str:
+    """Normalize signal string for deduplication.
+
+    Strips variable data like counts, numbers, specific values.
+    'Heavy Bash usage (42 calls)' -> 'Heavy Bash usage'
+    'Heavy Read usage (5 calls)' -> 'Heavy Read usage'
+    """
+    s = (signal or "").strip()
+    # Remove parenthetical counts like "(42 calls)", "(5 calls)"
+    s = re.sub(r'\s*\(\d+\s*calls?\)', '', s)
+    # Remove trailing numbers
+    s = re.sub(r'\s+\d+$', '', s)
+    # Remove any remaining parenthetical numbers
+    s = re.sub(r'\s*\(\d+\)', '', s)
+    return s.strip()
+
+
+def _boost_confidence(current: float, validated: int) -> float:
+    """Boost confidence based on validation count.
+
+    Each validation increases confidence toward 1.0:
+    - Start: 0.6
+    - 1 validation: 0.7
+    - 2 validations: 0.78
+    - 3 validations: 0.85
+    - 5+ validations: approaches 1.0
+
+    Uses diminishing returns formula: conf + (1 - conf) * 0.25
+    """
+    # Base boost per validation
+    boost_factor = 0.25
+    new_conf = current
+    for _ in range(min(validated, 10)):  # Cap at 10 boosts
+        new_conf = new_conf + (1.0 - new_conf) * boost_factor
+    return min(0.99, new_conf)  # Cap at 99%
 
 
 class CognitiveCategory(Enum):
@@ -300,14 +338,35 @@ class CognitiveLearner:
         return self.insights[key]
 
     def learn_signal(self, signal: str, what_it_indicates: str):
-        """Learn what signals indicate about a situation."""
-        key = self._generate_key(CognitiveCategory.CONTEXT, f"signal:{signal}")
+        """Learn what signals indicate about a situation.
+
+        Deduplicates by normalizing signal (strips variable counts).
+        Boosts confidence on repeated observations.
+        """
+        # Normalize signal for dedup - "Heavy Bash usage (42 calls)" -> "Heavy Bash usage"
+        normalized = _normalize_signal(signal)
+        key = self._generate_key(CognitiveCategory.CONTEXT, f"signal:{normalized}")
+
+        if key in self.insights:
+            # Existing signal - boost confidence and validate
+            existing = self.insights[key]
+            existing.times_validated += 1
+            existing.confidence = _boost_confidence(0.6, existing.times_validated)
+            # Add the specific observation as evidence
+            evidence_entry = f"{signal}: {what_it_indicates}"[:200]
+            if evidence_entry not in existing.evidence:
+                existing.evidence.append(evidence_entry)
+                existing.evidence = existing.evidence[-10:]  # Keep last 10
+            self._save_insights()
+            return existing
+
+        # New signal
         self.insights[key] = CognitiveInsight(
             category=CognitiveCategory.CONTEXT,
-            insight=f"When I see '{signal}', it usually means {what_it_indicates}",
-            evidence=[],
+            insight=f"When I see '{normalized}', it usually means {what_it_indicates}",
+            evidence=[f"{signal}: {what_it_indicates}"[:200]],
             confidence=0.6,
-            context=f"Recognizing {signal}"
+            context=f"Recognizing {normalized}"
         )
         self._save_insights()
         return self.insights[key]
@@ -399,19 +458,24 @@ class CognitiveLearner:
         relevant.sort(key=lambda t: (t[0], t[1].reliability, t[1].times_validated), reverse=True)
         return [i for _, i in relevant[:limit]]
 
-    def add_insight(self, category: CognitiveCategory, insight: str, 
+    def add_insight(self, category: CognitiveCategory, insight: str,
                     context: str = "", confidence: float = 0.7) -> CognitiveInsight:
-        """Add a generic insight directly."""
+        """Add a generic insight directly.
+
+        Boosts confidence on repeated validations.
+        """
         # Generate key from first few words of insight
         key_part = insight[:40].replace(" ", "_").lower()
         key = self._generate_key(category, key_part)
-        
+
         if key in self.insights:
-            # Update existing
-            self.insights[key].times_validated += 1
-            if context and context not in self.insights[key].evidence:
-                self.insights[key].evidence.append(context[:200])
-                self.insights[key].evidence = self.insights[key].evidence[-10:]
+            # Update existing - boost confidence!
+            existing = self.insights[key]
+            existing.times_validated += 1
+            existing.confidence = _boost_confidence(confidence, existing.times_validated)
+            if context and context not in existing.evidence:
+                existing.evidence.append(context[:200])
+                existing.evidence = existing.evidence[-10:]
         else:
             self.insights[key] = CognitiveInsight(
                 category=category,
@@ -420,7 +484,7 @@ class CognitiveLearner:
                 confidence=confidence,
                 context=context[:100] if context else ""
             )
-        
+
         self._save_insights()
         return self.insights[key]
 
@@ -489,6 +553,88 @@ class CognitiveLearner:
             "promoted_count": promoted_count,
             "unpromoted_count": total - promoted_count,
         }
+
+    def dedupe_signals(self) -> Dict[str, int]:
+        """Consolidate duplicate signal entries.
+
+        Merges entries like 'signal:Heavy Bash usage (42 calls)' and
+        'signal:Heavy Bash usage (5 calls)' into a single normalized entry.
+
+        Returns dict of {normalized_key: merged_count}
+        """
+        # Find all signal keys (they start with "signal:" or "context:signal:")
+        signal_keys = [k for k in self.insights.keys() if "signal:" in k.lower()]
+
+        # Group by normalized key
+        groups: Dict[str, List[str]] = {}
+        for key in signal_keys:
+            # Extract the signal part after "signal:"
+            parts = key.split("signal:", 1)
+            if len(parts) < 2:
+                continue
+            signal_part = parts[1]
+            normalized = _normalize_signal(signal_part)
+            # Use simple normalized key format
+            norm_key = f"signal:{normalized}"
+
+            if norm_key not in groups:
+                groups[norm_key] = []
+            groups[norm_key].append(key)
+
+        merged_counts = {}
+        for norm_key, keys in groups.items():
+            if len(keys) <= 1:
+                continue  # No duplicates
+
+            # Merge all duplicates into the normalized key
+            all_evidence = []
+            total_validated = 0
+            total_contradicted = 0
+            earliest_created = None
+            base_insight = None
+
+            for key in keys:
+                if key not in self.insights:
+                    continue
+                ins = self.insights[key]
+                all_evidence.extend(ins.evidence)
+                total_validated += ins.times_validated
+                total_contradicted += ins.times_contradicted
+                if earliest_created is None or ins.created_at < earliest_created:
+                    earliest_created = ins.created_at
+                if base_insight is None:
+                    base_insight = ins
+
+            if base_insight is None:
+                continue
+
+            # Create/update the normalized entry
+            merged = CognitiveInsight(
+                category=CognitiveCategory.CONTEXT,
+                insight=base_insight.insight,
+                evidence=list(set(all_evidence))[-10:],  # Dedupe and keep last 10
+                confidence=_boost_confidence(0.6, len(keys) + total_validated),
+                context=base_insight.context,
+                counter_examples=base_insight.counter_examples,
+                created_at=earliest_created or base_insight.created_at,
+                times_validated=len(keys) - 1 + total_validated,  # Each duplicate counts as validation
+                times_contradicted=total_contradicted,
+                promoted=base_insight.promoted,
+                promoted_to=base_insight.promoted_to,
+            )
+
+            # Remove old duplicates, add merged
+            for key in keys:
+                if key in self.insights:
+                    del self.insights[key]
+
+            self.insights[norm_key] = merged
+            merged_counts[norm_key] = len(keys)
+
+        if merged_counts:
+            self._save_insights()
+
+        return merged_counts
 
 
 # ============= Singleton =============
