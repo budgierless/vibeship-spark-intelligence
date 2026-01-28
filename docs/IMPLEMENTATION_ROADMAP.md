@@ -182,7 +182,7 @@
 - Added `lib/project_context.py` with top-level detection + cache.
 - Sync now filters bootstrap insights by project context.
 - Added `SemanticIntentDetector` (polite redirects, implicit preferences) with repetition gating.
-- Agent context injection is still pending.
+- Added opt-in agent context injection via `lib.orchestration.inject_agent_context`.
 
 ### Project Context Detection
 

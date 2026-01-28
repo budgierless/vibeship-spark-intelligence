@@ -172,6 +172,32 @@ def _format_context(
     return "\n".join(lines).strip()
 
 
+def build_compact_context(
+    *,
+    project_dir: Optional[Path] = None,
+    min_reliability: float = DEFAULT_MIN_RELIABILITY,
+    min_validations: int = DEFAULT_MIN_VALIDATIONS,
+    limit: int = 3,
+) -> Tuple[str, int]:
+    """Build a compact context block for agent prompt injection."""
+    cognitive = CognitiveLearner()
+    root = project_dir or Path.cwd()
+    project_context = None
+    try:
+        project_context = get_project_context(root)
+    except Exception:
+        project_context = None
+
+    insights = _select_insights(
+        min_reliability=min_reliability,
+        min_validations=min_validations,
+        limit=limit,
+        cognitive=cognitive,
+        project_context=project_context,
+    )
+    return cognitive.format_for_injection(insights), len(insights)
+
+
 def sync_context(
     *,
     project_dir: Optional[Path] = None,

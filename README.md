@@ -244,6 +244,19 @@ Spark works automatically with Clawdbot's workspace model. Learnings sync to:
 
 Override targets with `SPARK_CLAWDBOT_TARGETS=USER.md,TOOLS.md` if needed.
 
+### Agent Context Injection (Opt-in)
+
+If you spawn sub-agents, you can prepend a compact Spark context block to their
+prompts. This is off by default to prevent bloat.
+
+```bash
+SPARK_AGENT_INJECT=1
+SPARK_AGENT_CONTEXT_LIMIT=3
+SPARK_AGENT_CONTEXT_MAX_CHARS=1200
+```
+
+Use `lib.orchestration.inject_agent_context(prompt)` when preparing a sub-agent prompt.
+
 
 ### With Mind
 

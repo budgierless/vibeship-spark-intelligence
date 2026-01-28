@@ -6,12 +6,59 @@ KISS: file-based persistence, minimal features, no external deps.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .skills_router import recommend_skills
+from .context_sync import build_compact_context
+
+
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUTHY
+
+
+def inject_agent_context(
+    prompt: str,
+    *,
+    project_dir: Optional[Path] = None,
+    limit: int = 3,
+) -> str:
+    """Optionally prepend Spark context to an agent prompt.
+
+    Enable via SPARK_AGENT_INJECT=1 to avoid unexpected prompt bloat.
+    """
+    if not prompt:
+        return prompt
+    if not _env_truthy("SPARK_AGENT_INJECT"):
+        return prompt
+
+    max_chars_raw = os.environ.get("SPARK_AGENT_CONTEXT_MAX_CHARS", "").strip()
+    try:
+        max_chars = int(max_chars_raw) if max_chars_raw else 1200
+    except Exception:
+        max_chars = 1200
+
+    limit_raw = os.environ.get("SPARK_AGENT_CONTEXT_LIMIT", "").strip()
+    if limit_raw:
+        try:
+            limit = max(1, int(limit_raw))
+        except Exception:
+            pass
+
+    context, _ = build_compact_context(project_dir=project_dir, limit=limit)
+    if not context:
+        return prompt
+
+    if max_chars > 0 and len(context) > max_chars:
+        context = context[:max_chars].rstrip()
+
+    return f"{context}\n\n{prompt}"
 
 
 @dataclass
