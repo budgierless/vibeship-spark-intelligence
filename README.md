@@ -63,6 +63,38 @@ Mind provides persistent semantic memory. Without it, Spark still works but lear
 python -m spark.cli status
 ```
 
+### 4. Session Bootstrap (Recommended)
+
+Run a lightweight sync before launching your agent to load learnings into
+platform context files.
+
+```bash
+# One-shot
+python -m spark.cli sync-context
+
+# Wrapper launchers (sync then launch)
+./scripts/spark-claude.sh
+./scripts/spark-cursor.sh
+./scripts/spark-windsurf.sh
+./scripts/spark-clawdbot.sh
+```
+
+Windows (PowerShell / CMD):
+```bat
+scripts\spark-claude.bat
+scripts\spark-cursor.bat
+scripts\spark-windsurf.bat
+scripts\spark-clawdbot.bat
+```
+
+Clawdbot path override (optional):
+```bash
+SPARK_CLAWDBOT_CONTEXT_PATH=~/.clawdbot/agents/main/SPARK_CONTEXT.md
+```
+
+Optional: set a scheduled task to run `python -m spark.cli sync-context` every
+10–30 minutes for sessions started outside wrappers (see `docs/QUICKSTART.md`).
+
 Local dev alternative (from repo root):
 
 ```bash

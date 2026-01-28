@@ -64,6 +64,21 @@ python3 cli.py write
 # Creates .learnings/LEARNINGS.md
 ```
 
+## Optional: Scheduled Sync Backup
+
+If you want a safety net (for sessions launched outside wrappers), run sync on a timer.
+
+**Windows Task Scheduler**
+- Action: `python`
+- Args: `-m spark.cli sync-context`
+- Start in: your repo root
+- Trigger: every 10–30 minutes
+
+**macOS/Linux (cron)**
+```
+*/20 * * * * cd /path/to/vibeship-spark-intelligence && python3 -m spark.cli sync-context >/dev/null 2>&1
+```
+
 ### Promote High-Value Insights
 
 ```bash

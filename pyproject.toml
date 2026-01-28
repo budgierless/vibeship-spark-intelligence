@@ -53,6 +53,7 @@ Repository = "https://github.com/vibeforge1111/vibeship-spark-intelligence"
 
 [project.scripts]
 spark = "spark.cli:main"
+spark-sync = "lib.context_sync:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

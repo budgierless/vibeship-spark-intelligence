@@ -26,6 +26,7 @@ from lib.queue import get_queue_stats, read_recent_events, count_events
 from lib.aha_tracker import get_aha_tracker
 from lib.spark_voice import get_spark_voice
 from lib.growth_tracker import get_growth_tracker
+from lib.context_sync import sync_context
 from lib.memory_capture import (
     process_recent_memory_events,
     list_pending as capture_list_pending,
@@ -177,6 +178,18 @@ def cmd_write(args):
     print("[SPARK] Writing learnings to markdown...")
     stats = write_all_learnings()
     print(f"\nResults: {json.dumps(stats, indent=2)}")
+
+
+def cmd_sync_context(args):
+    """Sync bootstrap context to platform outputs."""
+    project_dir = Path(args.project).expanduser() if args.project else None
+    stats = sync_context(
+        project_dir=project_dir,
+        min_reliability=args.min_reliability,
+        min_validations=args.min_validations,
+        limit=args.limit,
+    )
+    print(json.dumps({"selected": stats.selected, "targets": stats.targets}, indent=2))
 
 
 def cmd_health(args):
@@ -555,6 +568,13 @@ Examples:
     
     # write
     subparsers.add_parser("write", help="Write learnings to markdown")
+
+    # sync-context
+    sync_ctx = subparsers.add_parser("sync-context", help="Sync bootstrap context to outputs")
+    sync_ctx.add_argument("--project", "-p", default=None, help="Project root for file outputs")
+    sync_ctx.add_argument("--min-reliability", type=float, default=0.7, help="Minimum reliability")
+    sync_ctx.add_argument("--min-validations", type=int, default=3, help="Minimum validations")
+    sync_ctx.add_argument("--limit", type=int, default=12, help="Max items")
     
     # health
     subparsers.add_parser("health", help="Health check")
@@ -633,6 +653,7 @@ Examples:
         "learnings": cmd_learnings,
         "promote": cmd_promote,
         "write": cmd_write,
+        "sync-context": cmd_sync_context,
         "health": cmd_health,
         "events": cmd_events,
         "capture": cmd_capture,
