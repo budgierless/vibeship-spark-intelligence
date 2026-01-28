@@ -20,6 +20,7 @@ from .correction import CorrectionDetector
 from .sentiment import SentimentDetector
 from .repetition import RepetitionDetector
 from .sequence import SequenceDetector
+from .semantic import SemanticIntentDetector
 
 
 # Confidence threshold to trigger learning
@@ -65,6 +66,7 @@ class PatternAggregator:
             SentimentDetector(),
             RepetitionDetector(),
             SequenceDetector(),
+            SemanticIntentDetector(),
         ]
         self._patterns_count = 0
         self._session_patterns: Dict[str, List[DetectedPattern]] = {}
@@ -187,7 +189,7 @@ class PatternAggregator:
             if not pattern.suggested_insight:
                 continue
 
-            # Map pattern type to cognitive category
+            # Map pattern type to cognitive category (override if detector suggests one)
             category_map = {
                 PatternType.CORRECTION: CognitiveCategory.USER_UNDERSTANDING,
                 PatternType.SATISFACTION: CognitiveCategory.USER_UNDERSTANDING,
@@ -195,9 +197,15 @@ class PatternAggregator:
                 PatternType.REPETITION: CognitiveCategory.USER_UNDERSTANDING,
                 PatternType.SEQUENCE_SUCCESS: CognitiveCategory.REASONING,
                 PatternType.SEQUENCE_FAILURE: CognitiveCategory.SELF_AWARENESS,
+                PatternType.STYLE: CognitiveCategory.USER_UNDERSTANDING,
             }
 
             category = category_map.get(pattern.pattern_type, CognitiveCategory.CONTEXT)
+            if pattern.suggested_category:
+                try:
+                    category = CognitiveCategory(pattern.suggested_category)
+                except Exception:
+                    pass
 
             # Create insight
             insight = learner.add_insight(

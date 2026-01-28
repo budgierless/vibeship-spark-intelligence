@@ -28,6 +28,8 @@ It combines:
 - **Persistent memory** — stores learnings in Mind for semantic retrieval
 - **Human-readable output** — writes to `.learnings/` markdown files
 - **Auto-promotion** — elevates high-value insights to CLAUDE.md/AGENTS.md
+- **Context-aware bootstrap** — filters learnings by project stack
+- **Semantic intent detection** — catches polite redirects and implicit preferences
 - **Skill extraction** — converts patterns into reusable skills
 
 ---

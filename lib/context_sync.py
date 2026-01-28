@@ -17,6 +17,7 @@ from .output_adapters import (
     write_clawdbot,
     write_exports,
 )
+from .project_context import get_project_context, filter_insights_for_context
 from .sync_tracker import get_sync_tracker
 
 
@@ -73,6 +74,7 @@ def _select_insights(
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = DEFAULT_MAX_ITEMS,
     cognitive: Optional[CognitiveLearner] = None,
+    project_context: Optional[Dict] = None,
 ) -> List[CognitiveInsight]:
     cognitive = cognitive or CognitiveLearner()
 
@@ -85,6 +87,8 @@ def _select_insights(
     )
 
     picked = [i for i in raw if not _is_low_value(i.insight)]
+    if project_context is not None:
+        picked = filter_insights_for_context(picked, project_context)
 
     picked.sort(
         key=lambda i: (_category_weight(i.category), cognitive.effective_reliability(i), i.times_validated, i.confidence),
@@ -180,14 +184,21 @@ def sync_context(
     # Prune stale insights (conservative defaults)
     cognitive.prune_stale(max_age_days=180.0, min_effective=0.2)
 
+    root = project_dir or Path.cwd()
+    project_context = None
+    try:
+        project_context = get_project_context(root)
+    except Exception:
+        project_context = None
+
     insights = _select_insights(
         min_reliability=min_reliability,
         min_validations=min_validations,
         limit=limit,
         cognitive=cognitive,
+        project_context=project_context,
     )
 
-    root = project_dir or Path.cwd()
     promoted = _load_promoted_lines(root) if include_promoted else []
     # De-dupe promoted vs selected insights
     seen = {_normalize_text(i.insight) for i in insights}

@@ -178,6 +178,12 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+**Phase 4 status (in progress):**
+- Added `lib/project_context.py` with top-level detection + cache.
+- Sync now filters bootstrap insights by project context.
+- Added `SemanticIntentDetector` (polite redirects, implicit preferences) with repetition gating.
+- Agent context injection is still pending.
+
 ### Project Context Detection
 
 | File | Detects |

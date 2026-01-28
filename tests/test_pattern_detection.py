@@ -11,6 +11,7 @@ from lib.pattern_detection import (
     SentimentDetector,
     RepetitionDetector,
     SequenceDetector,
+    SemanticIntentDetector,
     PatternAggregator,
     process_pattern_events,
 )
@@ -181,6 +182,41 @@ class TestSequenceDetector:
         assert len(streak_patterns) >= 1
 
 
+class TestSemanticIntentDetector:
+    """Test semantic intent detection."""
+
+    def setup_method(self):
+        self.detector = SemanticIntentDetector()
+
+    def test_redirect_signal(self):
+        """Detects polite redirect with low confidence."""
+        event = {
+            "session_id": "test",
+            "hook_event": "UserPromptSubmit",
+            "payload": {"text": "what about the config file instead"},
+        }
+        patterns = self.detector.process_event(event)
+        assert len(patterns) == 1
+        assert patterns[0].pattern_type == PatternType.CORRECTION
+        assert patterns[0].confidence < 0.7
+
+    def test_repeated_preference_promotes(self):
+        """Repeated redirect should cross learning threshold."""
+        event = {
+            "session_id": "test2",
+            "hook_event": "UserPromptSubmit",
+            "payload": {"text": "let's go with the config file"},
+        }
+        patterns = self.detector.process_event(event)
+        assert len(patterns) == 1
+        assert patterns[0].confidence < 0.7
+
+        patterns = self.detector.process_event(event)
+        assert len(patterns) == 1
+        assert patterns[0].confidence >= 0.7
+        assert patterns[0].suggested_insight is not None
+
+
 class TestPatternAggregator:
     """Test pattern aggregator."""
 
@@ -218,7 +254,7 @@ class TestPatternAggregator:
         stats = self.aggregator.get_stats()
         assert "total_patterns_detected" in stats
         assert "detectors" in stats
-        assert len(stats["detectors"]) == 4  # 4 detectors
+        assert len(stats["detectors"]) == 5  # 5 detectors
 
 
 def test_process_pattern_events_no_queue(tmp_path, monkeypatch):
