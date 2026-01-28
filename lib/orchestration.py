@@ -158,11 +158,18 @@ class SparkOrchestrator:
     # -------- Handoffs --------
     def record_handoff(self, from_agent: str, to_agent: str, context: Dict, success: Optional[bool] = None) -> str:
         handoff_id = f"handoff_{int(time.time() * 1000)}"
+        ctx = dict(context or {})
+        prompt = ctx.get("prompt")
+        if isinstance(prompt, str):
+            injected = inject_agent_context(prompt, project_dir=None)
+            if injected != prompt:
+                ctx["prompt"] = injected
+                ctx["spark_context_injected"] = True
         entry = {
             "handoff_id": handoff_id,
             "from_agent": from_agent,
             "to_agent": to_agent,
-            "context": context or {},
+            "context": ctx,
             "success": success,
             "timestamp": time.time(),
         }

@@ -40,3 +40,19 @@ def test_inject_agent_context_opt_in(monkeypatch):
     out = orch_mod.inject_agent_context("hello")
     assert out.startswith("CTX BLOCK")
     assert out.endswith("hello")
+
+
+def test_record_handoff_injects_prompt(tmp_path, monkeypatch):
+    import json
+    import lib.orchestration as orch_mod
+
+    monkeypatch.setenv("SPARK_AGENT_INJECT", "1")
+    monkeypatch.setattr(orch_mod, "build_compact_context", lambda **_: ("CTX", 1))
+
+    orch = orch_mod.SparkOrchestrator(root_dir=tmp_path)
+    orch.record_handoff("main", "agent-x", {"prompt": "do thing"})
+
+    data = (tmp_path / "handoffs.jsonl").read_text(encoding="utf-8").strip()
+    entry = json.loads(data)
+    assert entry["context"]["prompt"].startswith("CTX")
+    assert entry["context"]["spark_context_injected"] is True
