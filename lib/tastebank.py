@@ -80,7 +80,13 @@ def add_item(domain: str, source: str, notes: str = "", label: str = "", tags: O
 
     source = (source or "").strip()
     notes = (notes or "").strip()
-    label = (label or "").strip() or source[:60]
+    label = (label or "").strip()
+
+    # Strip channel prefixes if a caller passed raw transcript text as label
+    label = re.sub(r"^\s*\[[^\]]+\]\s*", "", label)
+
+    if not label:
+        label = source[:60]
 
     tags = tags or []
     signals = signals or []
