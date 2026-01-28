@@ -82,8 +82,9 @@ def add_item(domain: str, source: str, notes: str = "", label: str = "", tags: O
     notes = (notes or "").strip()
     label = (label or "").strip()
 
-    # Strip channel prefixes if a caller passed raw transcript text as label
+    # Strip channel prefixes / message_id if a caller passed raw transcript text as label
     label = re.sub(r"^\s*\[[^\]]+\]\s*", "", label)
+    label = re.sub(r"\n?\[message_id:.*?\]\s*$", "", label, flags=re.IGNORECASE | re.DOTALL).strip()
 
     if not label:
         label = source[:60]
@@ -91,8 +92,34 @@ def add_item(domain: str, source: str, notes: str = "", label: str = "", tags: O
     tags = tags or []
     signals = signals or []
 
-    # Dedupe by (domain + normalized source)
+    # Dedupe by (domain + normalized source). If already present, return existing
+    # without appending (prevents duplicates from repeated capture loops).
     item_id = _hash_id(d, (source or '').strip().lower()[:180])
+
+    path = _file(d)
+    if path.exists():
+        try:
+            for line in reversed(path.read_text(encoding="utf-8").splitlines()[-800:]):
+                try:
+                    existing = json.loads(line)
+                except Exception:
+                    continue
+                if existing.get("item_id") == item_id:
+                    return TasteItem(
+                        item_id=existing.get("item_id"),
+                        created_at=float(existing.get("created_at") or time.time()),
+                        domain=str(existing.get("domain") or d),
+                        label=str(existing.get("label") or label),
+                        source=str(existing.get("source") or source),
+                        notes=str(existing.get("notes") or notes),
+                        tags=list(existing.get("tags") or []),
+                        signals=list(existing.get("signals") or []),
+                        scope=str(existing.get("scope") or scope),
+                        project_key=existing.get("project_key"),
+                    )
+        except Exception:
+            pass
+
     item = TasteItem(
         item_id=item_id,
         created_at=time.time(),
@@ -106,7 +133,7 @@ def add_item(domain: str, source: str, notes: str = "", label: str = "", tags: O
         project_key=project_key,
     )
 
-    with _file(d).open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(item.to_dict(), ensure_ascii=False) + "\n")
 
     return item
@@ -211,6 +238,8 @@ def parse_like_message(text: str) -> Optional[Dict[str, Any]]:
 
     raw = (text or "").strip()
     raw = re.sub(r"^\s*\[[^\]]+\]\s*", "", raw)
+    # Also strip any trailing message_id suffix that Clawdbot may include
+    raw = re.sub(r"\n?\[message_id:.*?\]\s*$", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
     t = raw.lower()
 
     if not ("i like" in t or "i love" in t):
