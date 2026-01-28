@@ -72,8 +72,9 @@ SOFT_TRIGGERS = {
     "compatibility": 0.35,
     "adaptability": 0.35,
     "should": 0.25,
-    "must": 0.35,
+    "must": 0.4,
     "non-negotiable": 0.55,
+    "for this project": 0.65,
 }
 
 DECISION_MARKERS = {
@@ -203,8 +204,8 @@ def _make_id(session_id: str, text: str) -> str:
 # Core processing
 # -----------------------------
 
-AUTO_SAVE_THRESHOLD = 0.88
-SUGGEST_THRESHOLD = 0.62
+AUTO_SAVE_THRESHOLD = 0.82
+SUGGEST_THRESHOLD = 0.55
 
 
 _REMEMBER_PREFIX_RE = re.compile(r"^\s*(remember this|note this|save this)\s*:\s*", re.IGNORECASE)
