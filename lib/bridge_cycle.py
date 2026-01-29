@@ -13,6 +13,7 @@ from lib.tastebank import parse_like_message, add_item
 from lib.queue import read_recent_events, EventType
 from lib.pattern_detection import process_pattern_events
 from lib.validation_loop import process_validation_events
+from lib.prediction_loop import process_prediction_cycle
 from lib.content_learner import learn_from_edit_event
 from lib.diagnostics import log_debug
 
@@ -34,6 +35,7 @@ def run_bridge_cycle(
         "tastebank_saved": False,
         "pattern_processed": 0,
         "validation": {},
+        "prediction": {},
         "content_learned": 0,
         "errors": [],
     }
@@ -80,6 +82,12 @@ def run_bridge_cycle(
     except Exception as e:
         stats["errors"].append("validation")
         log_debug("bridge_worker", "validation loop failed", e)
+
+    try:
+        stats["prediction"] = process_prediction_cycle(limit=pattern_limit)
+    except Exception as e:
+        stats["errors"].append("prediction")
+        log_debug("bridge_worker", "prediction loop failed", e)
 
     # Content learning from Edit/Write events
     try:

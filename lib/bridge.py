@@ -16,6 +16,7 @@ from typing import List, Dict, Any, Optional
 from lib.memory_banks import infer_project_key, retrieve as bank_retrieve
 from lib.tastebank import infer_domain as taste_infer_domain, retrieve as taste_retrieve
 from lib.diagnostics import log_debug
+from lib.exposure_tracker import record_exposures
 
 # Paths
 SPARK_DIR = Path(__file__).parent.parent
@@ -69,7 +70,7 @@ def get_high_value_insights(
     cognitive = CognitiveLearner()
     valuable = []
     
-    for _, insight in cognitive.insights.items():
+    for key, insight in cognitive.insights.items():
         if _is_low_value_insight(insight.insight):
             continue
         if (
@@ -77,6 +78,7 @@ def get_high_value_insights(
             or (high_validation_override and insight.times_validated >= high_validation_override)
         ):
             valuable.append({
+                "insight_key": key,
                 "category": insight.category.value,
                 "insight": insight.insight,
                 "reliability": insight.reliability,
@@ -143,6 +145,7 @@ def get_failure_warnings(
     cog = CognitiveLearner()
     warnings = []
 
+    key_by_id = {id(v): k for k, v in cog.insights.items()}
     for ins in cog.get_self_awareness_insights():
         text = ins.insight or ""
         tl = text.lower()
@@ -156,6 +159,7 @@ def get_failure_warnings(
         ):
             continue
         warnings.append({
+            "insight_key": key_by_id.get(id(ins)),
             "category": ins.category.value,
             "text": text,
             "reliability": ins.reliability,
@@ -437,6 +441,16 @@ def generate_active_context(query: Optional[str] = None) -> str:
         for w in warnings:
             lines.append(f"- [{w['category']}] {w['text']}")
         lines.append("")
+        try:
+            record_exposures(
+                "spark_context:warnings",
+                [
+                    {"insight_key": w.get("insight_key"), "category": w.get("category"), "text": w.get("text")}
+                    for w in warnings
+                ],
+            )
+        except Exception:
+            pass
 
     # Micro-personalization (optional)
     recog = _recognition_snippet(query=query or "", contextual=contextual, lessons=lessons)
@@ -451,6 +465,16 @@ def generate_active_context(query: Optional[str] = None) -> str:
         for ins in insights[:5]:
             lines.append(f"- [{ins['category']}] {ins['insight']}")
         lines.append("")
+        try:
+            record_exposures(
+                "spark_context:proven",
+                [
+                    {"insight_key": i.get("insight_key"), "category": i.get("category"), "text": i.get("insight")}
+                    for i in insights[:5]
+                ],
+            )
+        except Exception:
+            pass
     
     # Lessons from surprises (hard-won knowledge)
     if lessons:

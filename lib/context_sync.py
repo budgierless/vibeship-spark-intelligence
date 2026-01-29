@@ -19,6 +19,7 @@ from .output_adapters import (
 )
 from .project_context import get_project_context, filter_insights_for_context
 from .sync_tracker import get_sync_tracker
+from .exposure_tracker import record_exposures
 
 
 DEFAULT_MIN_RELIABILITY = 0.7
@@ -304,6 +305,19 @@ def sync_context(
         cognitive=cognitive,
         project_context=project_context,
     )
+
+    try:
+        key_by_id = {id(v): k for k, v in cognitive.insights.items()}
+        exposures = []
+        for ins in insights:
+            exposures.append({
+                "insight_key": key_by_id.get(id(ins)),
+                "category": ins.category.value,
+                "text": ins.insight,
+            })
+        record_exposures("sync_context", exposures)
+    except Exception:
+        pass
 
     promoted = _load_promoted_lines(root) if include_promoted else []
     # De-dupe promoted vs selected insights

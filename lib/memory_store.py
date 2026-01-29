@@ -10,18 +10,15 @@ No server required. Falls back gracefully if embeddings or FTS5 are unavailable.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from array import array
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from lib.embeddings import embed_texts
 
 DB_PATH = Path.home() / ".spark" / "memory_store.sqlite"
 _FTS_AVAILABLE: Optional[bool] = None
-_EMBEDDER = None
-_EMBEDDER_ERROR = None
-
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -112,37 +109,8 @@ def _build_fts_query(text: str) -> str:
     return " OR ".join(tokens)
 
 
-def _get_embedder():
-    global _EMBEDDER, _EMBEDDER_ERROR
-    if os.environ.get("SPARK_EMBEDDINGS", "1").lower() in ("0", "false", "no"):
-        return None
-    if _EMBEDDER is not None:
-        return _EMBEDDER
-    if _EMBEDDER_ERROR is not None:
-        return None
-    try:
-        from fastembed import TextEmbedding
-    except Exception as e:
-        _EMBEDDER_ERROR = e
-        return None
-    model = os.environ.get("SPARK_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
-    try:
-        _EMBEDDER = TextEmbedding(model_name=model)
-    except Exception as e:
-        _EMBEDDER_ERROR = e
-        return None
-    return _EMBEDDER
-
-
 def _embed_texts(texts: List[str]) -> Optional[List[List[float]]]:
-    embedder = _get_embedder()
-    if embedder is None:
-        return None
-    try:
-        vectors = list(embedder.embed(texts))
-        return [list(v) for v in vectors]
-    except Exception:
-        return None
+    return embed_texts(texts)
 
 
 def _vector_to_blob(vec: List[float]) -> bytes:
