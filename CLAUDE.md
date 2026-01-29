@@ -8,20 +8,20 @@
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-29T21:08:53
+Last updated: 2026-01-30T01:16:34
 
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first  tasks (62% reliable, 1123 validations)
 - [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (57% reliable, 611 validations)
 - [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (51% reliable, 497 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (46% reliable, 9392 validations)
 - [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (24% reliable, 147 validations)
 - [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (15% reliable, 85 validations)
 - [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (15% reliable, 80 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (58% reliable, 642 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout (recovered 100% tasks (13% reliable, 73 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (43% reliable, 5720 validations)
 - [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 9 validations)
 - [reasoning] Sequence 'Bash -> Bash -> Bash' worked well (100% reliable, 5 validations)
 - [reasoning] Pattern 'Glob -> Read' works well: Find files then read them (100% reliable, 3 validations)
 - [reasoning] Sequence 'mcp__spark__spark_status -> mcp__spark__spark_stats -> mcp__spark__spark_learnings -> mcp__spark__spark_process' worked well (100% reliable, 7 validations)
+- [reasoning] Sequence 'Bash -> Bash -> Bash -> Read' worked well (100% reliable, 6 validations)
 
 ## Promoted Learnings (Docs)
 - I tend to be overconfident about Edit tasks *When: When attempting Edit* (100% reliable, 4 validations)

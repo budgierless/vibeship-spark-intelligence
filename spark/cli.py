@@ -273,12 +273,16 @@ def cmd_sync_context(args):
         min_validations=args.min_validations,
         limit=args.limit,
         include_promoted=(not args.no_promoted),
+        diagnose=args.diagnose,
     )
-    print(json.dumps({
+    out = {
         "selected": stats.selected,
         "promoted_selected": stats.promoted_selected,
         "targets": stats.targets,
-    }, indent=2))
+    }
+    if args.diagnose:
+        out["diagnostics"] = stats.diagnostics or {}
+    print(json.dumps(out, indent=2))
 
 
 def cmd_decay(args):
@@ -708,6 +712,7 @@ Examples:
     sync_ctx.add_argument("--min-validations", type=int, default=3, help="Minimum validations")
     sync_ctx.add_argument("--limit", type=int, default=12, help="Max items")
     sync_ctx.add_argument("--no-promoted", action="store_true", help="Skip promoted learnings from docs")
+    sync_ctx.add_argument("--diagnose", action="store_true", help="Include selection diagnostics in output")
 
     # decay
     decay = subparsers.add_parser("decay", help="Preview or apply decay-based pruning")

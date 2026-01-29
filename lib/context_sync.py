@@ -33,6 +33,7 @@ class SyncStats:
     targets: Dict[str, str]
     selected: int
     promoted_selected: int
+    diagnostics: Optional[Dict] = None
 
 
 def _normalize_text(text: str) -> str:
@@ -91,6 +92,7 @@ def _select_insights(
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = DEFAULT_MAX_ITEMS,
     high_validation_override: int = DEFAULT_HIGH_VALIDATION_OVERRIDE,
+    diagnostics: Optional[Dict] = None,
     cognitive: Optional[CognitiveLearner] = None,
     project_context: Optional[Dict] = None,
 ) -> List[CognitiveInsight]:
@@ -103,19 +105,36 @@ def _select_insights(
         limit=max(int(limit or 0) * 3, int(limit or 0)),
         resolve_conflicts=True,
     )
+    if diagnostics is not None:
+        diagnostics.update({
+            "min_reliability": min_reliability,
+            "min_validations": min_validations,
+            "limit": limit,
+            "high_validation_override": high_validation_override,
+            "raw_ranked": len(raw),
+        })
 
     picked = [i for i in raw if not _is_low_value(i.insight)]
+    if diagnostics is not None:
+        diagnostics["filtered_low_value"] = max(0, len(raw) - len(picked))
 
     if high_validation_override and high_validation_override > 0:
+        override_candidates = 0
         for ins in cognitive.insights.values():
             if ins.times_validated < high_validation_override:
                 continue
             if _is_low_value(ins.insight):
                 continue
             picked.append(ins)
+            override_candidates += 1
+        if diagnostics is not None:
+            diagnostics["override_candidates"] = override_candidates
 
     if project_context is not None:
+        before = len(picked)
         picked = filter_insights_for_context(picked, project_context)
+        if diagnostics is not None:
+            diagnostics["filtered_context"] = max(0, before - len(picked))
 
     picked.sort(
         key=lambda i: (
@@ -131,14 +150,33 @@ def _select_insights(
     # De-dupe by normalized insight text
     seen = set()
     deduped: List[CognitiveInsight] = []
+    duplicates = 0
     for ins in picked:
         key = _normalize_text(ins.insight)
         if not key or key in seen:
+            duplicates += 1
             continue
         seen.add(key)
         deduped.append(ins)
         if len(deduped) >= max(0, int(limit or 0)):
             break
+
+    if diagnostics is not None:
+        diagnostics.update({
+            "deduped_unique": len(deduped),
+            "duplicates_dropped": duplicates,
+            "selected": [
+                {
+                    "category": i.category.value,
+                    "insight": i.insight,
+                    "reliability": round(cognitive.effective_reliability(i), 3),
+                    "validations": i.times_validated,
+                    "actionability": _actionability_score(i.insight),
+                }
+                for i in deduped[: min(5, len(deduped))]
+            ],
+        })
+
     return deduped
 
 
@@ -243,6 +281,7 @@ def sync_context(
     limit: int = DEFAULT_MAX_ITEMS,
     high_validation_override: int = DEFAULT_HIGH_VALIDATION_OVERRIDE,
     include_promoted: bool = True,
+    diagnose: bool = False,
 ) -> SyncStats:
     cognitive = CognitiveLearner()
     # Prune stale insights (conservative defaults)
@@ -255,11 +294,13 @@ def sync_context(
     except Exception:
         project_context = None
 
+    diagnostics: Optional[Dict] = {} if diagnose else None
     insights = _select_insights(
         min_reliability=min_reliability,
         min_validations=min_validations,
         limit=limit,
         high_validation_override=high_validation_override,
+        diagnostics=diagnostics,
         cognitive=cognitive,
         project_context=project_context,
     )
@@ -313,6 +354,7 @@ def sync_context(
         targets=targets,
         selected=len(insights),
         promoted_selected=len(promoted),
+        diagnostics=diagnostics,
     )
 
 
