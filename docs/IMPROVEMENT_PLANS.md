@@ -50,7 +50,7 @@ Goal: keep these in view without building them now.
 
 - Full prediction -> outcome validation loop (Phase 6)
 - Active learning questions and goal inference
-- Team/shared memory + knowledge graph (PARTIAL: cross-project sink via SQLite + optional embeddings; migration added)
+- Team/shared memory + knowledge graph (PARTIAL: cross-project sink via SQLite + optional embeddings; migration + graph-lite edges)
 
 ## Mapping to Existing Plans
 

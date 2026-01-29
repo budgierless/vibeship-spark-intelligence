@@ -58,6 +58,20 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_edges (
+          source_id TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          weight REAL,
+          reason TEXT,
+          created_at REAL,
+          PRIMARY KEY (source_id, target_id)
+        );
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_source ON memory_edges(source_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_target ON memory_edges(target_id);")
     conn.commit()
 
 
@@ -157,6 +171,82 @@ def _cosine(a: List[float], b: List[float]) -> float:
     return max(0.0, min(1.0, dot / ((na ** 0.5) * (nb ** 0.5))))
 
 
+def _upsert_edge(
+    conn: sqlite3.Connection,
+    source_id: str,
+    target_id: str,
+    weight: float,
+    reason: str,
+    created_at: float,
+) -> None:
+    if not source_id or not target_id or source_id == target_id:
+        return
+    row = conn.execute(
+        "SELECT weight FROM memory_edges WHERE source_id = ? AND target_id = ?",
+        (source_id, target_id),
+    ).fetchone()
+    if row:
+        new_weight = min(1.0, float(row["weight"] or 0.0) + 0.05)
+        conn.execute(
+            "UPDATE memory_edges SET weight = ?, reason = ?, created_at = ? WHERE source_id = ? AND target_id = ?",
+            (new_weight, reason, created_at, source_id, target_id),
+        )
+    else:
+        conn.execute(
+            "INSERT OR REPLACE INTO memory_edges (source_id, target_id, weight, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+            (source_id, target_id, weight, reason, created_at),
+        )
+
+
+def _link_edges(
+    conn: sqlite3.Connection,
+    memory_id: str,
+    project_key: Optional[str],
+    scope: str,
+    created_at: float,
+    max_project_links: int = 5,
+    max_global_links: int = 3,
+) -> None:
+    targets: List[sqlite3.Row] = []
+    if project_key:
+        targets.extend(
+            conn.execute(
+                """
+                SELECT memory_id, project_key, scope
+                FROM memories
+                WHERE memory_id != ? AND project_key = ?
+                ORDER BY created_at DESC
+                LIMIT ?;
+                """,
+                (memory_id, project_key, max_project_links),
+            ).fetchall()
+        )
+
+    targets.extend(
+        conn.execute(
+            """
+            SELECT memory_id, project_key, scope
+            FROM memories
+            WHERE memory_id != ? AND scope = 'global'
+            ORDER BY created_at DESC
+            LIMIT ?;
+            """,
+            (memory_id, max_global_links),
+        ).fetchall()
+    )
+
+    seen = set()
+    for row in targets:
+        tid = row["memory_id"]
+        if not tid or tid in seen:
+            continue
+        seen.add(tid)
+        reason = "cooccurrence:project" if row["project_key"] == project_key and project_key else "cooccurrence:global"
+        weight = 0.6 if reason.endswith("project") else 0.4
+        _upsert_edge(conn, memory_id, tid, weight, reason, created_at)
+        _upsert_edge(conn, tid, memory_id, weight, reason, created_at)
+
+
 def upsert_entry(
     *,
     memory_id: str,
@@ -202,6 +292,8 @@ def upsert_entry(
                 "INSERT OR REPLACE INTO memories_vec (memory_id, dim, vector) VALUES (?, ?, ?)",
                 (memory_id, len(vec), _vector_to_blob(vec)),
             )
+
+        _link_edges(conn, memory_id, project_key, scope, created_at)
 
         conn.commit()
     finally:
@@ -321,6 +413,76 @@ def retrieve(
                     it["score"] = (0.6 * it["score"]) + (0.4 * cos)
 
         items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
-        return items[: max(0, int(limit or 0))]
+
+        # Edge expansion (graph-lite): add related items with small score boost.
+        want = max(0, int(limit or 0))
+        if want <= 0:
+            return []
+        if len(items) >= want:
+            return items[:want]
+
+        seed_ids = [i["entry_id"] for i in items[: min(5, len(items))] if i.get("entry_id")]
+        if not seed_ids:
+            return items[:want]
+
+        placeholders = ",".join("?" for _ in seed_ids)
+        edge_rows = conn.execute(
+            f"""
+            SELECT source_id, target_id, weight, reason
+            FROM memory_edges
+            WHERE source_id IN ({placeholders})
+            ORDER BY weight DESC
+            LIMIT 25;
+            """,
+            seed_ids,
+        ).fetchall()
+
+        edge_targets = []
+        for r in edge_rows:
+            edge_targets.append((r["target_id"], float(r["weight"] or 0.0), r["reason"]))
+
+        if not edge_targets:
+            return items[:want]
+
+        existing = {i["entry_id"] for i in items}
+        target_ids = [t[0] for t in edge_targets if t[0] and t[0] not in existing]
+        if not target_ids:
+            return items[:want]
+
+        placeholders = ",".join("?" for _ in target_ids)
+        rows = conn.execute(
+            f"""
+            SELECT memory_id, content, scope, project_key, category
+            FROM memories
+            WHERE memory_id IN ({placeholders});
+            """,
+            target_ids,
+        ).fetchall()
+        row_map = {r["memory_id"]: r for r in rows}
+
+        for tid, weight, reason in edge_targets:
+            if len(items) >= want:
+                break
+            if tid in existing:
+                continue
+            r = row_map.get(tid)
+            if not r:
+                continue
+            if project_key and r["project_key"] not in (project_key, None, "") and r["scope"] != "global":
+                continue
+            items.append({
+                "entry_id": r["memory_id"],
+                "text": r["content"],
+                "scope": r["scope"],
+                "project_key": r["project_key"],
+                "category": r["category"],
+                "bm25": None,
+                "score": 0.15 * weight,
+                "edge_reason": reason,
+            })
+            existing.add(tid)
+
+        items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
+        return items[:want]
     finally:
         conn.close()
