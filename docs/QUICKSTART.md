@@ -195,6 +195,7 @@ CLAUDE.md                      # Promoted conventions
 | `sync` | Sync to Mind (if running) |
 | `queue` | Process offline sync queue |
 | `process` | Run bridge worker cycle or drain backlog |
+| `validate` | Run validation scan on recent events |
 | `events` | Show recent captured events |
 
 ## Troubleshooting

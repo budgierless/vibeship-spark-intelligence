@@ -27,6 +27,7 @@ from lib.queue import quick_capture, EventType
 from lib.orchestration import register_agent, recommend_agent, record_handoff, get_orchestrator
 from lib.bridge_cycle import read_bridge_heartbeat
 from lib.pattern_detection.worker import get_pattern_backlog
+from lib.validation_loop import get_validation_backlog
 from lib.diagnostics import setup_component_logging
 
 PORT = 8787
@@ -70,6 +71,7 @@ class Handler(BaseHTTPRequestHandler):
                     "last_heartbeat": heartbeat.get("ts"),
                     "stats": heartbeat.get("stats") or {},
                     "pattern_backlog": get_pattern_backlog(),
+                    "validation_backlog": get_validation_backlog(),
                 },
             })
         if path == "/agents":

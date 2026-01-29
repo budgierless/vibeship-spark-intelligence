@@ -10,7 +10,7 @@
 | **P3** | Project Context + Semantic Matching | HIGH | Medium | ✅ DONE |
 | **P4** | Agent Context Injection | HIGH | Medium | ✅ DONE |
 | **P5** | Worker Health Monitoring | HIGH | Medium | ✅ DONE |
-| **P6** | Validation Loop (Predictions) | MEDIUM | Medium | 🔴 NOT STARTED |
+| **P6** | Validation Loop (Predictions) | MEDIUM | Medium | 🟡 IN PROGRESS |
 
 ---
 
@@ -239,7 +239,7 @@ All in `lib/cognitive_learner.py`:
 
 ---
 
-## Phase 6: Validation Loop (NOT STARTED)
+## Phase 6: Validation Loop (IN PROGRESS)
 
 ### Prediction → Outcome → Learning
 
@@ -266,6 +266,11 @@ All in `lib/cognitive_learner.py`:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Implemented (v1)
+- `lib/validation_loop.py` - validates user preference/communication insights from prompts
+- `lib/bridge_cycle.py` - runs validation each cycle
+- `spark validate` - manual scan command
+
 ---
 
 ## Summary
@@ -277,7 +282,7 @@ All in `lib/cognitive_learner.py`:
 | Phase 3: Decay + Conflicts | ✅ DONE | `lib/cognitive_learner.py` |
 | Phase 4: Context + Semantic | ✅ DONE | `lib/project_context.py`, `lib/orchestration.py` |
 | Phase 5: Worker Health | ✅ DONE | `scripts/watchdog.py`, `lib/bridge_cycle.py` |
-| Phase 6: Validation Loop | 🔴 NOT STARTED | - |
+| Phase 6: Validation Loop | 🟡 IN PROGRESS | `lib/validation_loop.py`, `lib/bridge_cycle.py` |
 
 ---
 

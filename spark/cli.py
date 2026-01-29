@@ -7,6 +7,7 @@ Usage:
     python -m spark.cli sync       # Sync insights to Mind
     python -m spark.cli queue      # Process offline queue
     python -m spark.cli process    # Run bridge worker cycle / drain backlog
+    python -m spark.cli validate   # Run validation scan
     python -m spark.cli learnings  # Show recent learnings
     python -m spark.cli promote    # Run promotion check
     python -m spark.cli write      # Write learnings to markdown
@@ -31,6 +32,7 @@ from lib.growth_tracker import get_growth_tracker
 from lib.context_sync import sync_context
 from lib.bridge_cycle import run_bridge_cycle, write_bridge_heartbeat, bridge_heartbeat_age_s
 from lib.pattern_detection import get_pattern_backlog
+from lib.validation_loop import process_validation_events, get_validation_backlog
 from lib.memory_capture import (
     process_recent_memory_events,
     list_pending as capture_list_pending,
@@ -88,6 +90,7 @@ def cmd_status(args):
     print(f"   Size: {queue_stats['size_mb']} MB")
     print(f"   Needs Rotation: {'Yes' if queue_stats['needs_rotation'] else 'No'}")
     print(f"   Pattern Backlog: {get_pattern_backlog()}")
+    print(f"   Validation Backlog: {get_validation_backlog()}")
     print()
 
     # Worker heartbeat
@@ -199,6 +202,16 @@ def cmd_process(args):
         time.sleep(max(0.5, float(args.interval)))
 
     print(f"[SPARK] bridge_worker cycles: {iterations}, patterns processed: {processed}")
+
+
+def cmd_validate(args):
+    """Run validation loop scan on recent events."""
+    stats = process_validation_events(limit=args.limit)
+    print("[SPARK] Validation scan")
+    print(f"  processed: {stats.get('processed', 0)}")
+    print(f"  validated: {stats.get('validated', 0)}")
+    print(f"  contradicted: {stats.get('contradicted', 0)}")
+    print(f"  surprises: {stats.get('surprises', 0)}")
 
 
 def cmd_learnings(args):
@@ -617,6 +630,7 @@ Commands:
   sync        Sync cognitive insights to Mind
   queue       Process offline queue
   process     Run bridge worker cycle or drain backlog
+  validate    Run validation scan on recent events
   learnings   Show recent cognitive insights
   promote     Run promotion check
   write       Write learnings to markdown files
@@ -654,6 +668,10 @@ Examples:
     process_parser.add_argument("--pattern-limit", type=int, default=200, help="Events per cycle for pattern detection")
     process_parser.add_argument("--memory-limit", type=int, default=60, help="Events per cycle for memory capture")
     process_parser.add_argument("--query", default=None, help="Optional fixed query for context")
+
+    # validate
+    validate_parser = subparsers.add_parser("validate", help="Run validation scan on recent events")
+    validate_parser.add_argument("--limit", "-n", type=int, default=200, help="Events to scan")
     
     # learnings
     learnings_parser = subparsers.add_parser("learnings", help="Show recent learnings")
@@ -756,6 +774,7 @@ Examples:
         "sync": cmd_sync,
         "queue": cmd_queue,
         "process": cmd_process,
+        "validate": cmd_validate,
         "learnings": cmd_learnings,
         "promote": cmd_promote,
         "write": cmd_write,

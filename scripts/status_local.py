@@ -28,12 +28,13 @@ def _bridge_heartbeat_age() -> float | None:
     return bridge_heartbeat_age_s()
 
 
-def _queue_counts() -> tuple[int, int]:
+def _queue_counts() -> tuple[int, int, int]:
     sys.path.insert(0, str(SPARK_DIR))
     from lib.queue import count_events
     from lib.pattern_detection.worker import get_pattern_backlog
+    from lib.validation_loop import get_validation_backlog
 
-    return count_events(), get_pattern_backlog()
+    return count_events(), get_pattern_backlog(), get_validation_backlog()
 
 
 def main() -> None:
@@ -51,8 +52,10 @@ def main() -> None:
         print(f"[spark] bridge_worker: {status} (last {int(hb_age)}s ago)")
 
     try:
-        queue_count, backlog = _queue_counts()
-        print(f"[spark] queue: {queue_count} events (pattern backlog {backlog})")
+        queue_count, pattern_backlog, validation_backlog = _queue_counts()
+        print(
+            f"[spark] queue: {queue_count} events (pattern backlog {pattern_backlog}, validation backlog {validation_backlog})"
+        )
     except Exception as e:
         print(f"[spark] queue: error ({e})")
 

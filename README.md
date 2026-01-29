@@ -326,6 +326,9 @@ python -m spark.cli sync
 # Process offline queue
 python -m spark.cli queue
 
+# Run validation scan
+python -m spark.cli validate
+
 # View recent learnings
 python -m spark.cli learnings
 

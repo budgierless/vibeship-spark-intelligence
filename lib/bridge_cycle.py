@@ -12,6 +12,7 @@ from lib.memory_capture import process_recent_memory_events
 from lib.tastebank import parse_like_message, add_item
 from lib.queue import read_recent_events, EventType
 from lib.pattern_detection import process_pattern_events
+from lib.validation_loop import process_validation_events
 from lib.diagnostics import log_debug
 
 
@@ -31,6 +32,7 @@ def run_bridge_cycle(
         "memory": {},
         "tastebank_saved": False,
         "pattern_processed": 0,
+        "validation": {},
         "errors": [],
     }
 
@@ -71,6 +73,12 @@ def run_bridge_cycle(
         stats["errors"].append("patterns")
         log_debug("bridge_worker", "pattern detection failed", e)
 
+    try:
+        stats["validation"] = process_validation_events(limit=pattern_limit)
+    except Exception as e:
+        stats["errors"].append("validation")
+        log_debug("bridge_worker", "validation loop failed", e)
+
     return stats
 
 
@@ -84,6 +92,7 @@ def write_bridge_heartbeat(stats: Dict[str, Any]) -> bool:
                 "context_updated": bool(stats.get("context_updated")),
                 "pattern_processed": int(stats.get("pattern_processed") or 0),
                 "memory": stats.get("memory") or {},
+                "validation": stats.get("validation") or {},
                 "errors": stats.get("errors") or [],
             },
         }

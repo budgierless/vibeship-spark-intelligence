@@ -18,7 +18,7 @@
 
 ### Key Discoveries (2026-01-29)
 - **Worker Health**: Already implemented! `scripts/watchdog.py` + `lib/bridge_cycle.py` provide full health monitoring. Events accumulated because services were started manually instead of via `start_spark.bat`.
-- **Validation Loop Gap**: Decay exists but automatic prediction→outcome→learning does not.
+- **Validation Loop Gap (partial)**: v1 validates user preference/communication insights, but automatic prediction→outcome→learning is still missing.
 
 ---
 
