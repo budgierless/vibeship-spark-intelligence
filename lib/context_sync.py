@@ -25,6 +25,7 @@ DEFAULT_MIN_RELIABILITY = 0.7
 DEFAULT_MIN_VALIDATIONS = 3
 DEFAULT_MAX_ITEMS = 12
 DEFAULT_MAX_PROMOTED = 6
+DEFAULT_HIGH_VALIDATION_OVERRIDE = 50
 
 
 @dataclass
@@ -54,6 +55,22 @@ def _is_low_value(insight_text: str) -> bool:
     return False
 
 
+def _actionability_score(text: str) -> int:
+    t = (text or "").lower()
+    score = 0
+    if "fix:" in t:
+        score += 3
+    if "avoid" in t or "never" in t:
+        score += 2
+    if "do " in t or "don't" in t or "should" in t or "must" in t:
+        score += 1
+    if "use " in t or "prefer" in t or "verify" in t or "check" in t:
+        score += 1
+    if "->" in t:
+        score += 1
+    return score
+
+
 def _category_weight(category) -> int:
     order = {
         "wisdom": 7,
@@ -61,7 +78,7 @@ def _category_weight(category) -> int:
         "meta_learning": 5,
         "communication": 4,
         "user_understanding": 4,
-        "self_awareness": 3,
+        "self_awareness": 5,
         "context": 2,
         "creativity": 1,
     }
@@ -73,6 +90,7 @@ def _select_insights(
     min_reliability: float = DEFAULT_MIN_RELIABILITY,
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = DEFAULT_MAX_ITEMS,
+    high_validation_override: int = DEFAULT_HIGH_VALIDATION_OVERRIDE,
     cognitive: Optional[CognitiveLearner] = None,
     project_context: Optional[Dict] = None,
 ) -> List[CognitiveInsight]:
@@ -87,11 +105,26 @@ def _select_insights(
     )
 
     picked = [i for i in raw if not _is_low_value(i.insight)]
+
+    if high_validation_override and high_validation_override > 0:
+        for ins in cognitive.insights.values():
+            if ins.times_validated < high_validation_override:
+                continue
+            if _is_low_value(ins.insight):
+                continue
+            picked.append(ins)
+
     if project_context is not None:
         picked = filter_insights_for_context(picked, project_context)
 
     picked.sort(
-        key=lambda i: (_category_weight(i.category), cognitive.effective_reliability(i), i.times_validated, i.confidence),
+        key=lambda i: (
+            _actionability_score(i.insight),
+            _category_weight(i.category),
+            cognitive.effective_reliability(i),
+            i.times_validated,
+            i.confidence,
+        ),
         reverse=True,
     )
 
@@ -126,10 +159,12 @@ def _load_promoted_lines(project_dir: Path) -> List[str]:
         # Stop at next section header
         next_idx = tail.find("\n## ")
         block = tail if next_idx == -1 else tail[:next_idx]
-        for raw in block.splitlines():
-            s = raw.strip()
-            if s.startswith("- "):
-                lines.append(s[2:].strip())
+    for raw in block.splitlines():
+        s = raw.strip()
+        if s.startswith("- "):
+            entry = s[2:].strip()
+            if entry and not _is_low_value(entry):
+                lines.append(entry)
     # De-dupe
     seen = set()
     out: List[str] = []
@@ -178,6 +213,7 @@ def build_compact_context(
     min_reliability: float = DEFAULT_MIN_RELIABILITY,
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = 3,
+    high_validation_override: int = DEFAULT_HIGH_VALIDATION_OVERRIDE,
 ) -> Tuple[str, int]:
     """Build a compact context block for agent prompt injection."""
     cognitive = CognitiveLearner()
@@ -192,6 +228,7 @@ def build_compact_context(
         min_reliability=min_reliability,
         min_validations=min_validations,
         limit=limit,
+        high_validation_override=high_validation_override,
         cognitive=cognitive,
         project_context=project_context,
     )
@@ -204,6 +241,7 @@ def sync_context(
     min_reliability: float = DEFAULT_MIN_RELIABILITY,
     min_validations: int = DEFAULT_MIN_VALIDATIONS,
     limit: int = DEFAULT_MAX_ITEMS,
+    high_validation_override: int = DEFAULT_HIGH_VALIDATION_OVERRIDE,
     include_promoted: bool = True,
 ) -> SyncStats:
     cognitive = CognitiveLearner()
@@ -221,6 +259,7 @@ def sync_context(
         min_reliability=min_reliability,
         min_validations=min_validations,
         limit=limit,
+        high_validation_override=high_validation_override,
         cognitive=cognitive,
         project_context=project_context,
     )

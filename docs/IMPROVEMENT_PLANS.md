@@ -25,47 +25,24 @@ light-to-medium zone (KISS).
 
 Goal: improve what we surface without adding new moving parts.
 
-1) Context selection upgrades (focus on actionable insights)
-   - Prefer insights with "Fix:", "Do:", "Avoid:", or explicit instructions.
-   - Downrank or exclude "Heavy X usage" signals in context outputs.
-   - File focus: `lib/context_sync.py`
-
-2) High-validation override
-   - Surface insights with very high validation counts even if reliability < threshold.
-   - File focus: `lib/context_sync.py`
-
-3) Self-awareness boost
-   - Prefer SELF_AWARENESS patterns that reduce tool failures (path, timeout, syntax).
-   - File focus: `lib/context_sync.py`
-
-4) "Warnings" section in SPARK_CONTEXT.md
-   - Show top 3 failure patterns with short fixes.
-   - File focus: `lib/bridge.py` or `lib/context_sync.py`
-
-5) Documentation clarity
-   - State which workers must be running and how to start them.
-   - Link to `start_spark.bat` and `spark status` for checks.
-   - File focus: `docs/QUICKSTART.md`, `README.md`
+| Item | Status | Notes | File Focus |
+|---|---|---|---|
+| Context selection upgrades (actionable insights) | DONE | Actionability boost + low-value filter | `lib/context_sync.py` |
+| High-validation override | DONE | High-validated insights can surface despite lower reliability | `lib/context_sync.py` |
+| Self-awareness boost | DONE | SELF_AWARENESS weighted higher | `lib/context_sync.py` |
+| "Warnings" section in SPARK_CONTEXT.md | DONE | Warnings block added with top failure fixes | `lib/bridge.py` |
+| Documentation clarity | DONE | Workers + watchdog documented | `docs/QUICKSTART.md`, `README.md` |
 
 ### Medium (Small Code, Big Impact)
 
 Goal: fix the quality loop with minimal code additions.
 
-1) Dedupe "struggle" variants
-   - Normalize "recovered X%" variants into a single insight.
-   - File focus: `lib/cognitive_learner.py`
-
-2) Reliability backfill
-   - If reliability is missing in stored insights, compute on load.
-   - File focus: `lib/cognitive_learner.py`
-
-3) Context diagnostics
-   - Expose why an insight was included or excluded (short summary).
-   - File focus: `spark/cli.py` or `lib/context_sync.py`
-
-4) Bridge status robustness
-   - Ensure status reporting handles dict vs object shapes safely.
-   - File focus: `lib/bridge.py`
+| Item | Status | Notes | File Focus |
+|---|---|---|---|
+| Dedupe "struggle" variants | NOT BUILT | Signal dedupe exists, not struggle dedupe | `lib/cognitive_learner.py` |
+| Reliability backfill | NOT BUILT | Reliability computed at access, not backfilled | `lib/cognitive_learner.py` |
+| Context diagnostics | NOT BUILT | No include/exclude reason output | `spark/cli.py` |
+| Bridge status robustness | DONE | Handles dict vs object shapes | `lib/bridge.py` |
 
 ### Heavy (Deferred)
 

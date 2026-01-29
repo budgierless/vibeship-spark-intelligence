@@ -7,6 +7,7 @@ The missing link: learnings that actually influence behavior.
 
 import json
 import os
+import re
 from datetime import datetime
 import time
 from pathlib import Path
@@ -21,17 +22,60 @@ SPARK_DIR = Path(__file__).parent.parent
 WORKSPACE = Path(os.environ.get("SPARK_WORKSPACE", str(Path.home() / "clawd"))).expanduser()
 MEMORY_FILE = WORKSPACE / "MEMORY.md"
 SPARK_CONTEXT_FILE = WORKSPACE / "SPARK_CONTEXT.md"
+HIGH_VALIDATION_OVERRIDE = 50
 
 
-def get_high_value_insights(min_reliability: float = 0.7, min_validations: int = 2) -> List[Dict]:
+def _normalize_insight_text(text: str) -> str:
+    t = (text or "").strip().lower()
+    t = re.sub(r"\s*\(\d+\s*calls?\)", "", t)
+    t = re.sub(r"\(\s*recovered\s*\d+%?\s*\)", "", t)
+    t = re.sub(r"\brecovered\s*\d+%?\b", "recovered", t)
+    t = re.sub(r"\s+\d+$", "", t)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
+
+
+def _is_low_value_insight(text: str) -> bool:
+    t = (text or "").lower()
+    if "indicates task type" in t:
+        return True
+    if "heavy " in t and " usage" in t:
+        return True
+    return False
+
+
+def _actionability_score(text: str) -> int:
+    t = (text or "").lower()
+    score = 0
+    if "fix:" in t:
+        score += 3
+    if "avoid" in t or "never" in t:
+        score += 2
+    if "use " in t or "prefer" in t or "verify" in t or "check" in t:
+        score += 1
+    if "->" in t:
+        score += 1
+    return score
+
+
+def get_high_value_insights(
+    min_reliability: float = 0.7,
+    min_validations: int = 2,
+    high_validation_override: int = HIGH_VALIDATION_OVERRIDE,
+) -> List[Dict]:
     """Get insights that have proven reliable enough to act on."""
     from lib.cognitive_learner import CognitiveLearner
     
     cognitive = CognitiveLearner()
     valuable = []
     
-    for key, insight in cognitive.insights.items():
-        if insight.reliability >= min_reliability and insight.times_validated >= min_validations:
+    for _, insight in cognitive.insights.items():
+        if _is_low_value_insight(insight.insight):
+            continue
+        if (
+            (insight.reliability >= min_reliability and insight.times_validated >= min_validations)
+            or (high_validation_override and insight.times_validated >= high_validation_override)
+        ):
             valuable.append({
                 "category": insight.category.value,
                 "insight": insight.insight,
@@ -40,9 +84,22 @@ def get_high_value_insights(min_reliability: float = 0.7, min_validations: int =
                 "promoted": insight.promoted,
             })
     
-    # Sort by reliability * validations (confidence score)
-    valuable.sort(key=lambda x: x["reliability"] * x["validations"], reverse=True)
-    return valuable
+    # De-dupe by normalized insight text
+    seen = set()
+    deduped = []
+    for item in valuable:
+        key = _normalize_insight_text(item.get("insight") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+
+    # Sort by actionability, then reliability * validations
+    deduped.sort(
+        key=lambda x: (_actionability_score(x.get("insight") or ""), x["reliability"] * x["validations"]),
+        reverse=True,
+    )
+    return deduped
 
 
 def get_recent_lessons() -> List[Dict]:
@@ -53,6 +110,17 @@ def get_recent_lessons() -> List[Dict]:
     lessons = []
     
     for surprise in aha.get_recent_surprises(20):
+        if isinstance(surprise, dict):
+            lesson = surprise.get("lesson_extracted")
+            if not lesson:
+                continue
+            lessons.append({
+                "lesson": lesson,
+                "from_prediction": (surprise.get("predicted_outcome") or "")[:50],
+                "actual": (surprise.get("actual_outcome") or "")[:50],
+                "type": surprise.get("surprise_type"),
+            })
+            continue
         if surprise.lesson_extracted:
             lessons.append({
                 "lesson": surprise.lesson_extracted,
@@ -62,6 +130,53 @@ def get_recent_lessons() -> List[Dict]:
             })
     
     return lessons[:10]  # Top 10 lessons
+
+
+def get_failure_warnings(
+    limit: int = 3,
+    min_validations: int = 3,
+    high_validation_override: int = HIGH_VALIDATION_OVERRIDE,
+) -> List[Dict[str, Any]]:
+    """Get high-signal failure patterns with short fixes."""
+    from lib.cognitive_learner import CognitiveLearner
+
+    cog = CognitiveLearner()
+    warnings = []
+
+    for ins in cog.get_self_awareness_insights():
+        text = ins.insight or ""
+        tl = text.lower()
+        if _is_low_value_insight(text):
+            continue
+        if not (("fail" in tl) or ("error" in tl) or ("fix:" in tl) or ("timeout" in tl)):
+            continue
+        if not (
+            ins.times_validated >= min_validations
+            or (high_validation_override and ins.times_validated >= high_validation_override)
+        ):
+            continue
+        warnings.append({
+            "category": ins.category.value,
+            "text": text,
+            "reliability": ins.reliability,
+            "validations": ins.times_validated,
+        })
+
+    # De-dupe variants (recovered X%)
+    seen = set()
+    deduped = []
+    for item in warnings:
+        key = _normalize_insight_text(item.get("text") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+
+    deduped.sort(
+        key=lambda x: (_actionability_score(x.get("text") or ""), x["validations"], x["reliability"]),
+        reverse=True,
+    )
+    return deduped[: max(0, int(limit or 0))]
 
 
 def get_strong_opinions() -> List[Dict]:
@@ -134,6 +249,8 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
 
         cog = CognitiveLearner()
         for ins in cog.get_insights_for_context(query, limit=limit):
+            if _is_low_value_insight(ins.insight):
+                continue
             out.append({
                 "source": "cognitive",
                 "category": ins.category.value,
@@ -255,6 +372,7 @@ def generate_active_context(query: Optional[str] = None) -> str:
     contextual = get_contextual_insights(query, limit=6) if query else []
     skills = get_relevant_skills(query, limit=3) if query else []
     insights = get_high_value_insights()
+    warnings = get_failure_warnings()
     lessons = get_recent_lessons()
     opinions = get_strong_opinions()
     growth = get_growth_moments()
@@ -312,6 +430,12 @@ def generate_active_context(query: Optional[str] = None) -> str:
 
     if advisor_block:
         lines.append(advisor_block.strip())
+        lines.append("")
+
+    if warnings:
+        lines.append("## Warnings (avoid failures)")
+        for w in warnings:
+            lines.append(f"- [{w['category']}] {w['text']}")
         lines.append("")
 
     # Micro-personalization (optional)

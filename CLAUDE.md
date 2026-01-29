@@ -6,20 +6,28 @@
 - Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
 
 <!-- SPARK_LEARNINGS_START -->
-- When I see 'Heavy Read usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Read usage (5 calls)* (100% reliable, 8 validations)
-- When I see 'Heavy Edit usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Edit usage (5 calls)* (100% reliable, 7 validations)
-- When I see 'Heavy WebFetch usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy WebFetch usage (34 calls)* (100% reliable, 3 validations)
-- When I see 'Heavy Write usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Write usage (34 calls)* (100% reliable, 7 validations)
-- When I see 'Heavy Bash usage (42 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Bash usage (42 calls)* (100% reliable, 22 validations)
-
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-29T02:38:29
+Last updated: 2026-01-29T21:08:53
 
-- [self_awareness] I struggle with WebFetch fails with other (recovered 67%) tasks (98% reliable, 257 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first  tasks (62% reliable, 1123 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (57% reliable, 611 validations)
+- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (51% reliable, 497 validations)
+- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (24% reliable, 147 validations)
+- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (15% reliable, 85 validations)
+- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (15% reliable, 80 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (58% reliable, 642 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout (recovered 100% tasks (13% reliable, 73 validations)
+- [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 9 validations)
+- [reasoning] Sequence 'Bash -> Bash -> Bash' worked well (100% reliable, 5 validations)
+- [reasoning] Pattern 'Glob -> Read' works well: Find files then read them (100% reliable, 3 validations)
+- [reasoning] Sequence 'mcp__spark__spark_status -> mcp__spark__spark_stats -> mcp__spark__spark_learnings -> mcp__spark__spark_process' worked well (100% reliable, 7 validations)
 
 ## Promoted Learnings (Docs)
-- Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
 - I tend to be overconfident about Edit tasks *When: When attempting Edit* (100% reliable, 4 validations)
 - I struggle with regex_patterns tasks *When: Tasks involving regex_patterns* (100% reliable, 4 validations)
+- I struggle with WebFetch fails with other tasks *When: Tasks involving WebFetch fails with other* (95% reliable, 75 validations)
+- I struggle with WebFetch fails with other (recovered 67%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 257 validations)
+- I struggle with WebFetch fails with other (recovered 55%) tasks *When: Tasks involving WebFetch fails with other (recover* (91% reliable, 40 validations)
+- I struggle with WebFetch fails with other (recovered 56%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 169 validations)
 <!-- SPARK_LEARNINGS_END -->
