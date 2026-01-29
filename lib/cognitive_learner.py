@@ -18,6 +18,7 @@ Learning Categories:
 """
 
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -75,6 +76,50 @@ def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
 
 def _now_iso() -> str:
     return datetime.now().isoformat()
+
+
+def _merge_unique(base: List[str], extra: List[str], limit: int = 10) -> List[str]:
+    """Merge two lists, preserving order and uniqueness, capped to limit."""
+    out: List[str] = []
+    for item in (base or []):
+        if item and item not in out:
+            out.append(item)
+    for item in (extra or []):
+        if item and item not in out:
+            out.append(item)
+    return out[-limit:]
+
+
+class _insights_lock:
+    """Best-effort lock using an exclusive lock file."""
+
+    def __init__(self, lock_file: Path, timeout_s: float = 0.5):
+        self.lock_file = lock_file
+        self.timeout_s = timeout_s
+        self.fd = None
+
+    def __enter__(self):
+        self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+        while True:
+            try:
+                self.fd = os.open(str(self.lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                return self
+            except FileExistsError:
+                if time.time() - start >= self.timeout_s:
+                    return self
+                time.sleep(0.01)
+            except Exception:
+                return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if self.fd is not None:
+                os.close(self.fd)
+            if self.lock_file.exists():
+                self.lock_file.unlink()
+        except Exception:
+            pass
 
 
 class CognitiveCategory(Enum):
@@ -160,6 +205,7 @@ class CognitiveLearner:
     """
 
     INSIGHTS_FILE = Path.home() / ".spark" / "cognitive_insights.json"
+    LOCK_FILE = Path.home() / ".spark" / ".cognitive.lock"
 
     def __init__(self):
         self.insights: Dict[str, CognitiveInsight] = {}
@@ -175,11 +221,71 @@ class CognitiveLearner:
             except Exception as e:
                 print(f"[SPARK] Error loading insights: {e}")
 
+    def _merge_insight(self, current: CognitiveInsight, disk: CognitiveInsight) -> CognitiveInsight:
+        """Merge two insights, preserving the most reliable/complete data."""
+        if not current.insight and disk.insight:
+            current.insight = disk.insight
+        if not current.context and disk.context:
+            current.context = disk.context
+        if not current.category:
+            current.category = disk.category
+
+        current.evidence = _merge_unique(disk.evidence, current.evidence, limit=10)
+        current.counter_examples = _merge_unique(disk.counter_examples, current.counter_examples, limit=10)
+
+        current.confidence = max(current.confidence, disk.confidence)
+        current.times_validated = max(current.times_validated, disk.times_validated)
+        current.times_contradicted = max(current.times_contradicted, disk.times_contradicted)
+
+        dv = _parse_iso(disk.last_validated_at)
+        cv = _parse_iso(current.last_validated_at)
+        if dv and (not cv or dv > cv):
+            current.last_validated_at = disk.last_validated_at
+
+        dc = _parse_iso(disk.created_at)
+        cc = _parse_iso(current.created_at)
+        if dc and (not cc or dc < cc):
+            current.created_at = disk.created_at
+
+        current.promoted = bool(current.promoted or disk.promoted)
+        if not current.promoted_to and disk.promoted_to:
+            current.promoted_to = disk.promoted_to
+
+        return current
+
     def _save_insights(self):
         """Save cognitive insights to disk."""
         self.INSIGHTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data = {key: insight.to_dict() for key, insight in self.insights.items()}
-        self.INSIGHTS_FILE.write_text(json.dumps(data, indent=2))
+        with _insights_lock(self.LOCK_FILE):
+            disk_data: Dict[str, Dict[str, Any]] = {}
+            if self.INSIGHTS_FILE.exists():
+                try:
+                    disk_data = json.loads(self.INSIGHTS_FILE.read_text())
+                except Exception:
+                    disk_data = {}
+
+            merged: Dict[str, CognitiveInsight] = {}
+            # Start from disk to avoid losing entries from other processes
+            for key, info in disk_data.items():
+                try:
+                    merged[key] = CognitiveInsight.from_dict(info)
+                except Exception:
+                    continue
+
+            # Merge in-memory insights
+            for key, insight in self.insights.items():
+                if key in merged:
+                    merged[key] = self._merge_insight(insight, merged[key])
+                else:
+                    merged[key] = insight
+
+            # Keep in-memory view consistent with merged result
+            self.insights = merged
+
+            data = {key: insight.to_dict() for key, insight in self.insights.items()}
+            tmp = self.INSIGHTS_FILE.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(data, indent=2))
+            tmp.replace(self.INSIGHTS_FILE)
 
     def _touch_validation(self, insight: CognitiveInsight, validated_delta: int = 0, contradicted_delta: int = 0):
         """Update validation counters and timestamp."""

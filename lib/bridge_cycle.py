@@ -13,6 +13,7 @@ from lib.tastebank import parse_like_message, add_item
 from lib.queue import read_recent_events, EventType
 from lib.pattern_detection import process_pattern_events
 from lib.validation_loop import process_validation_events
+from lib.content_learner import learn_from_edit_event
 from lib.diagnostics import log_debug
 
 
@@ -33,6 +34,7 @@ def run_bridge_cycle(
         "tastebank_saved": False,
         "pattern_processed": 0,
         "validation": {},
+        "content_learned": 0,
         "errors": [],
     }
 
@@ -79,6 +81,27 @@ def run_bridge_cycle(
         stats["errors"].append("validation")
         log_debug("bridge_worker", "validation loop failed", e)
 
+    # Content learning from Edit/Write events
+    try:
+        content_count = 0
+        for ev in events:
+            if ev.event_type != EventType.TOOL_RESULT:
+                continue
+            payload = (ev.data or {}).get("payload") or {}
+            tool = payload.get("tool") or ""
+            if tool not in ("Edit", "Write"):
+                continue
+            file_path = payload.get("file_path") or ""
+            content = payload.get("new_string") or payload.get("content") or ""
+            if file_path and content and len(content) > 50:
+                patterns = learn_from_edit_event(file_path, content)
+                if patterns:
+                    content_count += len(patterns)
+        stats["content_learned"] = content_count
+    except Exception as e:
+        stats["errors"].append("content_learning")
+        log_debug("bridge_worker", "content learning failed", e)
+
     return stats
 
 
@@ -91,6 +114,7 @@ def write_bridge_heartbeat(stats: Dict[str, Any]) -> bool:
             "stats": {
                 "context_updated": bool(stats.get("context_updated")),
                 "pattern_processed": int(stats.get("pattern_processed") or 0),
+                "content_learned": int(stats.get("content_learned") or 0),
                 "memory": stats.get("memory") or {},
                 "validation": stats.get("validation") or {},
                 "errors": stats.get("errors") or [],

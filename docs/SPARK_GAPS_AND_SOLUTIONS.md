@@ -11,7 +11,8 @@
 | 5 | Agent Isolation | P1 | ✅ DONE | `lib/orchestration.py:inject_agent_context()` |
 | 6 | No Learning Decay | P2 | ✅ DONE | `lib/cognitive_learner.py:effective_reliability()` |
 | 7 | No Conflict Resolution | P2 | ✅ DONE | `lib/cognitive_learner.py:resolve_conflicts()` |
-| 8-10 | Content Learning, Export, Timeline | P3 | 🟡 PARTIAL | Some features exist |
+| 8 | Content Learning | P3 | ✅ DONE | `lib/content_learner.py` (28/28 tests) |
+| 9-10 | Export, Timeline | P3 | 🟡 PARTIAL | Some features exist |
 | 11-20 | Deep Gaps | P4 | 🔴 NOT STARTED | Future work |
 | 21-30 | Philosophical Gaps | P5 | 🔴 NOT STARTED | Future work |
 | NEW | Worker Health Monitoring | P1 | ✅ DONE | `scripts/watchdog.py`, `lib/bridge_cycle.py` |

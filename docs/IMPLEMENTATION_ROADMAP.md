@@ -11,6 +11,7 @@
 | **P4** | Agent Context Injection | HIGH | Medium | ✅ DONE |
 | **P5** | Worker Health Monitoring | HIGH | Medium | ✅ DONE |
 | **P6** | Validation Loop (Predictions) | MEDIUM | Medium | 🟡 IN PROGRESS |
+| **P7** | Content Learning | HIGH | Medium | ✅ DONE |
 
 ---
 
@@ -278,6 +279,51 @@ All in `lib/cognitive_learner.py`:
 
 ---
 
+## Phase 7: Content Learning (COMPLETED ✓)
+
+**Completed 2026-01-29**
+
+### Content-Based Pattern Detection
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CONTENT LEARNING                                                │
+│                                                                 │
+│  Learns from:                                                   │
+│  ✅ Code written via Edit/Write events                         │
+│  ✅ Project structure from file listings                        │
+│                                                                 │
+│  Detects:                                                       │
+│  - Python: naming_style, type_hints, error_handling, imports   │
+│  - JS/TS: function_style, async_patterns, react_patterns       │
+│  - Generic: indentation, comments, formatting                   │
+│  - Project: test_organization, source_organization, tooling    │
+│                                                                 │
+│  Philosophy: Observations, not preferences                      │
+│  - Start at 60% confidence (vs 80% for explicit preferences)   │
+│  - Build understanding over repeated patterns (3+ occurrences) │
+│  - Stored as CONTEXT category insights                          │
+│                                                                 │
+│  All tests passing: 28/28                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Files
+- `lib/content_learner.py` - Pattern detection from code (296 lines)
+- `lib/bridge_cycle.py` - Integrated content learning from Edit/Write events
+- `tests/test_content_learner.py` - Comprehensive test suite (28 tests)
+
+### Pattern Categories
+
+| Language | Patterns Detected |
+|----------|-------------------|
+| **Python** | snake_case, type_hints, f_strings, dataclasses, pathlib, docstrings |
+| **JS/TS** | arrow_functions, async_await, react_hooks, exports, semicolons |
+| **Generic** | TODO comments, indentation style, line length |
+| **Project** | test organization, src directory, TypeScript, ESLint, Prettier |
+
+---
+
 ## Summary
 
 | Phase | Status | Key Files |
@@ -288,6 +334,7 @@ All in `lib/cognitive_learner.py`:
 | Phase 4: Context + Semantic | ✅ DONE | `lib/project_context.py`, `lib/orchestration.py` |
 | Phase 5: Worker Health | ✅ DONE | `scripts/watchdog.py`, `lib/bridge_cycle.py` |
 | Phase 6: Validation Loop | 🟡 IN PROGRESS | `lib/validation_loop.py`, `lib/bridge_cycle.py` |
+| Phase 7: Content Learning | ✅ DONE | `lib/content_learner.py` (28/28 tests) |
 
 ---
 
@@ -301,6 +348,7 @@ All in `lib/cognitive_learner.py`:
 | Phase 4 | Context-appropriate learnings | 90%+ relevance score | ✅ |
 | Phase 5 | Worker uptime | 99%+ | ✅ |
 | Phase 6 | Prediction accuracy tracking | Baseline + improvement | 🔴 |
+| Phase 7 | Code patterns detected | 3+ unique patterns/project | ✅ |
 
 ---
 
