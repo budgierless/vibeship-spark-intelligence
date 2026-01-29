@@ -6,15 +6,17 @@
 - Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
 
 <!-- SPARK_LEARNINGS_START -->
+- When I see 'Heavy Read usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Read usage (5 calls)* (100% reliable, 8 validations)
+- When I see 'Heavy Edit usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Edit usage (5 calls)* (100% reliable, 7 validations)
+- When I see 'Heavy WebFetch usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy WebFetch usage (34 calls)* (100% reliable, 3 validations)
+- When I see 'Heavy Write usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Write usage (34 calls)* (100% reliable, 7 validations)
+- When I see 'Heavy Bash usage (42 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Bash usage (42 calls)* (100% reliable, 22 validations)
+
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-28T22:45:07
+Last updated: 2026-01-29T02:38:29
 
 - [self_awareness] I struggle with WebFetch fails with other (recovered 67%) tasks (98% reliable, 257 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first  tasks (79% reliable, 1100 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (75% reliable, 621 validations)
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (74% reliable, 590 validations)
-- [self_awareness] I struggle with Edit fails with other tasks (71% reliable, 234 validations)
 
 ## Promoted Learnings (Docs)
 - Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
