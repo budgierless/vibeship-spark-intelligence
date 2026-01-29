@@ -39,8 +39,8 @@ Goal: fix the quality loop with minimal code additions.
 
 | Item | Status | Notes | File Focus |
 |---|---|---|---|
-| Dedupe "struggle" variants | NOT BUILT | Signal dedupe exists, not struggle dedupe | `lib/cognitive_learner.py` |
-| Reliability backfill | NOT BUILT | Reliability computed at access, not backfilled | `lib/cognitive_learner.py` |
+| Dedupe "struggle" variants | DONE | Recovered % variants merged on load | `lib/cognitive_learner.py` |
+| Reliability backfill | DONE | Missing confidence/validation fields coerced on load | `lib/cognitive_learner.py` |
 | Context diagnostics | NOT BUILT | No include/exclude reason output | `spark/cli.py` |
 | Bridge status robustness | DONE | Handles dict vs object shapes | `lib/bridge.py` |
 

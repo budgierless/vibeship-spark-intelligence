@@ -45,6 +45,29 @@ def _normalize_signal(signal: str) -> str:
     return s.strip()
 
 
+def _normalize_struggle_text(text: str) -> str:
+    """Normalize struggle insight text, collapsing recovered variants."""
+    t = (text or "").strip()
+    t = re.sub(r"\(\s*recovered\s*\d+%?\s*\)", "(recovered)", t, flags=re.IGNORECASE)
+    t = re.sub(r"\brecovered\s*\d+%?\b", "recovered", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
+
+
+def _normalize_struggle_key(text: str) -> str:
+    """Normalize struggle text for stable keys."""
+    return _normalize_struggle_text(text).lower()
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
 def _boost_confidence(current: float, validated: int) -> float:
     """Boost confidence based on validation count.
 
@@ -88,6 +111,19 @@ def _merge_unique(base: List[str], extra: List[str], limit: int = 10) -> List[st
         if item and item not in out:
             out.append(item)
     return out[-limit:]
+
+
+def _flatten_evidence(items: List[Any]) -> List[str]:
+    """Flatten evidence items into a list of strings."""
+    out: List[str] = []
+    for item in items or []:
+        if isinstance(item, list):
+            for sub in item:
+                if sub:
+                    out.append(str(sub))
+        elif item:
+            out.append(str(item))
+    return out
 
 
 class _insights_lock:
@@ -178,16 +214,22 @@ class CognitiveInsight:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CognitiveInsight":
         """Create from dictionary."""
+        times_validated = _coerce_int(data.get("times_validated"), 0)
+        times_contradicted = _coerce_int(data.get("times_contradicted"), 0)
+        confidence = data.get("confidence")
+        if confidence is None:
+            # Backfill missing confidence with any legacy reliability or a safe default.
+            confidence = float(data.get("reliability") or 0.5)
         return cls(
             category=CognitiveCategory(data["category"]),
             insight=data["insight"],
             evidence=data["evidence"],
-            confidence=data["confidence"],
+            confidence=confidence,
             context=data["context"],
             counter_examples=data.get("counter_examples", []),
             created_at=data.get("created_at", datetime.now().isoformat()),
-            times_validated=data.get("times_validated", 0),
-            times_contradicted=data.get("times_contradicted", 0),
+            times_validated=times_validated,
+            times_contradicted=times_contradicted,
             promoted=data.get("promoted", False),
             promoted_to=data.get("promoted_to"),
             last_validated_at=data.get("last_validated_at"),
@@ -218,6 +260,8 @@ class CognitiveLearner:
                 data = json.loads(self.INSIGHTS_FILE.read_text())
                 for key, info in data.items():
                     self.insights[key] = CognitiveInsight.from_dict(info)
+                # Consolidate duplicate struggle variants (e.g., recovered X%).
+                self.dedupe_struggles()
             except Exception as e:
                 print(f"[SPARK] Error loading insights: {e}")
 
@@ -253,7 +297,7 @@ class CognitiveLearner:
 
         return current
 
-    def _save_insights(self):
+    def _save_insights(self, drop_keys: Optional[set] = None):
         """Save cognitive insights to disk."""
         self.INSIGHTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with _insights_lock(self.LOCK_FILE):
@@ -263,6 +307,9 @@ class CognitiveLearner:
                     disk_data = json.loads(self.INSIGHTS_FILE.read_text())
                 except Exception:
                     disk_data = {}
+            if drop_keys:
+                for k in drop_keys:
+                    disk_data.pop(k, None)
 
             merged: Dict[str, CognitiveInsight] = {}
             # Start from disk to avoid losing entries from other processes
@@ -327,7 +374,11 @@ class CognitiveLearner:
 
     def learn_struggle_area(self, task_type: str, failure_reason: str):
         """Learn what types of tasks I struggle with."""
-        key = self._generate_key(CognitiveCategory.SELF_AWARENESS, f"struggle:{task_type}")
+        normalized_task = _normalize_struggle_text(task_type)
+        key = self._generate_key(
+            CognitiveCategory.SELF_AWARENESS,
+            f"struggle:{_normalize_struggle_key(task_type)}",
+        )
         if key in self.insights:
             self._touch_validation(self.insights[key], validated_delta=1)
             if failure_reason not in self.insights[key].evidence:
@@ -336,10 +387,10 @@ class CognitiveLearner:
         else:
             self.insights[key] = CognitiveInsight(
                 category=CognitiveCategory.SELF_AWARENESS,
-                insight=f"I struggle with {task_type} tasks",
+                insight=f"I struggle with {normalized_task} tasks",
                 evidence=[failure_reason[:200]],
                 confidence=0.5,
-                context=f"Tasks involving {task_type}"
+                context=f"Tasks involving {normalized_task}"
             )
         self._save_insights()
         return self.insights[key]
@@ -844,12 +895,13 @@ class CognitiveLearner:
             groups[norm_key].append(key)
 
         merged_counts = {}
+        removed_keys: set = set()
         for norm_key, keys in groups.items():
             if len(keys) <= 1:
                 continue  # No duplicates
 
             # Merge all duplicates into the normalized key
-            all_evidence = []
+            all_evidence: List[Any] = []
             total_validated = 0
             total_contradicted = 0
             earliest_created = None
@@ -874,7 +926,7 @@ class CognitiveLearner:
             merged = CognitiveInsight(
                 category=CognitiveCategory.CONTEXT,
                 insight=base_insight.insight,
-                evidence=list(set(all_evidence))[-10:],  # Dedupe and keep last 10
+                evidence=list(dict.fromkeys(_flatten_evidence(all_evidence)))[-10:],  # Dedupe and keep last 10
                 confidence=_boost_confidence(0.6, len(keys) + total_validated),
                 context=base_insight.context,
                 counter_examples=base_insight.counter_examples,
@@ -889,12 +941,93 @@ class CognitiveLearner:
             for key in keys:
                 if key in self.insights:
                     del self.insights[key]
+                    removed_keys.add(key)
 
             self.insights[norm_key] = merged
             merged_counts[norm_key] = len(keys)
 
         if merged_counts:
-            self._save_insights()
+            self._save_insights(drop_keys=removed_keys)
+
+        return merged_counts
+
+    def dedupe_struggles(self) -> Dict[str, int]:
+        """Consolidate duplicate struggle insights (recovered X% variants).
+
+        Returns dict of {normalized_key: merged_count}.
+        """
+        struggle_keys = [
+            k for k, v in self.insights.items()
+            if v.category == CognitiveCategory.SELF_AWARENESS and "struggle:" in k.lower()
+        ]
+
+        groups: Dict[str, List[str]] = {}
+        for key in struggle_keys:
+            ins = self.insights.get(key)
+            if not ins:
+                continue
+            norm = _normalize_struggle_key(ins.insight or "")
+            if not norm:
+                continue
+            norm_key = f"{CognitiveCategory.SELF_AWARENESS.value}:struggle:{norm[:50]}"
+            groups.setdefault(norm_key, []).append(key)
+
+        merged_counts: Dict[str, int] = {}
+        removed_keys: set = set()
+        for norm_key, keys in groups.items():
+            if len(keys) <= 1:
+                continue
+
+            all_evidence = []
+            total_validated = 0
+            total_contradicted = 0
+            earliest_created = None
+            latest_validated = None
+            base_insight = None
+
+            for key in keys:
+                ins = self.insights.get(key)
+                if not ins:
+                    continue
+                all_evidence.extend(ins.evidence)
+                total_validated += ins.times_validated
+                total_contradicted += ins.times_contradicted
+                if earliest_created is None or ins.created_at < earliest_created:
+                    earliest_created = ins.created_at
+                if ins.last_validated_at:
+                    if latest_validated is None or ins.last_validated_at > latest_validated:
+                        latest_validated = ins.last_validated_at
+                if base_insight is None or ins.times_validated > base_insight.times_validated:
+                    base_insight = ins
+
+            if base_insight is None:
+                continue
+
+            merged = CognitiveInsight(
+                category=CognitiveCategory.SELF_AWARENESS,
+                insight=_normalize_struggle_text(base_insight.insight),
+                evidence=list(dict.fromkeys(_flatten_evidence(all_evidence)))[-10:],
+                confidence=max(base_insight.confidence, 0.5),
+                context=base_insight.context,
+                counter_examples=base_insight.counter_examples,
+                created_at=earliest_created or base_insight.created_at,
+                times_validated=total_validated,
+                times_contradicted=total_contradicted,
+                promoted=base_insight.promoted,
+                promoted_to=base_insight.promoted_to,
+                last_validated_at=latest_validated,
+            )
+
+            for key in keys:
+                if key in self.insights:
+                    del self.insights[key]
+                    removed_keys.add(key)
+
+            self.insights[norm_key] = merged
+            merged_counts[norm_key] = len(keys)
+
+        if merged_counts:
+            self._save_insights(drop_keys=removed_keys)
 
         return merged_counts
 
