@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
 from .cognitive_learner import get_cognitive_learner
 from .skills_router import recommend_skills
+from .outcome_log import append_outcomes, make_outcome_id
 
 
 SKILLS_EFFECTIVENESS_FILE = Path.home() / ".spark" / "skills_effectiveness.json"
@@ -38,6 +40,8 @@ def update_skill_effectiveness(query: str, success: bool, limit: int = 2) -> Non
     if not skills:
         return
 
+    outcomes = []
+    now = time.time()
     data = _load_json(SKILLS_EFFECTIVENESS_FILE)
     for s in skills:
         sid = s.get("skill_id") or s.get("name")
@@ -49,8 +53,20 @@ def update_skill_effectiveness(query: str, success: bool, limit: int = 2) -> Non
         else:
             stats["fail"] = int(stats.get("fail", 0)) + 1
         data[sid] = stats
+        outcomes.append({
+            "outcome_id": make_outcome_id(str(now), "skill", sid, q[:120]),
+            "event_type": "skill_result",
+            "tool": None,
+            "text": f"skill {sid} {'succeeded' if success else 'failed'} for {q[:120]}",
+            "polarity": "pos" if success else "neg",
+            "created_at": now,
+            "domain": "skills",
+            "skill_id": sid,
+            "query": q[:200],
+        })
 
     _save_json(SKILLS_EFFECTIVENESS_FILE, data)
+    append_outcomes(outcomes)
 
 
 def update_self_awareness_reliability(tool_name: str, success: bool) -> None:

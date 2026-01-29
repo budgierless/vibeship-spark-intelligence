@@ -82,12 +82,25 @@ def get_dashboard_data():
     surprises = aha.get_recent_surprises(25)
     surprises_list = []
     for s in surprises:
+        # Support both dicts (current storage) and dataclass-like objects (legacy)
+        if isinstance(s, dict):
+            surprise_type = s.get("surprise_type", "unknown")
+            predicted_outcome = s.get("predicted_outcome", "") or ""
+            actual_outcome = s.get("actual_outcome", "") or ""
+            confidence_gap = s.get("confidence_gap", 0)
+            lesson_extracted = s.get("lesson_extracted")
+        else:
+            surprise_type = getattr(s, "surprise_type", "unknown")
+            predicted_outcome = getattr(s, "predicted_outcome", "") or ""
+            actual_outcome = getattr(s, "actual_outcome", "") or ""
+            confidence_gap = getattr(s, "confidence_gap", 0)
+            lesson_extracted = getattr(s, "lesson_extracted", None)
         surprises_list.append({
-            "type": s.surprise_type.replace("_", " ").title(),
-            "predicted": s.predicted_outcome[:50],
-            "actual": s.actual_outcome[:50],
-            "gap": s.confidence_gap,
-            "lesson": s.lesson_extracted[:60] if s.lesson_extracted else None
+            "type": str(surprise_type).replace("_", " ").title(),
+            "predicted": predicted_outcome[:50],
+            "actual": actual_outcome[:50],
+            "gap": confidence_gap,
+            "lesson": lesson_extracted[:60] if lesson_extracted else None
         })
     
     # Voice data - fresh from disk

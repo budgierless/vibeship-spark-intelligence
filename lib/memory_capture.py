@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from lib.cognitive_learner import CognitiveCategory, get_cognitive_learner
 from lib.queue import read_recent_events, EventType
 from lib.memory_banks import store_memory
+from lib.outcome_log import append_outcome, make_outcome_id
 
 
 PENDING_DIR = Path.home() / ".spark"
@@ -83,10 +84,28 @@ DECISION_MARKERS = {
     "ship it": 0.25,
     "do it": 0.15,
 }
+_DECISION_EXTRA = {
+    "launch",
+    "greenlight",
+    "approved",
+    "go with",
+    "move forward",
+}
 
 
 def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+
+def _is_decision_text(text: str) -> bool:
+    t = _norm(text)
+    for k in DECISION_MARKERS:
+        if k in t:
+            return True
+    for k in _DECISION_EXTRA:
+        if k in t:
+            return True
+    return False
 
 
 def infer_category(text: str) -> CognitiveCategory:
@@ -239,6 +258,20 @@ def commit_learning(text: str, category: CognitiveCategory, context: str = "", s
         # Also store into layered memory banks for fast retrieval + future project scoping.
         try:
             store_memory(text=clean, category=category.value, session_id=session_id or None, source="capture")
+        except Exception:
+            pass
+        try:
+            if _is_decision_text(clean):
+                append_outcome({
+                    "outcome_id": make_outcome_id(str(time.time()), "project_decision", clean[:120]),
+                    "event_type": "project_decision",
+                    "tool": None,
+                    "text": f"project decision: {clean[:200]}",
+                    "polarity": "pos",
+                    "created_at": time.time(),
+                    "domain": "project",
+                    "session_id": session_id or None,
+                })
         except Exception:
             pass
 

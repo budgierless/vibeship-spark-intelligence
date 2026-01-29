@@ -20,10 +20,10 @@ from lib.aha_tracker import get_aha_tracker, SurpriseType
 from lib.diagnostics import log_debug
 from lib.exposure_tracker import read_recent_exposures
 from lib.embeddings import embed_texts
+from lib.outcome_log import OUTCOMES_FILE, append_outcomes, make_outcome_id
 
 
 PREDICTIONS_FILE = Path.home() / ".spark" / "predictions.jsonl"
-OUTCOMES_FILE = Path.home() / ".spark" / "outcomes.jsonl"
 STATE_FILE = Path.home() / ".spark" / "prediction_state.json"
 
 
@@ -182,7 +182,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
             if not polarity:
                 continue
             rows.append({
-                "outcome_id": _hash_id(str(ev.timestamp), text[:100]),
+                "outcome_id": make_outcome_id(str(ev.timestamp), text[:100]),
                 "event_type": "user_prompt",
                 "tool": None,
                 "text": text,
@@ -199,7 +199,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 continue
             text = f"{tool} error: {str(error)[:200]}"
             rows.append({
-                "outcome_id": _hash_id(str(ev.timestamp), tool, "error"),
+                "outcome_id": make_outcome_id(str(ev.timestamp), tool, "error"),
                 "event_type": "tool_error",
                 "tool": tool,
                 "text": text,
@@ -207,7 +207,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "created_at": ev.timestamp,
             })
 
-    _append_jsonl(OUTCOMES_FILE, rows)
+    append_outcomes(rows)
     state["offset"] = offset + len(events)
     _save_state(state)
     return {"processed": processed, "outcomes": len(rows)}
@@ -297,9 +297,6 @@ def match_predictions(
         stats["matched"] += 1
         matched_ids.add(pred_id)
 
-        if not insight:
-            continue
-
         out_pol = best.get("polarity")
         if pred_type == "failure_pattern":
             validated = True
@@ -307,16 +304,22 @@ def match_predictions(
             validated = (pred_pol == out_pol)
 
         if validated:
+            stats["validated"] += 1
+        else:
+            stats["contradicted"] += 1
+
+        if not insight:
+            continue
+
+        if validated:
             cog._touch_validation(insight, validated_delta=1)
             insight.confidence = _boost_confidence(insight.confidence, 1)
             insight.evidence.append(best.get("text", "")[:200])
             insight.evidence = insight.evidence[-10:]
-            stats["validated"] += 1
         else:
             cog._touch_validation(insight, contradicted_delta=1)
             insight.counter_examples.append(best.get("text", "")[:200])
             insight.counter_examples = insight.counter_examples[-10:]
-            stats["contradicted"] += 1
 
             if insight.reliability >= 0.7 and insight.times_validated >= 2:
                 try:

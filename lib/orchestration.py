@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 
 from .skills_router import recommend_skills
 from .context_sync import build_compact_context
+from .exposure_tracker import record_exposures
+from .outcome_log import append_outcomes, make_outcome_id
 
 
 _TRUTHY = {"1", "true", "yes", "on"}
@@ -165,6 +167,7 @@ class SparkOrchestrator:
             if injected != prompt:
                 ctx["prompt"] = injected
                 ctx["spark_context_injected"] = True
+        handoff_text = _handoff_text(ctx, to_agent)
         entry = {
             "handoff_id": handoff_id,
             "from_agent": from_agent,
@@ -175,9 +178,41 @@ class SparkOrchestrator:
         }
         with self.handoffs_file.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
+        try:
+            record_exposures(
+                "orchestration",
+                [{
+                    "insight_key": handoff_id,
+                    "category": "orchestration",
+                    "text": handoff_text,
+                }],
+            )
+        except Exception:
+            pass
         if success is not None:
+            append_outcomes([{
+                "outcome_id": make_outcome_id(handoff_id, str(success)),
+                "event_type": "handoff_result",
+                "tool": None,
+                "text": f"{handoff_text} -> {'success' if success else 'failure'}",
+                "polarity": "pos" if success else "neg",
+                "created_at": time.time(),
+                "domain": "orchestration",
+                "agent_id": to_agent,
+                "handoff_id": handoff_id,
+            }])
             self.update_agent_result(to_agent, success)
         return handoff_id
+
+
+def _handoff_text(ctx: Dict, to_agent: str) -> str:
+    prompt = ctx.get("prompt") or ctx.get("task") or ctx.get("summary") or ""
+    if isinstance(prompt, dict):
+        prompt = prompt.get("text") or prompt.get("prompt") or ""
+    text = str(prompt).replace("\n", " ").strip()
+    if text:
+        return f"Handoff to {to_agent}: {text[:200]}"
+    return f"Handoff to {to_agent}"
 
 
 # Singleton helpers

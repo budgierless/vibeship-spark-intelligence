@@ -274,6 +274,7 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "source": "bank",
                 "category": m.get("category") or "memory",
                 "text": (m.get("text") or "")[:240],
+                "entry_id": m.get("entry_id"),
                 "reliability": None,
                 "validations": None,
             })
@@ -308,6 +309,7 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
                 "source": "mind",
                 "category": m.get("content_type") or "memory",
                 "text": (m.get("content") or "").splitlines()[0][:240],
+                "memory_id": m.get("memory_id"),
                 "reliability": None,
                 "validations": None,
             })
@@ -387,6 +389,51 @@ def generate_active_context(query: Optional[str] = None) -> str:
             advisor_block = get_advisor().generate_context_block("task", query, include_mind=False)
         except Exception as e:
             log_debug("bridge", "advisor block failed", e)
+
+    # Record non-cognitive contextual exposures for prediction loop
+    if contextual:
+        try:
+            exposures = []
+            for item in contextual:
+                if item.get("source") == "cognitive":
+                    continue
+                text = (item.get("text") or "").strip()
+                if not text:
+                    continue
+                key = item.get("entry_id") or item.get("memory_id") or ""
+                insight_key = f"{item.get('source')}:{key}" if key else None
+                cat = item.get("category") or "memory"
+                exposures.append({
+                    "insight_key": insight_key,
+                    "category": f"{item.get('source')}:{cat}",
+                    "text": text[:240],
+                })
+            record_exposures("spark_context:contextual", exposures)
+        except Exception:
+            pass
+
+    # Record skill exposures so prediction loop can validate skill outcomes
+    if skills:
+        try:
+            q_snip = (query or "").replace("\n", " ").strip()
+            if len(q_snip) > 120:
+                q_snip = q_snip[:120] + "..."
+            exposures = []
+            for s in skills:
+                sid = s.get("skill_id") or s.get("name") or "unknown-skill"
+                desc = (s.get("description") or "").strip()
+                if q_snip:
+                    text = f"Skill {sid} for task {q_snip}: {desc}"
+                else:
+                    text = f"Skill {sid}: {desc}"
+                exposures.append({
+                    "insight_key": f"skill:{sid}",
+                    "category": "skill",
+                    "text": text[:240],
+                })
+            record_exposures("spark_context:skills", exposures)
+        except Exception:
+            pass
     
     lines = [
         "=" * 50,
