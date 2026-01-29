@@ -49,6 +49,7 @@ class AhaMoment:
     context: Dict  # Tool, goal, sequence that led here
     lesson_extracted: Optional[str]  # What we learned
     importance: float  # How important this surprise is (0-1)
+    occurrences: int = 1  # How many times this surprise has occurred
     
     def format_visible(self) -> str:
         """Format for user-visible display."""
@@ -60,17 +61,21 @@ class AhaMoment:
             "different_path": "🔀",
             "recovery_success": "💪",
         }.get(self.surprise_type, "💡")
-        
+
+        title = f"{emoji} **Surprise!** {self.surprise_type.replace('_', ' ').title()}"
+        if self.occurrences > 1:
+            title += f" (x{self.occurrences})"
+
         lines = [
-            f"{emoji} **Surprise!** {self.surprise_type.replace('_', ' ').title()}",
+            title,
             f"   Expected: {self.predicted_outcome}",
             f"   Got: {self.actual_outcome}",
             f"   Confidence gap: {self.confidence_gap:.0%}",
         ]
-        
+
         if self.lesson_extracted:
             lines.append(f"   💡 Lesson: {self.lesson_extracted}")
-        
+
         return "\n".join(lines)
     
     def format_shareable(self) -> str:
@@ -124,6 +129,23 @@ class AhaTracker:
         self.data["pending_surface"] = self.pending_surface
         AHA_FILE.write_text(json.dumps(self.data, indent=2, default=str), encoding='utf-8')
 
+    def _find_duplicate(self, tool: str, actual_outcome: str, hours: float = 24.0) -> Optional[int]:
+        """Find a duplicate moment by tool + similar outcome within time window.
+
+        Returns the index of the duplicate moment, or None if not found.
+        """
+        cutoff = datetime.now().timestamp() - (hours * 3600)
+        actual_prefix = (actual_outcome or "")[:80].lower()
+
+        for i, m in enumerate(self.data["moments"]):
+            if m.get("timestamp", 0) < cutoff:
+                continue
+            m_tool = (m.get("context") or {}).get("tool", "")
+            m_actual = (m.get("actual_outcome") or "")[:80].lower()
+            if m_tool == tool and m_actual == actual_prefix:
+                return i
+        return None
+
     def capture_surprise(
         self,
         surprise_type: SurpriseType,
@@ -146,6 +168,17 @@ class AhaTracker:
             lesson: Optional lesson extracted from this moment
             auto_surface: Add to pending queue to show user
         """
+        tool = context.get("tool", "unknown")
+
+        # Check for duplicate within last 24 hours
+        dup_idx = self._find_duplicate(tool, actual)
+        if dup_idx is not None:
+            # Increment occurrences on existing moment instead of creating new
+            self.data["moments"][dup_idx]["occurrences"] = self.data["moments"][dup_idx].get("occurrences", 1) + 1
+            self.data["moments"][dup_idx]["timestamp"] = datetime.now().timestamp()  # Update timestamp
+            self._save()
+            return AhaMoment(**self.data["moments"][dup_idx])
+
         moment_id = hashlib.sha256(
             f"{datetime.now().timestamp()}{predicted}{actual}".encode()
         ).hexdigest()[:12]
@@ -165,7 +198,8 @@ class AhaTracker:
             confidence_gap=confidence_gap,
             context=context,
             lesson_extracted=lesson,
-            importance=importance
+            importance=importance,
+            occurrences=1
         )
 
         # Store moment
@@ -243,10 +277,54 @@ class AhaTracker:
                 return True
         return False
 
-    def get_recent_surprises(self, limit: int = 10) -> List[AhaMoment]:
-        """Get recent surprising moments."""
-        moments = [AhaMoment(**m) for m in self.data["moments"][-limit:]]
-        return sorted(moments, key=lambda x: x.timestamp, reverse=True)
+    def get_recent_surprises(self, limit: int = 10) -> List[Dict]:
+        """Get recent surprising moments with occurrence counts."""
+        moments = []
+        for m in self.data["moments"][-limit * 2:]:  # Get more to account for sorting
+            moment_data = dict(m)
+            moment_data.setdefault("occurrences", 1)
+            moments.append(moment_data)
+        moments.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        return moments[:limit]
+
+    def dedupe_existing(self) -> int:
+        """Deduplicate existing moments, merging duplicates and summing occurrences.
+
+        Returns the number of duplicates merged.
+        """
+        if not self.data["moments"]:
+            return 0
+
+        seen: Dict[str, int] = {}  # key -> index in deduped list
+        deduped: List[Dict] = []
+        merged_count = 0
+
+        for m in self.data["moments"]:
+            tool = (m.get("context") or {}).get("tool", "unknown")
+            actual_prefix = (m.get("actual_outcome") or "")[:80].lower()
+            key = f"{tool}:{actual_prefix}"
+
+            if key in seen:
+                # Merge into existing
+                idx = seen[key]
+                deduped[idx]["occurrences"] = deduped[idx].get("occurrences", 1) + m.get("occurrences", 1)
+                # Keep the more recent timestamp
+                if m.get("timestamp", 0) > deduped[idx].get("timestamp", 0):
+                    deduped[idx]["timestamp"] = m["timestamp"]
+                # Keep lesson if the existing one doesn't have one
+                if not deduped[idx].get("lesson_extracted") and m.get("lesson_extracted"):
+                    deduped[idx]["lesson_extracted"] = m["lesson_extracted"]
+                merged_count += 1
+            else:
+                m.setdefault("occurrences", 1)
+                seen[key] = len(deduped)
+                deduped.append(dict(m))
+
+        if merged_count > 0:
+            self.data["moments"] = deduped
+            self._save()
+
+        return merged_count
 
     def get_high_importance_surprises(self, min_importance: float = 0.7) -> List[AhaMoment]:
         """Get surprises with high learning potential."""
@@ -318,11 +396,14 @@ class AhaTracker:
 
     def get_stats(self) -> dict:
         """Get tracker statistics."""
+        total_occurrences = sum(m.get("occurrences", 1) for m in self.data["moments"])
         return {
             **self.data["stats"],
             "pattern_count": len(self.data["patterns"]),
             "unlearned_count": len(self.get_unlearned_surprises()),
-            "pending_surface": len(self.pending_surface)
+            "pending_surface": len(self.pending_surface),
+            "unique_moments": len(self.data["moments"]),
+            "total_occurrences": total_occurrences
         }
 
 
@@ -334,6 +415,12 @@ def get_aha_tracker() -> AhaTracker:
     if _tracker is None:
         _tracker = AhaTracker()
     return _tracker
+
+
+def dedupe_aha_moments() -> int:
+    """Deduplicate existing aha moments file. Returns count of duplicates merged."""
+    tracker = get_aha_tracker()
+    return tracker.dedupe_existing()
 
 
 def maybe_capture_surprise(
