@@ -41,6 +41,7 @@ def main():
 
     ok = 0
     bad = 0
+    first_error = None
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -49,12 +50,26 @@ def main():
             obj = json.loads(line)
             post(ingest_url, obj, token=token)
             ok += 1
-        except Exception:
+        except Exception as e:
             bad += 1
+            if first_error is None:
+                first_error = e
+            try:
+                meta = {}
+                if isinstance(obj, dict):
+                    for k in ("source", "kind", "session_id", "trace_id"):
+                        if obj.get(k) is not None:
+                            meta[k] = obj.get(k)
+                meta_str = f" meta={meta}" if meta else ""
+                sys.stderr.write(f"[stdin_ingest] post failed: {type(e).__name__}: {e}{meta_str}\n")
+            except Exception:
+                pass
 
-    # Silent by default; counts are useful when running manually.
+    # Counts are useful when running manually; errors go to stderr.
     if sys.stdout.isatty():
         print(f"sent={ok} bad={bad}")
+    if bad and not sys.stderr.isatty():
+        sys.stderr.write(f"[stdin_ingest] errors: {bad} (first: {type(first_error).__name__}: {first_error})\n")
 
 
 if __name__ == "__main__":
