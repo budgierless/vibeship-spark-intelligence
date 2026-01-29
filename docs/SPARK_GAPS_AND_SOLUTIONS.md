@@ -1,5 +1,11 @@
 # Spark Intelligence: Gap Analysis and Solutions
 
+Related docs:
+- docs/IMPROVEMENT_PLANS.md (KISS index and lightweight plan)
+- docs/IMPLEMENTATION_ROADMAP.md
+- docs/INTEGRATION-PLAN.md
+- docs/VIBE_CODING_INTELLIGENCE_ROADMAP.md
+
 ## Implementation Status (Updated 2026-01-29)
 
 | # | Gap | Priority | Status | Implementation |

@@ -1,5 +1,11 @@
 # Spark Implementation Roadmap
 
+Related docs:
+- docs/IMPROVEMENT_PLANS.md (KISS index and lightweight plan)
+- docs/INTEGRATION-PLAN.md
+- docs/SPARK_GAPS_AND_SOLUTIONS.md
+- docs/VIBE_CODING_INTELLIGENCE_ROADMAP.md
+
 ## Priority Matrix by ROI
 
 | Priority | Gap | Impact | Effort | Status |

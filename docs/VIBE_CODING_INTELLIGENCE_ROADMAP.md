@@ -8,6 +8,7 @@ Sources:
 - docs/IMPLEMENTATION_ROADMAP.md
 - docs/INTEGRATION-PLAN.md
 - docs/SPARK_GAPS_AND_SOLUTIONS.md
+- docs/IMPROVEMENT_PLANS.md (KISS index and lightweight plan)
 
 Current status highlights:
 - DONE: Session bootstrap, pattern detection, decay/conflicts, project context, worker health.

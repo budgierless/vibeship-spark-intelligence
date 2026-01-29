@@ -4,6 +4,12 @@ This document turns the prior analysis into a concrete architecture and
 implementation plan. It keeps the system lightweight, stable, and maintainable,
 while making learnings actually influence decisions.
 
+Related docs:
+- docs/IMPROVEMENT_PLANS.md (KISS index and lightweight plan)
+- docs/IMPLEMENTATION_ROADMAP.md
+- docs/SPARK_GAPS_AND_SOLUTIONS.md
+- docs/VIBE_CODING_INTELLIGENCE_ROADMAP.md
+
 ---
 
 ## 1) Goals (KISS)
