@@ -257,6 +257,14 @@ SPARK_AGENT_CONTEXT_MAX_CHARS=1200
 
 Use `lib.orchestration.inject_agent_context(prompt)` when preparing a sub-agent prompt.
 
+Example:
+```python
+from lib.orchestration import inject_agent_context
+
+prompt = "Please audit the config loader for edge cases."
+prompt = inject_agent_context(prompt)
+```
+
 
 ### With Mind
 
