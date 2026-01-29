@@ -6,6 +6,7 @@ Usage:
     python -m spark.cli status     # Show system status
     python -m spark.cli sync       # Sync insights to Mind
     python -m spark.cli queue      # Process offline queue
+    python -m spark.cli process    # Run bridge worker cycle / drain backlog
     python -m spark.cli learnings  # Show recent learnings
     python -m spark.cli promote    # Run promotion check
     python -m spark.cli write      # Write learnings to markdown
@@ -16,6 +17,7 @@ Usage:
 import sys
 import json
 import argparse
+import time
 from pathlib import Path
 
 from lib.cognitive_learner import get_cognitive_learner
@@ -27,6 +29,8 @@ from lib.aha_tracker import get_aha_tracker
 from lib.spark_voice import get_spark_voice
 from lib.growth_tracker import get_growth_tracker
 from lib.context_sync import sync_context
+from lib.bridge_cycle import run_bridge_cycle, write_bridge_heartbeat, bridge_heartbeat_age_s
+from lib.pattern_detection import get_pattern_backlog
 from lib.memory_capture import (
     process_recent_memory_events,
     list_pending as capture_list_pending,
@@ -83,6 +87,17 @@ def cmd_status(args):
     print(f"   Events: {queue_stats['event_count']}")
     print(f"   Size: {queue_stats['size_mb']} MB")
     print(f"   Needs Rotation: {'Yes' if queue_stats['needs_rotation'] else 'No'}")
+    print(f"   Pattern Backlog: {get_pattern_backlog()}")
+    print()
+
+    # Worker heartbeat
+    hb_age = bridge_heartbeat_age_s()
+    print("âš™ Workers")
+    if hb_age is None:
+        print("   bridge_worker: Unknown (no heartbeat)")
+    else:
+        status = "OK" if hb_age <= 90 else "Stale"
+        print(f"   bridge_worker: {status} (last {int(hb_age)}s ago)")
     print()
     
     # Markdown writer stats
@@ -145,6 +160,45 @@ def cmd_queue(args):
     print("[SPARK] Processing offline queue...")
     count = bridge.process_offline_queue()
     print(f"Processed: {count} items")
+
+
+def cmd_process(args):
+    """Run one bridge worker cycle or drain backlog."""
+    iterations = 0
+    processed = 0
+    start = time.time()
+
+    max_iterations = args.max_iterations
+    timeout_s = args.timeout
+
+    while True:
+        stats = run_bridge_cycle(
+            query=args.query,
+            memory_limit=args.memory_limit,
+            pattern_limit=args.pattern_limit,
+        )
+        write_bridge_heartbeat(stats)
+        iterations += 1
+        processed += int(stats.get("pattern_processed") or 0)
+
+        errors = stats.get("errors") or []
+        if errors:
+            print(f"[SPARK] Cycle errors: {', '.join(errors)}")
+
+        backlog = get_pattern_backlog()
+        if not args.drain:
+            break
+        if backlog <= 0:
+            break
+        if max_iterations and iterations >= max_iterations:
+            break
+        if timeout_s and (time.time() - start) >= timeout_s:
+            break
+        if stats.get("pattern_processed", 0) <= 0 and not errors:
+            break
+        time.sleep(max(0.5, float(args.interval)))
+
+    print(f"[SPARK] bridge_worker cycles: {iterations}, patterns processed: {processed}")
 
 
 def cmd_learnings(args):
@@ -242,6 +296,13 @@ def cmd_health(args):
     except Exception as e:
         print(f"✗ Event Queue: {e}")
     
+    # Check bridge worker heartbeat
+    hb_age = bridge_heartbeat_age_s()
+    if hb_age is None:
+        print("âš  bridge_worker: No heartbeat (start bridge_worker)")
+    else:
+        print(f"âœ“ bridge_worker: heartbeat {int(hb_age)}s ago")
+
     # Check learnings dir
     writer = get_markdown_writer()
     if writer.learnings_dir.exists():
@@ -555,6 +616,7 @@ Commands:
   status      Show overall system status
   sync        Sync cognitive insights to Mind
   queue       Process offline queue
+  process     Run bridge worker cycle or drain backlog
   learnings   Show recent cognitive insights
   promote     Run promotion check
   write       Write learnings to markdown files
@@ -582,6 +644,16 @@ Examples:
     
     # queue
     subparsers.add_parser("queue", help="Process offline queue")
+
+    # process
+    process_parser = subparsers.add_parser("process", help="Run bridge worker cycle or drain backlog")
+    process_parser.add_argument("--drain", action="store_true", help="Loop until pattern backlog is cleared")
+    process_parser.add_argument("--interval", type=float, default=1.0, help="Seconds between cycles when draining")
+    process_parser.add_argument("--timeout", type=float, default=300.0, help="Max seconds to run when draining")
+    process_parser.add_argument("--max-iterations", type=int, default=100, help="Max cycles when draining")
+    process_parser.add_argument("--pattern-limit", type=int, default=200, help="Events per cycle for pattern detection")
+    process_parser.add_argument("--memory-limit", type=int, default=60, help="Events per cycle for memory capture")
+    process_parser.add_argument("--query", default=None, help="Optional fixed query for context")
     
     # learnings
     learnings_parser = subparsers.add_parser("learnings", help="Show recent learnings")
@@ -683,6 +755,7 @@ Examples:
         "status": cmd_status,
         "sync": cmd_sync,
         "queue": cmd_queue,
+        "process": cmd_process,
         "learnings": cmd_learnings,
         "promote": cmd_promote,
         "write": cmd_write,

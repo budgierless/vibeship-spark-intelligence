@@ -18,7 +18,7 @@ from .repetition import RepetitionDetector
 from .sequence import SequenceDetector
 from .semantic import SemanticIntentDetector
 from .aggregator import PatternAggregator, get_aggregator
-from .worker import process_pattern_events
+from .worker import process_pattern_events, get_pattern_backlog
 
 __all__ = [
     "PatternDetector",
@@ -32,4 +32,5 @@ __all__ = [
     "PatternAggregator",
     "get_aggregator",
     "process_pattern_events",
+    "get_pattern_backlog",
 ]

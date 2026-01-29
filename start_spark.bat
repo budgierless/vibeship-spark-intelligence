@@ -5,10 +5,12 @@ REM Starts: sparkd (8787), bridge_worker, dashboard (8585)
 setlocal
 chcp 65001 > nul
 set PYTHONIOENCODING=utf-8
+set PYTHONUNBUFFERED=1
 set SPARK_DIR=%~dp0
 set SPARK_DATA=%USERPROFILE%\.spark
 set PID_DIR=%SPARK_DATA%\pids
 set LOG_DIR=%SPARK_DATA%\logs
+set SPARK_LOG_DIR=%LOG_DIR%
 
 REM Create directories
 if not exist "%SPARK_DATA%" mkdir "%SPARK_DATA%"
@@ -23,17 +25,23 @@ echo.
 
 REM Start sparkd (main daemon - port 8787)
 echo [SPARK] Starting sparkd on port 8787...
-start /B "" python "%SPARK_DIR%sparkd.py" > "%LOG_DIR%\sparkd.log" 2>&1
+start /B "" python "%SPARK_DIR%sparkd.py"
 timeout /t 1 /nobreak > nul
 
 REM Start bridge_worker (syncs learnings)
 echo [SPARK] Starting bridge_worker...
-start /B "" python "%SPARK_DIR%bridge_worker.py" --interval 30 > "%LOG_DIR%\bridge_worker.log" 2>&1
+start /B "" python "%SPARK_DIR%bridge_worker.py" --interval 30
 timeout /t 1 /nobreak > nul
 
 REM Start dashboard (port 8585)
 echo [SPARK] Starting dashboard on port 8585...
-start /B "" python "%SPARK_DIR%dashboard.py" > "%LOG_DIR%\dashboard.log" 2>&1
+start /B "" python "%SPARK_DIR%dashboard.py"
+
+REM Start watchdog (auto-restart + queue warnings)
+if "%SPARK_NO_WATCHDOG%"=="" (
+    echo [SPARK] Starting watchdog...
+    start /B "" python "%SPARK_DIR%scripts\watchdog.py" --interval 60
+)
 
 echo.
 echo [SPARK] All services starting...

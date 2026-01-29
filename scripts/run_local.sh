@@ -31,6 +31,7 @@ cd "$SPARK_DIR"
 start sparkd python3 "$SPARK_DIR/sparkd.py"
 start bridge_worker python3 "$SPARK_DIR/bridge_worker.py" --interval 30
 start dashboard python3 "$SPARK_DIR/dashboard.py"
+start watchdog python3 "$SPARK_DIR/scripts/watchdog.py" --interval 60
 
 echo ""
 echo "[spark] Dashboard: http://127.0.0.1:8585"

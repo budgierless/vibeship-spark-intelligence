@@ -92,6 +92,7 @@ Goal: load skills without heavy parsing.
 - Add lib/skills_registry.py
 - Add lib/skills_router.py
 - Add SPARK_SKILLS_DIR env var to config docs
+- Add SPARK_DEBUG note: off by default, enable only for troubleshooting
 - Add simple unit tests for index + router
 
 ### Phase 2: Context Injection (1-2 days)

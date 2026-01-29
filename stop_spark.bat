@@ -6,7 +6,7 @@ echo [SPARK] Stopping all Spark services...
 REM Kill Python processes running Spark components
 tasklist /FI "IMAGENAME eq python.exe" 2>nul | findstr /i "sparkd" > nul
 for /f "tokens=2" %%a in ('tasklist ^| findstr /i "python.exe"') do (
-    wmic process where "ProcessId=%%a" get CommandLine 2>nul | findstr /i "sparkd.py bridge_worker.py dashboard.py" > nul && (
+    wmic process where "ProcessId=%%a" get CommandLine 2>nul | findstr /i "sparkd.py bridge_worker.py dashboard.py watchdog.py" > nul && (
         taskkill /PID %%a /F > nul 2>&1
     )
 )

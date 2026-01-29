@@ -65,6 +65,21 @@ Mind provides persistent semantic memory. Without it, Spark still works but lear
 python -m spark.cli status
 ```
 
+If you want the background services (sparkd + bridge_worker + dashboard) running
+continuously, start them via the launcher:
+
+```bash
+./scripts/run_local.sh
+```
+
+Windows:
+```bat
+start_spark.bat
+```
+
+The watchdog auto-restarts workers and warns on queue growth. Set
+`SPARK_NO_WATCHDOG=1` to disable it.
+
 ### 4. Session Bootstrap (Recommended)
 
 Run a lightweight sync before launching your agent to load learnings into
@@ -116,6 +131,11 @@ Local dev alternative (from repo root):
 python cli.py status
 ```
 
+Drain the processing backlog (pattern detection + capture):
+```bash
+python -m spark.cli process --drain
+```
+
 If `python -m spark.cli` fails because the package isn't installed, run:
 
 ```bash
@@ -130,6 +150,11 @@ Spark keeps defaults minimal. Set these env vars to opt in:
 
 - `SPARK_DEBUG=1` to emit internal debug logs to stderr.
 - `SPARK_WORKSPACE=/path/to/workspace` to override the default `~/clawd` used by the bridge.
+- `SPARK_LOG_DIR=~/.spark/logs` to override where logs are written.
+- `SPARK_LOG_TEE=0` to disable teeing stdout/stderr into log files.
+- `SPARK_NO_WATCHDOG=1` to skip the watchdog when using launch scripts.
+
+Tip: leave `SPARK_DEBUG` off for normal use. Enable it temporarily when troubleshooting to avoid extra log noise.
 
 ---
 
@@ -210,6 +235,16 @@ Spark/
 ```bash
 # from your cloned Spark repo
 ./scripts/run_local.sh
+```
+
+Check status:
+```bash
+python ./scripts/status_local.py
+```
+
+Windows:
+```bat
+scripts\status_local.bat
 ```
 
 2) Add Spark hooks to Claude Code (`.claude/settings.json`):

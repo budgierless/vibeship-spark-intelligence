@@ -25,6 +25,7 @@ echo ""
 check sparkd 8787
 check bridge_worker ""
 check dashboard ""
+check watchdog ""
 
 echo ""
 echo "Dashboard: http://127.0.0.1:8585"

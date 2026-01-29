@@ -30,6 +30,7 @@ from lib.growth_tracker import GrowthTracker
 from lib.resonance import get_resonance_display
 from lib.dashboard_project import get_active_project, get_project_memory_preview
 from lib.taste_api import add_from_dashboard
+from lib.diagnostics import setup_component_logging
 
 PORT = 8585
 SPARK_DIR = Path.home() / ".spark"
@@ -2519,6 +2520,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    setup_component_logging("dashboard")
     print()
     print("  vibeship spark")
     print("  -----------------------------")

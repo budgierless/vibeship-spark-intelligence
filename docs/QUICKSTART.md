@@ -37,6 +37,32 @@ python3 cli.py health
 python3 cli.py status
 ```
 
+### Start Background Services (Recommended)
+
+These keep the bridge worker running and the dashboard live.
+
+```bash
+./scripts/run_local.sh
+```
+
+Windows:
+```bat
+start_spark.bat
+```
+
+Check status:
+```bash
+python ./scripts/status_local.py
+```
+
+Windows:
+```bat
+scripts\status_local.bat
+```
+
+The watchdog auto-restarts workers and warns when the queue grows. Set
+`SPARK_NO_WATCHDOG=1` to disable it when using the launch scripts.
+
 ### Create Learnings (Programmatic)
 
 ```python
@@ -168,6 +194,7 @@ CLAUDE.md                      # Promoted conventions
 | `decay` | Preview/apply decay-based pruning |
 | `sync` | Sync to Mind (if running) |
 | `queue` | Process offline sync queue |
+| `process` | Run bridge worker cycle or drain backlog |
 | `events` | Show recent captured events |
 
 ## Troubleshooting
@@ -187,6 +214,22 @@ pip install requests
 ### Learnings not appearing
 
 Check that the hook is configured correctly and the path is absolute.
+
+If the queue is large or processing stalled, run:
+
+```bash
+python -m spark.cli process --drain
+```
+
+### Extra logging (optional)
+
+Enable debug logs temporarily when troubleshooting:
+
+```bash
+set SPARK_DEBUG=1
+```
+
+Tip: leave it off for normal usage to avoid log noise.
 
 ## Next Steps
 

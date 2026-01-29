@@ -81,3 +81,16 @@ def process_pattern_events(limit: int = 200) -> int:
     _save_state(state)
     return processed
 
+
+def get_pattern_backlog() -> int:
+    """Return the count of queued events not yet processed by pattern detection."""
+    state = _load_state()
+    try:
+        offset = int(state.get("offset", 0))
+    except Exception:
+        offset = 0
+    total = count_events()
+    if total < offset:
+        offset = total
+    return max(0, total - offset)
+

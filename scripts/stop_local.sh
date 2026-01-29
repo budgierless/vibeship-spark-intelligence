@@ -21,6 +21,7 @@ stop() {
   rm -f "$pid_file"
 }
 
+stop watchdog
 stop dashboard
 stop bridge_worker
 stop sparkd

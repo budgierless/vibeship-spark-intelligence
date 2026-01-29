@@ -25,6 +25,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib.events import SparkEventV1
 from lib.queue import quick_capture, EventType
 from lib.orchestration import register_agent, recommend_agent, record_handoff, get_orchestrator
+from lib.bridge_cycle import read_bridge_heartbeat
+from lib.pattern_detection.worker import get_pattern_backlog
+from lib.diagnostics import setup_component_logging
 
 PORT = 8787
 TOKEN = os.environ.get("SPARKD_TOKEN")
@@ -58,10 +61,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return _text(self, 200, "ok")
         if path == "/status":
+            heartbeat = read_bridge_heartbeat() or {}
             return _json(self, 200, {
                 "ok": True,
                 "now": time.time(),
                 "port": PORT,
+                "bridge_worker": {
+                    "last_heartbeat": heartbeat.get("ts"),
+                    "stats": heartbeat.get("stats") or {},
+                    "pattern_backlog": get_pattern_backlog(),
+                },
             })
         if path == "/agents":
             orch = get_orchestrator()
@@ -168,6 +177,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    setup_component_logging("sparkd")
     print(f"sparkd listening on http://127.0.0.1:{PORT}")
     server = HTTPServer(("127.0.0.1", PORT), Handler)
     try:
