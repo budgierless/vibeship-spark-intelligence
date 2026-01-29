@@ -64,6 +64,19 @@ python3 cli.py write
 # Creates .learnings/LEARNINGS.md
 ```
 
+### Optional: Agent Context Injection (Opt-in)
+
+If you spawn sub-agents, you can prepend a compact Spark context block to their
+prompts. This is off by default.
+
+```bash
+SPARK_AGENT_INJECT=1
+SPARK_AGENT_CONTEXT_LIMIT=3
+SPARK_AGENT_CONTEXT_MAX_CHARS=1200
+```
+
+Use `lib.orchestration.inject_agent_context(prompt)` when preparing sub-agent prompts.
+
 ## Optional: Scheduled Sync Backup
 
 If you want a safety net (for sessions launched outside wrappers), run sync on a timer.
