@@ -32,7 +32,7 @@ from lib.growth_tracker import get_growth_tracker
 from lib.context_sync import sync_context
 from lib.bridge_cycle import run_bridge_cycle, write_bridge_heartbeat, bridge_heartbeat_age_s
 from lib.pattern_detection import get_pattern_backlog
-from lib.validation_loop import process_validation_events, get_validation_backlog
+from lib.validation_loop import process_validation_events, get_validation_backlog, get_validation_state
 from lib.memory_capture import (
     process_recent_memory_events,
     list_pending as capture_list_pending,
@@ -101,6 +101,23 @@ def cmd_status(args):
     else:
         status = "OK" if hb_age <= 90 else "Stale"
         print(f"   bridge_worker: {status} (last {int(hb_age)}s ago)")
+    print()
+
+    # Validation loop
+    vstate = get_validation_state()
+    last_ts = vstate.get("last_run_ts")
+    last_stats = vstate.get("last_stats") or {}
+    if last_ts:
+        age_s = max(0, int(time.time() - float(last_ts)))
+        print("✅ Validation Loop")
+        print(f"   Last Run: {age_s}s ago")
+        print(
+            f"   Last Stats: +{last_stats.get('validated', 0)} / -{last_stats.get('contradicted', 0)} "
+            f"(surprises {last_stats.get('surprises', 0)})"
+        )
+    else:
+        print("✅ Validation Loop")
+        print("   Last Run: Never")
     print()
     
     # Markdown writer stats

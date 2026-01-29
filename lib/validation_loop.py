@@ -245,6 +245,8 @@ def process_validation_events(limit: int = 200) -> Dict[str, int]:
         cog._save_insights()
 
     state["offset"] = offset + len(events)
+    state["last_run_ts"] = time.time()
+    state["last_stats"] = stats
     _save_state(state)
 
     return stats
@@ -261,3 +263,13 @@ def get_validation_backlog() -> int:
     if total < offset:
         offset = total
     return max(0, total - offset)
+
+
+def get_validation_state() -> Dict:
+    """Return last validation run stats and timestamp."""
+    state = _load_state()
+    return {
+        "last_run_ts": state.get("last_run_ts"),
+        "last_stats": state.get("last_stats") or {},
+        "offset": state.get("offset", 0),
+    }

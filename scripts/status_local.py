@@ -37,6 +37,13 @@ def _queue_counts() -> tuple[int, int, int]:
     return count_events(), get_pattern_backlog(), get_validation_backlog()
 
 
+def _validation_state():
+    sys.path.insert(0, str(SPARK_DIR))
+    from lib.validation_loop import get_validation_state
+
+    return get_validation_state()
+
+
 def main() -> None:
     sparkd_ok = _http_ok("http://127.0.0.1:8787/health")
     dash_ok = _http_ok("http://127.0.0.1:8585/api/status")
@@ -58,6 +65,20 @@ def main() -> None:
         )
     except Exception as e:
         print(f"[spark] queue: error ({e})")
+
+    try:
+        vstate = _validation_state()
+        last_ts = vstate.get("last_run_ts")
+        if last_ts:
+            age_s = max(0, int(time.time() - float(last_ts)))
+            stats = vstate.get("last_stats") or {}
+            print(
+                f"[spark] validation: last {age_s}s (+{stats.get('validated', 0)} / -{stats.get('contradicted', 0)})"
+            )
+        else:
+            print("[spark] validation: never run")
+    except Exception as e:
+        print(f"[spark] validation: error ({e})")
 
     print("")
     print("Dashboard: http://127.0.0.1:8585")
