@@ -6,11 +6,10 @@ Goal: feed Spark with **portable events** without coupling Spark core to any IDE
 
 Start Spark services (recommended one-liner):
 ```bash
-# from your cloned Spark repo
-./scripts/run_local.sh
+spark up
 ```
 
-(Stops with `./scripts/stop_local.sh`)
+(Stops with `spark down`)
 
 ## One-keystroke “Remember this” (recommended)
 

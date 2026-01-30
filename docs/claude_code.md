@@ -2,9 +2,9 @@
 
 ## 1) Start Spark services
 
-From the repo:
+From anywhere on your PATH:
 ```bash
-./scripts/run_local.sh
+spark up
 ```
 
 ## 2) Install hooks file

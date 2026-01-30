@@ -65,13 +65,15 @@ Mind provides persistent semantic memory. Without it, Spark still works but lear
 
 ```bash
 python -m spark.cli status
+# or: spark status
 ```
 
 If you want the background services (sparkd + bridge_worker + dashboard) running
 continuously, start them via the launcher:
 
 ```bash
-./scripts/run_local.sh
+python -m spark.cli up
+# or: spark up
 ```
 
 Windows:
@@ -81,6 +83,22 @@ start_spark.bat
 
 The watchdog auto-restarts workers and warns on queue growth. Set
 `SPARK_NO_WATCHDOG=1` to disable it.
+
+Check daemon status:
+```bash
+python -m spark.cli services
+# or: spark services
+```
+
+Auto-start at login (recommended):
+```bash
+spark up --sync-context
+```
+
+Per-project ensure (optional):
+```bash
+spark ensure --sync-context --project .
+```
 
 ### 4. Session Bootstrap (Recommended)
 
@@ -124,13 +142,13 @@ SPARK_CLAWDBOT_CONTEXT_PATH=~/clawd/SPARK_CONTEXT.md
 
 Default targets are `USER.md` and `SPARK_CONTEXT.md`.
 
-Optional: set a scheduled task to run `python -m spark.cli sync-context` every
+Optional: set a scheduled task to run `spark sync-context` every
 10–30 minutes for sessions started outside wrappers (see `docs/QUICKSTART.md`).
 
 Local dev alternative (from repo root):
 
 ```bash
-python cli.py status
+python -m spark.cli status
 ```
 
 Drain the processing backlog (pattern detection + capture):
@@ -235,18 +253,12 @@ Spark/
 
 1) Start Spark locally:
 ```bash
-# from your cloned Spark repo
-./scripts/run_local.sh
+spark up
 ```
 
 Check status:
 ```bash
-python ./scripts/status_local.py
-```
-
-Windows:
-```bat
-scripts\status_local.bat
+spark services
 ```
 
 2) Add Spark hooks to Claude Code (`.claude/settings.json`):
@@ -319,6 +331,18 @@ memories = retrieve_from_mind("how to handle API errors", limit=5)
 ## CLI Reference
 
 ```bash
+# Start background services
+python -m spark.cli up
+
+# Show daemon/service status
+python -m spark.cli services
+
+# Ensure services are running (start missing)
+python -m spark.cli ensure --sync-context --project .
+
+# Stop background services
+python -m spark.cli down
+
 # Check status
 python -m spark.cli status
 

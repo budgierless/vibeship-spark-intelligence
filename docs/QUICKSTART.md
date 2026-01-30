@@ -22,11 +22,14 @@ cd /path/to/Spark
 # Install dependencies
 pip install requests
 
-# Optional: Enable semantic search (requires ~500MB)
-pip install sentence-transformers
+# Install Spark (from repo)
+pip install -e .
+
+# Optional: Enable embeddings (fastembed)
+pip install fastembed
 
 # Test it works
-python3 cli.py health
+python3 -m spark.cli health
 ```
 
 ## Basic Usage
@@ -34,7 +37,7 @@ python3 cli.py health
 ### Check Status
 
 ```bash
-python3 cli.py status
+python3 -m spark.cli status
 ```
 
 ### Start Background Services (Recommended)
@@ -42,26 +45,59 @@ python3 cli.py status
 These keep the bridge worker running and the dashboard live.
 
 ```bash
+python3 -m spark.cli up
+# or: spark up
+```
+
+Repo shortcuts:
+```bash
 ./scripts/run_local.sh
 ```
 
-Windows:
+Windows (repo):
 ```bat
 start_spark.bat
 ```
 
 Check status:
 ```bash
-python ./scripts/status_local.py
-```
-
-Windows:
-```bat
-scripts\status_local.bat
+python3 -m spark.cli services
+# or: spark services
 ```
 
 The watchdog auto-restarts workers and warns when the queue grows. Set
 `SPARK_NO_WATCHDOG=1` to disable it when using the launch scripts.
+
+Stop services:
+```bash
+python3 -m spark.cli down
+# or: spark down
+```
+
+### Auto-start at Login (Recommended)
+
+Keep Spark always on so hooks never miss events.
+
+**Windows Task Scheduler**
+- Action: `spark`
+- Args: `up --sync-context`
+- Start in: your repo root (or any folder on your PATH)
+- Trigger: At log on
+
+**macOS/Linux (cron or systemd)**
+```
+@reboot python3 -m spark.cli up --sync-context >/dev/null 2>&1
+```
+
+### Per-Project Ensure (Optional)
+
+If you want each project to guarantee Spark is running, add this to your
+project start script or editor task:
+
+```bash
+spark ensure --sync-context --project .
+# or: python3 -m spark.cli ensure --sync-context --project .
+```
 
 ### Create Learnings (Programmatic)
 
@@ -86,7 +122,7 @@ cognitive.learn_principle(
 ### Write to Markdown
 
 ```bash
-python3 cli.py write
+python3 -m spark.cli write
 # Creates .learnings/LEARNINGS.md
 ```
 
@@ -108,24 +144,24 @@ Use `lib.orchestration.inject_agent_context(prompt)` when preparing sub-agent pr
 If you want a safety net (for sessions launched outside wrappers), run sync on a timer.
 
 **Windows Task Scheduler**
-- Action: `python`
-- Args: `-m spark.cli sync-context`
+- Action: `spark`
+- Args: `sync-context`
 - Start in: your repo root
 - Trigger: every 10–30 minutes
 
 **macOS/Linux (cron)**
 ```
-*/20 * * * * cd /path/to/vibeship-spark-intelligence && python3 -m spark.cli sync-context >/dev/null 2>&1
+*/20 * * * * cd /path/to/vibeship-spark-intelligence && spark sync-context >/dev/null 2>&1
 ```
 
 ### Promote High-Value Insights
 
 ```bash
 # Check what's ready
-python3 cli.py promote --dry-run
+python3 -m spark.cli promote --dry-run
 
 # Actually promote
-python3 cli.py promote
+python3 -m spark.cli promote
 # Creates/updates AGENTS.md, CLAUDE.md, etc.
 ```
 
@@ -141,7 +177,7 @@ pip install vibeship-mind
 python3 -m mind.lite_tier
 
 # Sync Spark learnings to Mind
-python3 cli.py sync
+python3 -m spark.cli sync
 ```
 
 ## Claude Code Integration
@@ -194,6 +230,10 @@ CLAUDE.md                      # Promoted conventions
 | Command | Description |
 |---------|-------------|
 | `status` | Show full system status |
+| `services` | Show daemon/service status |
+| `up` | Start background services |
+| `ensure` | Start missing services if not running |
+| `down` | Stop background services |
 | `health` | Quick health check |
 | `learnings` | List recent cognitive insights |
 | `write` | Write insights to markdown |
@@ -250,8 +290,8 @@ expand scope if needed.
 
 1. **Integrate with your workflow** — Set up the hooks
 2. **Start Mind** — For persistent cross-project learning
-3. **Review learnings** — `python3 cli.py learnings`
-4. **Promote insights** — `python3 cli.py promote`
+3. **Review learnings** — `python3 -m spark.cli learnings`
+4. **Promote insights** — `python3 -m spark.cli promote`
 
 ---
 

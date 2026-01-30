@@ -4,6 +4,10 @@ Spark CLI - Command-line interface for Spark
 
 Usage:
     python -m spark.cli status     # Show system status
+    python -m spark.cli services   # Show daemon/service status
+    python -m spark.cli up         # Start background services
+    python -m spark.cli ensure     # Start missing services if not running
+    python -m spark.cli down       # Stop background services
     python -m spark.cli sync       # Sync insights to Mind
     python -m spark.cli queue      # Process offline queue
     python -m spark.cli process    # Run bridge worker cycle / drain backlog
@@ -19,6 +23,7 @@ import sys
 import json
 import argparse
 import time
+import os
 from pathlib import Path
 
 from lib.cognitive_learner import get_cognitive_learner
@@ -30,6 +35,12 @@ from lib.aha_tracker import get_aha_tracker
 from lib.spark_voice import get_spark_voice
 from lib.growth_tracker import get_growth_tracker
 from lib.context_sync import sync_context
+from lib.service_control import (
+    start_services,
+    stop_services,
+    service_status,
+    format_status_lines,
+)
 from lib.bridge_cycle import run_bridge_cycle, write_bridge_heartbeat, bridge_heartbeat_age_s
 from lib.pattern_detection import get_pattern_backlog
 from lib.validation_loop import process_validation_events, get_validation_backlog, get_validation_state
@@ -368,6 +379,60 @@ def cmd_health(args):
     print()
 
 
+def cmd_services(args):
+    """Show daemon/service status."""
+    status = service_status(bridge_stale_s=args.bridge_stale_s)
+    print("")
+    for line in format_status_lines(status, bridge_stale_s=args.bridge_stale_s):
+        print(line)
+    print("")
+
+
+def _should_start_watchdog(args) -> bool:
+    if args.no_watchdog:
+        return False
+    return os.environ.get("SPARK_NO_WATCHDOG", "") == ""
+
+
+def cmd_up(args):
+    """Start Spark background services."""
+    include_watchdog = _should_start_watchdog(args)
+    results = start_services(
+        bridge_interval=args.bridge_interval,
+        bridge_query=args.bridge_query,
+        watchdog_interval=args.watchdog_interval,
+        include_dashboard=not args.no_dashboard,
+        include_watchdog=include_watchdog,
+        bridge_stale_s=args.bridge_stale_s,
+    )
+
+    print("")
+    print("[spark] starting services")
+    for name, result in results.items():
+        print(f"  {name}: {result}")
+    print("")
+
+    if args.sync_context:
+        project_dir = Path(args.project).expanduser() if args.project else Path.cwd()
+        sync_context(project_dir=project_dir)
+        print(f"[spark] sync-context: {project_dir}")
+
+
+def cmd_ensure(args):
+    """Ensure Spark services are running (start any missing)."""
+    cmd_up(args)
+
+
+def cmd_down(args):
+    """Stop Spark background services."""
+    results = stop_services()
+    print("")
+    print("[spark] stopping services")
+    for name, result in results.items():
+        print(f"  {name}: {result}")
+    print("")
+
+
 def cmd_events(args):
     """Show recent events."""
     limit = args.limit or 20
@@ -675,6 +740,10 @@ def main():
         epilog="""
 Commands:
   status      Show overall system status
+  services    Show daemon/service status
+  up          Start background services
+  ensure      Start missing services if not running
+  down        Stop background services
   sync        Sync cognitive insights to Mind
   queue       Process offline queue
   process     Run bridge worker cycle or drain backlog
@@ -688,6 +757,8 @@ Commands:
 
 Examples:
   spark status
+  spark services
+  spark up --sync-context
   spark sync
   spark promote --dry-run
   spark learnings --limit 20
@@ -697,9 +768,34 @@ Examples:
     )
     
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
-    
+
+    def _add_up_args(p):
+        p.add_argument("--bridge-interval", type=int, default=30, help="bridge_worker interval (seconds)")
+        p.add_argument("--bridge-query", default=None, help="optional fixed query for bridge_worker")
+        p.add_argument("--watchdog-interval", type=int, default=60, help="watchdog interval (seconds)")
+        p.add_argument("--bridge-stale-s", type=int, default=90, help="bridge_worker stale threshold (seconds)")
+        p.add_argument("--no-watchdog", action="store_true", help="do not start watchdog")
+        p.add_argument("--no-dashboard", action="store_true", help="do not start dashboard")
+        p.add_argument("--sync-context", action="store_true", help="run sync-context after start")
+        p.add_argument("--project", "-p", default=None, help="project root for sync-context")
+
     # status
     subparsers.add_parser("status", help="Show overall system status")
+
+    # services
+    services_parser = subparsers.add_parser("services", help="Show daemon/service status")
+    services_parser.add_argument("--bridge-stale-s", type=int, default=90, help="bridge_worker stale threshold (seconds)")
+
+    # up
+    up_parser = subparsers.add_parser("up", help="Start background services")
+    _add_up_args(up_parser)
+
+    # ensure
+    ensure_parser = subparsers.add_parser("ensure", help="Start missing services if not running")
+    _add_up_args(ensure_parser)
+
+    # down
+    subparsers.add_parser("down", help="Stop background services")
     
     # sync
     subparsers.add_parser("sync", help="Sync insights to Mind")
@@ -823,6 +919,10 @@ Examples:
     
     commands = {
         "status": cmd_status,
+        "services": cmd_services,
+        "up": cmd_up,
+        "ensure": cmd_ensure,
+        "down": cmd_down,
         "sync": cmd_sync,
         "queue": cmd_queue,
         "process": cmd_process,

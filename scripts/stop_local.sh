@@ -1,27 +1,9 @@
 #!/bin/bash
-# Stop Spark local services started by run_local.sh
+# Stop Spark local services
 
 set -e
 
-PID_DIR="$HOME/.spark/pids"
+SPARK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$SPARK_DIR"
 
-stop() {
-  local name="$1"
-  local pid_file="$PID_DIR/${name}.pid"
-  if [ ! -f "$pid_file" ]; then
-    echo "[spark] ${name} not running (no pid)"
-    return
-  fi
-  local pid
-  pid="$(cat "$pid_file" || true)"
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    echo "[spark] stopping ${name} (pid $pid)"
-    kill "$pid" || true
-  fi
-  rm -f "$pid_file"
-}
-
-stop watchdog
-stop dashboard
-stop bridge_worker
-stop sparkd
+python3 -m spark.cli down
