@@ -476,6 +476,9 @@ def generate_active_context(query: Optional[str] = None) -> str:
         references = project_profile.get("references") or []
         for r in references[:2]:
             lines.append(f"- Reference: {r.get('text') or r}")
+        transfers = project_profile.get("transfers") or []
+        for t in transfers[:2]:
+            lines.append(f"- Transfer: {t.get('text') or t}")
         lines.append("")
 
         questions = get_suggested_questions(project_profile, limit=3)

@@ -678,6 +678,7 @@ def cmd_project_status(args):
     print(f"   Feedback: {len(profile.get('feedback') or [])}")
     print(f"   Risks: {len(profile.get('risks') or [])}")
     print(f"   References: {len(profile.get('references') or [])}")
+    print(f"   Transfers: {len(profile.get('transfers') or [])}")
     questions = profile.get("questions") or []
     answered = len([q for q in questions if q.get("answered_at")])
     print(f"   Questions answered: {answered}/{len(questions)}")
@@ -739,6 +740,7 @@ def cmd_project_capture(args):
         "feedback": "project_feedback",
         "risk": "project_risk",
         "reference": "project_reference",
+        "transfer": "project_transfer",
     }
     store_memory(text, category=category_map.get(entry_type, "project_note"))
 
@@ -759,7 +761,7 @@ def cmd_project_capture(args):
             "session_id": sid,
         })
     else:
-        if entry_type in ("decision", "milestone", "reference"):
+        if entry_type in ("decision", "milestone", "reference", "transfer"):
             project_key = profile.get("project_key") or "project"
             record_checkin_request(
                 session_id=f"project:{project_key}",
@@ -1389,7 +1391,7 @@ Examples:
     project_answer.add_argument("--project", help="Project root path")
 
     project_capture = project_sub.add_parser("capture", help="Capture a project insight/decision/milestone")
-    project_capture.add_argument("--type", required=True, choices=["goal", "done", "milestone", "decision", "insight", "feedback", "risk", "reference"], help="Capture type")
+    project_capture.add_argument("--type", required=True, choices=["goal", "done", "milestone", "decision", "insight", "feedback", "risk", "reference", "transfer"], help="Capture type")
     project_capture.add_argument("--text", "-t", required=True, help="Capture text")
     project_capture.add_argument("--project", help="Project root path")
     project_capture.add_argument("--status", help="Status (for milestones)")

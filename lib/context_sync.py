@@ -246,6 +246,7 @@ def _format_context(
         milestones = project_profile.get("milestones") or []
         phase = project_profile.get("phase") or ""
         references = project_profile.get("references") or []
+        transfers = project_profile.get("transfers") or []
         lines.append("")
         lines.append("## Project Focus")
         if phase:
@@ -263,6 +264,9 @@ def _format_context(
         if references:
             for r in references[:2]:
                 lines.append(f"- Reference: {r.get('text') or r}")
+        if transfers:
+            for t in transfers[:2]:
+                lines.append(f"- Transfer: {t.get('text') or t}")
 
         questions = get_suggested_questions(project_profile, limit=3)
         if questions:

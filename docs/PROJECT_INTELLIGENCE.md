@@ -32,7 +32,8 @@ Key fields:
 2) **Capture**
    - `spark project capture` records insights, milestones, done criteria, etc.
    - Entries are saved to the project profile and stored in project memory.
-   - Use `--type reference` to capture real-world examples and transfer rules.
+   - Use `--type reference` to capture real-world examples.
+   - Use `--type transfer` to capture cross-project heuristics.
 
 3) **Prediction**
    - `prediction_loop` generates project predictions from:

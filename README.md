@@ -399,6 +399,7 @@ python -m spark.cli project questions
 python -m spark.cli project answer game_core_loop --text "Core loop feels satisfying when the grab succeeds 60% of the time."
 python -m spark.cli project capture --type insight --text "Claw physics: grip strength vs weight balance matters" --impact "player success rate"
 python -m spark.cli project capture --type reference --text "Claw machines rely on adjustable claw strength tied to payout" --evidence "arcade teardown video"
+python -m spark.cli project capture --type transfer --text "Calibrate difficulty with a target success window, not feature count"
 
 # View recent learnings
 python -m spark.cli learnings

@@ -121,6 +121,7 @@ def _default_profile(project_key: str, domain: str) -> Dict[str, Any]:
         "feedback": [],
         "risks": [],
         "references": [],
+        "transfers": [],
     }
 
 
@@ -279,6 +280,8 @@ def record_entry(profile: Dict[str, Any], entry_type: str, text: str, meta: Opti
         target = "done_history"
     if entry_type == "reference":
         target = "references"
+    if entry_type == "transfer":
+        target = "transfers"
     bucket = profile.setdefault(target, [])
     if isinstance(bucket, list):
         bucket.append(entry)
@@ -307,6 +310,7 @@ def completion_score(profile: Dict[str, Any]) -> Dict[str, Any]:
     feedback = profile.get("feedback") or []
     risks = profile.get("risks") or []
     references = profile.get("references") or []
+    transfers = profile.get("transfers") or []
 
     done_score = 20 if done else 0
     goals_score = 10 if goals else 0
@@ -325,7 +329,7 @@ def completion_score(profile: Dict[str, Any]) -> Dict[str, Any]:
     phase = (profile.get("phase") or "discovery").lower()
     phase_score = {"discovery": 2, "prototype": 5, "polish": 8, "launch": 10}.get(phase, 2)
 
-    craft_count = len(insights) + len(decisions) + len(feedback) + len(risks) + len(references)
+    craft_count = len(insights) + len(decisions) + len(feedback) + len(risks) + len(references) + len(transfers)
     craft_score = min(15, craft_count * 3)
 
     total = min(100, done_score + goals_score + q_score + milestone_score + phase_score + craft_score)
