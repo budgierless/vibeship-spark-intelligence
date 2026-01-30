@@ -8,20 +8,20 @@
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-30T13:05:05
+Last updated: 2026-01-30T17:53:48
 
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (51% reliable, 613 validations)
-- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (46% reliable, 499 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (44% reliable, 1177 validations)
-- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (20% reliable, 149 validations)
-- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (13% reliable, 87 validations)
-- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (12% reliable, 82 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (40% reliable, 717 validations)
-- [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 11 validations)
-- [reasoning] Sequence 'Bash -> Bash -> Bash -> Edit' worked well (100% reliable, 3 validations)
-- [reasoning] Sequence 'Edit -> Bash -> Bash -> Bash' worked well (100% reliable, 3 validations)
-- [reasoning] Sequence 'Read -> Edit -> Bash -> Bash' worked well (100% reliable, 3 validations)
-- [reasoning] Sequence 'Bash -> Bash -> Bash' worked well (100% reliable, 9 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (46% reliable, 627 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (41% reliable, 1191 validations)
+- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (41% reliable, 514 validations)
+- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (18% reliable, 162 validations)
+- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (12% reliable, 100 validations)
+- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (12% reliable, 95 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (38% reliable, 730 validations)
+- [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 14 validations)
+- [reasoning] Sequence 'Bash -> TaskOutput -> Bash -> Bash' worked well (100% reliable, 8 validations)
+- [reasoning] Sequence 'TaskOutput -> Bash -> Bash -> Bash' worked well (100% reliable, 5 validations)
+- [reasoning] Sequence 'Bash -> Bash -> TaskOutput -> Bash' worked well (100% reliable, 7 validations)
+- [reasoning] Sequence 'Bash -> Bash -> Bash -> TaskOutput' worked well (100% reliable, 3 validations)
 
 ## Promoted Learnings (Docs)
 - I tend to be overconfident about Edit tasks *When: When attempting Edit* (100% reliable, 4 validations)
