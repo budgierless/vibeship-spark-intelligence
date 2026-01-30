@@ -17,7 +17,8 @@ from lib.memory_banks import infer_project_key, retrieve as bank_retrieve
 from lib.tastebank import infer_domain as taste_infer_domain, retrieve as taste_retrieve
 from lib.diagnostics import log_debug
 from lib.exposure_tracker import record_exposures, infer_latest_session_id
-from lib.project_profile import load_profile
+from lib.project_profile import load_profile, get_suggested_questions
+from lib.outcome_checkin import list_checkins
 
 # Paths
 SPARK_DIR = Path(__file__).parent.parent
@@ -472,7 +473,25 @@ def generate_active_context(query: Optional[str] = None) -> str:
             status = (m.get("meta") or {}).get("status") or ""
             tag = f" [{status}]" if status else ""
             lines.append(f"- Milestone: {m.get('text')}{tag}")
+        references = project_profile.get("references") or []
+        for r in references[:2]:
+            lines.append(f"- Reference: {r.get('text') or r}")
         lines.append("")
+
+        questions = get_suggested_questions(project_profile, limit=3)
+        if questions:
+            lines.append("## Project Questions")
+            for q in questions:
+                lines.append(f"- {q.get('question')}")
+            lines.append("")
+
+        checkins = list_checkins(limit=2)
+        if checkins:
+            lines.append("## Outcome Check-in")
+            for item in checkins:
+                reason = item.get("reason") or item.get("event") or "check-in"
+                lines.append(f"- {reason}")
+            lines.append("")
 
     if contextual:
         lines.append("## Relevant Right Now")

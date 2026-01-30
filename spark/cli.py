@@ -51,7 +51,7 @@ from lib.validation_loop import process_validation_events, get_validation_backlo
 from lib.prediction_loop import get_prediction_state
 from lib.evaluation import evaluate_predictions
 from lib.outcome_log import append_outcome, build_explicit_outcome
-from lib.outcome_checkin import list_checkins
+from lib.outcome_checkin import list_checkins, record_checkin_request
 from lib.ingest_validation import scan_queue_events, write_ingest_report
 from lib.exposure_tracker import (
     read_recent_exposures,
@@ -63,6 +63,7 @@ from lib.project_profile import (
     load_profile,
     save_profile,
     ensure_questions,
+    get_suggested_questions,
     record_answer,
     record_entry,
     infer_domain,
@@ -635,21 +636,12 @@ def cmd_validate_ingest(args):
 
 
 def _print_project_questions(profile, limit: int = 5):
-    questions = profile.get("questions") or []
-    unanswered = [q for q in questions if not q.get("answered_at")]
-    extra = []
-    if not profile.get("done"):
-        extra.append({"category": "done", "id": "proj_done", "question": "How will you know this is complete?"})
-    if not profile.get("goals"):
-        extra.append({"category": "goal", "id": "proj_goal", "question": "What is the primary goal for this project?"})
-    if not profile.get("milestones"):
-        extra.append({"category": "milestone", "id": "proj_milestone", "question": "What is the next milestone?"})
-
-    if not unanswered and not extra:
+    suggested = get_suggested_questions(profile, limit=limit)
+    if not suggested:
         print("[SPARK] No unanswered questions.")
         return
     print("[SPARK] Suggested questions:")
-    for q in (unanswered + extra)[: max(1, int(limit or 5))]:
+    for q in suggested:
         cat = q.get("category") or "general"
         qid = q.get("id") or "unknown"
         text = q.get("question") or ""
@@ -685,6 +677,7 @@ def cmd_project_status(args):
     print(f"   Insights: {len(profile.get('insights') or [])}")
     print(f"   Feedback: {len(profile.get('feedback') or [])}")
     print(f"   Risks: {len(profile.get('risks') or [])}")
+    print(f"   References: {len(profile.get('references') or [])}")
     questions = profile.get("questions") or []
     answered = len([q for q in questions if q.get("answered_at")])
     print(f"   Questions answered: {answered}/{len(questions)}")
@@ -745,6 +738,7 @@ def cmd_project_capture(args):
         "insight": "project_insight",
         "feedback": "project_feedback",
         "risk": "project_risk",
+        "reference": "project_reference",
     }
     store_memory(text, category=category_map.get(entry_type, "project_note"))
 
@@ -764,6 +758,14 @@ def cmd_project_capture(args):
             "entity_id": entry.get("entry_id"),
             "session_id": sid,
         })
+    else:
+        if entry_type in ("decision", "milestone", "reference"):
+            project_key = profile.get("project_key") or "project"
+            record_checkin_request(
+                session_id=f"project:{project_key}",
+                event=f"project_{entry_type}",
+                reason=text[:160],
+            )
     print(f"[SPARK] Captured {entry_type}.")
 
 
@@ -1387,7 +1389,7 @@ Examples:
     project_answer.add_argument("--project", help="Project root path")
 
     project_capture = project_sub.add_parser("capture", help="Capture a project insight/decision/milestone")
-    project_capture.add_argument("--type", required=True, choices=["goal", "done", "milestone", "decision", "insight", "feedback", "risk"], help="Capture type")
+    project_capture.add_argument("--type", required=True, choices=["goal", "done", "milestone", "decision", "insight", "feedback", "risk", "reference"], help="Capture type")
     project_capture.add_argument("--text", "-t", required=True, help="Capture text")
     project_capture.add_argument("--project", help="Project root path")
     project_capture.add_argument("--status", help="Status (for milestones)")

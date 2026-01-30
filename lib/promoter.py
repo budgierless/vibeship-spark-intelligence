@@ -230,6 +230,7 @@ class Promoter:
         lines.extend(_render_items("Insights", profile.get("insights") or []))
         lines.extend(_render_items("Feedback", profile.get("feedback") or []))
         lines.extend(_render_items("Risks", profile.get("risks") or []))
+        lines.extend(_render_items("References", profile.get("references") or []))
 
         lines.append(PROJECT_END)
         return "\n".join(lines)

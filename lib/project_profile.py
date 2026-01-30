@@ -24,6 +24,8 @@ DOMAIN_QUESTIONS: Dict[str, List[Dict[str, str]]] = {
         {"id": "game_physics", "category": "insight", "question": "Any critical physics balance or tuning rules?"},
         {"id": "game_pacing", "category": "quality", "question": "What pace feels right for this experience?"},
         {"id": "game_definition_done", "category": "done", "question": "How will we know the game feels complete?"},
+        {"id": "game_reference", "category": "reference", "question": "What real-world system or game should we reference?"},
+        {"id": "game_transfer", "category": "transfer", "question": "What transferable heuristic should we capture for future projects?"},
     ],
     "product": [
         {"id": "product_activation", "category": "metric", "question": "What is the activation metric for this product?"},
@@ -59,6 +61,8 @@ DOMAIN_QUESTIONS: Dict[str, List[Dict[str, str]]] = {
         {"id": "gen_risk", "category": "risk", "question": "What could make this fail later?"},
         {"id": "gen_quality", "category": "quality", "question": "What quality signal matters most?"},
         {"id": "gen_feedback", "category": "feedback", "question": "Who gives feedback and how often?"},
+        {"id": "gen_reference", "category": "reference", "question": "What existing system or example are we referencing?"},
+        {"id": "gen_transfer", "category": "transfer", "question": "What principle should carry into other projects?"},
     ],
 }
 
@@ -116,6 +120,7 @@ def _default_profile(project_key: str, domain: str) -> Dict[str, Any]:
         "insights": [],
         "feedback": [],
         "risks": [],
+        "references": [],
     }
 
 
@@ -225,6 +230,20 @@ def ensure_questions(profile: Dict[str, Any]) -> int:
     return added
 
 
+def get_suggested_questions(profile: Dict[str, Any], limit: int = 3) -> List[Dict[str, Any]]:
+    ensure_questions(profile)
+    questions = profile.get("questions") or []
+    unanswered = [q for q in questions if not q.get("answered_at")]
+    extra = []
+    if not profile.get("done"):
+        extra.append({"category": "done", "id": "proj_done", "question": "How will you know this is complete?"})
+    if not profile.get("goals"):
+        extra.append({"category": "goal", "id": "proj_goal", "question": "What is the primary goal for this project?"})
+    if not profile.get("milestones"):
+        extra.append({"category": "milestone", "id": "proj_milestone", "question": "What is the next milestone?"})
+    return (unanswered + extra)[: max(1, int(limit or 3))]
+
+
 def record_answer(profile: Dict[str, Any], question_id: str, answer: str) -> Optional[Dict[str, Any]]:
     if not question_id or not answer:
         return None
@@ -258,6 +277,8 @@ def record_entry(profile: Dict[str, Any], entry_type: str, text: str, meta: Opti
     target = entry_type
     if entry_type == "done":
         target = "done_history"
+    if entry_type == "reference":
+        target = "references"
     bucket = profile.setdefault(target, [])
     if isinstance(bucket, list):
         bucket.append(entry)
@@ -285,6 +306,7 @@ def completion_score(profile: Dict[str, Any]) -> Dict[str, Any]:
     decisions = profile.get("decisions") or []
     feedback = profile.get("feedback") or []
     risks = profile.get("risks") or []
+    references = profile.get("references") or []
 
     done_score = 20 if done else 0
     goals_score = 10 if goals else 0
@@ -303,7 +325,7 @@ def completion_score(profile: Dict[str, Any]) -> Dict[str, Any]:
     phase = (profile.get("phase") or "discovery").lower()
     phase_score = {"discovery": 2, "prototype": 5, "polish": 8, "launch": 10}.get(phase, 2)
 
-    craft_count = len(insights) + len(decisions) + len(feedback) + len(risks)
+    craft_count = len(insights) + len(decisions) + len(feedback) + len(risks) + len(references)
     craft_score = min(15, craft_count * 3)
 
     total = min(100, done_score + goals_score + q_score + milestone_score + phase_score + craft_score)

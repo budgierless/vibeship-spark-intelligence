@@ -18,9 +18,10 @@ from .output_adapters import (
     write_exports,
 )
 from .project_context import get_project_context, filter_insights_for_context
-from .project_profile import load_profile
+from .project_profile import load_profile, get_suggested_questions
 from .exposure_tracker import record_exposures, infer_latest_session_id
 from .sync_tracker import get_sync_tracker
+from .outcome_checkin import list_checkins
 
 
 DEFAULT_MIN_RELIABILITY = 0.7
@@ -244,6 +245,7 @@ def _format_context(
         goals = project_profile.get("goals") or []
         milestones = project_profile.get("milestones") or []
         phase = project_profile.get("phase") or ""
+        references = project_profile.get("references") or []
         lines.append("")
         lines.append("## Project Focus")
         if phase:
@@ -258,6 +260,24 @@ def _format_context(
                 status = (m.get("meta") or {}).get("status") or ""
                 tag = f" [{status}]" if status else ""
                 lines.append(f"- Milestone: {m.get('text')}{tag}")
+        if references:
+            for r in references[:2]:
+                lines.append(f"- Reference: {r.get('text') or r}")
+
+        questions = get_suggested_questions(project_profile, limit=3)
+        if questions:
+            lines.append("")
+            lines.append("## Project Questions")
+            for q in questions:
+                lines.append(f"- {q.get('question')}")
+
+        checkins = list_checkins(limit=2)
+        if checkins:
+            lines.append("")
+            lines.append("## Outcome Check-in")
+            for item in checkins:
+                reason = item.get("reason") or item.get("event") or "check-in"
+                lines.append(f"- {reason}")
 
     if promoted:
         lines.append("")

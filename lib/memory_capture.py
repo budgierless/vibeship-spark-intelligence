@@ -33,6 +33,7 @@ from lib.cognitive_learner import CognitiveCategory, get_cognitive_learner
 from lib.queue import read_recent_events, EventType
 from lib.memory_banks import store_memory
 from lib.outcome_log import append_outcome, make_outcome_id
+from lib.outcome_checkin import record_checkin_request
 
 
 PENDING_DIR = Path.home() / ".spark"
@@ -272,6 +273,11 @@ def commit_learning(text: str, category: CognitiveCategory, context: str = "", s
                     "domain": "project",
                     "session_id": session_id or None,
                 })
+                record_checkin_request(
+                    session_id=session_id or "session",
+                    event="project_decision",
+                    reason=clean[:160],
+                )
         except Exception:
             pass
 

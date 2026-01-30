@@ -11,3 +11,5 @@
 - I struggle with WebFetch fails with other (recovered 53%) tasks *When: Tasks involving WebFetch fails with other (recover* (91% reliable, 40 validations)
 - I struggle with WebFetch fails with other (recovered 56%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 169 validations)
 - I struggle with WebFetch fails with other (recovered 48%) tasks *When: Tasks involving WebFetch fails with other (recover* (87% reliable, 27 validations)
+- I struggle with WebFetch fails with other tasks *When: Tasks involving WebFetch fails with other* (78% reliable, 76 validations)
+- I struggle with WebFetch fails with other (recovered) tasks *When: Tasks involving WebFetch fails with other (recover* (89% reliable, 562 validations)

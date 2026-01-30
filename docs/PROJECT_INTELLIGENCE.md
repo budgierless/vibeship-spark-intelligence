@@ -27,10 +27,12 @@ Key fields:
 1) **Questioning**
    - `spark project init` seeds domain questions.
    - `spark project questions` shows unanswered + dynamic questions.
+   - Domain questions include references + transferable heuristics.
 
 2) **Capture**
    - `spark project capture` records insights, milestones, done criteria, etc.
    - Entries are saved to the project profile and stored in project memory.
+   - Use `--type reference` to capture real-world examples and transfer rules.
 
 3) **Prediction**
    - `prediction_loop` generates project predictions from:
