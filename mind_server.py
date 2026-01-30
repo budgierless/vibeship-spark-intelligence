@@ -10,7 +10,7 @@ Endpoints:
   POST /v1/memories/retrieve  (simple keyword retrieval)
 
 Storage:
-  SQLite at ~/.spark/mind_lite.sqlite
+  SQLite at ~/.mind/lite/memories.db (shared with Mind Lite)
 
 Note: Retrieval is intentionally simple (keyword scoring) to keep this
 server zero-dependency. We can upgrade to embeddings later.
@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 PORT = 8080
-DB_PATH = Path.home() / ".spark" / "mind_lite.sqlite"
+DB_PATH = Path.home() / ".mind" / "lite" / "memories.db"
 TOKEN = os.environ.get("MIND_TOKEN")
 MAX_BODY_BYTES = int(os.environ.get("MIND_MAX_BODY_BYTES", "262144"))
 MAX_CONTENT_CHARS = int(os.environ.get("MIND_MAX_CONTENT_CHARS", "4000"))
