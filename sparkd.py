@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib.events import SparkEventV1
 from lib.queue import quick_capture, EventType
 from lib.orchestration import register_agent, recommend_agent, record_handoff, get_orchestrator
-from lib.bridge_cycle import read_bridge_heartbeat
+from lib.bridge_cycle import read_bridge_heartbeat, run_bridge_cycle, write_bridge_heartbeat
 from lib.pattern_detection.worker import get_pattern_backlog
 from lib.validation_loop import get_validation_backlog
 from lib.diagnostics import setup_component_logging
@@ -81,6 +81,45 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        if path == "/process":
+            # Run a bridge cycle to process pending events
+            try:
+                stats = run_bridge_cycle()
+                write_bridge_heartbeat(stats)
+                return _json(self, 200, {
+                    "ok": True,
+                    "processed": stats.get("pattern_processed", 0),
+                    "learnings": stats.get("content_learned", 0),
+                    "patterns": stats.get("pattern_processed", 0),
+                    "memory": stats.get("memory", {}),
+                    "validation": stats.get("validation", {}),
+                    "errors": stats.get("errors", []),
+                })
+            except Exception as e:
+                return _json(self, 500, {"ok": False, "error": str(e)[:200]})
+
+        if path == "/reflect":
+            # Trigger deep reflection (run multiple cycles + analyze)
+            try:
+                all_stats = []
+                for _ in range(3):  # Run 3 cycles for deeper analysis
+                    stats = run_bridge_cycle()
+                    all_stats.append(stats)
+                    write_bridge_heartbeat(stats)
+
+                total_patterns = sum(s.get("pattern_processed", 0) for s in all_stats)
+                total_learnings = sum(s.get("content_learned", 0) for s in all_stats)
+
+                return _json(self, 200, {
+                    "ok": True,
+                    "cycles": len(all_stats),
+                    "meta_patterns": total_patterns,
+                    "insights": total_learnings,
+                    "message": f"Reflected across {len(all_stats)} cycles",
+                })
+            except Exception as e:
+                return _json(self, 500, {"ok": False, "error": str(e)[:200]})
 
         if path == "/agent":
             length = int(self.headers.get("Content-Length", "0") or 0)

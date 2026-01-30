@@ -21,10 +21,18 @@ wheels/
 
 # Virtual environments
 .env
+.env.local
+.env.*.local
 .venv
 env/
 venv/
 ENV/
+
+# Secrets - NEVER commit
+*.secret
+secrets.json
+telegram_token.txt
+.telegram_token
 
 # IDE
 .idea/
