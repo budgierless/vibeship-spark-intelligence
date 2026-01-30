@@ -553,15 +553,6 @@ def cmd_validate_ingest(args):
         for k, v in stats["reasons"].items():
             print(f"     - {k}: {v}")
 
-    if args.reject:
-        ok = capture_reject(args.reject)
-        print("✓ Rejected" if ok else "✗ Not found / not pending")
-        return
-
-    if args.list:
-        items = capture_list_pending(limit=args.limit)
-        print("\n" + format_pending(items) + "\n")
-
 
 def cmd_surprises(args):
     """Show surprise moments (aha!)."""
