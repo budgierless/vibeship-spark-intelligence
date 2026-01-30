@@ -761,8 +761,14 @@ def cmd_project_capture(args):
             "session_id": sid,
         })
     else:
-        if entry_type in ("decision", "milestone", "reference", "transfer"):
-            project_key = profile.get("project_key") or "project"
+        project_key = profile.get("project_key") or "project"
+        if entry_type == "reference":
+            record_checkin_request(
+                session_id=f"project:{project_key}",
+                event="project_transfer",
+                reason=f"Transfer from reference: {text[:140]}",
+            )
+        elif entry_type in ("decision", "milestone", "transfer"):
             record_checkin_request(
                 session_id=f"project:{project_key}",
                 event=f"project_{entry_type}",

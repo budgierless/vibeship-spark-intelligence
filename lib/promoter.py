@@ -231,7 +231,20 @@ class Promoter:
         lines.extend(_render_items("Feedback", profile.get("feedback") or []))
         lines.extend(_render_items("Risks", profile.get("risks") or []))
         lines.extend(_render_items("References", profile.get("references") or []))
-        lines.extend(_render_items("Transfers", profile.get("transfers") or []))
+        transfers = profile.get("transfers") or []
+        lines.extend(_render_items("Transfers", transfers))
+
+        if len(transfers) >= 3:
+            def _theme_snip(text: str) -> str:
+                words = (text or "").strip().split()
+                return " ".join(words[:8]) if words else ""
+
+            recent = list(reversed(transfers))[:3]
+            lines.append("Transfer Summary:")
+            for entry in recent:
+                snippet = _theme_snip(entry.get("text") or "")
+                if snippet:
+                    lines.append(f"- Theme: {snippet}")
 
         lines.append(PROJECT_END)
         return "\n".join(lines)

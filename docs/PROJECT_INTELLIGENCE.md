@@ -34,6 +34,7 @@ Key fields:
    - Entries are saved to the project profile and stored in project memory.
    - Use `--type reference` to capture real-world examples.
    - Use `--type transfer` to capture cross-project heuristics.
+   - Capturing a reference auto-prompts a transfer check-in.
 
 3) **Prediction**
    - `prediction_loop` generates project predictions from:
@@ -52,6 +53,7 @@ Key fields:
 6) **Promotion**
    - `spark promote` writes a `PROJECT.md` block from the project profile.
    - This keeps human-readable project intelligence close to the repo.
+   - If 3+ transfers exist, a short transfer summary is added.
 
 ## Cross-project learning
 Project entries are stored in memory banks by category:
