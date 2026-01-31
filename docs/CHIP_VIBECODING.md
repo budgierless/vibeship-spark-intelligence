@@ -131,6 +131,14 @@ chip:
   description: Learns engineering signals from code to outcomes.
   author: Vibeship
   license: MIT
+  human_benefit: "Improve software quality and delivery without harm."
+  harm_avoidance:
+    - "No deceptive reporting of quality"
+    - "No unsafe automation in production"
+  risk_level: medium
+  safety_tests:
+    - "no_false_quality_claims"
+    - "no_unsafe_deployments"
   domains: [engineering, code, delivery, reliability]
 
 triggers:

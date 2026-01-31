@@ -1,0 +1,100 @@
+# Vibecoding Chip (runtime)
+
+chip:
+  id: vibecoding
+  name: Vibecoding Intelligence
+  version: 0.2.0
+  description: |
+    Learns engineering signals from code to outcomes.
+    Focuses on quality, velocity, and reliability without harm.
+  author: Vibeship
+  license: MIT
+  human_benefit: "Improve software quality and delivery without harm."
+  harm_avoidance:
+    - "No deceptive reporting of quality"
+    - "No unsafe automation in production"
+  risk_level: medium
+  safety_tests:
+    - "no_false_quality_claims"
+    - "no_unsafe_deployments"
+  domains:
+    - engineering
+    - code
+    - delivery
+    - reliability
+
+triggers:
+  patterns:
+    - "refactor"
+    - "rollback"
+    - "flaky test"
+    - "latency spike"
+    - "incident"
+    - "merge"
+    - "pr"
+  events:
+    - "code_change"
+    - "pr_opened"
+    - "test_failed"
+    - "deploy_finished"
+    - "incident_opened"
+
+observers:
+  - name: code_change
+    description: Tracks code changes and their scope
+    triggers: ["commit", "code change", "diff", "refactor"]
+    capture:
+      required:
+        repo: "Repository name"
+        commit_id: "Commit SHA"
+      optional:
+        branch: "Branch name"
+        files_changed: "Count of files changed"
+        diff_lines: "Lines added/removed"
+
+  - name: ci_failure
+    description: Tracks CI/test failures
+    triggers: ["test failed", "ci failed", "build failed", "flaky test"]
+    capture:
+      required:
+        repo: "Repository name"
+        test_name: "Failing test identifier"
+      optional:
+        error_code: "Error/exception identifier"
+        build_id: "Build ID"
+
+  - name: deploy_event
+    description: Tracks deploys and rollbacks
+    triggers: ["deploy", "release", "rollback"]
+    capture:
+      required:
+        repo: "Repository name"
+        env: "Environment"
+      optional:
+        status: "success/failure"
+        release_id: "Release identifier"
+        rollback: "true/false"
+
+outcomes:
+  positive:
+    - condition: "status == success"
+      insight: "Deploy succeeded without rollback"
+      weight: 1.0
+  negative:
+    - condition: "rollback == true"
+      insight: "Rollback indicates stability risk"
+      weight: 1.0
+
+questions:
+  - id: quality_definition
+    question: "What does 'quality' mean for this project?"
+    category: quality
+    phase: discovery
+    required: true
+    affects_learning: ["ci_failure", "code_change"]
+  - id: velocity_tradeoff
+    question: "What tradeoffs are acceptable between speed and stability?"
+    category: risk
+    phase: discovery
+    required: false
+    affects_learning: ["deploy_event"]

@@ -50,6 +50,12 @@ Think of it like this:
 └─────────────────────────────────────────────────────────┘
 ```
 
+Guardrails (required fields in `chip`):
+- human_benefit
+- harm_avoidance
+- risk_level (low/medium/high)
+- safety_tests
+
 ---
 
 ## Architecture Overview
@@ -121,6 +127,16 @@ chip:
 
   author: Vibeship
   license: MIT
+
+  # Humanity-first guardrails (required)
+  human_benefit: "Improve marketing effectiveness without manipulation or harm."
+  harm_avoidance:
+    - "No deceptive or coercive messaging"
+    - "No exploitation of vulnerable audiences"
+  risk_level: medium
+  safety_tests:
+    - "no_deceptive_growth"
+    - "no_harmful_targeting"
 
   # Domains this chip owns (for routing)
   domains:

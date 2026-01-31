@@ -61,6 +61,19 @@ OPERATIONAL_PATTERNS = [
 # Compile patterns for efficiency
 _OPERATIONAL_REGEXES = [re.compile(p, re.IGNORECASE) for p in OPERATIONAL_PATTERNS]
 
+# Safety block patterns (humanity-first guardrail)
+SAFETY_BLOCK_PATTERNS = [
+    r"\bdecept(?:ive|ion)\b",
+    r"\bmanipulat(?:e|ion)\b",
+    r"\bcoerc(?:e|ion)\b",
+    r"\bexploit\b",
+    r"\bharass(?:ment)?\b",
+    r"\bweaponize\b",
+    r"\bmislead\b",
+]
+
+_SAFETY_REGEXES = [re.compile(p, re.IGNORECASE) for p in SAFETY_BLOCK_PATTERNS]
+
 
 def is_operational_insight(insight_text: str) -> bool:
     """
@@ -103,6 +116,37 @@ def is_operational_insight(insight_text: str) -> bool:
         return True
 
     return False
+
+
+def is_unsafe_insight(insight_text: str) -> bool:
+    """Return True if insight is unsafe or harmful to promote."""
+    text = (insight_text or "").strip().lower()
+    if not text:
+        return True
+    for regex in _SAFETY_REGEXES:
+        if regex.search(text):
+            return True
+    return False
+
+
+def filter_unsafe_insights(insights: list) -> tuple:
+    """Split insights into safe and unsafe lists."""
+    safe = []
+    unsafe = []
+
+    for item in insights:
+        if isinstance(item, tuple):
+            insight = item[0]
+            text = insight.insight if hasattr(insight, "insight") else str(insight)
+        else:
+            text = item.insight if hasattr(item, "insight") else str(item)
+
+        if is_unsafe_insight(text):
+            unsafe.append(item)
+        else:
+            safe.append(item)
+
+    return safe, unsafe
 
 
 def filter_operational_insights(insights: list) -> tuple:
@@ -395,7 +439,10 @@ class Promoter:
             cognitive_only, operational = filter_operational_insights(candidates)
             if operational:
                 print(f"[SPARK] Filtered {len(operational)} operational insights (telemetry)")
-            return cognitive_only
+            safe_only, unsafe = filter_unsafe_insights(cognitive_only)
+            if unsafe:
+                print(f"[SPARK] Filtered {len(unsafe)} unsafe insights (safety guardrail)")
+            return safe_only
 
         return candidates
     
@@ -440,18 +487,23 @@ class Promoter:
 
         # Apply operational filter
         promotable, filtered_operational = filter_operational_insights(all_candidates)
+        # Apply safety filter
+        promotable, filtered_unsafe = filter_unsafe_insights(promotable)
 
         stats = {
             "promoted": 0,
             "skipped": 0,
             "failed": 0,
             "filtered_operational": len(filtered_operational),  # NEW: Track filtered
+            "filtered_unsafe": len(filtered_unsafe),
             "project_written": 0,
             "project_failed": 0,
         }
 
         if filtered_operational:
             print(f"[SPARK] Filtered {len(filtered_operational)} operational insights (tool sequences, telemetry)")
+        if filtered_unsafe:
+            print(f"[SPARK] Filtered {len(filtered_unsafe)} unsafe insights (safety guardrail)")
 
         if include_project:
             if dry_run:
@@ -501,6 +553,7 @@ class Promoter:
 
         # Apply filter
         cognitive_only, operational = filter_operational_insights(all_candidates)
+        cognitive_only, unsafe = filter_unsafe_insights(cognitive_only)
 
         promoted = [i for i in cognitive.insights.values() if i.promoted]
         by_target = {}
@@ -513,6 +566,7 @@ class Promoter:
             "promoted_count": len(promoted),
             "ready_for_promotion": len(cognitive_only),
             "filtered_operational": len(operational),  # NEW: Operational telemetry blocked
+            "filtered_unsafe": len(unsafe),
             "by_target": by_target,
             "threshold": self.reliability_threshold,
             "min_validations": self.min_validations

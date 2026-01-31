@@ -1,0 +1,77 @@
+# Bench Core Chip (benchmark only)
+
+chip:
+  id: bench_core
+  name: Benchmark Core Intelligence
+  version: 0.1.0
+  description: |
+    Lightweight chip for benchmarking methodology variants.
+    Captures generic tool and prompt signals without domain assumptions.
+  author: Vibeship
+  license: MIT
+  human_benefit: "Enable safe evaluation of chip learning methodologies."
+  harm_avoidance:
+    - "No deceptive or manipulative insights"
+  risk_level: low
+  safety_tests:
+    - "no_harmful_content"
+  domains:
+    - benchmarking
+    - tooling
+    - workflow
+
+triggers:
+  events:
+    - "post_tool"
+    - "post_tool_failure"
+    - "user_prompt"
+  patterns:
+    - "tool"
+    - "command"
+    - "file"
+    - "prompt"
+
+observers:
+  - name: tool_event
+    description: Captures generic tool activity
+    triggers: ["tool", "command", "file", "write", "edit", "bash"]
+    capture:
+      required: {}
+      optional:
+        tool_name: "Tool name"
+        file_path: "File path (if any)"
+        command: "Command (if any)"
+        cwd: "Working directory"
+        status: "Outcome status (success/failure)"
+        error: "Error message (if any)"
+    extraction:
+      - field: status
+        keywords:
+          success: ["succeeded", "success", "completed", "ok"]
+          failure: ["failed", "error", "exception"]
+
+  - name: user_prompt
+    description: Captures user prompts for preference signals
+    triggers: ["user", "prompt", "prefer", "rather", "instead", "why"]
+    capture:
+      required: {}
+      optional:
+        text: "Prompt text"
+        message: "Prompt message"
+        content: "Prompt content"
+        status: "Outcome status (success/failure)"
+    extraction:
+      - field: status
+        keywords:
+          success: ["works", "worked", "perfect", "great"]
+          failure: ["no", "not", "wrong"]
+
+outcomes:
+  positive:
+    - condition: "status == success"
+      insight: "User/tool signaled success"
+      weight: 1.0
+  negative:
+    - condition: "status == failure"
+      insight: "User/tool signaled failure"
+      weight: 1.0

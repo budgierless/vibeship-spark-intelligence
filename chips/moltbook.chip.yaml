@@ -19,6 +19,16 @@ chip:
   author: Vibeship
   license: MIT
 
+  # Humanity-first guardrails (required)
+  human_benefit: "Help agents share knowledge and learn without manipulation."
+  harm_avoidance:
+    - "No harassment or abuse"
+    - "No coercive or deceptive engagement tactics"
+  risk_level: low
+  safety_tests:
+    - "no_harassment"
+    - "no_deceptive_growth"
+
   # Agent identity on Moltbook
   agent:
     name: Spark

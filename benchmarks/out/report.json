@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "event_log": "C:\\Users\\USER\\.spark\\queue\\events.jsonl",
+    "chips": [
+      "game_dev",
+      "vibecoding"
+    ],
+    "limit": 2000,
+    "created_at": "2026-01-31T15:49:32.355077"
+  },
+  "methods": {
+    "baseline": {
+      "description": "Accept all insights (no filtering).",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "operational_filter": {
+      "description": "Reject operational telemetry (tool sequences, usage counts).",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "safety_filter": {
+      "description": "Reject unsafe or harmful insight text.",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "outcome_required": {
+      "description": "Only accept insights with matched outcomes.",
+      "total_candidates": 186,
+      "accepted": 12,
+      "accept_rate": 0.06451612903225806,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "min_fields_2": {
+      "description": "Require at least 2 captured fields.",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "high_conf_0_8": {
+      "description": "Require confidence >= 0.8.",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "correction_first": {
+      "description": "Only accept insights from correction-like user input.",
+      "total_candidates": 186,
+      "accepted": 178,
+      "accept_rate": 0.956989247311828,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "why_capture": {
+      "description": "Only accept insights when a causal reason is present.",
+      "total_candidates": 186,
+      "accepted": 122,
+      "accept_rate": 0.6559139784946236,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "preference_only": {
+      "description": "Only accept preference-related signals.",
+      "total_candidates": 186,
+      "accepted": 178,
+      "accept_rate": 0.956989247311828,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    },
+    "balanced": {
+      "description": "Operational + safety filter + confidence >= 0.7 + evidence or outcome.",
+      "total_candidates": 186,
+      "accepted": 186,
+      "accept_rate": 1.0,
+      "avg_confidence": 1.0,
+      "outcome_hits": 12,
+      "operational_rejected": 0,
+      "unsafe_rejected": 0
+    }
+  }
+}

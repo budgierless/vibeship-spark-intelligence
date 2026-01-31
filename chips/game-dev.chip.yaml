@@ -1,0 +1,104 @@
+# Game Dev Chip (runtime)
+
+chip:
+  id: game_dev
+  name: Game Dev Intelligence
+  version: 0.2.0
+  description: |
+    Learns gameplay, balance, and retention signals to improve player outcomes.
+  author: Vibeship
+  license: MIT
+  human_benefit: "Improve player experience without exploitation or harm."
+  harm_avoidance:
+    - "No manipulative or addictive dark patterns"
+    - "No harmful or abusive content strategies"
+  risk_level: medium
+  safety_tests:
+    - "no_dark_patterns"
+    - "no_harmful_content"
+  domains:
+    - game_dev
+    - gameplay
+    - balance
+    - retention
+    - player_experience
+
+triggers:
+  patterns:
+    - "playtest"
+    - "core loop"
+    - "balance"
+    - "difficulty"
+    - "retention"
+    - "bug"
+    - "fun"
+    - "frustrating"
+  events:
+    - "playtest_result"
+    - "balance_change"
+    - "build_released"
+    - "bug_reported"
+    - "user_feedback"
+
+observers:
+  - name: playtest_feedback
+    description: Captures playtest feedback and satisfaction
+    triggers: ["playtest", "feedback", "fun", "frustrating"]
+    capture:
+      required:
+        playtest_id: "Playtest identifier"
+        rating: "Player rating (1-5)"
+      optional:
+        segment: "Player segment"
+        notes: "Summary of feedback"
+
+  - name: balance_change
+    description: Tracks balance and tuning changes
+    triggers: ["balance", "tuning", "difficulty", "drop rate"]
+    capture:
+      required:
+        system: "System tuned (economy, combat, rewards)"
+        change: "Description of the change"
+      optional:
+        before: "Previous value"
+        after: "New value"
+
+  - name: retention_metric
+    description: Tracks retention and engagement signals
+    triggers: ["retention", "session length", "churn"]
+    capture:
+      required:
+        metric_name: "Metric name"
+        metric_value: "Metric value"
+      optional:
+        period: "Time window"
+
+outcomes:
+  positive:
+    - condition: "metric_value > 0.3"
+      insight: "Retention above target threshold"
+      weight: 1.0
+  negative:
+    - condition: "rating < 3"
+      insight: "Playtest satisfaction below acceptable level"
+      weight: 1.0
+
+questions:
+  - id: core_loop
+    question: "What is the core loop and how do we measure if it feels good?"
+    category: goal
+    phase: discovery
+    required: true
+    affects_learning: ["playtest_feedback"]
+  - id: target_retention
+    question: "What retention target matters most (D1, D7, D30)?"
+    category: metric
+    phase: discovery
+    required: false
+    affects_learning: ["retention_metric"]
+  - id: difficulty_intent
+    question: "What difficulty curve do we want players to experience?"
+    category: quality
+    phase: prototype
+    required: false
+    affects_learning: ["balance_change"]
