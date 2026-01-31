@@ -63,16 +63,6 @@ chip:
   description: |
     Learns what makes marketing campaigns succeed.
     Tracks metrics, messaging, and audience signals.
-  author: Vibeship
-  license: MIT
-  human_benefit: "Improve marketing outcomes without manipulation."
-  harm_avoidance:
-    - "No deceptive or coercive messaging"
-    - "No exploitation of vulnerable audiences"
-  risk_level: medium
-  safety_tests:
-    - "no_deceptive_growth"
-    - "no_harmful_targeting"
   domains:
     - marketing
     - growth

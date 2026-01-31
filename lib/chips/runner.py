@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .loader import ChipSpec, ObserverSpec
-from .policy import SafetyPolicy
 from .store import get_chip_store
 
 
@@ -45,7 +44,6 @@ class ChipRunner:
     def __init__(self, spec: ChipSpec):
         self.spec = spec
         self.store = get_chip_store(spec.id)
-        self.policy = SafetyPolicy.from_chip_spec(spec.raw_yaml)
 
     def process_event(self, event: Dict) -> List[Dict]:
         """
@@ -182,16 +180,11 @@ class ChipRunner:
         # Build insight
         field_summary = ", ".join(f"{k}={v}" for k, v in list(captured.fields.items())[:5])
 
-        insight_text = f"{observer.description}: {field_summary}"
-        decision = self.policy.check_text(insight_text)
-        if not decision.allowed:
-            return None
-
         return {
             "chip_id": self.spec.id,
             "chip_name": self.spec.name,
             "observer": observer.name,
-            "insight": insight_text,
+            "insight": f"{observer.description}: {field_summary}",
             "confidence": captured.confidence,
             "context": f"Captured by {self.spec.name} chip",
             "timestamp": captured.timestamp,

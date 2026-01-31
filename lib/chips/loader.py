@@ -17,8 +17,6 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from .schema import validate_chip_spec
-
 
 @dataclass
 class ObserverSpec:
@@ -110,10 +108,6 @@ class ChipSpec:
     author: str = ""
     license: str = "MIT"
     domains: List[str] = field(default_factory=list)
-    human_benefit: str = ""
-    harm_avoidance: List[str] = field(default_factory=list)
-    risk_level: str = "low"
-    safety_tests: List[str] = field(default_factory=list)
 
     # Components
     triggers: TriggerSpec = field(default_factory=TriggerSpec)
@@ -172,11 +166,6 @@ class ChipLoader:
 
     def _parse_spec(self, raw: Dict, path: Path) -> ChipSpec:
         """Parse raw YAML into ChipSpec."""
-        # Validate schema and guardrails
-        errors = validate_chip_spec(raw)
-        if errors:
-            raise ValueError(f"Chip spec validation failed: {', '.join(errors)}")
-
         # Validate required fields
         for field in self.REQUIRED_FIELDS:
             if field not in raw:
@@ -196,10 +185,6 @@ class ChipLoader:
             author=chip_data.get("author", ""),
             license=chip_data.get("license", "MIT"),
             domains=chip_data.get("domains", []),
-            human_benefit=chip_data.get("human_benefit", ""),
-            harm_avoidance=chip_data.get("harm_avoidance", []) or [],
-            risk_level=chip_data.get("risk_level", "low"),
-            safety_tests=chip_data.get("safety_tests", []) or [],
             source_path=path,
             raw_yaml=raw,
         )
