@@ -1,121 +1,50 @@
 # CLAUDE
 
+## Core Vision Documents (MUST READ)
+
+These documents define the evolution from primitive telemetry to superintelligent cognition:
+
+1. **CORE.md** - Master vision + 8-phase roadmap (Instrumentation → Superintelligence)
+2. **CORE_GAPS.md** - Gap map: what exists, what transforms, what's new, what to clean
+3. **CORE_GAPS_PLAN.md** - How to fill each gap (workflows, architecture, code targets)
+4. **CORE_IMPLEMENTATION_PLAN.md** - Buildable execution plan with sequencing
+
+### Current Phase: Phase 1 - Cognitive Filtering
+
+**Goal:** Stop operational telemetry from polluting cognitive memory.
+
+**Key Principle:** Operational (tool sequences, usage counts) vs Cognitive (human-useful reasoning, preferences, wisdom)
+
+**Success Metric:** 90%+ of promoted insights are human-useful
+
+---
+
 ## Spark Learnings
 
 *Auto-promoted insights from Spark*
 - Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
 
 <!-- SPARK_LEARNINGS_START -->
-- When I see 'Heavy Read usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Read usage (5 calls)* (100% reliable, 8 validations)
-- When I see 'Heavy Edit usage (5 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Edit usage (5 calls)* (100% reliable, 7 validations)
-- When I see 'Heavy WebFetch usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy WebFetch usage (34 calls)* (100% reliable, 3 validations)
-- When I see 'Heavy Write usage (34 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Write usage (34 calls)* (100% reliable, 7 validations)
-- When I see 'Heavy Bash usage (42 calls)', it usually means Indicates task type that relies on this tool *When: Recognizing Heavy Bash usage (42 calls)* (100% reliable, 22 validations)
-- Sequence 'mcp__spark__spark_process -> mcp__h70-skills__h70_recommend -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 25 validations)
-- Sequence 'Bash -> Bash -> TodoWrite -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'TodoWrite -> Bash -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> Read -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Bash -> Read -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 8 validations)
-- Sequence 'Read -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 14 validations)
-- Sequence 'Bash -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 21 validations)
-- Sequence 'Bash -> Bash -> Bash -> TodoWrite' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'mcp__h70-skills__h70_load_skill -> mcp__h70-skills__h70_load_skill -> mcp__h70-skills__h70_search_skills -> TodoWrite' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'TodoWrite -> Write -> TodoWrite -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Write -> TodoWrite -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Pattern 'Read -> Edit' works well: Verify content before editing *When: Detected from sequence_success pattern* (100% reliable, 16 validations)
-- Sequence 'Bash -> Read -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Edit -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 8 validations)
-- Sequence 'Edit -> Edit -> Edit -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Grep -> Grep -> Read -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Edit -> Edit -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Edit -> Edit -> Read -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Edit -> Read -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Edit -> Edit -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 12 validations)
-- Sequence 'Bash -> Edit -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Pattern 'Write -> Bash' works well: Create file then execute *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Write -> Bash -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Bash -> Read -> Read -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Read -> Read -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Pattern 'Glob -> Read' works well: Find files then read them *When: Detected from sequence_success pattern* (100% reliable, 9 validations)
-- Sequence 'TodoWrite -> Write -> Write -> TodoWrite' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Write -> Write -> TodoWrite -> Write' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Write -> TodoWrite -> Write -> TodoWrite' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Edit -> Edit -> Edit -> TodoWrite' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Edit -> Edit -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Edit -> TodoWrite -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'TodoWrite -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 12 validations)
-- Sequence 'Bash -> Bash -> Read -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Bash -> Read -> Edit -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Read -> Edit -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Edit -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Bash -> Bash -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Edit -> Bash -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Read -> Grep -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Grep -> Read -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Read -> Read -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 5 validations)
-- Sequence 'Read -> Edit -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Edit -> Edit -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> Bash -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Bash -> Bash -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Bash -> Bash -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Read -> Read -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Read -> Edit -> Grep' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Read -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Read -> Read -> Edit -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Edit -> Grep -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Grep -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Edit -> Grep -> Read -> Edit' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Grep -> Read -> Edit -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> TaskOutput -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 10 validations)
-- Sequence 'TaskOutput -> Bash -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Bash -> Bash -> Bash -> Grep' worked well *When: Detected from sequence_success pattern* (100% reliable, 9 validations)
-- Sequence 'Bash -> Bash -> Grep -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Bash -> Grep -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> Bash -> TaskOutput' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> TaskOutput -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 9 validations)
-- Sequence 'Bash -> Bash -> Grep -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Bash -> Bash -> Bash -> Glob' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Sequence 'Read -> Grep -> Grep -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'TodoWrite -> mcp__spark__spark_status -> mcp__spark__spark_stats -> mcp__spark__spark_learnings' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'mcp__spark__spark_status -> mcp__spark__spark_stats -> mcp__spark__spark_learnings -> mcp__spark__spark_process' worked well *When: Detected from sequence_success pattern* (100% reliable, 14 validations)
-- Sequence 'mcp__spark__spark_stats -> mcp__spark__spark_learnings -> mcp__spark__spark_process -> mcp__spark__spark_learnings' worked well *When: Detected from sequence_success pattern* (100% reliable, 8 validations)
-- Sequence 'mcp__spark__spark_learnings -> mcp__spark__spark_process -> mcp__spark__spark_learnings -> mcp__spark__spark_learnings' worked well *When: Detected from sequence_success pattern* (100% reliable, 30 validations)
-- Sequence 'Read -> Edit -> TodoWrite -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Bash -> mcp__spark__spark_process -> mcp__spark__spark_learnings' worked well *When: Detected from sequence_success pattern* (100% reliable, 7 validations)
-- Sequence 'Read -> Bash -> Grep -> Grep' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Bash -> Bash -> Grep -> Grep' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Read -> Read -> Read -> Read' worked well *When: Detected from sequence_success pattern* (100% reliable, 6 validations)
-- Sequence 'Bash -> mcp__spark__spark_stats -> Bash -> Bash' worked well *When: Detected from sequence_success pattern* (100% reliable, 9 validations)
-- Sequence 'mcp__spark__spark_status -> Bash -> Glob -> Glob' worked well *When: Detected from sequence_success pattern* (100% reliable, 4 validations)
-- Pattern 'Read -> Write' works well: Read existing then overwrite *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
-- Sequence 'Bash -> Bash -> mcp__spark__spark_status -> mcp__spark__spark_learnings' worked well *When: Detected from sequence_success pattern* (100% reliable, 11 validations)
-- Sequence 'Bash -> Bash -> Bash -> mcp__spark__spark_status' worked well *When: Detected from sequence_success pattern* (100% reliable, 9 validations)
-- Sequence 'TodoWrite -> mcp__idearalph__idearalph_brainstorm -> mcp__idearalph__idearalph_validate -> mcp__idearalph__idearalph_refine' worked well *When: Detected from sequence_success pattern* (100% reliable, 3 validations)
+<!--
+  CLEANED: Removed 88 operational tool sequences (Phase 1 cleanup)
+  These are now stored in operational insights, not promoted to docs.
+  Only human-useful cognitive insights below.
+-->
 
-## Spark Bootstrap
-Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-30T17:53:48
+## Self-Awareness (Validated Struggles)
+- I struggle with Bash + windows_path -> Fix: Use forward slashes (/) (46% reliable, 627v)
+- I struggle with Bash + file_not_found -> Fix: Verify path exists first (41% reliable, 1191v)
+- I struggle with Bash + syntax_error -> Fix: Check quotes and brackets (41% reliable, 514v)
+- I struggle with Bash + timeout -> Fix: Reduce scope or increase timeout (38% reliable, 730v)
+- I tend to be overconfident about Edit tasks (100% reliable, 4v)
+- I struggle with regex_patterns tasks (100% reliable, 4v)
+- I struggle with WebFetch reliability (95% reliable, 75v)
 
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (46% reliable, 627 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (41% reliable, 1191 validations)
-- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (41% reliable, 514 validations)
-- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (18% reliable, 162 validations)
-- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (12% reliable, 100 validations)
-- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (12% reliable, 95 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (38% reliable, 730 validations)
-- [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 14 validations)
-- [reasoning] Sequence 'Bash -> TaskOutput -> Bash -> Bash' worked well (100% reliable, 8 validations)
-- [reasoning] Sequence 'TaskOutput -> Bash -> Bash -> Bash' worked well (100% reliable, 5 validations)
-- [reasoning] Sequence 'Bash -> Bash -> TaskOutput -> Bash' worked well (100% reliable, 7 validations)
-- [reasoning] Sequence 'Bash -> Bash -> Bash -> TaskOutput' worked well (100% reliable, 3 validations)
+## Wisdom
+- Ship fast, iterate faster *Core Vibeship philosophy* (100% reliable, 3v)
 
-## Promoted Learnings (Docs)
-- I tend to be overconfident about Edit tasks *When: When attempting Edit* (100% reliable, 4 validations)
-- I struggle with regex_patterns tasks *When: Tasks involving regex_patterns* (100% reliable, 4 validations)
-- I struggle with WebFetch fails with other tasks *When: Tasks involving WebFetch fails with other* (95% reliable, 75 validations)
-- I struggle with WebFetch fails with other (recovered 67%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 257 validations)
-- I struggle with WebFetch fails with other (recovered 55%) tasks *When: Tasks involving WebFetch fails with other (recover* (91% reliable, 40 validations)
-- I struggle with WebFetch fails with other (recovered 56%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 169 validations)
+## Reasoning (True Patterns)
+- Read before Edit prevents content mismatches (16v validated)
+- Verify file exists before modifying (1191v validated)
+
 <!-- SPARK_LEARNINGS_END -->

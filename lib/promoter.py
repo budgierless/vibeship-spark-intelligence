@@ -36,6 +36,100 @@ PROJECT_START = "<!-- SPARK_PROJECT_START -->"
 PROJECT_END = "<!-- SPARK_PROJECT_END -->"
 
 
+# ============= Operational vs Cognitive Filter (Phase 1) =============
+# These patterns indicate operational telemetry, NOT human-useful cognition.
+# Operational insights are valuable for system debugging but should NOT be
+# promoted to user-facing docs like CLAUDE.md.
+
+OPERATIONAL_PATTERNS = [
+    # Tool sequence patterns (the main noise source)
+    r"^sequence\s+['\"]",
+    r"sequence.*worked well",
+    r"pattern\s+['\"].*->.*['\"]",
+    r"for \w+:.*->.*works",
+
+    # Usage count patterns
+    r"heavy\s+\w+\s+usage",
+    r"\(\d+\s*calls?\)",
+    r"indicates task type",
+
+    # Raw tool telemetry
+    r"^tool\s+\w+\s+(succeeded|failed)",
+    r"tool effectiveness",
+]
+
+# Compile patterns for efficiency
+_OPERATIONAL_REGEXES = [re.compile(p, re.IGNORECASE) for p in OPERATIONAL_PATTERNS]
+
+
+def is_operational_insight(insight_text: str) -> bool:
+    """
+    Determine if an insight is operational (telemetry) vs cognitive (human-useful).
+
+    Operational insights:
+    - Tool sequences: "Sequence 'Bash -> Edit' worked well"
+    - Usage counts: "Heavy Bash usage (42 calls)"
+    - Raw telemetry: "Tool X succeeded"
+
+    Cognitive insights:
+    - Self-awareness: "I struggle with windows paths"
+    - Reasoning: "Read before Edit prevents content mismatches"
+    - User preferences: "User prefers concise output"
+    - Wisdom: "Ship fast, iterate faster"
+
+    Returns True if operational (should NOT be promoted).
+    """
+    text = (insight_text or "").strip().lower()
+    if not text:
+        return True  # Empty insights are operational (skip them)
+
+    # Check against operational patterns
+    for regex in _OPERATIONAL_REGEXES:
+        if regex.search(text):
+            return True
+
+    # Additional heuristics
+
+    # Tool chain detection: multiple arrows indicate sequence
+    arrow_count = text.count("->") + text.count("→")
+    if arrow_count >= 2:
+        return True
+
+    # Tool name heavy: mostly tool names suggests telemetry
+    tool_names = ["bash", "read", "edit", "write", "grep", "glob", "todowrite", "taskoutput"]
+    tool_mentions = sum(1 for t in tool_names if t in text)
+    words = len(text.split())
+    if words > 0 and tool_mentions / words > 0.4:
+        return True
+
+    return False
+
+
+def filter_operational_insights(insights: list) -> tuple:
+    """
+    Split insights into cognitive (promotable) and operational (not promotable).
+
+    Returns (cognitive_list, operational_list)
+    """
+    cognitive = []
+    operational = []
+
+    for item in insights:
+        # Handle both tuples (insight, key, target) and raw insights
+        if isinstance(item, tuple):
+            insight = item[0]
+            text = insight.insight if hasattr(insight, 'insight') else str(insight)
+        else:
+            text = item.insight if hasattr(item, 'insight') else str(item)
+
+        if is_operational_insight(text):
+            operational.append(item)
+        else:
+            cognitive.append(item)
+
+    return cognitive, operational
+
+
 @dataclass
 class PromotionTarget:
     """Definition of a promotion target file."""
@@ -269,28 +363,41 @@ class Promoter:
             print(f"[SPARK] PROJECT.md update failed: {e}")
             return False
 
-    def get_promotable_insights(self) -> List[Tuple[CognitiveInsight, str, PromotionTarget]]:
-        """Get insights ready for promotion with their target files."""
+    def get_promotable_insights(self, include_operational: bool = False) -> List[Tuple[CognitiveInsight, str, PromotionTarget]]:
+        """Get insights ready for promotion with their target files.
+
+        Args:
+            include_operational: If False (default), filters out operational
+                                 telemetry (tool sequences, usage counts).
+                                 Set True only for debugging.
+        """
         cognitive = get_cognitive_learner()
-        promotable = []
-        
+        candidates = []
+
         for key, insight in cognitive.insights.items():
             # Skip already promoted
             if insight.promoted:
                 continue
-            
+
             # Check criteria
             if insight.reliability < self.reliability_threshold:
                 continue
             if insight.times_validated < self.min_validations:
                 continue
-            
+
             # Find target
             target = self._get_target_for_category(insight.category)
             if target:
-                promotable.append((insight, key, target))
-        
-        return promotable
+                candidates.append((insight, key, target))
+
+        # Phase 1: Filter out operational telemetry
+        if not include_operational:
+            cognitive_only, operational = filter_operational_insights(candidates)
+            if operational:
+                print(f"[SPARK] Filtered {len(operational)} operational insights (telemetry)")
+            return cognitive_only
+
+        return candidates
     
     def promote_insight(self, insight: CognitiveInsight, insight_key: str, 
                        target: PromotionTarget) -> bool:
@@ -316,15 +423,35 @@ class Promoter:
             return False
     
     def promote_all(self, dry_run: bool = False, include_project: bool = True) -> Dict[str, int]:
-        """Promote all eligible insights."""
-        promotable = self.get_promotable_insights()
+        """Promote all eligible insights (filters operational telemetry)."""
+        # Get candidates before filtering for stats
+        cognitive = get_cognitive_learner()
+        all_candidates = []
+        for key, insight in cognitive.insights.items():
+            if insight.promoted:
+                continue
+            if insight.reliability < self.reliability_threshold:
+                continue
+            if insight.times_validated < self.min_validations:
+                continue
+            target = self._get_target_for_category(insight.category)
+            if target:
+                all_candidates.append((insight, key, target))
+
+        # Apply operational filter
+        promotable, filtered_operational = filter_operational_insights(all_candidates)
+
         stats = {
             "promoted": 0,
             "skipped": 0,
             "failed": 0,
+            "filtered_operational": len(filtered_operational),  # NEW: Track filtered
             "project_written": 0,
             "project_failed": 0,
         }
+
+        if filtered_operational:
+            print(f"[SPARK] Filtered {len(filtered_operational)} operational insights (tool sequences, telemetry)")
 
         if include_project:
             if dry_run:
@@ -356,20 +483,36 @@ class Promoter:
         return stats
     
     def get_promotion_status(self) -> Dict:
-        """Get status of promotions."""
+        """Get status of promotions (includes operational filter stats)."""
         cognitive = get_cognitive_learner()
-        promotable = self.get_promotable_insights()
-        
+
+        # Get all candidates before filtering
+        all_candidates = []
+        for key, insight in cognitive.insights.items():
+            if insight.promoted:
+                continue
+            if insight.reliability < self.reliability_threshold:
+                continue
+            if insight.times_validated < self.min_validations:
+                continue
+            target = self._get_target_for_category(insight.category)
+            if target:
+                all_candidates.append((insight, key, target))
+
+        # Apply filter
+        cognitive_only, operational = filter_operational_insights(all_candidates)
+
         promoted = [i for i in cognitive.insights.values() if i.promoted]
         by_target = {}
         for insight in promoted:
             target = insight.promoted_to or "unknown"
             by_target[target] = by_target.get(target, 0) + 1
-        
+
         return {
             "total_insights": len(cognitive.insights),
             "promoted_count": len(promoted),
-            "ready_for_promotion": len(promotable),
+            "ready_for_promotion": len(cognitive_only),
+            "filtered_operational": len(operational),  # NEW: Operational telemetry blocked
             "by_target": by_target,
             "threshold": self.reliability_threshold,
             "min_validations": self.min_validations
