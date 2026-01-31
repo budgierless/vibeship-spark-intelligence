@@ -1,4 +1,11 @@
-"""Lightweight validation loop for user preference + communication insights."""
+"""
+Lightweight validation loop for user preference + communication insights.
+
+Phase 3: Outcome-Driven Learning
+- Validates insights using explicit outcomes (not just prompt analysis)
+- Links outcomes to insights for attribution
+- Supports chip-scoped validation
+"""
 
 from __future__ import annotations
 
@@ -12,6 +19,11 @@ from lib.queue import read_events, count_events, EventType
 from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory, _boost_confidence
 from lib.aha_tracker import get_aha_tracker, SurpriseType
 from lib.diagnostics import log_debug
+from lib.outcome_log import (
+    get_outcome_links,
+    read_outcomes,
+    OUTCOME_LINKS_FILE,
+)
 
 
 STATE_FILE = Path.home() / ".spark" / "validation_state.json"
@@ -272,4 +284,167 @@ def get_validation_state() -> Dict:
         "last_run_ts": state.get("last_run_ts"),
         "last_stats": state.get("last_stats") or {},
         "offset": state.get("offset", 0),
+    }
+
+
+# =============================================================================
+# Phase 3: Outcome-Driven Validation
+# =============================================================================
+
+def process_outcome_validation(limit: int = 100) -> Dict[str, int]:
+    """
+    Validate insights using explicit outcome links.
+
+    This is different from process_validation_events which uses prompt analysis.
+    This function uses explicit outcome -> insight links to validate.
+    """
+    cog = get_cognitive_learner()
+    links = get_outcome_links(limit=limit)
+
+    # Filter to unvalidated links
+    unvalidated = [l for l in links if not l.get("validated")]
+
+    if not unvalidated:
+        return {"processed": 0, "validated": 0, "contradicted": 0, "surprises": 0}
+
+    # Get outcomes for these links
+    outcome_ids = {l.get("outcome_id") for l in unvalidated}
+    outcomes = read_outcomes(limit=limit * 2)
+    outcome_map = {o.get("outcome_id"): o for o in outcomes}
+
+    stats = {"processed": 0, "validated": 0, "contradicted": 0, "surprises": 0}
+    updated_links = []
+
+    for link in unvalidated:
+        outcome_id = link.get("outcome_id")
+        insight_key = link.get("insight_key")
+
+        if not outcome_id or not insight_key:
+            continue
+
+        outcome = outcome_map.get(outcome_id)
+        if not outcome:
+            continue
+
+        insight = cog.insights.get(insight_key)
+        if not insight:
+            continue
+
+        stats["processed"] += 1
+        polarity = outcome.get("polarity", "neutral")
+
+        # Apply validation based on outcome polarity
+        if polarity == "pos":
+            cog._touch_validation(insight, validated_delta=1)
+            insight.confidence = _boost_confidence(insight.confidence, 1)
+            insight.evidence.append(f"Outcome: {outcome.get('text', '')[:150]}")
+            insight.evidence = insight.evidence[-10:]
+            stats["validated"] += 1
+            link["validated"] = True
+            link["validation_result"] = "validated"
+
+        elif polarity == "neg":
+            cog._touch_validation(insight, contradicted_delta=1)
+            insight.counter_examples.append(f"Outcome: {outcome.get('text', '')[:150]}")
+            insight.counter_examples = insight.counter_examples[-10:]
+            stats["contradicted"] += 1
+            link["validated"] = True
+            link["validation_result"] = "contradicted"
+
+            # Capture surprise if reliable insight contradicted
+            if insight.reliability >= 0.7 and insight.times_validated >= 2:
+                try:
+                    tracker = get_aha_tracker()
+                    tracker.capture_surprise(
+                        surprise_type=SurpriseType.UNEXPECTED_FAILURE,
+                        predicted=f"Expected: {insight.insight[:100]}",
+                        actual=f"Outcome: {outcome.get('text', '')[:100]}",
+                        confidence_gap=min(1.0, insight.reliability),
+                        context={"tool": "outcome_validation", "chip_id": link.get("chip_id")},
+                        lesson=f"Insight may need revision: {insight.insight[:60]}",
+                    )
+                    stats["surprises"] += 1
+                except Exception as e:
+                    log_debug("outcome_validation", "surprise capture failed", e)
+
+        else:
+            # Neutral - mark as processed but no validation effect
+            link["validated"] = True
+            link["validation_result"] = "neutral"
+
+        cog.insights[insight_key] = insight
+        updated_links.append(link)
+
+    # Save updated insights
+    if stats["validated"] or stats["contradicted"]:
+        cog._save_insights()
+
+    # Rewrite outcome links with validation status
+    if updated_links:
+        _update_outcome_links(updated_links)
+
+    return stats
+
+
+def _update_outcome_links(updated_links: List[Dict]) -> None:
+    """Update outcome links file with validation results."""
+    if not OUTCOME_LINKS_FILE.exists():
+        return
+
+    # Read all links
+    all_links = []
+    with OUTCOME_LINKS_FILE.open("r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                all_links.append(json.loads(line.strip()))
+            except Exception:
+                pass
+
+    # Update the validated links
+    updated_map = {l.get("link_id"): l for l in updated_links}
+    for i, link in enumerate(all_links):
+        if link.get("link_id") in updated_map:
+            all_links[i] = updated_map[link.get("link_id")]
+
+    # Rewrite file
+    with OUTCOME_LINKS_FILE.open("w", encoding="utf-8") as f:
+        for link in all_links:
+            f.write(json.dumps(link, ensure_ascii=False) + "\n")
+
+
+def get_insight_outcome_coverage() -> Dict[str, Any]:
+    """
+    Calculate what percentage of insights have outcome evidence.
+
+    This is a key metric for outcome-driven learning:
+    - Higher coverage = more validated insights
+    - Lower coverage = more speculation
+    """
+    cog = get_cognitive_learner()
+    links = get_outcome_links(limit=5000)
+
+    # Count insights with at least one outcome link
+    linked_insights = set()
+    validated_insights = set()
+
+    for link in links:
+        insight_key = link.get("insight_key")
+        if insight_key:
+            linked_insights.add(insight_key)
+            if link.get("validated"):
+                validated_insights.add(insight_key)
+
+    total_insights = len(cog.insights)
+    linked_count = len(linked_insights)
+    validated_count = len(validated_insights)
+
+    coverage = linked_count / total_insights if total_insights > 0 else 0
+    validation_rate = validated_count / linked_count if linked_count > 0 else 0
+
+    return {
+        "total_insights": total_insights,
+        "insights_with_outcomes": linked_count,
+        "insights_validated": validated_count,
+        "outcome_coverage": round(coverage, 3),
+        "validation_rate": round(validation_rate, 3),
     }

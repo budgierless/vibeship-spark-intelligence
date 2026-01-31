@@ -47,10 +47,24 @@ from lib.service_control import (
 )
 from lib.bridge_cycle import run_bridge_cycle, write_bridge_heartbeat, bridge_heartbeat_age_s
 from lib.pattern_detection import get_pattern_backlog
-from lib.validation_loop import process_validation_events, get_validation_backlog, get_validation_state
+from lib.validation_loop import (
+    process_validation_events,
+    get_validation_backlog,
+    get_validation_state,
+    process_outcome_validation,
+    get_insight_outcome_coverage,
+)
 from lib.prediction_loop import get_prediction_state
 from lib.evaluation import evaluate_predictions
-from lib.outcome_log import append_outcome, build_explicit_outcome
+from lib.outcome_log import (
+    append_outcome,
+    build_explicit_outcome,
+    link_outcome_to_insight,
+    get_outcome_links,
+    read_outcomes,
+    get_unlinked_outcomes,
+    get_outcome_stats,
+)
 from lib.outcome_checkin import list_checkins, record_checkin_request
 from lib.ingest_validation import scan_queue_events, write_ingest_report
 from lib.exposure_tracker import (
@@ -627,6 +641,102 @@ def cmd_eval(args):
     print(f"   Contradicted: {stats['contradicted']}")
     print(f"   Precision: {stats['precision']:.0%}")
     print(f"   Outcome Coverage: {stats['outcome_coverage']:.0%}")
+
+
+def cmd_outcome_link(args):
+    """Link an outcome to an insight for validation."""
+    outcome_id = args.outcome_id
+    insight_key = args.insight_key
+    chip_id = args.chip_id
+    confidence = float(args.confidence or 1.0)
+    notes = args.notes or ""
+
+    link = link_outcome_to_insight(
+        outcome_id=outcome_id,
+        insight_key=insight_key,
+        chip_id=chip_id,
+        confidence=confidence,
+        notes=notes,
+    )
+    print(f"[SPARK] Link created: {link.get('link_id')}")
+    print(f"   Outcome: {outcome_id}")
+    print(f"   Insight: {insight_key}")
+    if chip_id:
+        print(f"   Chip: {chip_id}")
+
+
+def cmd_outcome_stats(args):
+    """Show outcome-insight coverage statistics."""
+    chip_id = args.chip_id if hasattr(args, 'chip_id') else None
+
+    # Get general outcome stats
+    stats = get_outcome_stats(chip_id=chip_id)
+    coverage = get_insight_outcome_coverage()
+
+    print("[SPARK] Outcome Statistics")
+    print(f"   Total Outcomes: {stats['total_outcomes']}")
+    print(f"   By Polarity: +{stats['by_polarity'].get('pos', 0)} / -{stats['by_polarity'].get('neg', 0)} / ~{stats['by_polarity'].get('neutral', 0)}")
+    print(f"   Total Links: {stats['total_links']}")
+    print(f"   Validated Links: {stats['validated_links']}")
+    print(f"   Unlinked Outcomes: {stats['unlinked']}")
+    print()
+    print("[SPARK] Insight Coverage")
+    print(f"   Total Insights: {coverage['total_insights']}")
+    print(f"   With Outcomes: {coverage['insights_with_outcomes']}")
+    print(f"   Validated: {coverage['insights_validated']}")
+    print(f"   Coverage: {coverage['outcome_coverage']:.1%}")
+    print(f"   Validation Rate: {coverage['validation_rate']:.1%}")
+
+
+def cmd_outcome_validate(args):
+    """Run outcome-based validation on insights."""
+    limit = int(args.limit or 100)
+    stats = process_outcome_validation(limit=limit)
+
+    print("[SPARK] Outcome Validation")
+    print(f"   Processed: {stats['processed']}")
+    print(f"   Validated: {stats['validated']}")
+    print(f"   Contradicted: {stats['contradicted']}")
+    print(f"   Surprises: {stats['surprises']}")
+
+
+def cmd_outcome_unlinked(args):
+    """List outcomes without insight links."""
+    limit = int(args.limit or 20)
+    outcomes = get_unlinked_outcomes(limit=limit)
+
+    if not outcomes:
+        print("[SPARK] No unlinked outcomes found.")
+        return
+
+    print(f"[SPARK] Unlinked Outcomes ({len(outcomes)}):")
+    for o in outcomes:
+        oid = o.get("outcome_id", "?")[:10]
+        pol = o.get("polarity", "?")
+        text = (o.get("text") or "")[:60]
+        print(f"   [{pol:^7}] {oid}... {text}")
+
+
+def cmd_outcome_links(args):
+    """List outcome-insight links."""
+    insight_key = args.insight_key if hasattr(args, 'insight_key') else None
+    chip_id = args.chip_id if hasattr(args, 'chip_id') else None
+    limit = int(args.limit or 50)
+
+    links = get_outcome_links(insight_key=insight_key, chip_id=chip_id, limit=limit)
+
+    if not links:
+        print("[SPARK] No links found.")
+        return
+
+    print(f"[SPARK] Outcome-Insight Links ({len(links)}):")
+    for link in links:
+        lid = link.get("link_id", "?")[:8]
+        oid = link.get("outcome_id", "?")[:8]
+        ikey = link.get("insight_key", "?")[:30]
+        validated = "Y" if link.get("validated") else "N"
+        result = link.get("validation_result", "-")
+        print(f"   {lid}... {oid}... -> {ikey} [validated={validated} result={result}]")
 
 
 def cmd_validate_ingest(args):
@@ -1494,6 +1604,32 @@ Examples:
     eval_parser.add_argument("--days", type=float, default=7.0, help="Lookback window in days")
     eval_parser.add_argument("--sim", type=float, default=0.72, help="Similarity threshold (0-1)")
 
+    # outcome-link: Link an outcome to an insight
+    outcome_link_parser = subparsers.add_parser("outcome-link", help="Link outcome to insight")
+    outcome_link_parser.add_argument("outcome_id", help="Outcome ID to link")
+    outcome_link_parser.add_argument("insight_key", help="Insight key to link to")
+    outcome_link_parser.add_argument("--chip-id", help="Optional chip ID for scoping")
+    outcome_link_parser.add_argument("--confidence", type=float, default=1.0, help="Link confidence (0-1)")
+    outcome_link_parser.add_argument("--notes", help="Optional notes")
+
+    # outcome-stats: Show outcome coverage statistics
+    outcome_stats_parser = subparsers.add_parser("outcome-stats", help="Outcome-insight coverage stats")
+    outcome_stats_parser.add_argument("--chip-id", help="Filter by chip ID")
+
+    # outcome-validate: Run outcome-based validation
+    outcome_validate_parser = subparsers.add_parser("outcome-validate", help="Validate insights using outcomes")
+    outcome_validate_parser.add_argument("--limit", "-n", type=int, default=100, help="Max links to process")
+
+    # outcome-unlinked: List outcomes without links
+    outcome_unlinked_parser = subparsers.add_parser("outcome-unlinked", help="List unlinked outcomes")
+    outcome_unlinked_parser.add_argument("--limit", "-n", type=int, default=20, help="Max to show")
+
+    # outcome-links: List outcome-insight links
+    outcome_links_parser = subparsers.add_parser("outcome-links", help="List outcome-insight links")
+    outcome_links_parser.add_argument("--insight-key", help="Filter by insight key")
+    outcome_links_parser.add_argument("--chip-id", help="Filter by chip ID")
+    outcome_links_parser.add_argument("--limit", "-n", type=int, default=50, help="Max to show")
+
     # validate-ingest
     ingest_parser = subparsers.add_parser("validate-ingest", help="Validate recent queue events")
     ingest_parser.add_argument("--limit", "-n", type=int, default=200, help="Events to scan")
@@ -1646,6 +1782,11 @@ Examples:
         "health": cmd_health,
         "events": cmd_events,
         "outcome": cmd_outcome,
+        "outcome-link": cmd_outcome_link,
+        "outcome-stats": cmd_outcome_stats,
+        "outcome-validate": cmd_outcome_validate,
+        "outcome-unlinked": cmd_outcome_unlinked,
+        "outcome-links": cmd_outcome_links,
         "eval": cmd_eval,
         "validate-ingest": cmd_validate_ingest,
         "capture": cmd_capture,
