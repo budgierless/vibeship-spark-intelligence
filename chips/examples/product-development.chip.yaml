@@ -1,0 +1,195 @@
+# Product Development Intelligence Chip
+# Learns what makes products succeed
+
+chip:
+  id: product-dev
+  name: Product Development Intelligence
+  version: 1.0.0
+  description: |
+    Learns product development patterns that lead to success.
+    Tracks user feedback, feature decisions, and launch outcomes.
+  author: Vibeship
+  license: MIT
+  domains:
+    - product
+    - features
+    - user-research
+    - roadmap
+
+triggers:
+  patterns:
+    - "users want"
+    - "feature request"
+    - "NPS score"
+    - "retention rate"
+    - "churn because"
+    - "activation rate"
+    - "shipped"
+    - "launched"
+    - "users complained"
+    - "feedback shows"
+
+  events:
+    - UserPromptSubmit
+
+observers:
+  - name: user_feedback
+    description: Captures user feedback patterns
+    triggers:
+      - "users want"
+      - "feature request"
+      - "users complained"
+      - "feedback"
+    capture:
+      required:
+        feedback_type: Request, complaint, or praise
+        topic: What it's about
+      optional:
+        user_segment: Which users
+        frequency: How common
+        priority: Urgency level
+
+  - name: metric_signal
+    description: Captures product metrics
+    triggers:
+      - "NPS"
+      - "retention"
+      - "churn"
+      - "activation"
+      - "DAU"
+      - "MAU"
+    capture:
+      required:
+        metric: The metric name
+        value: Current value
+      optional:
+        trend: Up, down, or flat
+        segment: User segment
+        period: Time period
+
+  - name: launch_outcome
+    description: Captures feature launch results
+    triggers:
+      - "shipped"
+      - "launched"
+      - "released"
+    capture:
+      required:
+        feature: What was shipped
+        result: Success or failure
+      optional:
+        adoption: Adoption rate
+        feedback: Initial feedback
+        bugs: Issues found
+
+learners:
+  - name: feature_impact
+    description: Learns which features matter
+    type: correlation
+    input:
+      fields:
+        - feature
+        - user_segment
+    output:
+      fields:
+        - retention
+        - NPS
+        - activation
+    learn:
+      - "Features that improve retention"
+      - "What drives activation"
+      - "High-impact launches"
+
+  - name: user_needs
+    description: Learns user patterns
+    type: pattern
+    observe: user_feedback
+    learn:
+      - "Common user requests"
+      - "Pain point patterns"
+      - "Unmet needs"
+
+  - name: launch_success
+    description: Learns what makes launches succeed
+    type: pattern
+    observe: launch_outcome
+    learn:
+      - "Successful launch patterns"
+      - "Common failure modes"
+      - "Optimal release timing"
+
+outcomes:
+  positive:
+    - condition: "NPS > 50"
+      weight: 1.0
+      insight: "Users love this"
+    - condition: "retention > 0.4"
+      weight: 0.9
+      insight: "Strong retention"
+    - condition: "activation > 0.3"
+      weight: 0.8
+      insight: "Good activation"
+
+  negative:
+    - condition: "churn > 0.1"
+      weight: 0.9
+      insight: "Churn problem"
+    - condition: "NPS < 0"
+      weight: 1.0
+      insight: "Users unhappy"
+    - condition: "bugs > 5"
+      weight: 0.7
+      insight: "Quality issues at launch"
+
+questions:
+  - id: prod_north_star
+    question: What is the north star metric?
+    category: metric
+    affects_learning:
+      - feature_impact
+
+  - id: prod_user_segment
+    question: Who is the primary user persona?
+    category: goal
+    affects_learning:
+      - user_needs
+      - feature_impact
+
+  - id: prod_done_definition
+    question: What does "shipped" mean (beta, GA, full rollout)?
+    category: done
+    affects_learning:
+      - launch_success
+
+  - id: prod_quality_bar
+    question: What quality bar must features meet?
+    category: quality
+    phase: polish
+    affects_learning:
+      - launch_success
+
+  - id: prod_feedback_source
+    question: Where does user feedback come from (support, interviews, analytics)?
+    category: insight
+    affects_learning:
+      - user_needs
+
+context:
+  format: |
+    ## Product Development Intelligence
+
+    ### Key Metrics
+    - NPS: {{nps}} | Retention: {{retention}}
+
+    ### Feature Patterns
+    {{#each feature_insights}}
+    - {{feature}}: {{impact}}
+    {{/each}}
+
+    ### User Needs
+    {{#each user_patterns}}
+    - {{need}}: {{frequency}}
+    {{/each}}
+
+  priority: 0.85
+  max_chars: 400

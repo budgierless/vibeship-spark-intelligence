@@ -462,6 +462,90 @@ Spark now supports project-level questioning and capture. See:
 
 ---
 
+## Chips - Domain-Specific Intelligence
+
+**Chips teach Spark *what* to learn, not just *how* to learn.**
+
+Chips are YAML specifications that define:
+- **Triggers** — When to activate (patterns, events, tools)
+- **Observers** — What data to capture
+- **Learners** — What patterns to detect
+- **Outcomes** — How to measure success
+- **Questions** — What context helps learning
+
+```bash
+# List installed chips
+spark chips list
+
+# Install a chip
+spark chips install chips/spark-core.chip.yaml
+
+# Activate it
+spark chips activate spark-core
+
+# See what questions it asks
+spark chips questions spark-core
+
+# Check its insights
+spark chips insights spark-core
+```
+
+### Built-in Chips
+
+| Chip | Domains | What It Learns |
+|------|---------|----------------|
+| `spark-core` | coding, debugging | Tool effectiveness, error patterns, preferences |
+
+### Example Chips
+
+See `chips/examples/` for domain-specific templates:
+- `marketing-growth.chip.yaml` — Channel ROI, messaging, audience signals
+- `product-development.chip.yaml` — Feature impact, user needs, launch patterns
+- `sales-intelligence.chip.yaml` — Win patterns, objection handling, cycle optimization
+
+### Create Your Own
+
+```yaml
+chip:
+  id: my-domain
+  name: My Domain Intelligence
+  domains: [my-area]
+
+triggers:
+  patterns:
+    - "success phrase"
+    - "failure phrase"
+
+observers:
+  - name: my_observation
+    triggers: ["capture this"]
+    capture:
+      required:
+        key_field: What this captures
+
+learners:
+  - name: my_learner
+    type: correlation
+    learn:
+      - "What patterns to detect"
+
+outcomes:
+  positive:
+    - condition: "metric > threshold"
+      insight: "This approach works"
+
+questions:
+  - id: domain_goal
+    question: What is the goal?
+    category: goal
+    affects_learning: [my_learner]
+```
+
+Full documentation: `docs/CHIPS.md`
+Workflow guide: `docs/CHIP_WORKFLOW.md`
+
+---
+
 ## License
 
 MIT

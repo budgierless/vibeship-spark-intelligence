@@ -1,0 +1,196 @@
+# Marketing Growth Intelligence Chip
+# Learns what makes marketing campaigns succeed
+
+chip:
+  id: marketing-growth
+  name: Marketing Growth Intelligence
+  version: 1.0.0
+  description: |
+    Learns marketing patterns that drive growth.
+    Tracks channel effectiveness, messaging resonance, and audience signals.
+  author: Vibeship
+  license: MIT
+  domains:
+    - marketing
+    - growth
+    - campaigns
+    - acquisition
+
+triggers:
+  patterns:
+    - "CTR was"
+    - "conversion rate"
+    - "CAC is"
+    - "ROAS"
+    - "campaign performed"
+    - "audience responded"
+    - "A/B test showed"
+    - "email open rate"
+    - "click through"
+
+  events:
+    - UserPromptSubmit
+
+observers:
+  - name: campaign_metric
+    description: Captures campaign performance metrics
+    triggers:
+      - "CTR"
+      - "conversion"
+      - "CAC"
+      - "ROAS"
+      - "performed"
+    capture:
+      required:
+        metric: The metric being measured
+        value: The numeric value
+      optional:
+        channel: Marketing channel (email, paid, organic, social)
+        campaign: Campaign name or type
+        audience: Target audience segment
+        period: Time period
+
+  - name: ab_test_result
+    description: Captures A/B test outcomes
+    triggers:
+      - "A/B test"
+      - "variant"
+      - "control"
+    capture:
+      required:
+        winner: Which variant won
+        metric: What was measured
+      optional:
+        lift: Percentage improvement
+        confidence: Statistical confidence
+
+  - name: audience_signal
+    description: Captures audience behavior insights
+    triggers:
+      - "audience"
+      - "segment"
+      - "responded"
+    capture:
+      required:
+        segment: The audience segment
+        behavior: What they did
+      optional:
+        channel: Where this happened
+        message: What resonated
+
+learners:
+  - name: channel_roi
+    description: Learns which channels have best ROI
+    type: correlation
+    input:
+      fields:
+        - channel
+        - audience
+        - campaign
+    output:
+      fields:
+        - ROAS
+        - conversion_rate
+        - CAC
+    learn:
+      - "Which channels have best ROI per audience"
+      - "Optimal budget allocation"
+      - "Channel-audience fit"
+
+  - name: message_resonance
+    description: Learns what messaging works
+    type: pattern
+    observe: ab_test_result
+    learn:
+      - "Winning message patterns"
+      - "What drives clicks"
+      - "Subject line patterns"
+
+  - name: timing_patterns
+    description: Learns optimal timing
+    type: optimization
+    input:
+      fields:
+        - period
+        - channel
+    output:
+      fields:
+        - engagement
+        - conversion_rate
+    learn:
+      - "Best send times"
+      - "Seasonal patterns"
+
+outcomes:
+  positive:
+    - condition: "ROAS > 3"
+      weight: 1.0
+      insight: "Highly profitable channel"
+    - condition: "conversion_rate > 0.03"
+      weight: 0.9
+      insight: "Strong conversion performance"
+    - condition: "CAC < 50"
+      weight: 0.8
+      insight: "Efficient acquisition"
+
+  negative:
+    - condition: "ROAS < 1"
+      weight: 1.0
+      insight: "Unprofitable channel"
+    - condition: "bounce_rate > 0.7"
+      weight: 0.8
+      insight: "Audience-message mismatch"
+    - condition: "CAC > LTV"
+      weight: 1.0
+      insight: "Unsustainable unit economics"
+
+questions:
+  - id: mkt_primary_kpi
+    question: What is the primary KPI for growth (CAC, ROAS, MQLs)?
+    category: metric
+    affects_learning:
+      - channel_roi
+
+  - id: mkt_target_audience
+    question: Who is the ideal customer profile?
+    category: goal
+    affects_learning:
+      - channel_roi
+      - audience_signal
+
+  - id: mkt_budget_constraint
+    question: What is the monthly marketing budget?
+    category: constraint
+    affects_learning:
+      - channel_roi
+
+  - id: mkt_channel_priority
+    question: Which channel is most important right now?
+    category: strategy
+    affects_learning:
+      - channel_roi
+      - timing_patterns
+
+  - id: mkt_test_velocity
+    question: How often do you run A/B tests?
+    category: quality
+    phase: prototype
+    affects_learning:
+      - message_resonance
+
+context:
+  format: |
+    ## Marketing Growth Intelligence
+
+    ### Channel Performance
+    {{#each channel_insights}}
+    - {{channel}}: ROAS {{roas}}, CAC ${{cac}}
+    {{/each}}
+
+    ### What's Working
+    {{#each winning_patterns}}
+    - {{pattern}}
+    {{/each}}
+
+  priority: 0.85
+  max_chars: 400

@@ -1,0 +1,196 @@
+# Sales Intelligence Chip
+# Learns what makes deals close
+
+chip:
+  id: sales-intelligence
+  name: Sales Intelligence
+  version: 1.0.0
+  description: |
+    Learns sales patterns that close deals.
+    Tracks objection handling, deal progression, and win/loss patterns.
+  author: Vibeship
+  license: MIT
+  domains:
+    - sales
+    - deals
+    - objections
+    - pipeline
+
+triggers:
+  patterns:
+    - "deal closed"
+    - "deal lost"
+    - "objection"
+    - "prospect said"
+    - "pipeline"
+    - "won because"
+    - "lost because"
+    - "sales cycle"
+    - "demo went"
+    - "proposal sent"
+
+  events:
+    - UserPromptSubmit
+
+observers:
+  - name: deal_outcome
+    description: Captures deal results
+    triggers:
+      - "deal closed"
+      - "deal lost"
+      - "won"
+      - "lost"
+    capture:
+      required:
+        result: Won or lost
+        deal_size: Dollar amount
+      optional:
+        reason: Why won/lost
+        cycle_days: Sales cycle length
+        industry: Customer industry
+        competitor: Competitor involved
+
+  - name: objection_handling
+    description: Captures objections and responses
+    triggers:
+      - "objection"
+      - "concern"
+      - "pushback"
+    capture:
+      required:
+        objection: What they said
+      optional:
+        response: How handled
+        outcome: Did it work
+        stage: Pipeline stage
+
+  - name: sales_activity
+    description: Captures sales activities
+    triggers:
+      - "demo"
+      - "proposal"
+      - "meeting"
+      - "call"
+    capture:
+      required:
+        activity: Activity type
+        outcome: How it went
+      optional:
+        next_step: What's next
+        engagement: Buyer engagement level
+
+learners:
+  - name: win_patterns
+    description: Learns what wins deals
+    type: correlation
+    input:
+      fields:
+        - industry
+        - deal_size
+        - activities
+    output:
+      fields:
+        - won
+        - cycle_days
+    learn:
+      - "Patterns that predict wins"
+      - "Optimal deal size"
+      - "Best industries"
+
+  - name: objection_responses
+    description: Learns effective objection handling
+    type: pattern
+    observe: objection_handling
+    learn:
+      - "Common objections by stage"
+      - "Effective responses"
+      - "Objection-to-close patterns"
+
+  - name: cycle_optimization
+    description: Learns how to shorten cycles
+    type: optimization
+    input:
+      fields:
+        - activities
+        - stage
+    output:
+      fields:
+        - cycle_days
+        - won
+    learn:
+      - "Activities that accelerate deals"
+      - "Stage transition patterns"
+
+outcomes:
+  positive:
+    - condition: "won == true"
+      weight: 1.0
+      insight: "Deal won - pattern validated"
+    - condition: "cycle_days < 30"
+      weight: 0.8
+      insight: "Fast close - efficient process"
+    - condition: "deal_size > average"
+      weight: 0.7
+      insight: "Above-average deal"
+
+  negative:
+    - condition: "lost == true"
+      weight: 1.0
+      insight: "Deal lost - analyze pattern"
+    - condition: "cycle_days > 90"
+      weight: 0.6
+      insight: "Long cycle - review process"
+    - condition: "no_response > 3"
+      weight: 0.7
+      insight: "Prospect ghosting - qualification issue"
+
+questions:
+  - id: sales_target_size
+    question: What is the target deal size?
+    category: goal
+    affects_learning:
+      - win_patterns
+
+  - id: sales_ideal_customer
+    question: What is the ideal customer profile?
+    category: goal
+    affects_learning:
+      - win_patterns
+      - cycle_optimization
+
+  - id: sales_main_competitor
+    question: Who is the main competitor?
+    category: risk
+    affects_learning:
+      - win_patterns
+      - objection_responses
+
+  - id: sales_cycle_target
+    question: What is the target sales cycle length?
+    category: metric
+    affects_learning:
+      - cycle_optimization
+
+  - id: sales_common_objection
+    question: What is the most common objection?
+    category: insight
+    phase: prototype
+    affects_learning:
+      - objection_responses
+
+context:
+  format: |
+    ## Sales Intelligence
+
+    ### Win Patterns
+    - Win rate: {{win_rate}}
+    - Avg deal size: ${{avg_deal}}
+    - Avg cycle: {{avg_cycle}} days
+
+    ### Top Objections
+    {{#each objection_patterns}}
+    - {{objection}}: {{response}}
+    {{/each}}
+
+  priority: 0.85
+  max_chars: 400
