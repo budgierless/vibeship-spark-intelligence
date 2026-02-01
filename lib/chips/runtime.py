@@ -344,34 +344,107 @@ class ChipRuntime:
         return f"{len(lines)} lines"
 
     def _generate_insight_content(self, match: TriggerMatch, captured: Dict, event: Dict) -> str:
-        """Generate human-readable insight content."""
-        parts = []
+        """
+        Generate human-readable insight content.
 
-        # Domain context
-        parts.append(f"[{match.chip.name}]")
-
-        # Observer context if available
-        if match.observer:
-            parts.append(f"({match.observer.name})")
-
-        # What triggered
-        parts.append(f"Triggered by '{match.trigger}'")
-
-        # File context
-        if 'file_path' in captured:
-            parts.append(f"in {Path(captured['file_path']).name}")
-
-        # Structured fields
+        Priority: extracted fields > event content > trigger context
+        Goal: produce insights a human would find useful, not operational logs.
+        """
         fields = captured.get("fields") or {}
+        data = event.get("data") or event.get("input") or {}
+
+        # Try to build a meaningful insight from extracted fields first
         if fields:
-            field_summary = ", ".join(f"{k}={v}" for k, v in list(fields.items())[:5])
-            parts.append(f"- {field_summary}")
+            return self._build_field_based_insight(match, fields, data)
 
-        # Change context
-        if 'change_summary' in captured:
-            parts.append(f"- {captured['change_summary']}")
+        # For X research events, extract from content
+        if event.get("event_type") == "x_research":
+            content = data.get("content") or data.get("text", "")
+            ecosystem = data.get("ecosystem", "")
+            engagement = data.get("engagement", 0)
+            sentiment = data.get("sentiment", "neutral")
 
-        return " ".join(parts)
+            if content:
+                # Truncate content meaningfully
+                snippet = content[:150].strip()
+                if len(content) > 150:
+                    snippet = snippet.rsplit(' ', 1)[0] + "..."
+
+                parts = []
+                if ecosystem:
+                    parts.append(f"[{ecosystem}]")
+                if engagement and engagement > 20:
+                    parts.append(f"(eng:{engagement})")
+                parts.append(snippet)
+                if sentiment != "neutral":
+                    parts.append(f"[{sentiment}]")
+
+                return " ".join(parts)
+
+        # Fallback: provide context but not just "Triggered by X"
+        chip_name = match.chip.name
+
+        # Try to get meaningful content from event
+        content = self._extract_event_content(event)
+        if content and len(content) > 20:
+            snippet = content[:200].strip()
+            if len(content) > 200:
+                snippet = snippet.rsplit(' ', 1)[0] + "..."
+            return f"[{chip_name}] {snippet}"
+
+        # Last resort: minimal trigger context (but filter these as primitive)
+        if 'file_path' in captured:
+            filename = Path(captured['file_path']).name
+            return f"[{chip_name}] Activity in {filename}"
+
+        # This will likely be filtered as primitive - that's intentional
+        return f"[{chip_name}] Observation: {match.trigger}"
+
+    def _build_field_based_insight(self, match: TriggerMatch, fields: Dict, data: Dict) -> str:
+        """Build insight from extracted structured fields."""
+        chip_id = match.chip.id
+        observer_name = match.observer.name if match.observer else ""
+
+        # Market intelligence patterns
+        if chip_id == "market-intel":
+            if "competitor" in fields and "gap_type" in fields:
+                comp = fields["competitor"]
+                gap = fields["gap_type"]
+                opp = fields.get("opportunity", "")
+                if opp:
+                    return f"Competitor gap: {comp} lacks {gap} -> opportunity: {opp}"
+                return f"Competitor gap: {comp} lacks {gap}"
+
+            if "content_type" in fields and "engagement_signal" in fields:
+                ct = fields["content_type"]
+                eng = fields["engagement_signal"]
+                hook = fields.get("hook", "")
+                if hook:
+                    return f"Viral pattern: {ct} with {eng} engagement, hook: \"{hook}\""
+                return f"Viral pattern: {ct} content showing {eng} engagement"
+
+            if "sentiment" in fields and "subject" in fields:
+                sent = fields["sentiment"]
+                subj = fields["subject"]
+                return f"User sentiment: {sent} about {subj}"
+
+            if "insight_type" in fields and "insight" in fields:
+                return f"Product insight ({fields['insight_type']}): {fields['insight']}"
+
+        # Game dev patterns
+        if chip_id == "game_dev":
+            if "balance_decision" in fields:
+                return f"Balance decision: {fields['balance_decision']}"
+            if "feel_factor" in fields:
+                return f"Game feel: {fields['feel_factor']}"
+
+        # Generic field-based insight
+        key_fields = [(k, v) for k, v in fields.items() if v and k not in ("trigger", "chip")]
+        if key_fields:
+            summary = ", ".join(f"{k}: {v}" for k, v in key_fields[:3])
+            return f"[{match.chip.name}] {summary}"
+
+        return ""
 
     def _summarize_event(self, event: Dict[str, Any]) -> str:
         """Create a short summary of the event."""

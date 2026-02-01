@@ -152,8 +152,20 @@ def process_x_research_through_chips(
         for insight in insights:
             stats["chips_used"].add(insight.chip_id)
 
-    # Store events for audit trail
-    events = [create_x_research_event(**r) for r in research_results if r.get("text")]
+    # Store events for audit trail (map 'text' to 'tweet_text' if needed)
+    events = []
+    for r in research_results:
+        text = r.get("text") or r.get("tweet_text", "")
+        if text:
+            events.append(create_x_research_event(
+                query=r.get("query", ""),
+                tweet_text=text,
+                author=r.get("author", ""),
+                engagement=r.get("engagement", 0),
+                ecosystem=r.get("ecosystem", ""),
+                sentiment=r.get("sentiment", "neutral"),
+                source_url=r.get("url", ""),
+            ))
     store_research_events(events)
 
     stats["chips_used"] = list(stats["chips_used"])
