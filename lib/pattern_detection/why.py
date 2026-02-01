@@ -122,7 +122,7 @@ class WhyDetector(PatternDetector):
     - Learns constraints and rationales
     - Moves beyond "what happened" to "why it happened"
 
-    Unlike CorrectionDetector (what user wants) or SequenceDetector (what tools ran),
+    Unlike CorrectionDetector (what user wants),
     WhyDetector captures the REASONING that makes insights transferable.
     """
 

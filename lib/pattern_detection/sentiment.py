@@ -145,12 +145,6 @@ class SentimentDetector(PatternDetector):
         session_id = event.get("session_id", "unknown")
         hook_event = event.get("hook_event", "")
 
-        # Buffer tool events so we can reference recent tools.
-        if hook_event in ("PostToolUse", "PostToolUseFailure"):
-            if event.get("tool_name"):
-                self._buffer_event(session_id, event)
-            return patterns
-
         # Only analyze user messages
         if hook_event != "UserPromptSubmit":
             return patterns
@@ -191,10 +185,6 @@ class SentimentDetector(PatternDetector):
             final_confidence = self._calculate_confidence(text, best_sat_confidence)
             self._track_sentiment(session_id, "satisfaction", final_confidence)
 
-            # Get recent context (what AI did that user liked)
-            recent_events = self._get_buffer(session_id)
-            recent_tools = [e.get("tool_name") for e in recent_events[-3:] if e.get("tool_name")]
-
             patterns.append(DetectedPattern(
                 pattern_type=PatternType.SATISFACTION,
                 confidence=final_confidence,
@@ -205,10 +195,9 @@ class SentimentDetector(PatternDetector):
                 context={
                     "user_text": text,
                     "signal": best_satisfaction.group(0),
-                    "recent_tools": recent_tools,
                 },
                 session_id=session_id,
-                suggested_insight=f"User was satisfied after: {', '.join(recent_tools) if recent_tools else 'AI response'}",
+                suggested_insight="User expressed satisfaction with the response",
                 suggested_category="user_understanding",
             ))
 
@@ -218,10 +207,6 @@ class SentimentDetector(PatternDetector):
 
             # Check trend
             trend = self._get_trend(session_id)
-
-            # Get recent context (what AI did that frustrated user)
-            recent_events = self._get_buffer(session_id)
-            recent_tools = [e.get("tool_name") for e in recent_events[-3:] if e.get("tool_name")]
 
             evidence = [
                 f"User said: {text[:100]}...",
@@ -240,10 +225,9 @@ class SentimentDetector(PatternDetector):
                     "user_text": text,
                     "signal": best_frustration.group(0),
                     "trend": trend,
-                    "recent_tools": recent_tools,
                 },
                 session_id=session_id,
-                suggested_insight=f"User frustrated after: {', '.join(recent_tools) if recent_tools else 'AI response'}",
+                suggested_insight="User expressed frustration with the response",
                 suggested_category="self_awareness",
             ))
 

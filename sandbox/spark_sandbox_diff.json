@@ -45,8 +45,8 @@
     {
       "path": "cognitive.avg_reliability",
       "baseline": 0.7625,
-      "current": 0.8833,
-      "delta": 0.12080000000000002
+      "current": 0.8865,
+      "delta": 0.124
     },
     {
       "path": "cognitive.promoted_count",
@@ -57,32 +57,32 @@
     {
       "path": "exposures.recent",
       "baseline": 3,
-      "current": 10,
-      "delta": 7
+      "current": 21,
+      "delta": 18
     },
     {
       "path": "meta.timestamp",
       "baseline": 1769964243.6260502,
-      "current": 1769965315.200639,
-      "delta": 1071.5745887756348
+      "current": 1769965769.9772863,
+      "delta": 1526.3512361049652
     },
     {
       "path": "outcomes.stats.by_polarity.neg",
       "baseline": 2,
-      "current": 4,
-      "delta": 2
+      "current": 6,
+      "delta": 4
     },
     {
       "path": "outcomes.stats.total_outcomes",
       "baseline": 2,
-      "current": 4,
-      "delta": 2
+      "current": 6,
+      "delta": 4
     },
     {
       "path": "outcomes.stats.unlinked",
       "baseline": 2,
-      "current": 4,
-      "delta": 2
+      "current": 6,
+      "delta": 4
     },
     {
       "path": "outputs.markdown.skipped",
@@ -97,12 +97,6 @@
       "delta": -8
     },
     {
-      "path": "outputs.promotion.promoted",
-      "baseline": 0,
-      "current": 1,
-      "delta": 1
-    },
-    {
       "path": "outputs.promotion_status.promoted_count",
       "baseline": 0,
       "current": 1,
@@ -111,44 +105,44 @@
     {
       "path": "pattern_detection.event_count",
       "baseline": 12,
-      "current": 24,
-      "delta": 12
+      "current": 36,
+      "delta": 24
     },
     {
       "path": "project_profile.completion.craft",
       "baseline": 6,
-      "current": 12,
-      "delta": 6
+      "current": 15,
+      "delta": 9
     },
     {
       "path": "project_profile.completion.score",
       "baseline": 45,
-      "current": 51,
-      "delta": 6
+      "current": 54,
+      "delta": 9
     },
     {
       "path": "project_profile.goals",
       "baseline": 1,
-      "current": 2,
-      "delta": 1
+      "current": 3,
+      "delta": 2
     },
     {
       "path": "project_profile.milestones",
       "baseline": 1,
-      "current": 2,
-      "delta": 1
+      "current": 3,
+      "delta": 2
     },
     {
       "path": "queue.event_count",
       "baseline": 12,
-      "current": 24,
-      "delta": 12
+      "current": 36,
+      "delta": 24
     },
     {
       "path": "queue.size_bytes",
       "baseline": 4601,
-      "current": 9203,
-      "delta": 4602
+      "current": 13807,
+      "delta": 9206
     },
     {
       "path": "queue.size_mb",
@@ -157,5 +151,5 @@
       "delta": 0.01
     }
   ],
-  "count": 26
+  "count": 25
 }

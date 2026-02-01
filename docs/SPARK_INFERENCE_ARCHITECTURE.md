@@ -199,18 +199,6 @@ class SentimentDetector(PatternDetector):
         return None
 
 
-class SequenceDetector(PatternDetector):
-    """Detects successful tool sequences."""
-
-    def __init__(self):
-        self.sequences = []  # Track tool sequences per goal
-
-    def observe(self, event: SparkEvent) -> Optional[Pattern]:
-        # Track: Goal → Tool1 → Tool2 → ... → Success/Failure
-        # After N similar successful sequences, emit pattern
-        pass
-
-
 class StyleDetector(PatternDetector):
     """Detects user's working style from behavior."""
 
@@ -234,7 +222,6 @@ class PatternAggregator:
             CorrectionDetector(),
             RepetitionDetector(),
             SentimentDetector(),
-            SequenceDetector(),
             StyleDetector(),
         ]
         self.pending_patterns = []
@@ -274,7 +261,6 @@ class InferenceEngine:
         "correction": infer_from_correction,
         "repetition": infer_from_repetition,
         "satisfaction": infer_from_sentiment,
-        "sequence_success": infer_from_sequence,
         "style_signal": infer_from_style,
     }
 
@@ -760,7 +746,6 @@ class MetaLearner:
 - [ ] CorrectionDetector
 - [ ] RepetitionDetector
 - [ ] SentimentDetector
-- [ ] SequenceDetector
 - [ ] Pattern aggregator
 
 ### Phase 3: Inference Engine (Week 3)

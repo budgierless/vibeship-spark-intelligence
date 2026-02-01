@@ -11,6 +11,8 @@ sandbox validation
 - Done means: End-to-end learning pipeline validated with stable report.
 - Goal: Automate regression checks for Spark learning quality.
 - Goal: Automate regression checks for Spark learning quality.
+- Goal: Automate regression checks for Spark learning quality.
+- Milestone: Sandbox generates report + baseline diff.
 - Milestone: Sandbox generates report + baseline diff.
 - Milestone: Sandbox generates report + baseline diff.
 - Reference: Spark sandbox harness format
@@ -37,6 +39,7 @@ sandbox validation
 ### Relevant Learnings
 - Consider skill [sandbox_skill]: Sample skill for sandbox validation 
 - I struggle with Edit_error tasks (100% confident)
+- User wanted: not that. Instead use a small diff and explain why.
 
 ## Warnings (avoid failures)
 - [self_awareness] I struggle with Edit_error tasks
@@ -45,6 +48,10 @@ sandbox validation
 - Ground this in the user's preferences: User wanted: not that. Instead use a small diff and explain why.
 
 ## Proven Insights (act on these)
+- [reasoning] Pattern 'Write -> Bash' works well: Create file then execute
 - [self_awareness] I struggle with Edit_error tasks
+- [meta_learning] always Read before Edit.
+- [wisdom] Principle: Read before Edit
+- [wisdom] Principle: this: always Read before Edit
 
 ==================================================

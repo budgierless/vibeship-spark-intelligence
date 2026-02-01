@@ -1,0 +1,326 @@
+# ~/.spark/chips/market-intel.chip.yaml
+# Spark Chip for Market Intelligence - Competitive Analysis & X Trends
+
+# ============================================================
+# IDENTITY: Who is this chip?
+# ============================================================
+chip:
+  id: market-intel
+  name: Market Intelligence
+  version: 1.0.0
+  description: |
+    Makes Spark intelligent about market trends, competitor gaps, and viral patterns.
+    Learns from X/Twitter research, competitor analysis, and ecosystem evolution.
+
+    This chip captures insights that inform product decisions for SparkNet
+    and other Vibeship products. It's the "eyes and ears" on the market.
+
+  author: Vibeship
+  license: MIT
+
+  # Humanity-first guardrails
+  human_benefit: "Help build better products by understanding what users actually want."
+  harm_avoidance:
+    - "No manipulation or dark patterns"
+    - "No copying competitor code"
+    - "Insights used to build, not to tear down"
+  risk_level: low
+  safety_tests:
+    - "insights_used_ethically"
+    - "no_competitor_sabotage"
+
+  # Domains this chip owns
+  domains:
+    - market-research
+    - competitor-analysis
+    - viral-content
+    - x-trends
+    - ecosystem-intel
+    - product-gaps
+    - user-sentiment
+
+# ============================================================
+# TRIGGERS: What activates this chip?
+# ============================================================
+triggers:
+  # Pattern-based triggers
+  patterns:
+    - "moltbook"
+    - "openclaw"
+    - "competitor"
+    - "viral"
+    - "trending"
+    - "x trend"
+    - "twitter trend"
+    - "engagement"
+    - "what's working"
+    - "gap in"
+    - "missing feature"
+    - "users want"
+    - "market opportunity"
+    - "vibe coding"
+    - "agent ecosystem"
+    - "ai social"
+
+  # Event type triggers
+  events:
+    - x_search_completed
+    - competitor_analyzed
+    - trend_identified
+    - gap_discovered
+    - viral_content_found
+    - user_feedback_captured
+
+  # Tool triggers
+  tools:
+    - name: mcp__x-twitter__search_twitter
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_tweet_details
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_trends
+      context_contains: ["*"]
+    - name: WebFetch
+      context_contains: ["moltbook", "openclaw", "competitor", "viral"]
+
+# ============================================================
+# OBSERVERS: What data to capture when triggered?
+# ============================================================
+observers:
+  # Viral Content Observer
+  - name: viral_content
+    description: Captures patterns from high-engagement content
+
+    triggers:
+      - "viral"
+      - "high engagement"
+      - "likes"
+      - "retweets"
+      - "bookmarks"
+
+    capture:
+      required:
+        content_type: "tweet, thread, article"
+        topic: "What the content is about"
+        engagement_signal: "What metrics indicate success"
+
+      optional:
+        likes: "Like count"
+        retweets: "Retweet count"
+        bookmarks: "Bookmark count"
+        impressions: "View count"
+        hook: "Opening line that worked"
+        format: "Thread, single tweet, article"
+        author_type: "Individual, brand, agent"
+
+    extraction:
+      - field: likes
+        patterns:
+          - '(\d+(?:,\d+)?)\s*(?:likes?|like)'
+          - 'likes?[:\s]+(\d+(?:,\d+)?)'
+
+      - field: engagement_signal
+        keywords:
+          high: ["viral", "blew up", "trending", ">1000 likes", ">10K"]
+          medium: ["good engagement", "100+ likes", "resonated"]
+          low: ["few likes", "didn't work"]
+
+  # Competitor Gap Observer
+  - name: competitor_gap
+    description: Captures identified gaps in competitor products
+
+    triggers:
+      - "gap"
+      - "missing"
+      - "doesn't have"
+      - "no way to"
+      - "complaint"
+      - "problem with"
+
+    capture:
+      required:
+        competitor: "Which competitor (moltbook, openclaw, etc)"
+        gap_type: "What's missing or broken"
+
+      optional:
+        severity: "How big a problem (1-5)"
+        user_evidence: "User quotes or complaints"
+        opportunity: "How SparkNet can do better"
+        validation_count: "How many users mentioned this"
+
+  # User Sentiment Observer
+  - name: user_sentiment
+    description: Captures what users feel about AI agent products
+
+    triggers:
+      - "users want"
+      - "people love"
+      - "people hate"
+      - "frustrating"
+      - "amazing"
+      - "scared"
+      - "excited"
+
+    capture:
+      required:
+        sentiment: "positive/negative/mixed"
+        subject: "What they feel about"
+
+      optional:
+        intensity: "How strong (1-5)"
+        quote: "Actual user quote"
+        context: "What triggered this sentiment"
+
+  # Product Insight Observer
+  - name: product_insight
+    description: Captures actionable product insights
+
+    triggers:
+      - "should have"
+      - "would be better"
+      - "opportunity"
+      - "differentiate"
+      - "feature"
+
+    capture:
+      required:
+        insight_type: "feature/ux/trust/architecture"
+        insight: "The actual insight"
+
+      optional:
+        priority: "How urgent (1-5)"
+        evidence: "What validates this"
+        implementation_hint: "How to build it"
+
+# ============================================================
+# LEARNERS: What patterns to detect and learn?
+# ============================================================
+learners:
+  # Viral Pattern Learner
+  - name: viral_patterns
+    description: Learns what makes content go viral in AI/agent space
+    type: pattern
+
+    observe: viral_content
+
+    extract:
+      - common_hooks
+      - effective_formats
+      - optimal_length
+      - topic_timing
+
+    learn:
+      - "Holy shit moment framing drives engagement"
+      - "Reference content (lists, frameworks) gets bookmarks"
+      - "First-person AI narratives fascinate people"
+
+  # Competitor Intelligence Learner
+  - name: competitor_intel
+    description: Learns competitor weaknesses and market gaps
+    type: correlation
+
+    input:
+      observer: competitor_gap
+      fields: [competitor, gap_type, severity]
+
+    output:
+      fields: [opportunity, user_evidence]
+
+    learn:
+      - "Moltbook lacks verification = SparkNet opportunity"
+      - "OpenClaw complexity = simplicity opportunity"
+      - "No visible agent memory = transparency opportunity"
+
+  # Market Timing Learner
+  - name: market_timing
+    description: Learns when trends emerge and peak
+    type: pattern
+
+    observe: viral_content, competitor_gap
+
+    learn:
+      - "Topics that are about to trend"
+      - "When to launch features for max impact"
+      - "Ecosystem momentum signals"
+
+# ============================================================
+# OUTCOMES: What does success look like?
+# ============================================================
+outcomes:
+  positive:
+    - condition: "insight_led_to_feature"
+      weight: 1.0
+      insight: "Market intel drove product decision"
+
+    - condition: "gap_identified_and_filled"
+      weight: 0.9
+      insight: "Found and filled a market gap"
+
+    - condition: "viral_pattern_replicated"
+      weight: 0.7
+      insight: "Applied viral pattern successfully"
+
+  negative:
+    - condition: "insight_proved_wrong"
+      weight: 0.8
+      insight: "Market read was incorrect"
+      action: review_methodology
+
+    - condition: "trend_was_fleeting"
+      weight: 0.5
+      insight: "Chased a temporary trend"
+      action: increase_validation_threshold
+
+# ============================================================
+# CONTEXT CONTRIBUTION: What to inject into prompts
+# ============================================================
+context:
+  format: |
+    ## Market Intelligence (Chip: market-intel)
+
+    ### Competitor Gaps (SparkNet Opportunities)
+    {{#each competitor_gaps limit=5}}
+    - {{competitor}}: {{gap_type}} → {{opportunity}}
+    {{/each}}
+
+    ### Viral Patterns
+    {{#each viral_patterns limit=3}}
+    - {{pattern}} ({{confidence}}% confident)
+    {{/each}}
+
+    ### User Sentiment
+    - Primary feeling: {{dominant_sentiment}}
+    - Key desires: {{top_user_wants}}
+
+    ### Recent Insights
+    {{#each recent_insights limit=5}}
+    - {{insight}}
+    {{/each}}
+
+  priority: 0.85  # High priority - informs product decisions
+  max_chars: 800
+
+# ============================================================
+# SPARKNET INTEGRATION: How this feeds SparkNet
+# ============================================================
+sparknet_integration:
+  # Insights that should flow to SparkNet agents
+  export_to_agents:
+    - type: wisdom
+      filter: "category:wisdom AND confidence > 0.8"
+      purpose: "Give agents general principles"
+
+    - type: competitor_intel
+      filter: "observer:competitor_gap AND severity >= 3"
+      purpose: "Agents know what to avoid"
+
+    - type: user_desires
+      filter: "observer:user_sentiment AND sentiment:positive"
+      purpose: "Agents know what users want"
+
+  # How SparkNet agents should use this intel
+  agent_guidelines:
+    - "Use verified agent identity - cryptographic proof"
+    - "Make memory visible and auditable"
+    - "Emergent behavior should be transparent"
+    - "Value over vanity metrics"
+    - "Trust through verification"

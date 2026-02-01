@@ -52,6 +52,12 @@ def _normalize_text(text: str) -> str:
 
 def _is_low_value(insight_text: str) -> bool:
     t = (insight_text or "").lower()
+    try:
+        from .promoter import is_operational_insight
+        if is_operational_insight(t):
+            return True
+    except Exception:
+        pass
     if "indicates task type" in t:
         return True
     if "heavy " in t and " usage" in t:
@@ -69,8 +75,6 @@ def _actionability_score(text: str) -> int:
     if "do " in t or "don't" in t or "should" in t or "must" in t:
         score += 1
     if "use " in t or "prefer" in t or "verify" in t or "check" in t:
-        score += 1
-    if "->" in t:
         score += 1
     return score
 

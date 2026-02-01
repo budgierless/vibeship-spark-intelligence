@@ -5,7 +5,6 @@ Detects meaningful patterns from raw events:
 - CorrectionDetector: "no, I meant..." signals
 - SentimentDetector: satisfaction/frustration
 - RepetitionDetector: same request 3+ times
-- SequenceDetector: successful tool patterns
 - SemanticIntentDetector: polite redirects and implicit preferences
 - WhyDetector: reasoning, causality, and principles (HIGH VALUE)
 
@@ -16,7 +15,6 @@ from .base import PatternDetector, DetectedPattern, PatternType
 from .correction import CorrectionDetector
 from .sentiment import SentimentDetector
 from .repetition import RepetitionDetector
-from .sequence import SequenceDetector
 from .semantic import SemanticIntentDetector
 from .why import WhyDetector
 from .aggregator import PatternAggregator, get_aggregator
@@ -29,7 +27,6 @@ __all__ = [
     "CorrectionDetector",
     "SentimentDetector",
     "RepetitionDetector",
-    "SequenceDetector",
     "SemanticIntentDetector",
     "WhyDetector",
     "PatternAggregator",

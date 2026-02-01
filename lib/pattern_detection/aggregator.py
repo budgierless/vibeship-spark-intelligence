@@ -19,7 +19,6 @@ from .base import DetectedPattern, PatternType
 from .correction import CorrectionDetector
 from .sentiment import SentimentDetector
 from .repetition import RepetitionDetector
-from .sequence import SequenceDetector
 from .semantic import SemanticIntentDetector
 from .why import WhyDetector
 
@@ -50,6 +49,15 @@ def _log_pattern(pattern: DetectedPattern):
         pass
 
 
+def _is_operational_insight(text: str) -> bool:
+    """Return True for tool-telemetry or sequence-style insights."""
+    try:
+        from ..promoter import is_operational_insight
+        return is_operational_insight(text)
+    except Exception:
+        return False
+
+
 class PatternAggregator:
     """
     Aggregates patterns from all detectors.
@@ -66,7 +74,6 @@ class PatternAggregator:
             CorrectionDetector(),
             SentimentDetector(),
             RepetitionDetector(),
-            SequenceDetector(),
             SemanticIntentDetector(),
             WhyDetector(),  # Phase 4: Capture reasoning and principles
         ]
@@ -164,13 +171,6 @@ class PatternAggregator:
                     p.confidence = min(0.99, p.confidence + 0.1)
                     p.evidence.append("CORROBORATED: Repetition + Frustration detected together")
 
-        # Sequence failure + Frustration = approach problem
-        if PatternType.SEQUENCE_FAILURE in pattern_types and PatternType.FRUSTRATION in pattern_types:
-            for p in patterns:
-                if p.pattern_type in (PatternType.SEQUENCE_FAILURE, PatternType.FRUSTRATION):
-                    p.confidence = min(0.99, p.confidence + 0.1)
-                    p.evidence.append("CORROBORATED: Tool failures + Frustration")
-
         return patterns
 
     def trigger_learning(self, patterns: List[DetectedPattern]) -> List[Dict]:
@@ -190,6 +190,8 @@ class PatternAggregator:
 
             if not pattern.suggested_insight:
                 continue
+            if _is_operational_insight(pattern.suggested_insight):
+                continue
 
             # Map pattern type to cognitive category (override if detector suggests one)
             category_map = {
@@ -197,8 +199,6 @@ class PatternAggregator:
                 PatternType.SATISFACTION: CognitiveCategory.USER_UNDERSTANDING,
                 PatternType.FRUSTRATION: CognitiveCategory.SELF_AWARENESS,
                 PatternType.REPETITION: CognitiveCategory.USER_UNDERSTANDING,
-                PatternType.SEQUENCE_SUCCESS: CognitiveCategory.REASONING,
-                PatternType.SEQUENCE_FAILURE: CognitiveCategory.SELF_AWARENESS,
                 PatternType.STYLE: CognitiveCategory.USER_UNDERSTANDING,
             }
 

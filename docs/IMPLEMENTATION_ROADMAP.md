@@ -80,7 +80,6 @@ Related docs:
 │  ✅ CorrectionDetector - "no, I meant..." signals               │
 │  ✅ SentimentDetector - satisfaction/frustration detection      │
 │  ✅ RepetitionDetector - user asks same thing 3+ times          │
-│  ✅ SequenceDetector - successful tool sequence patterns        │
 │  ✅ SemanticIntentDetector - polite redirects, implicit prefs   │
 │  ✅ PatternAggregator - combines detectors, triggers learning   │
 │                                                                 │
@@ -92,7 +91,6 @@ Related docs:
 - `lib/pattern_detection/correction.py` - 7KB
 - `lib/pattern_detection/sentiment.py` - 9KB
 - `lib/pattern_detection/repetition.py` - 7KB
-- `lib/pattern_detection/sequence.py` - 10KB
 - `lib/pattern_detection/semantic.py` - 5KB
 - `lib/pattern_detection/aggregator.py` - 9KB
 - `lib/pattern_detection/worker.py` - Queue processing worker
@@ -104,7 +102,6 @@ Related docs:
 | **CorrectionDetector** | "no, I meant", "not that", "actually", "wrong" | HIGH - direct preference learning |
 | **SentimentDetector** | "perfect", "great" vs "ugh", "still not working" | HIGH - satisfaction tracking |
 | **RepetitionDetector** | Same request 3+ times | MEDIUM - strong preference signal |
-| **SequenceDetector** | Read→Edit→Test patterns that succeed | MEDIUM - approach learning |
 | **SemanticIntentDetector** | "what about", "let's go with", "option B" | MEDIUM - polite redirects |
 
 ---

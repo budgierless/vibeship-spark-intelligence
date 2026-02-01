@@ -69,7 +69,6 @@ Events → Queue → Pattern Detection → Cognitive Insights → Context Sync
               - CorrectionDetector
               - SentimentDetector
               - RepetitionDetector
-              - SequenceDetector
               - SemanticIntentDetector
 ```
 

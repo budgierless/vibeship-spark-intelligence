@@ -17,8 +17,6 @@ class PatternType(str, Enum):
     SATISFACTION = "satisfaction"      # User expressing satisfaction
     FRUSTRATION = "frustration"        # User expressing frustration
     REPETITION = "repetition"          # Same request multiple times
-    SEQUENCE_SUCCESS = "sequence_success"  # Tool sequence that worked
-    SEQUENCE_FAILURE = "sequence_failure"  # Tool sequence that failed
     STYLE = "style"                    # Working style preference
 
 

@@ -10,7 +10,6 @@ from lib.pattern_detection import (
     CorrectionDetector,
     SentimentDetector,
     RepetitionDetector,
-    SequenceDetector,
     SemanticIntentDetector,
     PatternAggregator,
     process_pattern_events,
@@ -141,45 +140,6 @@ class TestRepetitionDetector:
             patterns.extend(self.detector.process_event(event))
 
         assert len(patterns) == 0
-
-
-class TestSequenceDetector:
-    """Test sequence detection."""
-
-    def setup_method(self):
-        self.detector = SequenceDetector()
-
-    def test_read_edit_success(self):
-        """Test Read -> Edit sequence detection."""
-        events = [
-            {"session_id": "test", "hook_event": "PostToolUse", "tool_name": "Read"},
-            {"session_id": "test", "hook_event": "PostToolUse", "tool_name": "Edit"},
-        ]
-
-        patterns = []
-        for event in events:
-            patterns.extend(self.detector.process_event(event))
-
-        assert len(patterns) == 1
-        assert patterns[0].pattern_type == PatternType.SEQUENCE_SUCCESS
-        assert "Read" in patterns[0].context["sequence"]
-        assert "Edit" in patterns[0].context["sequence"]
-
-    def test_failure_streak(self):
-        """Test consecutive failures detection."""
-        events = [
-            {"session_id": "test2", "hook_event": "PostToolUseFailure", "tool_name": "Bash"},
-            {"session_id": "test2", "hook_event": "PostToolUseFailure", "tool_name": "Bash"},
-            {"session_id": "test2", "hook_event": "PostToolUseFailure", "tool_name": "Bash"},
-        ]
-
-        patterns = []
-        for event in events:
-            patterns.extend(self.detector.process_event(event))
-
-        # Should detect failure streak after 3 consecutive failures
-        streak_patterns = [p for p in patterns if p.context.get("streak_length", 0) >= 3]
-        assert len(streak_patterns) >= 1
 
 
 class TestSemanticIntentDetector:

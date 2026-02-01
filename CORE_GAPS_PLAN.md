@@ -23,7 +23,7 @@ Minimal architecture:
 - Separate file or namespace for operational insights.
 
 Code transformations:
-- `lib/pattern_detection/sequence.py` -> tag operational.
+- Retire sequence-based detection; filter operational telemetry at ingestion.
 - `lib/promoter.py` -> reject operational insights.
 - `lib/cognitive_learner.py` -> optional store split.
 
@@ -230,4 +230,3 @@ Code transformations:
 5) Project questioning intelligence
 
 Each step should be usable standalone and remain lightweight.
-

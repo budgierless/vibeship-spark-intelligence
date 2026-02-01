@@ -1,6 +1,6 @@
 {
   "meta": {
-    "timestamp": 1769965315.200639,
+    "timestamp": 1769965769.9772863,
     "repo_root": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence"
   },
   "paths": {
@@ -11,8 +11,8 @@
     "skills_dir": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\sandbox\\spark_sandbox\\skills"
   },
   "queue": {
-    "event_count": 24,
-    "size_bytes": 9203,
+    "event_count": 36,
+    "size_bytes": 13807,
     "size_mb": 0.01,
     "queue_file": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\sandbox\\spark_sandbox\\home\\.spark\\queue\\events.jsonl",
     "max_events": 10000,
@@ -21,7 +21,7 @@
   "pipeline": {
     "bridge_cycles": [
       {
-        "timestamp": 1769965295.250335,
+        "timestamp": 1769965750.167666,
         "context_updated": true,
         "memory": {
           "auto_saved": 1,
@@ -38,27 +38,27 @@
           "surprises": 0
         },
         "prediction": {
-          "predictions": 2,
+          "predictions": 0,
           "outcomes": 2,
           "matched": 0,
           "validated": 0,
           "contradicted": 0,
           "surprises": 0
         },
-        "content_learned": 10,
+        "content_learned": 15,
         "chips": {
-          "events_processed": 24,
-          "insights_captured": 96,
+          "events_processed": 36,
+          "insights_captured": 144,
           "chips_activated": [
-            "bench_core",
             "vibecoding",
+            "bench_core",
             "spark-core"
           ]
         },
         "errors": []
       },
       {
-        "timestamp": 1769965304.830244,
+        "timestamp": 1769965759.7390301,
         "context_updated": true,
         "memory": {
           "auto_saved": 0,
@@ -75,20 +75,20 @@
           "surprises": 0
         },
         "prediction": {
-          "predictions": 0,
+          "predictions": 4,
           "outcomes": 0,
           "matched": 0,
           "validated": 0,
           "contradicted": 0,
           "surprises": 0
         },
-        "content_learned": 10,
+        "content_learned": 15,
         "chips": {
-          "events_processed": 24,
-          "insights_captured": 96,
+          "events_processed": 36,
+          "insights_captured": 144,
           "chips_activated": [
-            "bench_core",
             "vibecoding",
+            "bench_core",
             "spark-core"
           ]
         },
@@ -122,7 +122,7 @@
       "skipped": 8
     },
     "promotion": {
-      "promoted": 1,
+      "promoted": 0,
       "skipped": 0,
       "failed": 0,
       "filtered_operational": 0,
@@ -145,7 +145,7 @@
   },
   "cognitive": {
     "total_insights": 8,
-    "avg_reliability": 0.8833,
+    "avg_reliability": 0.8865,
     "by_category": {
       "reasoning": 2,
       "self_awareness": 2,
@@ -157,25 +157,25 @@
   },
   "pattern_detection": {
     "backlog": 0,
-    "event_count": 24
+    "event_count": 36
   },
   "validation": {
     "backlog": 0
   },
   "exposures": {
-    "recent": 10
+    "recent": 21
   },
   "outcomes": {
     "stats": {
-      "total_outcomes": 4,
+      "total_outcomes": 6,
       "by_polarity": {
         "pos": 0,
-        "neg": 4,
+        "neg": 6,
         "neutral": 0
       },
       "total_links": 0,
       "validated_links": 0,
-      "unlinked": 4
+      "unlinked": 6
     },
     "coverage": {}
   },
@@ -183,23 +183,23 @@
     "domain": "general",
     "phase": "prototype",
     "done": "End-to-end learning pipeline validated with stable report.",
-    "goals": 2,
-    "milestones": 2,
+    "goals": 3,
+    "milestones": 3,
     "completion": {
-      "score": 51,
+      "score": 54,
       "done": 20,
       "goals": 10,
       "questions": 4,
       "milestones": 0,
       "phase": 5,
-      "craft": 12
+      "craft": 15
     }
   },
   "chips": {
     "installed": 7,
     "active": [
-      "bench_core",
       "vibecoding",
+      "bench_core",
       "spark-core"
     ],
     "insights": 200
@@ -233,17 +233,17 @@
         "changes": [
           {
             "type": "deprecate_trigger",
-            "trigger": "edit",
+            "trigger": "bash",
             "reason": "Only 0% high-value matches"
           },
           {
             "type": "deprecate_trigger",
-            "trigger": "post_tool",
+            "trigger": "post_tool_failure",
             "reason": "Only 0% high-value matches"
           },
           {
             "type": "deprecate_trigger",
-            "trigger": "user_prompt",
+            "trigger": "write",
             "reason": "Only 0% high-value matches"
           }
         ]

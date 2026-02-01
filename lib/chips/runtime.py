@@ -9,7 +9,7 @@ What this captures that was missing before:
 - "Health values tripled from 100 to 300 for better balance"
 - "Kid's room environment with purple carpet and kiddie pools"
 
-Instead of just: "Edit tool used", "Bash -> Edit sequence"
+Instead of just: "Edit tool used" telemetry
 """
 
 import json
