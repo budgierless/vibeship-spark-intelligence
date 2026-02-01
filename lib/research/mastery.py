@@ -470,6 +470,60 @@ class MasteryResearcher:
         anti_patterns.extend(mastery.common_mistakes)
         return anti_patterns
 
+    def research_online(self, domain: str, search_results: List[Dict] = None) -> DomainMastery:
+        """
+        Research a domain using web search results.
+
+        Can be called with pre-fetched results or will trigger search.
+        """
+        from .web_research import get_web_researcher
+
+        researcher = get_web_researcher()
+
+        # Get or create mastery
+        mastery = self.get_mastery(domain)
+        if not mastery:
+            mastery = DomainMastery(
+                domain=domain,
+                description=f"{domain} - Researched from web",
+                researched_at=datetime.now().isoformat(),
+            )
+
+        # Process search results if provided
+        if search_results:
+            research = researcher.research_domain_sync(domain, search_results)
+            merge_data = researcher.merge_into_mastery(research)
+
+            # Add researched markers
+            for marker in merge_data.get("markers", []):
+                if marker.name not in [m.name for m in mastery.markers]:
+                    mastery.markers.append(marker)
+
+            # Add principles
+            for principle in merge_data.get("core_principles", []):
+                if principle not in mastery.core_principles:
+                    mastery.core_principles.append(principle)
+
+            # Add mistakes
+            for mistake in merge_data.get("common_mistakes", []):
+                if mistake not in mastery.common_mistakes:
+                    mastery.common_mistakes.append(mistake)
+
+            # Add expert insights
+            for insight in merge_data.get("expert_insights", []):
+                if insight not in mastery.expert_insights:
+                    mastery.expert_insights.append(insight)
+
+            # Add sources
+            mastery.sources.extend(merge_data.get("sources", []))
+            mastery.needs_refresh = False
+
+        self._cache[domain] = mastery
+        self._save_mastery(mastery)
+
+        log.info(f"Enriched mastery for {domain} with web research")
+        return mastery
+
     def list_domains(self) -> List[str]:
         """List all known domains."""
         domains = set(BUILTIN_MASTERY.keys())
