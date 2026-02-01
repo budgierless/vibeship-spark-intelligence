@@ -1365,10 +1365,142 @@ def cmd_eidos(args):
     from lib.eidos import (
         get_store, get_control_plane, get_distillation_engine,
         Episode, Step, Distillation, Policy,
-        Phase, Outcome, DistillationType
+        Phase, Outcome, DistillationType,
+        get_metrics_calculator, get_evidence_store,
+        run_full_migration, validate_migration,
+        get_deferred_tracker
     )
 
     store = get_store()
+
+    # Metrics command
+    if args.metrics:
+        calc = get_metrics_calculator()
+        metrics = calc.all_metrics()
+
+        print(f"\n{'=' * 60}")
+        print(f"  EIDOS Intelligence Metrics")
+        print(f"{'=' * 60}")
+
+        # North Star
+        ns = metrics["north_star"]
+        status = "[OK]" if ns["status"] == "on_track" else "[!!]"
+        print(f"\n  {status} COMPOUNDING RATE: {ns['compounding_rate_pct']}% (target: {ns['target']}%)")
+
+        # Effectiveness
+        eff = metrics["effectiveness"]
+        print(f"\n  Memory Effectiveness:")
+        print(f"    With memory:    {eff['with_memory']['rate_pct']}% ({eff['with_memory']['successes']}/{eff['with_memory']['episodes']})")
+        print(f"    Without memory: {eff['without_memory']['rate_pct']}% ({eff['without_memory']['successes']}/{eff['without_memory']['episodes']})")
+        print(f"    Advantage:      {eff['memory_advantage_pct']}%")
+
+        # Loop Suppression
+        loops = metrics["loop_suppression"]
+        print(f"\n  Loop Suppression:")
+        print(f"    Avg retries: {loops['avg_retries']} (target: <{loops['target_max']})")
+        print(f"    Max retries: {loops['max_retries']}")
+
+        # Weekly
+        weekly = metrics["weekly"]
+        print(f"\n  This Week:")
+        print(f"    Episodes: {weekly['episodes']} ({weekly['success_rate_pct']}% success)")
+        print(f"    New rules: {weekly['new_heuristics']} heuristics, {weekly['new_sharp_edges']} sharp edges")
+        print()
+        return
+
+    # Evidence command
+    if args.evidence:
+        ev_store = get_evidence_store()
+        ev_stats = ev_store.get_stats()
+
+        print(f"\n{'=' * 60}")
+        print(f"  EIDOS Evidence Store")
+        print(f"{'=' * 60}")
+        print(f"\n  Total Items: {ev_stats['total_items']}")
+        print(f"  Total Size: {ev_stats['total_bytes'] / 1024:.1f} KB")
+        print(f"  Expiring in 24h: {ev_stats['expiring_in_24h']}")
+        print(f"  Permanent: {ev_stats['permanent']}")
+
+        if ev_stats['by_type']:
+            print(f"\n  By Type:")
+            for t, data in ev_stats['by_type'].items():
+                print(f"    {t}: {data['count']} ({data['bytes'] / 1024:.1f} KB)")
+        print()
+        return
+
+    # Migrate command
+    if args.migrate:
+        print(f"\n{'=' * 60}")
+        print(f"  EIDOS Migration")
+        print(f"{'=' * 60}")
+
+        dry_run = args.dry_run
+        if dry_run:
+            print("\n  [DRY RUN] No changes will be made.\n")
+
+        results = run_full_migration(dry_run=dry_run)
+
+        print(f"  Insights migrated: {results['insights']['insights_migrated']}")
+        print(f"  Insights skipped:  {results['insights']['insights_skipped']}")
+        print(f"  Patterns archived: {results['patterns_archived']}")
+        print(f"  Policies created:  {results['policies_created']}")
+
+        if results['insights']['errors']:
+            print(f"\n  Errors:")
+            for err in results['insights']['errors'][:5]:
+                print(f"    - {err}")
+
+        print(f"\n  Duration: {results['duration_seconds']:.1f}s")
+        print()
+        return
+
+    # Validate migration command
+    if args.validate_migration:
+        results = validate_migration()
+
+        print(f"\n{'=' * 60}")
+        print(f"  EIDOS Migration Validation")
+        print(f"{'=' * 60}")
+        print(f"\n  Tables exist: {results['eidos_tables_exist']}")
+        print(f"  Distillations: {results['distillations_count']}")
+        print(f"  Policies: {results['policies_count']}")
+        print(f"  Episodes: {results['episodes_count']}")
+        print(f"  Steps: {results['steps_count']}")
+        print(f"  Backup exists: {results['backup_exists']}")
+        print(f"  Patterns archived: {results['patterns_archived']}")
+
+        status = "[OK]" if results['valid'] else "[!!]"
+        print(f"\n  {status} Migration valid: {results['valid']}")
+        print()
+        return
+
+    # Deferred validations command
+    if args.deferred:
+        tracker = get_deferred_tracker()
+        stats = tracker.get_stats()
+
+        print(f"\n{'=' * 60}")
+        print(f"  Deferred Validations")
+        print(f"{'=' * 60}")
+        print(f"\n  Total: {stats['total']}")
+        print(f"  Resolved: {stats['resolved']}")
+        print(f"  Pending: {stats['pending']}")
+        print(f"  Overdue: {stats['overdue']}")
+
+        if stats['by_reason']:
+            print(f"\n  By Reason:")
+            for reason, data in stats['by_reason'].items():
+                print(f"    {reason}: {data['total']} ({data['resolved']} resolved)")
+
+        # Show overdue items
+        overdue = tracker.get_overdue()
+        if overdue:
+            print(f"\n  Overdue Items:")
+            for d in overdue[:5]:
+                hours = (time.time() - d.deferred_at) / 3600
+                print(f"    - {d.step_id}: {d.reason} ({hours:.1f}h ago)")
+        print()
+        return
 
     if args.stats:
         stats = store.get_stats()
@@ -2226,6 +2358,12 @@ Examples:
     eidos_parser.add_argument("--policies", "-p", action="store_true", help="List operating policies")
     eidos_parser.add_argument("--steps", action="store_true", help="List recent steps (decision packets)")
     eidos_parser.add_argument("--episode", help="Show steps for specific episode ID")
+    eidos_parser.add_argument("--metrics", "-m", action="store_true", help="Show compounding rate and intelligence metrics")
+    eidos_parser.add_argument("--evidence", action="store_true", help="Show evidence store statistics")
+    eidos_parser.add_argument("--migrate", action="store_true", help="Run migration from old Spark to EIDOS")
+    eidos_parser.add_argument("--validate-migration", action="store_true", help="Validate migration completed successfully")
+    eidos_parser.add_argument("--deferred", action="store_true", help="Show deferred validations status")
+    eidos_parser.add_argument("--dry-run", action="store_true", help="For migrate: preview without making changes")
     eidos_parser.add_argument("--limit", "-n", type=int, default=10, help="Max items to show")
 
     # voice

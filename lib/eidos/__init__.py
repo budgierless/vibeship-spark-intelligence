@@ -8,7 +8,8 @@ The self-evolving intelligence system that forces learning through:
 - Distillation (experience → reusable rules)
 - Control plane (watchers, phases, budgets)
 
-The Five Layers:
+The Six Layers:
+0. Evidence Store - Ephemeral audit trail (NEW)
 1. Canonical Memory (SQLite) - Source of truth
 2. Semantic Index - Embeddings for retrieval
 3. Control Plane - Deterministic enforcement
@@ -17,6 +18,14 @@ The Five Layers:
 
 The Vertical Loop:
 Action → Prediction → Outcome → Evaluation → Policy Update → Distillation → Mandatory Reuse
+
+Guardrails:
+1. Progress Contract
+2. Memory Binding
+3. Outcome Enforcement
+4. Loop Watchers
+5. Phase Control
+6. Evidence Before Modification (NEW)
 """
 
 from .models import (
@@ -38,6 +47,39 @@ from .distillation_engine import (
     ReflectionResult, DistillationCandidate
 )
 from .store import EidosStore, get_store
+
+# New components
+from .guardrails import (
+    GuardrailEngine, GuardrailResult,
+    EvidenceBeforeModificationGuard, PhaseViolationGuard,
+    ViolationType, PHASE_ALLOWED_ACTIONS
+)
+from .evidence_store import (
+    EvidenceStore, Evidence, EvidenceType,
+    get_evidence_store, create_evidence_from_tool,
+    RETENTION_POLICY
+)
+from .escalation import (
+    Escalation, EscalationType, RequestType,
+    EscalationBuilder, build_escalation,
+    Attempt, EvidenceGathered, MinimalReproduction, SuggestedOption
+)
+from .validation import (
+    ValidationMethod, ValidationResult, DeferredValidation,
+    DeferredValidationTracker, get_deferred_tracker,
+    validate_step, is_positive_validation, is_negative_validation,
+    DEFERRAL_LIMITS
+)
+from .metrics import (
+    MetricsCalculator, get_metrics_calculator,
+    CompoundingMetrics, ReuseMetrics, EffectivenessMetrics,
+    LoopMetrics, DistillationMetrics, WeeklyReport
+)
+from .migration import (
+    migrate_cognitive_insights, archive_patterns,
+    migrate_user_policies, run_full_migration,
+    validate_migration, MigrationStats
+)
 
 __all__ = [
     # Core Models
@@ -74,4 +116,60 @@ __all__ = [
     # Store
     "EidosStore",
     "get_store",
+
+    # Guardrails (NEW)
+    "GuardrailEngine",
+    "GuardrailResult",
+    "EvidenceBeforeModificationGuard",
+    "PhaseViolationGuard",
+    "ViolationType",
+    "PHASE_ALLOWED_ACTIONS",
+
+    # Evidence Store (NEW)
+    "EvidenceStore",
+    "Evidence",
+    "EvidenceType",
+    "get_evidence_store",
+    "create_evidence_from_tool",
+    "RETENTION_POLICY",
+
+    # Escalation (NEW)
+    "Escalation",
+    "EscalationType",
+    "RequestType",
+    "EscalationBuilder",
+    "build_escalation",
+    "Attempt",
+    "EvidenceGathered",
+    "MinimalReproduction",
+    "SuggestedOption",
+
+    # Validation (NEW)
+    "ValidationMethod",
+    "ValidationResult",
+    "DeferredValidation",
+    "DeferredValidationTracker",
+    "get_deferred_tracker",
+    "validate_step",
+    "is_positive_validation",
+    "is_negative_validation",
+    "DEFERRAL_LIMITS",
+
+    # Metrics (NEW)
+    "MetricsCalculator",
+    "get_metrics_calculator",
+    "CompoundingMetrics",
+    "ReuseMetrics",
+    "EffectivenessMetrics",
+    "LoopMetrics",
+    "DistillationMetrics",
+    "WeeklyReport",
+
+    # Migration (NEW)
+    "migrate_cognitive_insights",
+    "archive_patterns",
+    "migrate_user_policies",
+    "run_full_migration",
+    "validate_migration",
+    "MigrationStats",
 ]

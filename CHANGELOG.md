@@ -124,6 +124,92 @@ Intelligence = compression + reuse + behavior change. Not storage. Not retrieval
 
 ---
 
+## [Phase 3.1 Complete] - 2026-02-02
+
+### Theme: EIDOS Architecture Additions
+
+Implemented the full EIDOS specification from EIDOS_ARCHITECTURE_ADDITIONS.md.
+
+### New Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| **Guardrails** | `lib/eidos/guardrails.py` | Evidence Before Modification guard, Phase violation checks |
+| **Evidence Store** | `lib/eidos/evidence_store.py` | Ephemeral audit trail with retention policies |
+| **Escalation** | `lib/eidos/escalation.py` | Structured escalation output with attempts, evidence, options |
+| **Validation** | `lib/eidos/validation.py` | Validation methods and deferred validation tracking |
+| **Metrics** | `lib/eidos/metrics.py` | Compounding rate and intelligence metrics |
+| **Migration** | `lib/eidos/migration.py` | Data migration from old Spark to EIDOS |
+
+### Guardrail 6: Evidence Before Modification
+
+After 2 failed edit attempts, agent is FORBIDDEN to edit until:
+- Reproducing reliably
+- Narrowing scope
+- Identifying discriminating signal
+- Creating minimal reproduction
+
+### Layer 0: Ephemeral Evidence Store
+
+Tool logs stored separately with retention policies:
+- Tool output: 72 hours
+- Test/build results: 7 days
+- Deploy artifacts: 30 days
+- Security events: 90 days
+- User-flagged: Permanent
+
+### Escalation Structure
+
+Complete escalation reports with:
+- Summary (goal, progress, blocker)
+- Attempts history
+- Evidence gathered
+- Current hypothesis
+- Minimal reproduction
+- Request type (INFO/DECISION/HELP/REVIEW)
+- Suggested options
+
+### Validation Methods
+
+Standard codes: `test:passed`, `build:success`, `lint:clean`, `output:expected`, etc.
+
+Deferred validation with max wait times:
+- `deferred:needs_deploy` (24h)
+- `deferred:needs_data` (48h)
+- `deferred:needs_human` (72h)
+- `deferred:async_process` (4h)
+
+### Metrics SQL
+
+Compounding Rate query and supporting metrics:
+- Reuse Rate: % steps citing memory
+- Memory Effectiveness: Win rate with/without memory
+- Loop Suppression: Average retries
+- Distillation Quality: Rules useful when reused
+- Weekly Intelligence Report
+
+### CLI Commands
+
+```bash
+# Intelligence metrics
+spark eidos --metrics
+
+# Evidence store stats
+spark eidos --evidence
+
+# Deferred validations
+spark eidos --deferred
+
+# Migration (dry-run first!)
+spark eidos --migrate --dry-run
+spark eidos --migrate
+
+# Validate migration
+spark eidos --validate-migration
+```
+
+---
+
 ## [Phase 2 Complete] - 2026-02-02
 
 ### Theme: Importance Scoring Foundation
