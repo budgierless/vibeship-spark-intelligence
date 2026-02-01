@@ -40,6 +40,8 @@ class WatcherType(Enum):
     CONFIDENCE_STAGNATION = "confidence_stagnation"  # Delta < 0.05 for 3 steps
     MEMORY_BYPASS = "memory_bypass"          # Action without memory citation
     BUDGET_HALF_NO_PROGRESS = "budget_half_no_progress"  # >50% budget, no progress
+    SCOPE_CREEP = "scope_creep"              # Plan grows while progress doesn't
+    VALIDATION_GAP = "validation_gap"        # >2 steps without validation evidence
 
 
 class WatcherSeverity(Enum):
@@ -232,6 +234,16 @@ class WatcherEngine:
         if alert:
             alerts.append(alert)
 
+        # Watcher G: Scope Creep
+        alert = self._check_scope_creep(episode, recent_steps)
+        if alert:
+            alerts.append(alert)
+
+        # Watcher H: Validation Gap
+        alert = self._check_validation_gap(recent_steps)
+        if alert:
+            alerts.append(alert)
+
         self.alert_history.extend(alerts)
         return alerts
 
@@ -314,6 +326,58 @@ class WatcherEngine:
                     required_output="scope reduction + minimal failing unit"
                 )
         return None
+
+    def _check_scope_creep(self, episode: Episode, recent_steps: List[Step]) -> Optional[WatcherAlert]:
+        """Watcher G: Plan size grows while progress doesn't."""
+        if len(recent_steps) < 5:
+            return None
+
+        # Check if we're accumulating alternatives/assumptions without progress
+        early_steps = recent_steps[:len(recent_steps)//2]
+        late_steps = recent_steps[len(recent_steps)//2:]
+
+        early_complexity = sum(
+            len(s.alternatives) + len(s.assumptions)
+            for s in early_steps
+        )
+        late_complexity = sum(
+            len(s.alternatives) + len(s.assumptions)
+            for s in late_steps
+        )
+
+        early_progress = sum(1 for s in early_steps if s.progress_made)
+        late_progress = sum(1 for s in late_steps if s.progress_made)
+
+        # Complexity growing but progress not
+        if late_complexity > early_complexity * 1.5 and late_progress <= early_progress:
+            return WatcherAlert(
+                watcher=WatcherType.SCOPE_CREEP,
+                severity=WatcherSeverity.FORCE,
+                message="Scope/complexity growing while progress stagnates",
+                forced_phase=Phase.SIMPLIFY,
+                required_output="reduce scope by 50% - focus on one thing"
+            )
+        return None
+
+    def _check_validation_gap(self, recent_steps: List[Step]) -> Optional[WatcherAlert]:
+        """Watcher H: >2 steps executed without validation evidence."""
+        if len(recent_steps) < 3:
+            return None
+
+        # Check last 3 steps for validation evidence
+        recent_without_validation = 0
+        for step in recent_steps[-3:]:
+            if not step.validated and not step.validation_evidence:
+                recent_without_validation += 1
+
+        if recent_without_validation >= 2:
+            return WatcherAlert(
+                watcher=WatcherType.VALIDATION_GAP,
+                severity=WatcherSeverity.FORCE,
+                message=f"{recent_without_validation} recent steps lack validation evidence",
+                forced_phase=Phase.VALIDATE,
+                required_output="validation-only step - verify current state"
+            )
 
     def get_blocking_alerts(self, alerts: List[WatcherAlert]) -> List[WatcherAlert]:
         """Get alerts that should block the action."""

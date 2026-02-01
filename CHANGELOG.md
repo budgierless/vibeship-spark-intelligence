@@ -4,6 +4,94 @@ All notable changes to Spark Intelligence are documented here.
 
 ---
 
+## [Phase 3.4 Complete] - 2026-02-02
+
+### Theme: Final Hardening - Resilient Intelligence
+
+Added the "last-mile" pieces that prevent silent failure, corruption, and hallucinated learning.
+
+### New Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| **Truth Ledger** | `truth_ledger.py` | Prevents hallucinated learning - CLAIMS vs FACTS vs RULES |
+| **Acceptance Compiler** | `acceptance_compiler.py` | Definition of Done - prevents endless objectives |
+| **Policy Patches** | `policy_patches.py` | Explicit behavior change from distillations |
+| **Minimal Mode** | `minimal_mode.py` | Fallback when smart agent melts down |
+
+### Truth Ledger (Prevents Hallucinated Learning)
+
+Strict distinction between:
+- **CLAIMS** (unverified) - things we believe but haven't proven
+- **FACTS** (validated) - things we've proven with evidence
+- **RULES** (distilled) - generalizations from multiple facts
+
+Every memory artifact has:
+- `evidence_level`: none | weak | strong
+- `evidence_refs`: step IDs / test output hash / artifact ID
+
+**Rule:** Only FACTS and RULES with strong evidence for high-impact actions.
+
+### Acceptance Compiler (Definition of Done)
+
+Converts goal + constraints + success_criteria into explicit acceptance tests.
+
+**Rule:** If acceptance tests don't exist, cannot enter EXECUTE.
+Stay in EXPLORE/PLAN until validation plan exists.
+
+### Policy Patches (Behavior Change)
+
+Turns learning into control, not just knowledge:
+- "When condition X, force behavior Y"
+- e.g., "After 2 failures, enter DIAGNOSE and freeze edits"
+
+Every validated distillation proposes:
+- a new playbook step
+- a sharp edge block
+- or a policy patch
+
+### Minimal Mode (Fallback Agent)
+
+When smart agent is struggling, switch to dumb but reliable mode:
+- Only diagnostics
+- No refactors
+- No broad changes
+- Only reduce scope & run tests
+
+Triggered by:
+- Repeated watcher firings (3+)
+- Low confidence + low evidence
+- Budget nearly exhausted
+
+### Two New Watchers (8 Total)
+
+| Watcher | Trigger | Action |
+|---------|---------|--------|
+| **Scope Creep** | Plan grows while progress doesn't | → SIMPLIFY (reduce scope 50%) |
+| **Validation Gap** | >2 steps without validation evidence | → VALIDATE-only step |
+
+### Revalidation & Decay
+
+Distillations become less trusted over time:
+- `expires_at`: When it becomes stale
+- `revalidate_by`: When it needs re-verification
+
+Expired distillations show warning and require revalidation before use.
+
+### V1 Launch Checklist
+
+- [x] State machine enforced
+- [x] Step Envelope enforced (prediction/result/validation)
+- [x] 8 watchers live
+- [x] Escape protocol wired
+- [x] Distillation engine with evidence links
+- [x] Truth Ledger (claims vs facts vs rules)
+- [x] Acceptance Compiler (Definition of Done)
+- [x] Policy Patches (explicit behavior change)
+- [x] Minimal Mode (fallback agent)
+
+---
+
 ## [Phase 3.3 Complete] - 2026-02-02
 
 ### Theme: Elevated Control Layer - Self-Correcting Intelligence

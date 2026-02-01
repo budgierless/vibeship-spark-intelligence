@@ -156,6 +156,60 @@ EXPLORE → PLAN → EXECUTE → VALIDATE → CONSOLIDATE
 
 ---
 
+## Final Hardening (v1 Complete)
+
+### Truth Ledger (Prevents Hallucinated Learning)
+
+| Status | Meaning | Can Use For |
+|--------|---------|-------------|
+| **CLAIM** | Unverified | Low-impact only |
+| **FACT** | Validated with evidence | All actions |
+| **RULE** | Generalized from facts | High-impact actions |
+
+**Rule:** Only FACTS/RULES with strong evidence for high-impact decisions.
+
+### Acceptance Compiler (Definition of Done)
+
+**Rule:** No EXECUTE without acceptance tests.
+- Goal → compiled to explicit tests
+- Must have critical (must-pass) tests defined
+- Stay in EXPLORE/PLAN until validation plan exists
+
+### Policy Patches (Learning → Behavior)
+
+Distillations create patches:
+```
+"When condition X, force behavior Y"
+```
+
+Default patches:
+- Two failures → DIAGNOSE + freeze edits
+- File touched 3x → block file
+- Budget 50% → require validation
+
+### Minimal Mode (Fallback)
+
+When stuck, enter minimal mode:
+- ✅ Read, Glob, Grep, tests
+- ❌ Edit, Write, refactor
+
+Exit requires: new evidence + new hypothesis
+
+### 8 Watchers
+
+| # | Watcher | Trigger |
+|---|---------|---------|
+| 1 | Repeat Failure | Same error 2x |
+| 2 | No New Evidence | 5 steps without |
+| 3 | Diff Thrash | Same file 3x |
+| 4 | Confidence Stagnation | Delta < 0.05 × 3 |
+| 5 | Memory Bypass | No citation |
+| 6 | Budget Half No Progress | >50%, no progress |
+| 7 | **Scope Creep** | Plan grows, progress doesn't |
+| 8 | **Validation Gap** | >2 steps without validation |
+
+---
+
 ### Phase 2 - Importance Scoring ✅ COMPLETE
 
 **Completed:** 2026-02-02

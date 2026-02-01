@@ -91,6 +91,31 @@ from .elevated_control import (
 )
 from .models import VALID_TRANSITIONS
 
+# Truth Ledger (prevents hallucinated learning)
+from .truth_ledger import (
+    TruthLedger, get_truth_ledger,
+    TruthEntry, TruthStatus, EvidenceLevel, EvidenceRef,
+)
+
+# Acceptance Compiler (Definition of Done)
+from .acceptance_compiler import (
+    AcceptanceCompiler, get_acceptance_compiler,
+    AcceptancePlan, AcceptanceTest, AcceptanceType, AcceptanceStatus,
+)
+
+# Policy Patches (explicit behavior change)
+from .policy_patches import (
+    PolicyPatchEngine, get_policy_patch_engine,
+    PolicyPatch, PatchTrigger, PatchAction, PatchResult,
+)
+
+# Minimal Mode (fallback when stuck)
+from .minimal_mode import (
+    MinimalModeController, get_minimal_mode_controller,
+    MinimalModeState, MinimalModeReason,
+    MINIMAL_MODE_ALLOWED_TOOLS, MINIMAL_MODE_BASH_PATTERNS,
+)
+
 __all__ = [
     # Core Models
     "Episode",
@@ -198,4 +223,36 @@ __all__ = [
     "ControlMetrics",
     "calculate_control_metrics",
     "VALID_TRANSITIONS",
+
+    # Truth Ledger
+    "TruthLedger",
+    "get_truth_ledger",
+    "TruthEntry",
+    "TruthStatus",
+    "EvidenceLevel",
+    "EvidenceRef",
+
+    # Acceptance Compiler
+    "AcceptanceCompiler",
+    "get_acceptance_compiler",
+    "AcceptancePlan",
+    "AcceptanceTest",
+    "AcceptanceType",
+    "AcceptanceStatus",
+
+    # Policy Patches
+    "PolicyPatchEngine",
+    "get_policy_patch_engine",
+    "PolicyPatch",
+    "PatchTrigger",
+    "PatchAction",
+    "PatchResult",
+
+    # Minimal Mode
+    "MinimalModeController",
+    "get_minimal_mode_controller",
+    "MinimalModeState",
+    "MinimalModeReason",
+    "MINIMAL_MODE_ALLOWED_TOOLS",
+    "MINIMAL_MODE_BASH_PATTERNS",
 ]
