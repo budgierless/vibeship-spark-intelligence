@@ -556,6 +556,148 @@ mastery_metrics:
 
 ---
 
+## Multi-Domain Project Tracking
+
+Real projects require success across **multiple interconnected domains**. Focusing only on the "main" domain while neglecting others leads to failure.
+
+### The Problem with Single-Domain Focus
+
+```
+❌ Single-Domain Thinking:
+   "This is a game project → focus on game_dev chip"
+
+   Result: Great gameplay, but:
+   - No marketing → nobody finds it
+   - Poor tech → performance issues
+   - No business model → can't sustain
+
+✅ Multi-Domain Thinking:
+   "This game needs: design + tech + art + audio + marketing + business"
+
+   Result: All areas tracked, nothing neglected
+```
+
+### Project Profiles
+
+Every project gets a **multi-domain profile**:
+
+```yaml
+project_profile:
+  name: "Lobster Royale"
+  primary_domain: "game_design"
+
+  domains:
+    - game_design: 0.9 (critical)
+    - game_tech: 0.9 (critical)
+    - game_art: 0.7 (important)
+    - game_audio: 0.5 (nice to have)
+    - marketing: 0.8 (important for launch)
+    - business: 0.6 (monetization)
+
+  interconnections:
+    - game_design → game_tech (requires)
+    - game_design → game_art (enhances)
+    - product → marketing (enables)
+```
+
+### Domain Interconnections
+
+Domains affect each other. Track the relationships:
+
+| From | To | Relationship | Effect |
+|------|-----|--------------|--------|
+| game_design | game_tech | requires | Good feel needs solid tech |
+| game_design | game_art | enhances | Art reinforces mechanics |
+| product | marketing | enables | Good product → marketing claims |
+| tech | operations | constrains | Tech debt → operational burden |
+
+### Holistic Intent Setting
+
+Instead of setting intent for ONE domain, set for ALL:
+
+```python
+from lib.research import set_holistic_intent
+
+intent = set_holistic_intent(
+    project_path="/games/lobster-royale",
+    user_priorities=["game_design", "marketing"],
+    focus_areas=["fun first", "prepare for launch"]
+)
+
+# Result: Intents set for EVERY domain
+# - game_design: watch for game feel, balance
+# - game_tech: watch for performance, stability
+# - marketing: watch for positioning, messaging
+# - business: watch for monetization fit
+```
+
+### Neglected Domain Detection
+
+Spark tracks coverage across all domains and alerts when critical domains are neglected:
+
+```yaml
+coverage_check:
+  game_design: 15 insights, 2 warnings (healthy)
+  game_tech: 8 insights, 1 warning (healthy)
+  marketing: 0 insights, 0 warnings (⚠️ NEGLECTED)
+
+  alert: "Marketing is critical (0.8 weight) but has no coverage"
+  recommendation: "Consider marketing strategy before launch"
+```
+
+### Cross-Domain Insights
+
+Some insights span multiple domains:
+
+```yaml
+cross_domain_insight:
+  content: "Purple carpet + kiddie pools creates kid-friendly arena"
+  domains: [game_art, game_design, marketing]
+  relationship: "Art direction affects gameplay perception and target audience"
+
+  implications:
+    - game_art: This aesthetic choice defines the style
+    - game_design: Level design should match playful tone
+    - marketing: Target family/casual audience, not hardcore
+```
+
+### Cross-Cutting Concerns
+
+Some patterns affect ALL domains equally:
+
+```yaml
+cross_cutting_concerns:
+  quality:
+    watch: "Consistent quality across all areas"
+    warn: "Quality varying wildly between domains"
+
+  integration:
+    watch: "Clean interfaces between domains"
+    warn: "Domains evolving independently"
+
+  user_focus:
+    watch: "User needs driving all decisions"
+    warn: "Domains optimizing for themselves"
+
+  sustainability:
+    watch: "Balanced progress across domains"
+    warn: "One domain racing ahead while others lag"
+```
+
+### Practical Example
+
+When building Lobster Royale, Spark should track:
+
+| Session Focus | Also Watch For |
+|--------------|----------------|
+| Implementing combat | Tech debt accumulating? |
+| Adding new arena | Marketing hook in this arena? |
+| Fixing physics | Breaking art/animation? |
+| Polish/juice | Core loop still fun? |
+| Any session | Which domains need attention? |
+
+---
+
 ## Quick Reference
 
 **Before capturing, ask:**
@@ -563,6 +705,7 @@ mastery_metrics:
 2. Is this a decision or just an action?
 3. Can I link this to an outcome?
 4. Is this domain-specific or universal?
+5. **Does this affect multiple domains?**
 
 **When promoting, require:**
 1. 2+ validations OR explicit user confirmation
@@ -570,9 +713,11 @@ mastery_metrics:
 3. Appropriate scope (project/domain/universal)
 
 **For project onboarding:**
-1. Always ask: Domain, Success, Focus, Avoid
+1. Always ask: Domain**s** (plural), Success, Focus, Avoid
 2. Optionally ask: Constraints, Preferences, Stakeholders
 3. Domain-specific: Let chips suggest questions
+4. **Detect all relevant domains, not just primary**
+5. **Set holistic intents across all domains**
 
 ---
 
