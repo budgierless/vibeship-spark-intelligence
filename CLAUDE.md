@@ -9,13 +9,40 @@ These documents define the evolution from primitive telemetry to superintelligen
 3. **CORE_GAPS_PLAN.md** - How to fill each gap (workflows, architecture, code targets)
 4. **CORE_IMPLEMENTATION_PLAN.md** - Buildable execution plan with sequencing
 
-### Current Phase: Phase 1 - Cognitive Filtering
+### Current Phase: Phase 2 - Importance Scoring ✅ COMPLETE
 
-**Goal:** Stop operational telemetry from polluting cognitive memory.
+**Completed:** 2026-02-02
 
-**Key Principle:** Operational (tool sequences, usage counts) vs Cognitive (human-useful reasoning, preferences, wisdom)
+**The Core Problem (Solved):**
+Spark was deciding importance at PROMOTION time, not INGESTION time. Critical one-time insights were lost because they didn't repeat.
 
-**Success Metric:** 90%+ of promoted insights are human-useful
+**What We Built:**
+- `lib/importance_scorer.py` - Semantic importance scoring at ingestion
+- Integrated into `lib/pattern_detection/aggregator.py`
+- CLI command: `spark importance --text "..."` for testing
+
+**How It Works:**
+| Tier | Score | Examples |
+|------|-------|----------|
+| CRITICAL | 0.9+ | "Remember this", corrections, explicit decisions |
+| HIGH | 0.7-0.9 | Preferences, principles, reasoned explanations |
+| MEDIUM | 0.5-0.7 | Observations, context, weak preferences |
+| LOW | 0.3-0.5 | Acknowledgments, trivial statements |
+| IGNORE | <0.3 | Tool sequences, metrics, operational noise |
+
+**Key Principle:** Importance != Frequency. Critical insights on first mention get learned immediately.
+
+### Phase 1 - Cognitive Filtering ✅ COMPLETE
+
+**Completed:** 2026-02-02
+
+**What We Did:**
+- Removed ALL operational learning from `learner.py` (1,156 → 113 lines)
+- Disabled `learning_filter.py` (no longer needed)
+- Cleaned 1,196 primitive learnings from `cognitive_insights.json`
+- Kept 231 truly cognitive insights
+
+See **CHANGELOG.md** for full details.
 
 ---
 
@@ -74,30 +101,104 @@ When domain detected, chips should:
 
 ## Spark Learnings
 
-*Auto-promoted insights from Spark*
-- Ship fast, iterate faster *When: Core Vibeship philosophy* (100% reliable, 3 validations)
+*Cognitive insights from `~/.spark/cognitive_insights.json` (231 total)*
 
 <!-- SPARK_LEARNINGS_START -->
 <!--
-  CLEANED: Removed 88 operational tool sequences (Phase 1 cleanup)
-  These are now stored in operational insights, not promoted to docs.
-  Only human-useful cognitive insights below.
+  Phase 1 Complete (2026-02-02): Removed 1,196 primitive learnings
+  Only human-useful cognitive insights remain.
 -->
 
-## Self-Awareness (Validated Struggles)
-- I struggle with Bash + windows_path -> Fix: Use forward slashes (/) (46% reliable, 627v)
-- I struggle with Bash + file_not_found -> Fix: Verify path exists first (41% reliable, 1191v)
-- I struggle with Bash + syntax_error -> Fix: Check quotes and brackets (41% reliable, 514v)
-- I struggle with Bash + timeout -> Fix: Reduce scope or increase timeout (38% reliable, 730v)
-- I tend to be overconfident about Edit tasks (100% reliable, 4v)
-- I struggle with regex_patterns tasks (100% reliable, 4v)
-- I struggle with WebFetch reliability (95% reliable, 75v)
+### User Understanding (171 insights)
+- User prefers Vibeship style - dark theme, monospace fonts, clean grids
+- User hates gradients - use solid colors, flat design
+- User prefers clean and thorough code - quality over speed
+- User works best late night - quiet, no interruptions, flow state
+- Main frustration with AI: not remembering context
 
-## Wisdom
-- Ship fast, iterate faster *Core Vibeship philosophy* (100% reliable, 3v)
+### Self-Awareness (14 insights)
+- I struggle with Bash errors (449 validations)
+- I tend to be overconfident about Bash tasks (187v)
+- I struggle with Edit errors (46v)
+- Blind spot: File permissions before operation
 
-## Reasoning (True Patterns)
-- Read before Edit prevents content mismatches (16v validated)
-- Verify file exists before modifying (1191v validated)
+### Wisdom (17 insights)
+- Ship fast, iterate faster
+- Never fail silently - always surface errors clearly
+- Maintainable > clever
+- Security is non-negotiable
+- Lightweight solutions - avoid bloat
+
+### Context (23 insights)
+- Windows Unicode crash - cp1252 can't encode emojis
+- Two Spark directories - old vibeship-spark vs new vibeship-spark-intelligence
+- Bash vs cmd syntax mismatch on Windows
+
+### Reasoning (6 insights)
+- Assumption 'File exists at expected path' often wrong → Use Glob first
 
 <!-- SPARK_LEARNINGS_END -->
+
+---
+
+## Tools & Capabilities
+
+### Playwright (Browser Automation)
+When WebFetch fails or content requires JavaScript rendering (e.g., X/Twitter articles, SPAs):
+
+```javascript
+// Use Playwright to fetch dynamic content
+const { chromium } = require('playwright');
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(3000); // Wait for JS to render
+const content = await page.evaluate(() => document.body.innerText);
+await browser.close();
+```
+
+**When to use Playwright over WebFetch:**
+- X/Twitter articles and threads
+- Single Page Applications (SPAs)
+- Content behind JavaScript rendering
+- Pages that block simple HTTP requests
+
+**Installation:** `npm install playwright && npx playwright install chromium`
+
+---
+
+## Spark Autonomy (24/7 Self-Evolving Builder)
+
+**Full Documentation:** [SPARK_AUTONOMY.md](./SPARK_AUTONOMY.md)
+
+Spark orchestrates the VibeShip ecosystem to build autonomously while you're away:
+
+```
+IdeaRalph (Ideation) → Spark (Executor) → Spark (Learner) → feedback loop
+```
+
+### Key Components
+
+| Tool | Role |
+|------|------|
+| **IdeaRalph** | Source of ideas, specs, risk tags |
+| **Mind** | Persistent memory, context retrieval |
+| **Spawner** | Route tasks to agents/skills |
+| **Scanner** | Security scan before shipping |
+
+### Install VibeShip Tools
+
+```bash
+npx github:vibeforge1111/vibeship-idearalph install
+```
+
+### The Vision
+
+Spark doesn't just learn - it **builds**:
+- Queries IdeaRalph for next actionable idea
+- Gets agent recommendation from Spawner
+- Executes in sandbox using existing orchestration
+- Learns from outcome via pattern detection
+- Feeds insights back to IdeaRalph
+
+See SPARK_AUTONOMY.md for full implementation details.

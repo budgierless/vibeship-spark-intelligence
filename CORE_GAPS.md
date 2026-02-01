@@ -192,3 +192,50 @@ What is new:
 What to clean:
 - Remove or de-emphasize metrics that reward spam.
 
+---
+
+## 11) Importance Scoring Foundation ✅ IMPLEMENTED
+
+**Status: Phase 2 Complete (2026-02-02)**
+
+The core problem: Spark was deciding importance at PROMOTION time, not INGESTION time.
+This meant critical one-time insights were lost because they didn't repeat.
+
+**The Key Insight: Importance != Frequency**
+
+| Old Approach | New Approach |
+|--------------|--------------|
+| Learn if it repeats | Learn if it's important |
+| Confidence = repetition | Importance = semantic value |
+| Filter at promotion | Score at ingestion |
+| Miss one-time critical insights | Elevate first-mention signals |
+
+What now exists:
+- `lib/importance_scorer.py` - Semantic importance scoring at ingestion
+- Integration in `lib/pattern_detection/aggregator.py`
+- CLI command: `spark importance --text "..."` for testing
+
+How importance is scored:
+1. **Critical Signals** (0.9+): "remember this", corrections, explicit decisions
+2. **High Signals** (0.7-0.9): preferences, principles, reasoning with "because"
+3. **Medium Signals** (0.5-0.7): observations, context, weak preferences
+4. **Low Signals** (0.3-0.5): acknowledgments, trivial statements
+5. **Ignore** (<0.3): tool sequences, metrics, operational noise
+
+Domain-driven importance:
+- Active domain (game_dev, fintech, etc.) weights relevant terms
+- "balance" in game_dev context gets 1.5x boost
+
+First-mention elevation:
+- Critical insights on first mention get captured immediately
+- No need to wait for repetition
+
+Question-guided capture:
+- Project onboarding questions guide what to pay attention to
+- "What does success look like?" patterns get elevated
+
+What to evolve next:
+- Semantic clustering for similar insights
+- Outcome attribution to validate importance predictions
+- LLM-assisted importance scoring for edge cases
+

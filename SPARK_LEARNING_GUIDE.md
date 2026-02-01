@@ -524,11 +524,19 @@ mastery_metrics:
 
 ## Implementation Checklist
 
-### Phase 1: Cognitive Filtering (Current)
+### Phase 1: Cognitive Filtering ✅ COMPLETE (2026-02-02)
 - [x] Distinguish operational vs cognitive events
 - [x] Build chip runtime for domain capture
+- [x] **Remove operational learning entirely** (learner.py gutted)
+- [x] **Clean primitive data** (1,196 primitive insights removed)
+- [x] **Disable learning filter** (no longer needed)
 - [ ] Implement project onboarding questions
 - [ ] Add outcome linking to insights
+
+**Phase 1 Results:**
+- Before: 1,427 insights (84% primitive)
+- After: 231 insights (cognitive only)
+- See CHANGELOG.md for full details
 
 ### Phase 2: Metacognitive Loop
 - [ ] Self-assessment of capabilities

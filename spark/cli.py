@@ -1099,6 +1099,267 @@ def cmd_bridge(args):
         print(generate_active_context())
 
 
+def cmd_importance(args):
+    """Test and visualize importance scoring."""
+    from lib.importance_scorer import get_importance_scorer, ImportanceTier
+
+    scorer = get_importance_scorer(domain=args.domain)
+
+    if args.feedback:
+        # Show feedback statistics
+        stats = scorer.get_feedback_stats()
+        print(f"\n{'=' * 60}")
+        print(f"  Importance Prediction Feedback")
+        print(f"{'=' * 60}")
+        print(f"\n  Total Predictions: {stats['total']}")
+        print(f"  Correct: {stats['correct']}")
+        print(f"  Accuracy: {stats['accuracy']:.1%}")
+
+        if stats.get("by_tier"):
+            print(f"\n  By Tier:")
+            for tier, tier_stats in stats["by_tier"].items():
+                tier_acc = tier_stats["correct"] / tier_stats["total"] if tier_stats["total"] > 0 else 0
+                print(f"    {tier}: {tier_stats['correct']}/{tier_stats['total']} ({tier_acc:.1%})")
+        print()
+        return
+
+    if args.text:
+        # Score a single text
+        if args.semantic:
+            score = scorer.score_with_semantics(args.text, context={"source": args.source} if args.source else None)
+        else:
+            score = scorer.score(args.text, context={"source": args.source} if args.source else None)
+
+        tier_colors = {
+            "critical": "🔴",
+            "high": "🟠",
+            "medium": "🟡",
+            "low": "⚪",
+            "ignore": "⚫",
+        }
+
+        print(f"\n{'=' * 60}")
+        print(f"  Importance Scoring Result {'(with semantics)' if args.semantic else ''}")
+        print(f"{'=' * 60}")
+        print(f"\n  Text: {args.text[:100]}{'...' if len(args.text) > 100 else ''}")
+        print(f"\n  {tier_colors[score.tier.value]} Tier: {score.tier.value.upper()}")
+        print(f"  Score: {score.score:.2f}")
+        print(f"  Domain Relevance: {score.domain_relevance:.2f}")
+
+        if score.first_mention_elevation:
+            print(f"  First Mention: YES (elevated)")
+
+        if score.question_match:
+            print(f"  Question Match: {score.question_match}")
+
+        if score.reasons:
+            print(f"\n  Reasons:")
+            for r in score.reasons:
+                print(f"    - {r}")
+
+        if score.signals_detected:
+            print(f"\n  Signals Detected:")
+            for s in score.signals_detected:
+                print(f"    - {s}")
+
+        print(f"\n  Should Learn: {'YES' if score.tier in (ImportanceTier.CRITICAL, ImportanceTier.HIGH, ImportanceTier.MEDIUM) else 'NO'}")
+        print(f"  Should Promote: {'YES' if score.tier in (ImportanceTier.CRITICAL, ImportanceTier.HIGH) else 'NO'}")
+        print()
+        return
+
+    if args.examples:
+        # Show example scorings
+        examples = [
+            ("Remember this: always use forward slashes on Windows", "explicit_remember"),
+            ("I prefer dark mode for all my apps", "preference"),
+            ("No, I meant use the other approach", "correction"),
+            ("The balance is set to 300 for better gameplay feel", "domain_decision"),
+            ("Okay, got it", "acknowledgment"),
+            ("Bash -> Edit -> Write sequence works", "tool_sequence"),
+            ("This works because the offset compensates for physics drift", "reasoning"),
+            ("Ship fast, iterate faster", "principle"),
+        ]
+
+        print(f"\n{'=' * 60}")
+        print(f"  Importance Scoring Examples")
+        print(f"{'=' * 60}")
+
+        for text, expected in examples:
+            score = scorer.score(text)
+            tier_colors = {
+                "critical": "🔴",
+                "high": "🟠",
+                "medium": "🟡",
+                "low": "⚪",
+                "ignore": "⚫",
+            }
+            print(f"\n  {tier_colors[score.tier.value]} [{score.tier.value.upper():8}] ({score.score:.2f})")
+            print(f"    \"{text[:60]}{'...' if len(text) > 60 else ''}\"")
+            if score.signals_detected:
+                print(f"    Signals: {', '.join(score.signals_detected[:3])}")
+        print()
+        return
+
+    # Default: show scorer stats
+    print(f"\n{'=' * 60}")
+    print(f"  Importance Scorer Status")
+    print(f"{'=' * 60}")
+    print(f"\n  Active Domain: {scorer.active_domain or '(none)'}")
+    print(f"  Seen Signals: {len(scorer.seen_signals)}")
+    print(f"  Question Answers: {len(scorer.question_answers)}")
+    print(f"\n  Use --text \"your text\" to score specific text")
+    print(f"  Use --examples to see example scorings")
+    print()
+
+
+def cmd_curiosity(args):
+    """Explore knowledge gaps and questions."""
+    from lib.curiosity_engine import get_curiosity_engine
+
+    engine = get_curiosity_engine()
+
+    if args.questions:
+        gaps = engine.get_open_questions(limit=args.limit or 10)
+        print(f"\n{'=' * 60}")
+        print(f"  Open Questions ({len(gaps)})")
+        print(f"{'=' * 60}")
+        for gap in gaps:
+            print(f"\n  [{gap.gap_type.value.upper()}] {gap.question}")
+            print(f"    Topic: {gap.topic}")
+            print(f"    Priority: {gap.priority:.2f}")
+            if gap.source_insight:
+                print(f"    From: {gap.source_insight[:60]}...")
+        print()
+        return
+
+    if args.fill:
+        gap_id = args.fill
+        answer = args.answer or ""
+        valuable = not args.not_valuable
+        engine.fill_gap(gap_id, answer, valuable)
+        print(f"[SPARK] Gap {gap_id} filled. Valuable: {valuable}")
+        return
+
+    # Default: show stats
+    stats = engine.get_stats()
+    print(f"\n{'=' * 60}")
+    print(f"  Curiosity Engine Status")
+    print(f"{'=' * 60}")
+    print(f"\n  Total Gaps: {stats['total_gaps']}")
+    print(f"  Filled: {stats['filled']}")
+    print(f"  Unfilled: {stats['unfilled']}")
+    print(f"  Valuable Answers: {stats['valuable_answers']}")
+    print(f"  Value Rate: {stats['value_rate']:.1%}")
+    print(f"\n  Use --questions to see open questions")
+    print()
+
+
+def cmd_hypotheses(args):
+    """Track and validate hypotheses."""
+    from lib.hypothesis_tracker import get_hypothesis_tracker
+
+    tracker = get_hypothesis_tracker()
+
+    if args.testable:
+        hypotheses = tracker.get_testable_hypotheses(limit=args.limit or 5)
+        print(f"\n{'=' * 60}")
+        print(f"  Testable Hypotheses ({len(hypotheses)})")
+        print(f"{'=' * 60}")
+        for h in hypotheses:
+            print(f"\n  [{h.state.value.upper()}] {h.statement[:80]}")
+            print(f"    ID: {h.hypothesis_id}")
+            print(f"    Confidence: {h.confidence:.2f}")
+            print(f"    Predictions: {len(h.predictions)} ({h.sample_size} with outcomes)")
+            print(f"    Accuracy: {h.accuracy:.1%}")
+        print()
+        return
+
+    if args.pending:
+        pending = tracker.get_pending_predictions()
+        print(f"\n{'=' * 60}")
+        print(f"  Pending Predictions ({len(pending)})")
+        print(f"{'=' * 60}")
+        for h_id, idx, h, p in pending[:args.limit or 10]:
+            print(f"\n  Hypothesis: {h.statement[:60]}...")
+            print(f"    Prediction: {p.prediction_text}")
+            print(f"    Context: {p.context[:40]}...")
+            print(f"    ID: {h_id}:{idx}")
+        print()
+        return
+
+    if args.outcome:
+        parts = args.outcome.split(":")
+        if len(parts) != 2:
+            print("[SPARK] Invalid format. Use: --outcome <hypothesis_id>:<prediction_index>")
+            return
+        h_id, idx = parts[0], int(parts[1])
+        correct = args.correct
+        tracker.record_outcome(h_id, idx, correct, args.notes or "")
+        print(f"[SPARK] Outcome recorded: {'correct' if correct else 'incorrect'}")
+        return
+
+    # Default: show stats
+    stats = tracker.get_stats()
+    print(f"\n{'=' * 60}")
+    print(f"  Hypothesis Tracker Status")
+    print(f"{'=' * 60}")
+    print(f"\n  Total Hypotheses: {stats['total_hypotheses']}")
+    print(f"  Total Predictions: {stats['total_predictions']}")
+    print(f"  Outcomes Recorded: {stats['outcomes_recorded']}")
+    print(f"  Pending Outcomes: {stats['pending_outcomes']}")
+    print(f"  Validated: {stats['validated_count']}")
+    if stats['validated_count'] > 0:
+        print(f"  Avg Validated Accuracy: {stats['avg_validated_accuracy']:.1%}")
+    print(f"\n  By State:")
+    for state, count in stats['by_state'].items():
+        print(f"    {state}: {count}")
+    print()
+
+
+def cmd_contradictions(args):
+    """View and resolve contradictions."""
+    from lib.contradiction_detector import get_contradiction_detector
+
+    detector = get_contradiction_detector()
+
+    if args.unresolved:
+        unresolved = detector.get_unresolved()
+        print(f"\n{'=' * 60}")
+        print(f"  Unresolved Contradictions ({len(unresolved)})")
+        print(f"{'=' * 60}")
+        for idx, c in unresolved[:args.limit or 10]:
+            print(f"\n  [{idx}] {c.contradiction_type.value.upper()} (confidence: {c.confidence:.2f})")
+            print(f"    Existing: {c.existing_text[:60]}...")
+            print(f"    New: {c.new_text[:60]}...")
+        print()
+        return
+
+    if args.resolve is not None:
+        idx = args.resolve
+        res_type = args.resolution_type or "context"
+        res = args.resolution or ""
+        detector.resolve(idx, res_type, res)
+        print(f"[SPARK] Contradiction {idx} resolved as: {res_type}")
+        return
+
+    # Default: show stats
+    stats = detector.get_stats()
+    print(f"\n{'=' * 60}")
+    print(f"  Contradiction Detector Status")
+    print(f"{'=' * 60}")
+    print(f"\n  Total Detected: {stats['total']}")
+    print(f"  Resolved: {stats['resolved']}")
+    print(f"  Unresolved: {stats['unresolved']}")
+    print(f"\n  By Type:")
+    for t, count in stats.get('by_type', {}).items():
+        print(f"    {t}: {count}")
+    if stats.get('resolution_types'):
+        print(f"\n  Resolution Types:")
+        for t, count in stats['resolution_types'].items():
+            print(f"    {t}: {count}")
+    print()
+
+
 def cmd_memory(args):
     """Configure/view Clawdbot semantic memory (embeddings provider)."""
     from lib.clawdbot_memory_setup import (
@@ -1784,6 +2045,41 @@ Examples:
     surprises_parser.add_argument("--limit", "-n", type=int, default=10, help="Number to show")
     surprises_parser.add_argument("--insights", "-i", action="store_true", help="Show analysis/insights")
     surprises_parser.add_argument("--surface", "-s", action="store_true", help="Surface pending surprises")
+
+    # importance
+    importance_parser = subparsers.add_parser("importance", help="Test and visualize importance scoring")
+    importance_parser.add_argument("--text", "-t", help="Text to score for importance")
+    importance_parser.add_argument("--domain", "-d", help="Active domain (game_dev, fintech, marketing, product)")
+    importance_parser.add_argument("--source", help="Context source (user_correction, etc.)")
+    importance_parser.add_argument("--examples", "-e", action="store_true", help="Show example scorings")
+    importance_parser.add_argument("--semantic", "-s", action="store_true", help="Use semantic intelligence (embeddings)")
+    importance_parser.add_argument("--feedback", "-f", action="store_true", help="Show feedback/accuracy statistics")
+
+    # curiosity - knowledge gaps and questions
+    curiosity_parser = subparsers.add_parser("curiosity", help="Explore knowledge gaps and open questions")
+    curiosity_parser.add_argument("--questions", "-q", action="store_true", help="Show open questions")
+    curiosity_parser.add_argument("--fill", help="Fill a gap by ID")
+    curiosity_parser.add_argument("--answer", "-a", help="Answer text when filling a gap")
+    curiosity_parser.add_argument("--not-valuable", action="store_true", help="Mark answer as not valuable")
+    curiosity_parser.add_argument("--limit", "-n", type=int, default=10, help="Max items to show")
+
+    # hypotheses - track and validate hypotheses
+    hypotheses_parser = subparsers.add_parser("hypotheses", help="Track and validate hypotheses")
+    hypotheses_parser.add_argument("--testable", "-t", action="store_true", help="Show testable hypotheses")
+    hypotheses_parser.add_argument("--pending", "-p", action="store_true", help="Show pending predictions")
+    hypotheses_parser.add_argument("--outcome", help="Record outcome: <hypothesis_id>:<prediction_index>")
+    hypotheses_parser.add_argument("--correct", action="store_true", help="Mark prediction as correct")
+    hypotheses_parser.add_argument("--notes", help="Notes for outcome")
+    hypotheses_parser.add_argument("--limit", "-n", type=int, default=10, help="Max items to show")
+
+    # contradictions - view and resolve contradictions
+    contradictions_parser = subparsers.add_parser("contradictions", help="View and resolve contradictions")
+    contradictions_parser.add_argument("--unresolved", "-u", action="store_true", help="Show unresolved contradictions")
+    contradictions_parser.add_argument("--resolve", type=int, help="Resolve contradiction by index")
+    contradictions_parser.add_argument("--resolution-type", choices=["update", "context", "keep_both", "discard_new"],
+                                       help="How to resolve")
+    contradictions_parser.add_argument("--resolution", help="Resolution notes")
+    contradictions_parser.add_argument("--limit", "-n", type=int, default=10, help="Max items to show")
     
     # voice
     voice_parser = subparsers.add_parser("voice", help="Spark's personality")
@@ -1896,7 +2192,7 @@ Examples:
     moltbook_parser.add_argument("--status-check", action="store_true", help="Check if daemon is running")
 
     args = parser.parse_args()
-    
+
     if not args.command:
         # Default to status
         cmd_status(args)
@@ -1933,6 +2229,10 @@ Examples:
         "capture": cmd_capture,
         "learn": cmd_learn,
         "surprises": cmd_surprises,
+        "importance": cmd_importance,
+        "curiosity": cmd_curiosity,
+        "hypotheses": cmd_hypotheses,
+        "contradictions": cmd_contradictions,
         "voice": cmd_voice,
         "timeline": cmd_timeline,
         "bridge": cmd_bridge,
@@ -1942,7 +2242,7 @@ Examples:
         "moltbook": cmd_moltbook,
         "project": None,
     }
-    
+
     if args.command == "project":
         if args.project_cmd == "init":
             cmd_project_init(args)

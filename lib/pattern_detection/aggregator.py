@@ -22,6 +22,7 @@ from .repetition import RepetitionDetector
 from .semantic import SemanticIntentDetector
 from .why import WhyDetector
 from ..primitive_filter import is_primitive_text
+from ..importance_scorer import get_importance_scorer, ImportanceTier
 
 
 # Confidence threshold to trigger learning
@@ -81,6 +82,14 @@ class PatternAggregator:
         self._patterns_count = 0
         self._session_patterns: Dict[str, List[DetectedPattern]] = {}
         self._recent_pattern_keys: Dict[str, Dict[str, float]] = {}
+        # Importance scoring stats
+        self._importance_stats = {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "ignored": 0,
+        }
 
     def process_event(self, event: Dict) -> List[DetectedPattern]:
         """
@@ -187,22 +196,49 @@ class PatternAggregator:
         """
         Route patterns to CognitiveLearner for insight creation.
 
-        Only patterns above CONFIDENCE_THRESHOLD trigger learning.
+        Uses ImportanceScorer to assess importance at INGESTION time.
+        This is the key improvement: importance != repetition.
         """
         from ..cognitive_learner import get_cognitive_learner, CognitiveCategory
 
         learner = get_cognitive_learner()
+        scorer = get_importance_scorer()
         insights_created = []
 
         for pattern in patterns:
-            if pattern.confidence < CONFIDENCE_THRESHOLD:
-                continue
-
             if not pattern.suggested_insight:
                 continue
             if is_primitive_text(pattern.suggested_insight):
                 continue
             if _is_operational_insight(pattern.suggested_insight):
+                continue
+
+            # NEW: Score importance at ingestion, not just confidence
+            importance = scorer.score(
+                pattern.suggested_insight,
+                context={
+                    "source": pattern.pattern_type.value,
+                    "has_outcome": bool(pattern.context.get("outcome")),
+                }
+            )
+
+            # Combine pattern confidence with importance score
+            # Critical/High importance can bypass low confidence threshold
+            effective_confidence = pattern.confidence
+
+            if importance.tier == ImportanceTier.CRITICAL:
+                # Critical importance always learns, even with lower confidence
+                effective_confidence = max(pattern.confidence, 0.85)
+            elif importance.tier == ImportanceTier.HIGH:
+                # High importance gets boosted
+                effective_confidence = max(pattern.confidence, importance.score)
+            elif importance.tier == ImportanceTier.IGNORE:
+                # Ignore tier never learns
+                self._importance_stats["ignored"] = self._importance_stats.get("ignored", 0) + 1
+                continue
+
+            # Apply original confidence threshold, but with importance-adjusted confidence
+            if effective_confidence < CONFIDENCE_THRESHOLD:
                 continue
 
             # Map pattern type to cognitive category (override if detector suggests one)
@@ -221,19 +257,72 @@ class PatternAggregator:
                 except Exception:
                     pass
 
-            # Create insight
+            # Create insight with importance metadata
             insight = learner.add_insight(
                 category=category,
                 insight=pattern.suggested_insight,
-                context=f"Detected from {pattern.pattern_type.value} pattern",
-                confidence=pattern.confidence,
+                context=f"Detected from {pattern.pattern_type.value} pattern (importance: {importance.tier.value})",
+                confidence=effective_confidence,
             )
 
-            insights_created.append({
+            # Track importance distribution
+            self._importance_stats[importance.tier.value] = (
+                self._importance_stats.get(importance.tier.value, 0) + 1
+            )
+
+            insight_info = {
                 "pattern_type": pattern.pattern_type.value,
                 "insight": pattern.suggested_insight,
-                "confidence": pattern.confidence,
-            })
+                "confidence": effective_confidence,
+                "importance_tier": importance.tier.value,
+                "importance_score": importance.score,
+                "importance_reasons": importance.reasons,
+            }
+
+            # === INTELLIGENCE SYSTEM INTEGRATION ===
+
+            # 1. Check for contradictions with existing beliefs
+            try:
+                from ..contradiction_detector import check_for_contradiction
+                contradiction = check_for_contradiction(pattern.suggested_insight)
+                if contradiction:
+                    insight_info["contradiction_detected"] = {
+                        "existing": contradiction.existing_text[:100],
+                        "type": contradiction.contradiction_type.value,
+                        "confidence": contradiction.confidence,
+                    }
+            except Exception:
+                pass
+
+            # 2. Identify knowledge gaps (what we don't know)
+            try:
+                from ..curiosity_engine import identify_knowledge_gaps
+                gaps = identify_knowledge_gaps(pattern.suggested_insight)
+                if gaps:
+                    insight_info["knowledge_gaps"] = [
+                        {"type": g.gap_type.value, "question": g.question}
+                        for g in gaps[:2]
+                    ]
+            except Exception:
+                pass
+
+            # 3. Feed to hypothesis tracker (pattern -> hypothesis)
+            try:
+                from ..hypothesis_tracker import observe_for_hypothesis
+                hypothesis = observe_for_hypothesis(
+                    pattern.suggested_insight,
+                    domain=pattern.context.get("domain", "")
+                )
+                if hypothesis:
+                    insight_info["hypothesis_generated"] = {
+                        "id": hypothesis.hypothesis_id,
+                        "statement": hypothesis.statement[:100],
+                        "confidence": hypothesis.confidence,
+                    }
+            except Exception:
+                pass
+
+            insights_created.append(insight_info)
 
         return insights_created
 
@@ -247,6 +336,7 @@ class PatternAggregator:
             "total_patterns_detected": self._patterns_count,
             "active_sessions": len(self._session_patterns),
             "detectors": [d.get_stats() for d in self.detectors],
+            "importance_distribution": self._importance_stats,
         }
 
 

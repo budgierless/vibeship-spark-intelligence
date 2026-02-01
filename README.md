@@ -36,6 +36,38 @@ It combines:
 
 ---
 
+## Current Status: Phase 1 Complete ✅
+
+**As of 2026-02-02**, Spark has completed Phase 1: Cognitive Filtering.
+
+### What Changed
+
+| Before | After |
+|--------|-------|
+| Captured ALL tool events | Only captures cognitive insights |
+| 1,427 stored "learnings" | 231 truly useful insights |
+| 84% primitive data | 0% primitive data |
+| Tool sequences, timing, error rates | User preferences, wisdom, context |
+
+### Philosophy
+
+```
+OLD: Capture everything → Filter → Still noisy
+NEW: Only capture what a human would find useful
+```
+
+### Current Cognitive Insights (231 total)
+
+- **User Understanding** (171): Preferences, styles, frustrations
+- **Context** (23): Windows issues, setup gotchas
+- **Wisdom** (17): Principles like "Ship fast, iterate faster"
+- **Self-Awareness** (14): What Spark struggles with
+- **Reasoning** (6): Domain-specific knowledge
+
+See `CHANGELOG.md` for full details on the Phase 1 refactor.
+
+---
+
 ## Core Documents (Start Here)
 
 - `CORE.md` — Vision and phase roadmap from primitive telemetry to superintelligence
