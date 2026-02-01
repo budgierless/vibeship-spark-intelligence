@@ -17,13 +17,17 @@ What this fixes:
 """
 
 from .loader import ChipLoader, Chip, ChipObserver
-from .registry import ChipRegistry
-from .router import ChipRouter, TriggerMatch
-from .runtime import ChipRuntime, process_chip_events
+from .registry import ChipRegistry, get_registry
+from .router import ChipRouter, TriggerMatch, get_router
+from .runtime import ChipRuntime, process_chip_events, get_runtime
+from .runner import ChipRunner
+from .store import get_chip_store
 
 __all__ = [
     'ChipLoader', 'Chip', 'ChipObserver',
-    'ChipRegistry',
-    'ChipRouter', 'TriggerMatch',
-    'ChipRuntime', 'process_chip_events'
+    'ChipRegistry', 'get_registry',
+    'ChipRouter', 'TriggerMatch', 'get_router',
+    'ChipRuntime', 'process_chip_events', 'get_runtime',
+    'get_chip_store',
+    'ChipRunner'
 ]

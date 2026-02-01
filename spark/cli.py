@@ -1279,12 +1279,23 @@ def cmd_moltbook(args):
 def cmd_chips(args):
     """Manage Spark chips - domain-specific intelligence modules."""
     from pathlib import Path
-    from lib.chips import get_registry, load_chip, ChipRunner, get_chip_store
+    from lib.chips import get_registry, get_runtime
 
     registry = get_registry()
+    runtime = get_runtime()
+
+    def _insight_count(chip_id: str) -> int:
+        path = Path.home() / ".spark" / "chip_insights" / f"{chip_id}.jsonl"
+        if not path.exists():
+            return 0
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except Exception:
+            return 0
 
     if args.action == "list":
-        chips = registry.list_all()
+        chips = registry.get_installed()
         if not chips:
             print("\n[SPARK] No chips installed.")
             print("        Use 'spark chips install <path>' to install a chip.")
@@ -1294,15 +1305,17 @@ def cmd_chips(args):
         print("  SPARK CHIPS - Domain Intelligence")
         print(f"{'=' * 50}\n")
 
-        active = [c for c in chips if c.active]
-        inactive = [c for c in chips if not c.active]
+        active_ids = {c.id for c in registry.get_active_chips()}
+        active = [c for c in chips if c.id in active_ids]
+        inactive = [c for c in chips if c.id not in active_ids]
 
         if active:
             print("Active Chips:")
             for chip in active:
                 print(f"  [*] {chip.id} v{chip.version}")
                 print(f"      {chip.name}")
-                print(f"      Insights: {chip.stats.insights_generated} | Events: {chip.stats.events_processed}")
+                if chip.domains:
+                    print(f"      Domains: {', '.join(chip.domains[:5])}")
 
         if inactive:
             print("\nInactive Chips:")
@@ -1323,11 +1336,13 @@ def cmd_chips(args):
             return
 
         try:
-            entry = registry.install(path, source=args.source or "custom")
-            print(f"[SPARK] Installed chip: {entry.id} v{entry.version}")
-            print(f"        Name: {entry.name}")
-            print(f"        Source: {entry.source}")
-            print(f"        Use 'spark chips activate {entry.id}' to enable")
+            chip = registry.install(path)
+            if not chip:
+                print(f"[SPARK] Install failed: {path}")
+                return
+            print(f"[SPARK] Installed chip: {chip.id} v{chip.version}")
+            print(f"        Name: {chip.name}")
+            print(f"        Use 'spark chips activate {chip.id}' to enable")
         except Exception as e:
             print(f"[SPARK] Install failed: {e}")
 
@@ -1371,32 +1386,27 @@ def cmd_chips(args):
             print(f"  Active: {stats['total_active']}")
             return
 
-        entry = registry.get(chip_id)
-        if not entry:
+        chip = registry.get_chip(chip_id)
+        if not chip:
             print(f"[SPARK] Chip not found: {chip_id}")
             return
 
-        spec = registry.get_spec(chip_id)
-        print(f"\n[SPARK] Chip: {entry.id}")
-        print(f"  Name: {entry.name}")
-        print(f"  Version: {entry.version}")
-        print(f"  Source: {entry.source}")
-        print(f"  Active: {'Yes' if entry.active else 'No'}")
-        print(f"  Installed: {entry.installed_at[:10]}")
-        print(f"\n  Stats:")
-        print(f"    Insights Generated: {entry.stats.insights_generated}")
-        print(f"    Events Processed: {entry.stats.events_processed}")
-        print(f"    Predictions Made: {entry.stats.predictions_made}")
-        if entry.stats.last_active:
-            print(f"    Last Active: {entry.stats.last_active[:19]}")
+        active = registry.is_active(chip_id)
+        print(f"\n[SPARK] Chip: {chip.id}")
+        print(f"  Name: {chip.name}")
+        print(f"  Version: {chip.version}")
+        print(f"  Active: {'Yes' if active else 'No'}")
+        if chip.source_path:
+            print(f"  Source: {chip.source_path}")
+        print(f"  Insights Stored: {_insight_count(chip_id)}")
 
-        if spec:
-            print(f"\n  Components:")
-            print(f"    Domains: {', '.join(spec.domains[:5])}")
-            print(f"    Triggers: {len(spec.triggers.patterns)} patterns, {len(spec.triggers.events)} events")
-            print(f"    Observers: {len(spec.observers)}")
-            print(f"    Learners: {len(spec.learners)}")
-            print(f"    Outcomes: {len(spec.outcomes_positive)}+ / {len(spec.outcomes_negative)}-")
+        print(f"\n  Stats:")
+        if chip.domains:
+            print(f"    Domains: {', '.join(chip.domains[:5])}")
+        print(f"    Triggers: {len(chip.triggers)}")
+        print(f"    Observers: {len(chip.observers)}")
+        print(f"    Learners: {len(chip.learners)}")
+        print(f"    Outcomes: {len(chip.outcomes_positive)}+ / {len(chip.outcomes_negative)}- / {len(chip.outcomes_neutral)}~")
 
     elif args.action == "insights":
         chip_id = args.chip_id
@@ -1404,8 +1414,7 @@ def cmd_chips(args):
             print("[SPARK] Specify chip ID to view insights")
             return
 
-        store = get_chip_store(chip_id)
-        insights = store.get_insights(limit=args.limit or 10)
+        insights = runtime.get_insights(chip_id, limit=args.limit or 10)
 
         if not insights:
             print(f"\n[SPARK] No insights for chip: {chip_id}")
@@ -1413,9 +1422,8 @@ def cmd_chips(args):
 
         print(f"\n[SPARK] Insights from {chip_id} (showing {len(insights)})\n")
         for i in insights:
-            conf = i.get("confidence", 0)
-            print(f"  [{i.get('category', 'general')}] {i.get('insight')}")
-            print(f"      Confidence: {conf:.0%} | Validations: {i.get('validations', 0)}")
+            print(f"  {i.content}")
+            print(f"      Confidence: {i.confidence:.0%} | Time: {i.timestamp[:19]}")
             print()
 
     elif args.action == "test":
@@ -1424,8 +1432,8 @@ def cmd_chips(args):
             print("[SPARK] Specify chip ID to test")
             return
 
-        spec = registry.get_spec(chip_id)
-        if not spec:
+        chip = registry.get_chip(chip_id)
+        if not chip:
             print(f"[SPARK] Chip not found: {chip_id}")
             return
 
@@ -1433,18 +1441,17 @@ def cmd_chips(args):
         test_text = args.test_text or "This is a test event"
         test_event = {
             "session_id": "test-session",
-            "hook_event": "UserPromptSubmit",
-            "payload": {"text": test_text},
+            "tool_name": "cli_test",
+            "input": test_text,
         }
 
-        runner = ChipRunner(spec)
-        insights = runner.process_event(test_event)
+        insights = runtime.process_event_for_chips(test_event, [chip])
 
         print(f"\n[SPARK] Test chip: {chip_id}")
         print(f"  Input: {test_text[:80]}...")
         print(f"  Insights generated: {len(insights)}")
         for ins in insights:
-            print(f"    - {ins.get('insight', '')[:100]}")
+            print(f"    - {ins.content[:100]}")
 
     elif args.action == "questions":
         # Phase 5: Show questions from active chips
@@ -1453,21 +1460,21 @@ def cmd_chips(args):
 
         if chip_id:
             # Show questions for a specific chip
-            spec = registry.get_spec(chip_id)
-            if not spec:
+            chip = registry.get_chip(chip_id)
+            if not chip:
                 print(f"[SPARK] Chip not found: {chip_id}")
                 return
 
-            if not spec.questions:
+            if not chip.questions:
                 print(f"[SPARK] Chip {chip_id} has no questions defined")
                 return
 
             print(f"\n[SPARK] Questions from {chip_id}:\n")
-            for q in spec.questions:
-                phase_tag = f" [{q.phase}]" if q.phase else ""
-                affects = ", ".join(q.affects_learning[:3]) if q.affects_learning else "general"
-                print(f"  [{q.category}]{phase_tag} {q.question}")
-                print(f"      ID: {q.id} | Affects: {affects}")
+            for q in chip.questions:
+                phase_tag = f" [{q.get('phase')}]" if q.get("phase") else ""
+                affects = ", ".join(q.get("affects_learning", [])[:3]) if q.get("affects_learning") else "general"
+                print(f"  [{q.get('category', 'general')}]{phase_tag} {q.get('question', '')}")
+                print(f"      ID: {q.get('id')} | Affects: {affects}")
                 print()
         else:
             # Show questions from all active chips
@@ -1481,8 +1488,8 @@ def cmd_chips(args):
             for q in questions:
                 phase_tag = f" [{q['phase']}]" if q.get('phase') else ""
                 affects = ", ".join(q.get('affects_learning', [])[:3]) or "general"
-                print(f"  [{q['category']}]{phase_tag} {q['question']}")
-                print(f"      ID: {q['id']} | Chip: {q['chip_id']} | Affects: {affects}")
+                print(f"  [{q.get('category', 'general')}]{phase_tag} {q.get('question', '')}")
+                print(f"      ID: {q.get('id')} | Chip: {q.get('chip_id')} | Affects: {affects}")
                 print()
 
     else:

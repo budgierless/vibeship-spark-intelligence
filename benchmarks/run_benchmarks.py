@@ -13,7 +13,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from benchmarks.methodologies import get_methodologies
-from lib.chips.loader import ChipLoader, ChipSpec
+from lib.chips.loader import ChipLoader, Chip
 from lib.chips.runner import ChipRunner
 from lib.chips import store as chip_store
 from lib.promoter import is_operational_insight, is_unsafe_insight
@@ -224,16 +224,21 @@ def _score_scenario(events: List[Dict], scenario: Dict, root_dir: Path) -> Dict:
     }
 
 
-def _matches(spec: ChipSpec, event: Dict) -> bool:
+def _matches(chip: Chip, event: Dict) -> bool:
     event_type = event.get("type") or event.get("hook_event") or event.get("kind", "")
-    if event_type and event_type in spec.triggers.events:
+    if event_type and event_type in (chip.trigger_events or []):
         return True
 
     tool_name = event.get("tool_name") or event.get("tool", "")
     if tool_name:
-        for tool_trigger in spec.triggers.tools:
-            if tool_trigger.get("name", "").lower() == tool_name.lower():
+        for tool_trigger in chip.trigger_tools or []:
+            if isinstance(tool_trigger, dict):
+                name = tool_trigger.get("name", "")
                 context_patterns = tool_trigger.get("context_contains", [])
+            else:
+                name = str(tool_trigger)
+                context_patterns = []
+            if name.lower() == tool_name.lower():
                 if not context_patterns or context_patterns == ["*"]:
                     return True
                 content = _get_event_text(event)
@@ -242,7 +247,7 @@ def _matches(spec: ChipSpec, event: Dict) -> bool:
                         return True
 
     content = _get_event_text(event)
-    if content and spec.triggers.matches(content):
+    if content and chip.matches_content(content):
         return True
 
     return False
@@ -265,12 +270,12 @@ def _get_event_text(event: Dict) -> str:
     return " ".join(parts)
 
 
-def _load_chips(chips_dir: Path, chip_ids: List[str]) -> List[ChipSpec]:
-    loader = ChipLoader()
-    specs = []
+def _load_chips(chips_dir: Path, chip_ids: List[str]) -> List[Chip]:
+    loader = ChipLoader(chips_dir=chips_dir)
+    specs: List[Chip] = []
     for path in chips_dir.glob("*.chip.yaml"):
         try:
-            spec = loader.load(path)
+            spec = loader.load_chip(path)
         except Exception:
             continue
         if chip_ids and spec.id not in chip_ids:

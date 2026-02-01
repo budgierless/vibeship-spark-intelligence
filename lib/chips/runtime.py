@@ -84,19 +84,38 @@ class ChipRuntime:
         if not matches:
             return insights
 
-        # Execute observers for matches
+        return self._process_matches(matches, event)
+
+    def process_event_for_chips(self, event: Dict[str, Any], chips: List[Chip]) -> List[ChipInsight]:
+        """Process an event for a specific list of chips (no activation changes)."""
+        if not chips:
+            return []
+        matches = self.router.route_event(event, chips)
+        if not matches:
+            return []
+        return self._process_matches(matches, event)
+
+    def _process_matches(self, matches: List[TriggerMatch], event: Dict[str, Any]) -> List[ChipInsight]:
+        """Execute observers for matched triggers."""
+        insights: List[ChipInsight] = []
         for match in matches:
             insight = self._execute_observer(match, event)
             if insight:
                 insights.append(insight)
                 self._store_insight(insight)
-                log.info(f"Captured insight from {match.chip.id}/{match.observer.name if match.observer else 'chip'}: {insight.content[:100]}")
-
+                log.info(
+                    f"Captured insight from {match.chip.id}/{match.observer.name if match.observer else 'chip'}: "
+                    f"{insight.content[:100]}"
+                )
         return insights
 
     def _extract_event_content(self, event: Dict[str, Any]) -> str:
         """Extract content from event for trigger matching."""
         parts = []
+
+        event_type = event.get('event_type') or event.get('hook_event') or event.get('type') or event.get('kind')
+        if event_type:
+            parts.append(str(event_type))
 
         for key in ['tool_name', 'tool', 'file_path', 'cwd']:
             if key in event and event[key]:
@@ -114,6 +133,12 @@ class ChipRuntime:
         if isinstance(output, str):
             parts.append(output[:1000])
 
+        data = event.get('data')
+        if isinstance(data, dict):
+            for v in data.values():
+                if v and isinstance(v, str):
+                    parts.append(v[:1000])
+
         return ' '.join(parts)
 
     def _execute_observer(self, match: TriggerMatch, event: Dict[str, Any]) -> Optional[ChipInsight]:
@@ -124,12 +149,26 @@ class ChipRuntime:
         """
         try:
             # Build context from event
+            content = self._extract_event_content(event)
             captured = self._capture_data(match, event)
+
+            if match.observer:
+                fields = self._extract_observer_fields(match.observer, event, content, match.content_snippet)
+                field_confidence = self._field_confidence(match.observer, fields)
+                captured['fields'] = fields
+                captured['field_confidence'] = field_confidence
+
+                if match.observer.capture_required and field_confidence < 0.5:
+                    return None
 
             # Generate insight content
             content = self._generate_insight_content(match, captured, event)
             if not content:
                 return None
+
+            confidence = match.confidence
+            if match.observer and 'field_confidence' in captured:
+                confidence = min(confidence, captured['field_confidence'])
 
             return ChipInsight(
                 chip_id=match.chip.id,
@@ -137,7 +176,7 @@ class ChipRuntime:
                 trigger=match.trigger,
                 content=content,
                 captured_data=captured,
-                confidence=match.confidence,
+                confidence=confidence,
                 timestamp=datetime.now().isoformat(),
                 event_summary=self._summarize_event(event)
             )
@@ -185,6 +224,93 @@ class ChipRuntime:
                 captured['content_summary'] = self._summarize_content(inp['content'])
 
         return captured
+
+    def _extract_observer_fields(self, observer: ChipObserver, event: Dict[str, Any], content: str,
+                                 trigger_snippet: str = "") -> Dict[str, Any]:
+        """Extract fields from event using observer extraction rules."""
+        fields: Dict[str, Any] = {}
+
+        # Try extraction rules first
+        for extraction in observer.extraction:
+            field_name = extraction.get("field", "")
+            if not field_name:
+                continue
+            value = None
+
+            patterns = extraction.get("patterns", []) or []
+            for pattern in patterns:
+                try:
+                    match = re.search(pattern, content, re.IGNORECASE)
+                except re.error:
+                    continue
+                if match:
+                    if match.groups():
+                        value = match.group(1).strip()
+                    else:
+                        value = match.group(0).strip()
+                    break
+
+            if value is None:
+                keywords = extraction.get("keywords", {}) or {}
+                for keyword_value, keyword_patterns in keywords.items():
+                    for kp in keyword_patterns:
+                        if kp.lower() in content.lower():
+                            value = keyword_value
+                            break
+                    if value is not None:
+                        break
+
+            if value is not None:
+                fields[field_name] = value
+
+        # Try to extract required fields from event directly
+        for field_name in observer.capture_required:
+            if field_name not in fields:
+                if field_name == "pattern" and trigger_snippet:
+                    fields[field_name] = trigger_snippet.strip()
+                    continue
+                value = self._get_event_field(event, field_name)
+                if value is not None:
+                    fields[field_name] = value
+
+        # Try optional fields
+        for field_name in observer.capture_optional:
+            if field_name not in fields:
+                value = self._get_event_field(event, field_name)
+                if value is not None:
+                    fields[field_name] = value
+
+        return fields
+
+    def _get_event_field(self, event: Dict[str, Any], field_name: str) -> Optional[Any]:
+        """Best-effort lookup for a field in common event containers."""
+        if field_name in event:
+            return event[field_name]
+
+        containers = [
+            event.get("payload"),
+            event.get("tool_input"),
+            event.get("input"),
+            event.get("data"),
+        ]
+
+        data = event.get("data")
+        if isinstance(data, dict):
+            containers.append(data.get("payload"))
+
+        for container in containers:
+            if isinstance(container, dict) and field_name in container:
+                return container[field_name]
+
+        return None
+
+    def _field_confidence(self, observer: ChipObserver, fields: Dict[str, Any]) -> float:
+        """Calculate confidence based on required fields captured."""
+        required_count = len(observer.capture_required)
+        if required_count == 0:
+            return 1.0
+        captured_required = sum(1 for f in observer.capture_required if f in fields)
+        return captured_required / required_count
 
     def _summarize_change(self, old: str, new: str) -> str:
         """Summarize what changed between old and new."""
@@ -234,6 +360,12 @@ class ChipRuntime:
         # File context
         if 'file_path' in captured:
             parts.append(f"in {Path(captured['file_path']).name}")
+
+        # Structured fields
+        fields = captured.get("fields") or {}
+        if fields:
+            field_summary = ", ".join(f"{k}={v}" for k, v in list(fields.items())[:5])
+            parts.append(f"- {field_summary}")
 
         # Change context
         if 'change_summary' in captured:

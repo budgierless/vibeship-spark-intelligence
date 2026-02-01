@@ -382,7 +382,7 @@ chips/
   my-custom.chip.yaml      # Your custom chips
 
 lib/chips/
-  loader.py                # YAML parsing, ChipSpec
+  loader.py                # YAML parsing, Chip
   registry.py              # Install/activate tracking
   router.py                # Event-to-chip matching
   runner.py                # Observer execution

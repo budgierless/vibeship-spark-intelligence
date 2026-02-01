@@ -8,7 +8,7 @@ but no code to read them.
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 log = logging.getLogger("spark.chips")
@@ -25,6 +25,7 @@ class ChipObserver:
     triggers: List[str]
     capture_required: Dict[str, str] = field(default_factory=dict)
     capture_optional: Dict[str, str] = field(default_factory=dict)
+    extraction: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -37,10 +38,16 @@ class Chip:
     domains: List[str]
     triggers: List[str]  # All triggers (patterns + events + observer triggers)
     observers: List[ChipObserver]
+    learners: List[Dict[str, Any]]
     outcomes_positive: List[Dict]
     outcomes_negative: List[Dict]
+    outcomes_neutral: List[Dict]
     questions: List[Dict]
+    trigger_patterns: List[str] = field(default_factory=list)
+    trigger_events: List[str] = field(default_factory=list)
+    trigger_tools: List[Dict[str, Any]] = field(default_factory=list)
     source_path: Optional[Path] = None
+    raw_yaml: Dict[str, Any] = field(default_factory=dict)
 
     def matches_content(self, content: str) -> List[str]:
         """Check which triggers match the content. Returns matched triggers."""
@@ -83,15 +90,18 @@ class ChipLoader:
             chip_data = data.get('chip', data)
 
             # Parse triggers from multiple sources
-            triggers = self._parse_triggers(data)
+            trigger_patterns, trigger_events, trigger_tools = self._parse_triggers(data)
 
             # Parse observers
             observers = self._parse_observers(data.get('observers', []))
 
             # Add observer triggers to chip triggers
+            observer_triggers: List[str] = []
             for obs in observers:
-                triggers.extend(obs.triggers)
-            triggers = list(set(triggers))  # Dedupe
+                observer_triggers.extend(obs.triggers)
+
+            trigger_patterns = list(set(trigger_patterns + observer_triggers))
+            triggers = list(set(trigger_patterns + trigger_events))  # Dedupe
 
             # Parse outcomes
             outcomes = data.get('outcomes', {})
@@ -103,11 +113,17 @@ class ChipLoader:
                 description=chip_data.get('description', ''),
                 domains=chip_data.get('domains', []),
                 triggers=triggers,
+                trigger_patterns=trigger_patterns,
+                trigger_events=trigger_events,
+                trigger_tools=trigger_tools,
                 observers=observers,
+                learners=data.get('learners', []),
                 outcomes_positive=outcomes.get('positive', []),
                 outcomes_negative=outcomes.get('negative', []),
+                outcomes_neutral=outcomes.get('neutral', []),
                 questions=data.get('questions', []),
-                source_path=path
+                source_path=path,
+                raw_yaml=data
             )
 
             self._cache[chip.id] = chip
@@ -118,18 +134,21 @@ class ChipLoader:
             log.error(f"Failed to load chip {path}: {e}")
             return None
 
-    def _parse_triggers(self, data: Dict) -> List[str]:
+    def _parse_triggers(self, data: Dict) -> tuple:
         """Parse triggers from chip data."""
-        triggers = []
+        patterns: List[str] = []
+        events: List[str] = []
+        tools: List[Dict[str, Any]] = []
         triggers_data = data.get('triggers', {})
 
         if isinstance(triggers_data, dict):
-            triggers.extend(triggers_data.get('patterns', []))
-            triggers.extend(triggers_data.get('events', []))
+            patterns.extend(triggers_data.get('patterns', []) or [])
+            events.extend(triggers_data.get('events', []) or [])
+            tools.extend(triggers_data.get('tools', []) or [])
         elif isinstance(triggers_data, list):
-            triggers = triggers_data
+            patterns = triggers_data
 
-        return triggers
+        return patterns, events, tools
 
     def _parse_observers(self, observers_data: List) -> List[ChipObserver]:
         """Parse observer definitions."""
@@ -141,7 +160,8 @@ class ChipLoader:
                 description=obs.get('description', ''),
                 triggers=obs.get('triggers', []),
                 capture_required=capture.get('required', {}),
-                capture_optional=capture.get('optional', {})
+                capture_optional=capture.get('optional', {}),
+                extraction=obs.get('extraction', []) or []
             ))
         return observers
 

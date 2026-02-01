@@ -47,6 +47,8 @@ class ChipRouter:
             return matches
 
         content_lower = content.lower()
+        self._current_event_type = event.get('event_type') or event.get('hook_event') or event.get('type') or event.get('kind')
+        self._current_tool_name = event.get('tool_name') or event.get('tool')
 
         for chip in chips:
             chip_matches = self._match_chip(chip, content_lower, content)
@@ -63,6 +65,11 @@ class ChipRouter:
         Combines: tool name, file path, input, output snippet
         """
         parts = []
+
+        # Event type
+        event_type = event.get('event_type') or event.get('hook_event') or event.get('type') or event.get('kind')
+        if event_type:
+            parts.append(str(event_type))
 
         # Tool name
         tool = event.get('tool_name') or event.get('tool')
@@ -105,21 +112,45 @@ class ChipRouter:
         matches = []
         seen_triggers = set()
 
-        # Match chip-level triggers
-        for trigger in chip.triggers:
-            if trigger in seen_triggers:
-                continue
-
-            match_result = self._match_trigger(trigger, content_lower)
-            if match_result:
-                seen_triggers.add(trigger)
-                confidence, snippet = match_result
+        # Event-type triggers (high confidence)
+        event_type = (self._current_event_type or "").lower()
+        for event_trigger in getattr(chip, "trigger_events", []) or []:
+            if event_type and event_type == str(event_trigger).lower():
+                if event_trigger in seen_triggers:
+                    continue
+                seen_triggers.add(event_trigger)
                 matches.append(TriggerMatch(
                     chip=chip,
                     observer=None,
-                    trigger=trigger,
-                    confidence=confidence,
-                    content_snippet=snippet
+                    trigger=str(event_trigger),
+                    confidence=0.85,
+                    content_snippet=str(event_trigger)
+                ))
+
+        # Tool triggers (contextual)
+        tool_name = (self._current_tool_name or "").lower()
+        for tool_trigger in getattr(chip, "trigger_tools", []) or []:
+            if isinstance(tool_trigger, dict):
+                name = tool_trigger.get("name", "")
+                context_patterns = tool_trigger.get("context_contains", [])
+            else:
+                name = str(tool_trigger)
+                context_patterns = []
+
+            if tool_name and name.lower() == tool_name:
+                if context_patterns and context_patterns != ["*"]:
+                    if not any(p.lower() in content_lower for p in context_patterns):
+                        continue
+                trigger_label = f"tool:{name}"
+                if trigger_label in seen_triggers:
+                    continue
+                seen_triggers.add(trigger_label)
+                matches.append(TriggerMatch(
+                    chip=chip,
+                    observer=None,
+                    trigger=trigger_label,
+                    confidence=0.8,
+                    content_snippet=name
                 ))
 
         # Match observer-level triggers (higher confidence if observer-specific)
@@ -140,6 +171,24 @@ class ChipRouter:
                         confidence=min(1.0, confidence + 0.1),
                         content_snippet=snippet
                     ))
+
+        # Match chip-level triggers
+        trigger_patterns = getattr(chip, "trigger_patterns", None) or chip.triggers
+        for trigger in trigger_patterns:
+            if trigger in seen_triggers:
+                continue
+
+            match_result = self._match_trigger(trigger, content_lower)
+            if match_result:
+                seen_triggers.add(trigger)
+                confidence, snippet = match_result
+                matches.append(TriggerMatch(
+                    chip=chip,
+                    observer=None,
+                    trigger=trigger,
+                    confidence=confidence,
+                    content_snippet=snippet
+                ))
 
         return matches
 
@@ -188,3 +237,15 @@ class ChipRouter:
                     observer_matches[key] = (match.chip, match.observer, match.confidence)
 
         return list(observer_matches.values())
+
+
+
+_router: Optional[ChipRouter] = None
+
+
+def get_router() -> ChipRouter:
+    """Get singleton chip router."""
+    global _router
+    if _router is None:
+        _router = ChipRouter()
+    return _router

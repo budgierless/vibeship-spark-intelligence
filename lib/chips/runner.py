@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .loader import ChipSpec, ObserverSpec
+from .loader import Chip, ChipObserver
 from .policy import SafetyPolicy
 from .store import get_chip_store
 
@@ -42,10 +42,10 @@ class ChipRunner:
     5. Return insights if any
     """
 
-    def __init__(self, spec: ChipSpec):
-        self.spec = spec
-        self.store = get_chip_store(spec.id)
-        self.policy = SafetyPolicy.from_chip_spec(spec.raw_yaml)
+    def __init__(self, chip: Chip):
+        self.chip = chip
+        self.store = get_chip_store(chip.id)
+        self.policy = SafetyPolicy.from_chip_spec(chip.raw_yaml)
 
     def process_event(self, event: Dict) -> List[Dict]:
         """
@@ -93,12 +93,12 @@ class ChipRunner:
 
         return " ".join(parts)
 
-    def _find_matching_observers(self, content: str) -> List[ObserverSpec]:
+    def _find_matching_observers(self, content: str) -> List[ChipObserver]:
         """Find observers whose triggers match the content."""
         matching = []
         content_lower = content.lower()
 
-        for observer in self.spec.observers:
+        for observer in self.chip.observers:
             for trigger in observer.triggers:
                 if trigger.lower() in content_lower:
                     matching.append(observer)
@@ -106,11 +106,11 @@ class ChipRunner:
 
         return matching
 
-    def _extract_fields(self, observer: ObserverSpec, event: Dict, content: str) -> CapturedData:
+    def _extract_fields(self, observer: ChipObserver, event: Dict, content: str) -> CapturedData:
         """Extract fields from event using observer's extraction rules."""
         captured = CapturedData(
             observer_name=observer.name,
-            chip_id=self.spec.id,
+            chip_id=self.chip.id,
             timestamp=datetime.utcnow().isoformat(),
             session_id=event.get("session_id", "unknown"),
             event_type=event.get("type") or event.get("hook_event", "unknown"),
@@ -173,7 +173,7 @@ class ChipRunner:
 
         return captured
 
-    def _generate_insight(self, observer: ObserverSpec, captured: CapturedData) -> Optional[Dict]:
+    def _generate_insight(self, observer: ChipObserver, captured: CapturedData) -> Optional[Dict]:
         """Generate an insight from captured data."""
         # Only generate if we have meaningful data
         if not captured.fields or captured.confidence < 0.5:
@@ -188,12 +188,12 @@ class ChipRunner:
             return None
 
         return {
-            "chip_id": self.spec.id,
-            "chip_name": self.spec.name,
+            "chip_id": self.chip.id,
+            "chip_name": self.chip.name,
             "observer": observer.name,
             "insight": insight_text,
             "confidence": captured.confidence,
-            "context": f"Captured by {self.spec.name} chip",
+            "context": f"Captured by {self.chip.name} chip",
             "timestamp": captured.timestamp,
             "session_id": captured.session_id,
         }
@@ -205,33 +205,36 @@ class ChipRunner:
         Returns outcome insight if matched.
         """
         # Check positive outcomes
-        for outcome in self.spec.outcomes_positive:
-            if self._evaluate_condition(outcome.condition, data):
+        for outcome in self.chip.outcomes_positive:
+            condition = outcome.get("condition")
+            if self._evaluate_condition(condition, data):
                 return {
                     "type": "positive",
-                    "insight": outcome.insight,
-                    "weight": outcome.weight,
-                    "action": outcome.action,
+                    "insight": outcome.get("insight"),
+                    "weight": outcome.get("weight"),
+                    "action": outcome.get("action"),
                 }
 
         # Check negative outcomes
-        for outcome in self.spec.outcomes_negative:
-            if self._evaluate_condition(outcome.condition, data):
+        for outcome in self.chip.outcomes_negative:
+            condition = outcome.get("condition")
+            if self._evaluate_condition(condition, data):
                 return {
                     "type": "negative",
-                    "insight": outcome.insight,
-                    "weight": outcome.weight,
-                    "action": outcome.action,
+                    "insight": outcome.get("insight"),
+                    "weight": outcome.get("weight"),
+                    "action": outcome.get("action"),
                 }
 
         # Check neutral outcomes
-        for outcome in self.spec.outcomes_neutral:
-            if self._evaluate_condition(outcome.condition, data):
+        for outcome in self.chip.outcomes_neutral:
+            condition = outcome.get("condition")
+            if self._evaluate_condition(condition, data):
                 return {
                     "type": "neutral",
-                    "insight": outcome.insight,
-                    "weight": outcome.weight,
-                    "action": outcome.action,
+                    "insight": outcome.get("insight"),
+                    "weight": outcome.get("weight"),
+                    "action": outcome.get("action"),
                 }
 
         return None
@@ -297,9 +300,9 @@ class ChipRunner:
     def get_stats(self) -> Dict[str, Any]:
         """Get runner statistics."""
         return {
-            "chip_id": self.spec.id,
-            "chip_name": self.spec.name,
-            "observers": len(self.spec.observers),
-            "learners": len(self.spec.learners),
+            "chip_id": self.chip.id,
+            "chip_name": self.chip.name,
+            "observers": len(self.chip.observers),
+            "learners": len(self.chip.learners),
             "store_stats": self.store.get_stats(),
         }
