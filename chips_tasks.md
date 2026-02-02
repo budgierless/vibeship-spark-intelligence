@@ -25,6 +25,7 @@ Status legend: TODO | DOING | BLOCKED | DONE
 - DONE: Added Spark Pulse chips + tuneables rail (right sidebar) and API. (2026-02-02)
 - DONE: Documented chip tuneables in `TUNEABLES.md`. (2026-02-02)
 - DONE: Wired Spark Pulse into services + dashboard nav for visibility. (2026-02-02)
+- DONE: Updated Quick Start docs with Spark Pulse links + notes. (2026-02-02)
 - DONE: Normalize `spark-core` triggers to include `post_tool`, `post_tool_failure`, `user_prompt` and add safety metadata. (2026-02-02)
 - DONE: Precision pass on noisy triggers in `vibecoding`, `marketing`, `game-dev`, `market-intel`. (2026-02-02)
 - DONE: Audit required chip identity fields across runtime chips (no missing fields found). (2026-02-02)

@@ -220,7 +220,7 @@ spark learnings --query "topic"
 | Dashboard | URL | Purpose |
 |-----------|-----|---------|
 | Spark Lab | http://localhost:8585 | Main dashboard, insights, queue |
-| Spark Pulse | http://localhost:8765 | Neural visualization |
+| Spark Pulse | http://localhost:8765 | Neural visualization + chips rail |
 | Mind API | http://localhost:8080/docs | Memory API docs |
 
 ---

@@ -131,6 +131,10 @@ python -m spark.cli services
 # or: spark services
 ```
 
+Dashboards:
+- Spark Lab (overview + ops): http://localhost:8585
+- Spark Pulse (chips + tuneables rail): http://localhost:8765
+
 Auto-start at login (recommended):
 ```bash
 spark up --sync-context

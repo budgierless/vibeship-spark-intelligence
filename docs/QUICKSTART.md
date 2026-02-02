@@ -74,6 +74,13 @@ python3 -m spark.cli down
 # or: spark down
 ```
 
+### Dashboards
+
+- Spark Lab (overview + orchestration): http://localhost:8585
+- Spark Pulse (chips + tuneables rail): http://localhost:8765
+
+Tip: `spark up` starts Spark Lab + Spark Pulse by default. Use `--no-pulse` to skip Pulse.
+
 ### Automated Always-On (Quick Start)
 
 Keep Spark running at login so hooks never miss events.
