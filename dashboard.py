@@ -1478,6 +1478,7 @@ def generate_html():
         <div class="navbar-links">
             <a class="nav-link active" href="/">Overview</a>
             <a class="nav-link" href="/ops">Orchestration</a>
+            <a class="nav-link" href="http://localhost:8765">Pulse</a>
         </div>
     </nav>
     
@@ -2474,6 +2475,7 @@ def generate_ops_html():
         <div class="navbar-links">
             <a class="nav-link" href="/">Overview</a>
             <a class="nav-link active" href="/ops">Orchestration</a>
+            <a class="nav-link" href="http://localhost:8765">Pulse</a>
         </div>
     </nav>
 

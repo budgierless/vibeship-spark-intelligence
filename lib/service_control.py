@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Service control helpers for Spark daemons (sparkd, bridge_worker, dashboard, watchdog)."""
+"""Service control helpers for Spark daemons (sparkd, bridge_worker, dashboard, pulse, watchdog)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from urllib import request
 
 SPARKD_URL = "http://127.0.0.1:8787/health"
 DASHBOARD_URL = "http://127.0.0.1:8585/api/status"
+PULSE_URL = "http://127.0.0.1:8765/api/pulse"
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 def _pid_dir() -> Path:
@@ -162,6 +164,7 @@ def _service_cmds(
             str(bridge_interval),
         ],
         "dashboard": [sys.executable, "-m", "dashboard"],
+        "pulse": [sys.executable, str(ROOT_DIR / "spark_pulse.py")],
         "watchdog": [
             sys.executable,
             "-m",
@@ -178,15 +181,18 @@ def _service_cmds(
 def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
     sparkd_ok = _http_ok(SPARKD_URL)
     dash_ok = _http_ok(DASHBOARD_URL)
+    pulse_ok = _http_ok(PULSE_URL)
     hb_age = _bridge_heartbeat_age()
 
     sparkd_pid = _read_pid("sparkd")
     dash_pid = _read_pid("dashboard")
+    pulse_pid = _read_pid("pulse")
     bridge_pid = _read_pid("bridge_worker")
     watchdog_pid = _read_pid("watchdog")
 
     sparkd_running = sparkd_ok or _pid_alive(sparkd_pid)
     dash_running = dash_ok or _pid_alive(dash_pid)
+    pulse_running = pulse_ok or _pid_alive(pulse_pid)
     bridge_running = (hb_age is not None and hb_age <= bridge_stale_s) or _pid_alive(bridge_pid)
     watchdog_running = _pid_alive(watchdog_pid)
 
@@ -200,6 +206,11 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
             "running": dash_running,
             "healthy": dash_ok,
             "pid": dash_pid,
+        },
+        "pulse": {
+            "running": pulse_running,
+            "healthy": pulse_ok,
+            "pid": pulse_pid,
         },
         "bridge_worker": {
             "running": bridge_running,
@@ -219,6 +230,7 @@ def start_services(
     bridge_query: Optional[str] = None,
     watchdog_interval: int = 60,
     include_dashboard: bool = True,
+    include_pulse: bool = True,
     include_watchdog: bool = True,
     bridge_stale_s: int = 90,
 ) -> dict[str, str]:
@@ -230,9 +242,11 @@ def start_services(
     statuses = service_status(bridge_stale_s=bridge_stale_s)
     results: dict[str, str] = {}
 
-    order = ["sparkd", "bridge_worker", "dashboard", "watchdog"]
+    order = ["sparkd", "bridge_worker", "dashboard", "pulse", "watchdog"]
     if not include_dashboard:
         order.remove("dashboard")
+    if not include_pulse:
+        order.remove("pulse")
     if not include_watchdog:
         order.remove("watchdog")
 
@@ -252,6 +266,7 @@ def ensure_services(
     bridge_query: Optional[str] = None,
     watchdog_interval: int = 60,
     include_dashboard: bool = True,
+    include_pulse: bool = True,
     include_watchdog: bool = True,
     bridge_stale_s: int = 90,
 ) -> dict[str, str]:
@@ -260,6 +275,7 @@ def ensure_services(
         bridge_query=bridge_query,
         watchdog_interval=watchdog_interval,
         include_dashboard=include_dashboard,
+        include_pulse=include_pulse,
         include_watchdog=include_watchdog,
         bridge_stale_s=bridge_stale_s,
     )
@@ -267,7 +283,7 @@ def ensure_services(
 
 def stop_services() -> dict[str, str]:
     results: dict[str, str] = {}
-    for name in ["watchdog", "dashboard", "bridge_worker", "sparkd"]:
+    for name in ["watchdog", "pulse", "dashboard", "bridge_worker", "sparkd"]:
         pid = _read_pid(name)
         if not pid:
             results[name] = "no_pid"
@@ -288,6 +304,7 @@ def format_status_lines(status: dict[str, dict], bridge_stale_s: int = 90) -> li
     lines: list[str] = []
     sparkd = status.get("sparkd", {})
     dash = status.get("dashboard", {})
+    pulse = status.get("pulse", {})
     bridge = status.get("bridge_worker", {})
     watchdog = status.get("watchdog", {})
 
@@ -298,6 +315,10 @@ def format_status_lines(status: dict[str, dict], bridge_stale_s: int = 90) -> li
     lines.append(
         f"[spark] dashboard: {'RUNNING' if dash.get('running') else 'STOPPED'}"
         + (" (healthy)" if dash.get("healthy") else "")
+    )
+    lines.append(
+        f"[spark] pulse: {'RUNNING' if pulse.get('running') else 'STOPPED'}"
+        + (" (healthy)" if pulse.get("healthy") else "")
     )
     hb_age = bridge.get("heartbeat_age_s")
     if hb_age is None:
@@ -315,4 +336,5 @@ def format_status_lines(status: dict[str, dict], bridge_stale_s: int = 90) -> li
     if log_dir:
         lines.append(f"[spark] logs: {log_dir}")
     lines.append("Dashboard: http://127.0.0.1:8585")
+    lines.append("Spark Pulse: http://127.0.0.1:8765")
     return lines

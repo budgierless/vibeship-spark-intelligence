@@ -83,12 +83,19 @@ def get_chip_stats() -> dict:
     for chip in sorted(installed, key=lambda c: c.id):
         insight_file = CHIP_INSIGHTS_DIR / f"{chip.id}.jsonl"
         last = _read_last_json_line(insight_file)
+        insight_count = 0
+        if insight_file.exists():
+            try:
+                with open(insight_file, "r", encoding="utf-8") as f:
+                    insight_count = sum(1 for _ in f)
+            except Exception:
+                insight_count = 0
         chips.append({
             "id": chip.id,
             "name": chip.name,
             "activation": getattr(chip, "activation", "auto"),
             "active": chip.id in active_ids,
-            "insights": sum(1 for _ in insight_file.open("r", encoding="utf-8")) if insight_file.exists() else 0,
+            "insights": insight_count,
             "last_seen": last.get("timestamp") if isinstance(last, dict) else None,
         })
 
