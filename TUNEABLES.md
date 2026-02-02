@@ -9,20 +9,57 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/pattern_detection/memory_gate.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `threshold` | **0.5** | Minimum score to pass gate |
-| `WEIGHTS["impact"]` | 0.30 | Weight for progress made |
-| `WEIGHTS["novelty"]` | 0.20 | Weight for new patterns |
-| `WEIGHTS["surprise"]` | 0.30 | Weight for prediction ≠ outcome |
-| `WEIGHTS["recurrence"]` | 0.20 | Weight for 3+ occurrences |
-| `WEIGHTS["irreversible"]` | 0.40 | Weight for high-stakes actions |
-| `WEIGHTS["evidence"]` | 0.10 | Weight for validation |
+The Memory Gate decides which Steps and Distillations are worth persisting to long-term memory. It prevents noise from polluting the knowledge base by scoring each item against multiple quality signals.
 
-**Tuning guidance:**
-- Lower `threshold` → more permissive, more distillations saved
-- Higher `threshold` → stricter, only high-signal items persist
-- Adjust weights to prioritize different signals
+### How It Works
+
+Every Step or Distillation is scored from 0.0 to 1.0+ based on weighted signals. Only items scoring above the `threshold` are persisted.
+
+```
+Final Score = Σ(signal_present × signal_weight)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `threshold` | **0.5** | **The gate cutoff.** Items scoring below this are discarded. At 0.5, an item needs at least 2-3 positive signals to pass. |
+| `WEIGHTS["impact"]` | 0.30 | **Progress signal.** Did this action unblock progress or advance toward the goal? High when a stuck situation was resolved. |
+| `WEIGHTS["novelty"]` | 0.20 | **New pattern signal.** Is this something we haven't seen before? Detects first-time tool combinations, new error types, or unique approaches. |
+| `WEIGHTS["surprise"]` | 0.30 | **Prediction error signal.** Did the outcome differ from what was predicted? Surprises indicate learning opportunities - the system's model was wrong. |
+| `WEIGHTS["recurrence"]` | 0.20 | **Frequency signal.** Has this pattern appeared 3+ times? Recurring patterns are likely stable and worth remembering. |
+| `WEIGHTS["irreversible"]` | 0.40 | **Stakes signal.** Is this a high-stakes action (production deploy, security change, data deletion)? Irreversible actions get extra weight because mistakes are costly. |
+| `WEIGHTS["evidence"]` | 0.10 | **Validation signal.** Is there concrete evidence (test pass, user confirmation) supporting this? Evidence-backed items are more trustworthy. |
+
+### Scoring Examples
+
+**High score (passes gate):**
+```
+Step: "Fixed authentication bug by adding token refresh"
+- impact: 0.30 (unblocked login flow)
+- surprise: 0.30 (expected different root cause)
+- evidence: 0.10 (tests now pass)
+Total: 0.70 ✓ PASSES
+```
+
+**Low score (rejected):**
+```
+Step: "Read config file"
+- novelty: 0.0 (common action)
+- impact: 0.0 (no progress made)
+- surprise: 0.0 (expected outcome)
+Total: 0.0 ✗ REJECTED
+```
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Too much noise in memory | Raise `threshold` to 0.6-0.7 |
+| Missing important learnings | Lower `threshold` to 0.4 |
+| Want more emphasis on errors | Raise `surprise` weight |
+| Learning too slowly | Lower `recurrence` weight |
+| High-stakes project (finance, security) | Raise `irreversible` weight to 0.5+ |
 
 ---
 
@@ -30,15 +67,41 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/pattern_detection/distiller.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `min_occurrences` | **3** | Minimum pattern occurrences to distill |
-| `min_confidence` | **0.6** | Minimum success rate for heuristic |
-| `gate_threshold` | **0.5** | Memory gate threshold |
+The Pattern Distiller analyzes completed Steps to extract reusable rules (Distillations). It looks for patterns in successes, failures, and user behavior to create actionable guidance.
 
-**Tuning guidance:**
-- Lower `min_occurrences` → faster learning from fewer examples
-- Higher `min_occurrences` → more evidence required before distillation
+### How It Works
+
+1. Collects completed Steps from the Request Tracker
+2. Groups by pattern type (user preferences, tool usage, surprises)
+3. Requires minimum evidence before creating a Distillation
+4. Passes Distillations through Memory Gate before storage
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `min_occurrences` | **3** | **Evidence threshold.** A pattern must appear at least this many times before being distilled into a rule. Prevents one-off flukes from becoming permanent guidance. |
+| `min_confidence` | **0.6** | **Success rate threshold.** For heuristics (if X then Y), the pattern must have worked at least 60% of the time. Filters out unreliable patterns. |
+| `gate_threshold` | **0.5** | **Memory gate threshold** (inherited from Memory Gate). Distillations must score above this to be stored. |
+
+### Distillation Types Created
+
+| Type | What It Captures | Example |
+|------|------------------|---------|
+| `HEURISTIC` | "When X, do Y" patterns | "When file not found, check path case sensitivity first" |
+| `ANTI_PATTERN` | "Don't do X because Y" | "Don't use sed on Windows - syntax differs" |
+| `SHARP_EDGE` | Gotchas and pitfalls | "Python venv activation differs between shells" |
+| `PLAYBOOK` | Multi-step procedures | "To debug imports: 1. Check PYTHONPATH, 2. Verify __init__.py" |
+| `POLICY` | User-defined rules | "Always run tests before committing" |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Learning too slowly | Lower `min_occurrences` to 2 |
+| Distillations are unreliable | Raise `min_occurrences` to 5 |
+| Too many weak heuristics | Raise `min_confidence` to 0.7-0.8 |
+| Missing edge case patterns | Lower `min_confidence` to 0.5 |
 
 ---
 
@@ -46,11 +109,34 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/pattern_detection/request_tracker.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `max_pending` | 50 | Maximum unresolved requests to track |
-| `max_completed` | 200 | Maximum completed Steps to retain |
-| `max_age_seconds` (timeout) | 3600 | Auto-timeout for pending requests |
+The Request Tracker wraps every user request in an EIDOS Step envelope, tracking the full lifecycle from intent → action → outcome. This creates the structured data needed for learning.
+
+### How It Works
+
+```
+User Message → Step Created (with intent, hypothesis, prediction)
+     ↓
+Action Taken → Step Updated (with decision, tool used)
+     ↓
+Outcome Observed → Step Completed (with result, evaluation, lesson)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_pending` | **50** | **Concurrent request limit.** Maximum unresolved requests being tracked. Prevents memory bloat from abandoned requests. When exceeded, oldest pending requests are dropped. |
+| `max_completed` | **200** | **Completed history limit.** How many completed Steps to retain for distillation analysis. Older completed Steps are pruned. |
+| `max_age_seconds` | **3600** | **Timeout (1 hour).** Pending requests older than this are auto-closed as "timed_out". Prevents zombie requests from lingering forever. |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Long-running sessions with many requests | Raise `max_pending` to 100 |
+| Memory-constrained environment | Lower both limits |
+| Want more history for distillation | Raise `max_completed` to 500 |
+| Requests timing out too quickly | Raise `max_age_seconds` to 7200 (2 hours) |
 
 ---
 
@@ -58,15 +144,39 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/pattern_detection/aggregator.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `CONFIDENCE_THRESHOLD` | **0.7** | Minimum confidence to trigger learning |
-| `DEDUPE_TTL_SECONDS` | 600 | Deduplication window (10 min) |
-| `DISTILLATION_INTERVAL` | **20** | Events between distillation runs |
+The Pattern Aggregator coordinates all pattern detectors (correction, sentiment, repetition, semantic, why) and routes detected patterns to the learning system. It's the central hub for pattern detection.
 
-**Tuning guidance:**
-- Lower `CONFIDENCE_THRESHOLD` → more patterns trigger learning
-- Lower `DISTILLATION_INTERVAL` → more frequent distillation
+### How It Works
+
+```
+Event → All Detectors Run → Patterns Collected → Corroboration Check → Learning Triggered
+                                    ↓
+                         (Every N events) → Distillation Run
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CONFIDENCE_THRESHOLD` | **0.7** | **Learning trigger threshold.** Patterns must have at least 70% confidence to trigger learning. Below this, patterns are detected but not acted on. |
+| `DEDUPE_TTL_SECONDS` | **600** | **Deduplication window (10 min).** The same pattern won't be processed twice within this window. Prevents spammy patterns from flooding the system. |
+| `DISTILLATION_INTERVAL` | **20** | **Batch size for distillation.** After every 20 events processed, the distiller runs to analyze completed Steps. Lower = more frequent distillation. |
+
+### Corroboration Boost
+
+When multiple detectors agree, confidence is boosted:
+- Correction + Frustration detected together → +15% confidence
+- Repetition + Frustration detected together → +10% confidence
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Missing subtle patterns | Lower `CONFIDENCE_THRESHOLD` to 0.6 |
+| Too many false positives | Raise `CONFIDENCE_THRESHOLD` to 0.8 |
+| Same insight appearing repeatedly | Raise `DEDUPE_TTL_SECONDS` to 1800 (30 min) |
+| Want faster learning cycles | Lower `DISTILLATION_INTERVAL` to 10 |
+| System too slow | Raise `DISTILLATION_INTERVAL` to 50 |
 
 ---
 
@@ -74,18 +184,41 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/eidos/models.py` → `Budget` class
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `max_steps` | **25** | Maximum steps per episode |
-| `max_time_seconds` | **720** | Maximum time (12 minutes) |
-| `max_retries_per_error` | **2** | Failures before forced diagnostic |
-| `max_file_touches` | **2** | Max modifications to same file |
-| `no_evidence_limit` | **5** | Steps without evidence before DIAGNOSE |
+The EIDOS Budget enforces hard limits on episodes to prevent rabbit holes. When any limit is exceeded, the episode transitions to DIAGNOSE or HALT phase.
 
-**Tuning guidance:**
-- These are HARD GATES - when exceeded, episode transitions to HALT/DIAGNOSE
-- Lower values = stricter enforcement, faster escalation
-- Higher values = more freedom, risk of rabbit holes
+### How It Works
+
+These are **circuit breakers** - when tripped, they force the system to stop and reassess rather than continuing blindly.
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_steps` | **25** | **Step limit per episode.** After 25 actions without completing the goal, force DIAGNOSE phase. Prevents endless looping. |
+| `max_time_seconds` | **720** | **Time limit (12 minutes).** Episodes taking longer than this are force-stopped. Protects against infinite loops and runaway processes. |
+| `max_retries_per_error` | **2** | **Error retry limit.** After failing the same way twice, stop retrying and diagnose. Prevents "try harder" loops. |
+| `max_file_touches` | **2** | **File modification limit.** Can only modify the same file twice per episode. Third touch triggers DIAGNOSE. Prevents diff thrash. |
+| `no_evidence_limit` | **5** | **Evidence requirement.** After 5 steps without gathering new evidence (file reads, test runs, etc.), force DIAGNOSE. Prevents blind flailing. |
+
+### What Happens When Limits Hit
+
+| Limit Exceeded | Transition | Behavior |
+|----------------|------------|----------|
+| `max_steps` | → HALT | Episode ends, escalate to user |
+| `max_time_seconds` | → HALT | Episode ends, escalate to user |
+| `max_retries_per_error` | → DIAGNOSE | Stop modifying, only observe |
+| `max_file_touches` | → DIAGNOSE | File frozen, must find another approach |
+| `no_evidence_limit` | → DIAGNOSE | Must gather evidence before acting |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Complex tasks need more steps | Raise `max_steps` to 40 |
+| Want faster failure detection | Lower `max_steps` to 15 |
+| Legitimate long-running tasks | Raise `max_time_seconds` to 1800 (30 min) |
+| Frequent file thrashing | Lower `max_file_touches` to 1 |
+| Tasks require iteration | Raise `max_file_touches` to 3 |
 
 ---
 
@@ -93,12 +226,33 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/eidos/control_plane.py`
 
-| Watcher | Threshold | Trigger |
-|---------|-----------|---------|
-| Repeat Error | **2** | Same error signature twice |
-| No New Info | **5** | Steps without new evidence |
-| Diff Thrash | **3** | Same file modified 3x |
-| Confidence Stagnation | **0.05** | Delta < 0.05 for 3 steps |
+Watchers are real-time monitors that detect specific stuck patterns. When triggered, they force phase transitions to break out of unproductive loops.
+
+### How It Works
+
+Each watcher monitors a specific metric. When the threshold is exceeded, it fires an alert that triggers a phase transition (usually to DIAGNOSE).
+
+### Watchers
+
+| Watcher | Threshold | What It Detects | Response |
+|---------|-----------|-----------------|----------|
+| **Repeat Error** | **2** | Same error signature appearing twice. | → DIAGNOSE. Stop modifying, investigate root cause. |
+| **No New Info** | **5** | Five consecutive steps without gathering new evidence. | → DIAGNOSE. Must read/test before acting. |
+| **Diff Thrash** | **3** | Same file modified three times. | → SIMPLIFY. Freeze file, find alternative. |
+| **Confidence Stagnation** | **0.05 × 3** | Confidence delta < 5% for three steps. | → PLAN. Step back, reconsider approach. |
+| **Memory Bypass** | **1** | Action taken without citing retrieved memory. | BLOCK. Must acknowledge memory or declare absent. |
+| **Budget Half No Progress** | **50%** | Budget >50% consumed with no progress. | → SIMPLIFY. Reduce scope, focus on core. |
+| **Scope Creep** | varies | Plan grows but progress doesn't. | → PLAN. Re-scope to original goal. |
+| **Validation Gap** | **2** | More than 2 steps without validation. | → VALIDATE. Must test before continuing. |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| False positives on error detection | Raise repeat error threshold to 3 |
+| Missing repeated mistakes | Lower repeat error threshold to 1 |
+| Tasks legitimately require file iteration | Raise diff thrash to 4-5 |
+| Want stricter evidence requirements | Lower no new info to 3 |
 
 ---
 
@@ -106,25 +260,44 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/cognitive_learner.py`
 
-### Half-Life by Category (days)
+The Cognitive Learner stores insights with time-based decay. Older insights gradually lose reliability, ensuring the system stays current and doesn't over-rely on stale knowledge.
 
-| Category | Half-Life | Notes |
-|----------|-----------|-------|
-| USER_UNDERSTANDING | **90** | Preferences decay slowly |
-| COMMUNICATION | 90 | Style preferences |
-| WISDOM | **180** | Principles last longest |
-| META_LEARNING | 120 | How to learn |
-| SELF_AWARENESS | 60 | Blind spots |
-| REASONING | 60 | Assumptions |
-| CONTEXT | **45** | Environment-specific |
-| CREATIVITY | 60 | Novel approaches |
+### How It Works
+
+```
+Effective Reliability = Base Reliability × 2^(-age_days / half_life)
+```
+
+After one half-life period, reliability drops to 50%. After two half-lives, 25%, etc.
+
+### Half-Life by Category
+
+| Category | Half-Life | Rationale |
+|----------|-----------|-----------|
+| `WISDOM` | **180 days** | Principles and wisdom are timeless, decay slowly. "Ship fast, iterate faster" stays true. |
+| `META_LEARNING` | **120 days** | How to learn itself changes slowly. Learning strategies remain valid. |
+| `USER_UNDERSTANDING` | **90 days** | User preferences are fairly stable but can evolve. |
+| `COMMUNICATION` | **90 days** | Communication style preferences are sticky but not permanent. |
+| `SELF_AWARENESS` | **60 days** | Blind spots need regular reassessment. What I struggled with before may not apply now. |
+| `REASONING` | **60 days** | Assumptions and reasoning patterns should be questioned regularly. |
+| `CREATIVITY` | **60 days** | Novel approaches may become stale as tech evolves. |
+| `CONTEXT` | **45 days** | Environment-specific context changes frequently. Project structure, team practices, etc. |
 
 ### Pruning Parameters
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `max_age_days` | 365 | Maximum age before pruning |
-| `min_effective` | 0.2 | Minimum effective reliability |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_age_days` | **365** | **Maximum age.** Insights older than 1 year are pruned regardless of reliability. |
+| `min_effective` | **0.2** | **Minimum effective reliability.** When decay brings reliability below 20%, the insight is pruned. |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Fast-changing project | Lower CONTEXT half-life to 30 days |
+| Stable long-term project | Raise half-lives across the board |
+| Want insights to last longer | Raise `max_age_days` to 730 (2 years) |
+| Memory getting cluttered | Lower `min_effective` to 0.3 |
 
 ---
 
@@ -132,24 +305,98 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/eidos/retriever.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `max_results` | **10** | Maximum distillations returned |
-| `min_overlap` (keyword) | 2 | Minimum keyword overlap for match |
+The Structural Retriever fetches relevant Distillations before actions. Unlike text similarity search, it prioritizes by EIDOS structure (policies > playbooks > sharp edges > heuristics).
+
+### How It Works
+
+```
+Intent/Error → Keyword Extraction → Match Against Distillations → Sort by Type Priority → Return Top N
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_results` | **10** | **Result limit.** Maximum Distillations returned per query. More results = more context but also more noise. |
+| `min_overlap` | **2** | **Keyword threshold.** Minimum number of keywords that must overlap between query and Distillation. Filters out weak matches. |
+
+### Type Priority Order
+
+1. **POLICY** (highest) - User-defined rules always come first
+2. **PLAYBOOK** - Multi-step procedures for known situations
+3. **SHARP_EDGE** - Gotchas and pitfalls to avoid
+4. **HEURISTIC** - General "if X then Y" patterns
+5. **ANTI_PATTERN** (lowest) - What not to do
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Retrieval returning irrelevant results | Raise `min_overlap` to 3 |
+| Missing relevant Distillations | Lower `min_overlap` to 1 |
+| Too much context overwhelming decisions | Lower `max_results` to 5 |
+| Complex tasks need more guidance | Raise `max_results` to 15-20 |
 
 ---
 
-## 9. Importance Scorer
+## 9. Importance Scorer (Signal Detection)
 
 **File:** `lib/importance_scorer.py`
 
-| Tier | Score Range | Examples |
-|------|-------------|----------|
-| CRITICAL | 0.9+ | "Remember this", corrections, explicit decisions |
-| HIGH | 0.7-0.9 | Preferences, principles, reasoned explanations |
-| MEDIUM | 0.5-0.7 | Observations, context, weak preferences |
-| LOW | 0.3-0.5 | Acknowledgments, trivial statements |
-| IGNORE | <0.3 | Tool sequences, metrics, operational noise |
+The Importance Scorer evaluates incoming text at **ingestion time** (not promotion time) to determine what's worth learning. This ensures critical one-time insights are captured even if they never repeat.
+
+### How It Works
+
+Text is analyzed for signal patterns that indicate importance:
+1. Check for CRITICAL signals (explicit requests, corrections)
+2. Check for HIGH signals (preferences, principles)
+3. Check for MEDIUM signals (observations, context)
+4. Check for LOW signals (noise indicators)
+5. Apply domain relevance boost
+6. Apply first-mention elevation
+
+### Importance Tiers
+
+| Tier | Score Range | Behavior | Examples |
+|------|-------------|----------|----------|
+| **CRITICAL** | 0.9+ | Learn immediately, bypass normal thresholds | "Remember this", corrections, "never do X" |
+| **HIGH** | 0.7-0.9 | Should learn, prioritize | Preferences, principles, reasoned explanations |
+| **MEDIUM** | 0.5-0.7 | Consider learning | Observations, context, weak preferences |
+| **LOW** | 0.3-0.5 | Store but don't promote | Acknowledgments, trivial statements |
+| **IGNORE** | <0.3 | Don't store | Tool sequences, metrics, operational noise |
+
+### Critical Signals (Immediate Learning)
+
+| Pattern | Signal Type | Why It's Critical |
+|---------|-------------|-------------------|
+| "remember this" | explicit_remember | User explicitly requesting persistence |
+| "always do it this way" | explicit_preference | Strong user directive |
+| "never do this" | explicit_prohibition | Important constraint |
+| "no, I meant..." | correction | User correcting misunderstanding |
+| "because this works" | reasoned_decision | Outcome with explanation |
+
+### High Signals
+
+| Pattern | Signal Type |
+|---------|-------------|
+| "I prefer" | preference |
+| "let's go with" | preference |
+| "the key is" | principle |
+| "the pattern here is" | pattern_recognition |
+| "in general" | generalization |
+
+### Low Signals (Noise)
+
+| Pattern | Signal Type |
+|---------|-------------|
+| "Bash → Edit" | tool_sequence |
+| "45% success" | metric |
+| "timeout" | operational |
+| "okay", "got it" | acknowledgment |
+
+### When to Tune
+
+Add domain-specific patterns to `DOMAIN_WEIGHTS` for your use case. See Section 15 for domain weight configuration.
 
 ---
 
@@ -157,77 +404,24 @@ Use this to test and optimize learning quality.
 
 **File:** `lib/context_sync.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `DEFAULT_MIN_RELIABILITY` | 0.7 | Minimum reliability for sync |
-| `DEFAULT_MIN_VALIDATIONS` | 3 | Minimum validations required |
-| `DEFAULT_MAX_ITEMS` | 12 | Maximum items to sync |
-| `DEFAULT_MAX_PROMOTED` | 6 | Maximum promoted items |
+Context Sync synchronizes high-value insights to Mind (persistent memory) for cross-session retrieval.
 
----
+### Parameters
 
-## Quick Reference: Most Important Tuneables
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `DEFAULT_MIN_RELIABILITY` | **0.7** | **Quality threshold.** Only sync insights with 70%+ reliability to Mind. |
+| `DEFAULT_MIN_VALIDATIONS` | **3** | **Evidence threshold.** Insights must be validated 3+ times before syncing. |
+| `DEFAULT_MAX_ITEMS` | **12** | **Batch limit.** Maximum items to sync per operation. |
+| `DEFAULT_MAX_PROMOTED` | **6** | **Promotion limit.** Maximum items to mark as "promoted" per sync. |
 
-### For Learning Quality
+### When to Tune
 
-```python
-# Pattern detection
-CONFIDENCE_THRESHOLD = 0.7        # lib/pattern_detection/aggregator.py
-DISTILLATION_INTERVAL = 20        # lib/pattern_detection/aggregator.py
-
-# Memory gate
-threshold = 0.5                   # lib/pattern_detection/memory_gate.py
-min_occurrences = 3               # lib/pattern_detection/distiller.py
-min_confidence = 0.6              # lib/pattern_detection/distiller.py
-```
-
-### For Stuck Detection
-
-```python
-# EIDOS Budget
-max_steps = 25                    # lib/eidos/models.py
-max_retries_per_error = 2         # lib/eidos/models.py
-no_evidence_limit = 5             # lib/eidos/models.py
-
-# Watchers
-repeat_error_threshold = 2        # lib/eidos/control_plane.py
-diff_thrash_threshold = 3         # lib/eidos/control_plane.py
-```
-
-### For Memory Retention
-
-```python
-# Half-life (days)
-WISDOM_HALF_LIFE = 180            # lib/cognitive_learner.py
-CONTEXT_HALF_LIFE = 45            # lib/cognitive_learner.py
-USER_UNDERSTANDING_HALF_LIFE = 90 # lib/cognitive_learner.py
-```
-
----
-
-## Testing Recommendations
-
-1. **Memory Gate Testing**
-   - Create test patterns with known quality
-   - Verify gate passes/rejects correctly
-   - Monitor `gate.get_stats()` for pass rate
-
-2. **Distillation Quality Testing**
-   - Process known patterns through distiller
-   - Check distillation statement quality
-   - Verify confidence scores match expectations
-
-3. **Watcher Testing**
-   - Simulate stuck scenarios
-   - Verify watchers trigger at thresholds
-   - Check phase transitions happen correctly
-
-4. **Decay Testing**
-   - Create old insights
-   - Verify effective_reliability decays correctly
-   - Check pruning removes stale items
-
----
+| Scenario | Adjustment |
+|----------|------------|
+| Mind getting cluttered | Raise thresholds |
+| Missing important context | Lower `DEFAULT_MIN_VALIDATIONS` to 2 |
+| Want more cross-session memory | Raise `DEFAULT_MAX_ITEMS` to 20 |
 
 ---
 
@@ -235,16 +429,42 @@ USER_UNDERSTANDING_HALF_LIFE = 90 # lib/cognitive_learner.py
 
 **File:** `lib/advisor.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `MIN_RELIABILITY_FOR_ADVICE` | **0.6** | Minimum reliability to include advice |
-| `MIN_VALIDATIONS_FOR_STRONG_ADVICE` | **2** | Validations for strong advice |
-| `MAX_ADVICE_ITEMS` | **5** | Maximum advice items per query |
-| `ADVICE_CACHE_TTL_SECONDS` | **300** | Cache TTL (5 minutes) |
+The Advisor queries relevant insights **before** actions are taken, making stored knowledge actionable. It bridges the gap between learning and decision-making.
 
-**Tuning guidance:**
-- Lower `MIN_RELIABILITY_FOR_ADVICE` → more advice, lower quality
-- Higher `MAX_ADVICE_ITEMS` → more context but slower
+### How It Works
+
+```
+Tool + Context → Query Memory Banks + Cognitive Insights + Mind → Rank by Relevance → Return Advice
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MIN_RELIABILITY_FOR_ADVICE` | **0.6** | **Quality filter.** Only include insights with 60%+ reliability in advice. Lower than promotion threshold because advice is just suggestions. |
+| `MIN_VALIDATIONS_FOR_STRONG_ADVICE` | **2** | **Strong advice threshold.** Insights validated 2+ times are marked as "strong" advice. |
+| `MAX_ADVICE_ITEMS` | **5** | **Advice limit.** Maximum advice items returned per query. More advice = more context but slower decisions. |
+| `ADVICE_CACHE_TTL_SECONDS` | **300** | **Cache duration (5 min).** Same query within 5 minutes returns cached advice. Reduces redundant lookups. |
+
+### Advice Sources
+
+| Source | What It Provides |
+|--------|------------------|
+| `cognitive` | Insights from cognitive_learner (preferences, self-awareness) |
+| `mind` | Memories from Mind persistent storage |
+| `bank` | Project/global memory banks |
+| `self_awareness` | Cautions about known struggles |
+| `surprise` | Warnings from past unexpected failures |
+| `skill` | Relevant skill recommendations |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Getting too much advice | Lower `MAX_ADVICE_ITEMS` to 3 |
+| Missing relevant warnings | Lower `MIN_RELIABILITY_FOR_ADVICE` to 0.5 |
+| Advice is stale | Lower `ADVICE_CACHE_TTL_SECONDS` to 60 |
+| Performance issues | Raise cache TTL to 600 (10 min) |
 
 ---
 
@@ -252,26 +472,58 @@ USER_UNDERSTANDING_HALF_LIFE = 90 # lib/cognitive_learner.py
 
 **File:** `lib/memory_capture.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `AUTO_SAVE_THRESHOLD` | **0.82** | Score to auto-save (no confirmation) |
-| `SUGGEST_THRESHOLD` | **0.55** | Score to suggest saving |
-| `MAX_CAPTURE_CHARS` | **2000** | Maximum characters to capture |
+Memory Capture scans user messages for statements worth persisting. It uses keyword triggers and heuristics to identify preferences, rules, and decisions.
 
-### Hard Triggers (Score 0.85-1.0)
+### How It Works
 
-| Trigger | Score |
-|---------|-------|
-| "remember this" | 1.0 |
-| "don't forget" | 0.95 |
-| "lock this in" | 0.95 |
-| "non-negotiable" | 0.95 |
-| "hard rule" | 0.95 |
-| "from now on" | 0.85 |
+```
+User Message → Score Against Triggers → Above Auto-Save? → Save Automatically
+                                     → Above Suggest? → Queue for Review
+                                     → Below Suggest? → Ignore
+```
 
-**Tuning guidance:**
-- Lower `AUTO_SAVE_THRESHOLD` → more auto-saves, risk noise
-- Lower `SUGGEST_THRESHOLD` → more suggestions to review
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `AUTO_SAVE_THRESHOLD` | **0.82** | **Auto-save cutoff.** Statements scoring 82%+ are saved without confirmation. High threshold ensures only clear signals auto-save. |
+| `SUGGEST_THRESHOLD` | **0.55** | **Suggestion cutoff.** Statements scoring 55-82% are queued for user review. Below 55% is ignored. |
+| `MAX_CAPTURE_CHARS` | **2000** | **Length limit.** Maximum characters to capture. Longer statements are truncated. |
+
+### Hard Triggers (Explicit Signals)
+
+These keywords trigger high scores immediately:
+
+| Trigger Phrase | Score | Why |
+|----------------|-------|-----|
+| "remember this" | 1.0 | Explicit persistence request |
+| "don't forget" | 0.95 | Strong persistence signal |
+| "lock this in" | 0.95 | Commitment language |
+| "non-negotiable" | 0.95 | Boundary/constraint |
+| "hard rule" | 0.95 | Explicit rule definition |
+| "hard boundary" | 0.95 | Constraint definition |
+| "from now on" | 0.85 | Future-oriented preference |
+| "always" | 0.65 | Generalization signal |
+| "never" | 0.65 | Prohibition signal |
+
+### Soft Triggers (Implicit Signals)
+
+| Trigger | Score | Interpretation |
+|---------|-------|----------------|
+| "I prefer" | 0.55 | Preference |
+| "I hate" | 0.75 | Strong negative preference |
+| "I need" | 0.50 | Requirement |
+| "design constraint" | 0.65 | Technical constraint |
+| "for this project" | 0.65 | Project-specific context |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Too many auto-saves | Raise `AUTO_SAVE_THRESHOLD` to 0.90 |
+| Missing important preferences | Lower `AUTO_SAVE_THRESHOLD` to 0.75 |
+| Too many suggestions to review | Raise `SUGGEST_THRESHOLD` to 0.65 |
+| Long statements getting cut off | Raise `MAX_CAPTURE_CHARS` to 3000 |
 
 ---
 
@@ -279,14 +531,37 @@ USER_UNDERSTANDING_HALF_LIFE = 90 # lib/cognitive_learner.py
 
 **File:** `lib/queue.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `MAX_EVENTS` | **10000** | Max events before rotation |
-| `TAIL_CHUNK_BYTES` | **64KB** | Read chunk size for tail |
+The Event Queue captures all Spark events (tool calls, user prompts, errors) with < 10ms latency. Background processing handles the heavy lifting.
 
-**Tuning guidance:**
-- Lower `MAX_EVENTS` → more frequent rotation, less history
-- Higher `MAX_EVENTS` → more history, larger files
+### How It Works
+
+```
+Event → Quick Capture (< 10ms) → Append to JSONL File → Background Processing
+                                           ↓
+                              Rotate when MAX_EVENTS exceeded
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MAX_EVENTS` | **10000** | **Rotation threshold.** When queue exceeds 10,000 events, oldest half is discarded. Balances history retention vs file size. |
+| `TAIL_CHUNK_BYTES` | **65536** | **Read chunk size (64KB).** When reading recent events, reads this much at a time. Larger = faster for big files, more memory. |
+
+### Queue Location
+
+```
+~/.spark/queue/events.jsonl
+```
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Need more history | Raise `MAX_EVENTS` to 50000 |
+| Disk space constrained | Lower `MAX_EVENTS` to 5000 |
+| Large events (long outputs) | Raise `TAIL_CHUNK_BYTES` to 131072 (128KB) |
+| Memory constrained | Lower `TAIL_CHUNK_BYTES` to 32768 (32KB) |
 
 ---
 
@@ -294,71 +569,164 @@ USER_UNDERSTANDING_HALF_LIFE = 90 # lib/cognitive_learner.py
 
 **File:** `lib/promoter.py`
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `DEFAULT_PROMOTION_THRESHOLD` | **0.7** | Minimum reliability to promote |
-| `DEFAULT_MIN_VALIDATIONS` | **3** | Minimum validations to promote |
+The Promoter automatically promotes high-quality insights to project documentation (CLAUDE.md, AGENTS.md, etc.) where they'll be loaded every session.
 
-**Safety Filters:**
-- Operational patterns filtered (tool sequences, telemetry)
-- Safety-blocked patterns (deception, manipulation, etc.)
+### How It Works
 
-**Tuning guidance:**
-- Lower thresholds → more promotions, more noise in CLAUDE.md
-- Higher thresholds → fewer promotions, only high-confidence
+```
+Cognitive Insights → Filter by Reliability/Validations → Filter Operational Noise → Filter Safety → Write to Target File
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `DEFAULT_PROMOTION_THRESHOLD` | **0.7** | **Reliability requirement.** Insights must have 70%+ reliability to be promoted. |
+| `DEFAULT_MIN_VALIDATIONS` | **3** | **Validation requirement.** Insights must be validated 3+ times before promotion. |
+
+### Safety Filters
+
+**Operational patterns blocked** (tool telemetry, not human-useful):
+- Tool sequences: `"Bash → Edit"`, `"Read → Write"`
+- Usage counts: `"42 calls"`, `"heavy usage"`
+- Metrics: `"success rate"`, `"error rate"`
+
+**Safety patterns blocked** (harmful content):
+- Deception-related language
+- Manipulation-related language
+- Harassment-related language
+
+### Promotion Targets
+
+| Target File | Categories | What Goes There |
+|-------------|------------|-----------------|
+| CLAUDE.md | WISDOM, REASONING, CONTEXT | Project conventions, gotchas, patterns |
+| AGENTS.md | META_LEARNING, SELF_AWARENESS | Workflow patterns, blind spots |
+| TOOLS.md | CONTEXT | Tool-specific insights |
+| SOUL.md | USER_UNDERSTANDING, COMMUNICATION | User preferences, communication style |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| CLAUDE.md getting cluttered | Raise both thresholds |
+| Important insights not promoting | Lower `DEFAULT_MIN_VALIDATIONS` to 2 |
+| Want only high-confidence | Raise `DEFAULT_PROMOTION_THRESHOLD` to 0.8 |
 
 ---
 
-## 15. Importance Scorer
+## 15. Importance Scorer (Weights & Domains)
 
 **File:** `lib/importance_scorer.py`
 
-### Importance Tiers
-
-| Tier | Score Range | Action |
-|------|-------------|--------|
-| CRITICAL | 0.9+ | Must learn immediately |
-| HIGH | 0.7-0.9 | Should learn |
-| MEDIUM | 0.5-0.7 | Consider learning |
-| LOW | 0.3-0.5 | Store but don't promote |
-| IGNORE | <0.3 | Don't store |
+Extended configuration for domain-specific importance weighting.
 
 ### Default Keyword Weights
 
+These keywords boost importance scores across all domains:
+
 ```python
 DEFAULT_WEIGHTS = {
-    "user": 1.3,
-    "preference": 1.4,
-    "decision": 1.3,
-    "principle": 1.3,
-    "style": 1.2,
+    "user": 1.3,        # User-related content is important
+    "preference": 1.4,  # Explicit preferences highly valued
+    "decision": 1.3,    # Decisions should be remembered
+    "principle": 1.3,   # Principles guide future actions
+    "style": 1.2,       # Style preferences matter
 }
 ```
 
 ### Domain-Specific Weights
 
-| Domain | High-Value Keywords (Weight) |
-|--------|------------------------------|
-| game_dev | balance (1.5), feel (1.5), gameplay (1.4), physics (1.3) |
-| fintech | compliance (1.5), security (1.5), transaction (1.4), risk (1.4) |
-| marketing | audience (1.5), conversion (1.5), messaging (1.4), roi (1.4) |
-| product | user (1.5), feature (1.4), feedback (1.4), priority (1.3) |
+When a domain is active, these keywords get boosted:
 
-**Tuning guidance:**
-- Adjust domain weights to prioritize domain-specific learning
-- Add new domains to `DOMAIN_WEIGHTS` dict
+**Game Development (`game_dev`):**
+```python
+{
+    "balance": 1.5,     # Game balance is critical
+    "feel": 1.5,        # Game feel is critical
+    "gameplay": 1.4,    # Gameplay decisions
+    "physics": 1.3,     # Physics tuning
+    "collision": 1.2,   # Collision behavior
+    "spawn": 1.2,       # Spawn mechanics
+    "difficulty": 1.3,  # Difficulty tuning
+    "player": 1.3,      # Player experience
+}
+```
+
+**Finance/Fintech (`fintech`):**
+```python
+{
+    "compliance": 1.5,   # Regulatory requirements
+    "security": 1.5,     # Security is paramount
+    "transaction": 1.4,  # Transaction handling
+    "risk": 1.4,         # Risk management
+    "audit": 1.3,        # Audit requirements
+    "validation": 1.3,   # Data validation
+}
+```
+
+**Marketing (`marketing`):**
+```python
+{
+    "audience": 1.5,     # Target audience
+    "conversion": 1.5,   # Conversion optimization
+    "messaging": 1.4,    # Message crafting
+    "channel": 1.3,      # Channel strategy
+    "campaign": 1.3,     # Campaign management
+    "roi": 1.4,          # ROI considerations
+}
+```
+
+**Product (`product`):**
+```python
+{
+    "user": 1.5,        # User focus
+    "feature": 1.4,     # Feature decisions
+    "feedback": 1.4,    # User feedback
+    "priority": 1.3,    # Prioritization
+    "roadmap": 1.3,     # Roadmap planning
+}
+```
+
+### Adding New Domains
+
+To add a new domain, add to `DOMAIN_WEIGHTS` dict in `lib/importance_scorer.py`:
+
+```python
+DOMAIN_WEIGHTS["healthcare"] = {
+    "hipaa": 1.5,
+    "patient": 1.5,
+    "clinical": 1.4,
+    "ehr": 1.3,
+}
+```
 
 ---
 
 ## 16. Environment Variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `SPARK_NO_WATCHDOG` | false | Disable watchdog timers |
-| `SPARK_OUTCOME_AUTO_LINK` | true | Auto-link outcomes to steps |
-| `SPARK_AGENT_CONTEXT_LIMIT` | 8000 | Context token limit for agents |
-| `SPARK_DEBUG` | false | Enable debug logging |
-| `SPARK_MIND_URL` | localhost:8080 | Mind API endpoint |
+System-wide configuration via environment variables.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SPARK_NO_WATCHDOG` | `false` | **Disable watchers.** Set to `true` to turn off all watcher enforcement. Use for debugging only. |
+| `SPARK_OUTCOME_AUTO_LINK` | `true` | **Auto-link outcomes.** Automatically link outcomes to their originating Steps. |
+| `SPARK_AGENT_CONTEXT_LIMIT` | `8000` | **Agent context tokens.** Maximum tokens for agent context injection. |
+| `SPARK_DEBUG` | `false` | **Debug mode.** Enables verbose logging across all components. |
+| `SPARK_MIND_URL` | `localhost:8080` | **Mind API endpoint.** URL for Mind persistent memory service. |
+
+### Usage
+
+```bash
+# Disable watchers for debugging
+export SPARK_NO_WATCHDOG=true
+
+# Enable debug logging
+export SPARK_DEBUG=true
+
+# Connect to remote Mind
+export SPARK_MIND_URL=https://mind.example.com:8080
+```
 
 ---
 
@@ -397,40 +765,84 @@ python -c "from lib.queue import get_queue_stats; print(get_queue_stats())"
 
 ## Quick Parameter Index
 
-### Learning Quality Tuneables
+### Learning Quality Pipeline
 
-| Parameter | File | Default | Impact |
-|-----------|------|---------|--------|
-| CONFIDENCE_THRESHOLD | aggregator.py | 0.7 | Patterns → learning |
-| min_occurrences | distiller.py | 3 | Required evidence |
-| gate threshold | memory_gate.py | 0.5 | Steps → persistence |
-| AUTO_SAVE_THRESHOLD | memory_capture.py | 0.82 | User input → learning |
-| PROMOTION_THRESHOLD | promoter.py | 0.7 | Learning → CLAUDE.md |
+```
+User Input → Memory Capture (0.82 auto-save)
+         → Pattern Detection (0.7 confidence)
+         → Distillation (3 occurrences, 0.6 success rate)
+         → Memory Gate (0.5 threshold)
+         → Cognitive Storage
+         → Promotion (0.7 reliability, 3 validations)
+         → CLAUDE.md
+```
 
-### Stuck Detection Tuneables
+### Stuck Detection Pipeline
 
-| Parameter | File | Default | Impact |
-|-----------|------|---------|--------|
-| max_steps | models.py | 25 | Episode length |
-| max_retries_per_error | models.py | 2 | Error tolerance |
-| no_evidence_limit | models.py | 5 | Evidence requirement |
-| repeat_error_threshold | control_plane.py | 2 | Repeat detection |
-| diff_thrash_threshold | control_plane.py | 3 | File edit detection |
+```
+Action → Budget Check (25 steps, 12 min)
+     → Watcher Check (repeat error 2x, no evidence 5x)
+     → Phase Transition → DIAGNOSE/HALT
+```
 
-### Memory Retention Tuneables
+### Memory Decay Pipeline
 
-| Parameter | File | Default | Impact |
-|-----------|------|---------|--------|
-| WISDOM_HALF_LIFE | cognitive_learner.py | 180 days | Principle decay |
-| USER_UNDERSTANDING_HALF_LIFE | cognitive_learner.py | 90 days | Preference decay |
-| CONTEXT_HALF_LIFE | cognitive_learner.py | 45 days | Context decay |
-| max_age_days | cognitive_learner.py | 365 | Prune threshold |
+```
+Insight Created → Daily Decay (category half-life)
+              → Effective Reliability Drops
+              → Below 0.2? → Pruned
+              → Over 365 days? → Pruned
+```
 
-### System Limits
+---
 
-| Parameter | File | Default | Impact |
-|-----------|------|---------|--------|
-| MAX_EVENTS | queue.py | 10000 | Queue rotation |
-| MAX_ADVICE_ITEMS | advisor.py | 5 | Advice per query |
-| max_results | retriever.py | 10 | Retrieval limit |
-| MAX_CAPTURE_CHARS | memory_capture.py | 2000 | Input truncation |
+## Testing Recommendations
+
+### 1. Memory Gate Testing
+```python
+from lib.pattern_detection import get_memory_gate
+gate = get_memory_gate()
+
+# Create test step with known quality
+# Verify gate.score_step() returns expected score
+# Check gate.get_stats() for pass/reject rates
+```
+
+### 2. Distillation Quality Testing
+```python
+from lib.pattern_detection import get_pattern_distiller
+distiller = get_pattern_distiller()
+
+# Process known patterns
+# Verify distillation statements make sense
+# Check confidence scores match expectations
+```
+
+### 3. Watcher Testing
+```python
+from lib.eidos import get_elevated_control_plane
+control = get_elevated_control_plane()
+
+# Simulate stuck scenarios
+# Verify watchers trigger at thresholds
+# Check phase transitions happen correctly
+```
+
+### 4. Importance Scorer Testing
+```bash
+# Test specific text
+spark importance --text "Remember this: always use dark theme"
+
+# Should return CRITICAL tier
+
+spark importance --text "okay got it"
+
+# Should return LOW/IGNORE tier
+```
+
+### 5. End-to-End Learning Test
+1. Send user message with "remember this" trigger
+2. Verify auto-save in cognitive_insights.json
+3. Validate 3 times
+4. Check promotion to CLAUDE.md
+5. Verify retrieval in next session
