@@ -732,6 +732,33 @@ export SPARK_MIND_URL=https://mind.example.com:8080
 
 ---
 
+## 17. Chips (Activation & Validation)
+
+**Files:** `lib/chips/loader.py`, `lib/chips/registry.py`, `lib/chips/schema.py`, `lib/metalearning/strategist.py`
+
+Chip behavior is influenced by activation policy, auto-activation sensitivity, and schema validation mode.
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `chip.activation` | **auto / opt_in** | **Per-chip activation policy** in YAML. `auto` chips can be auto-activated from content. `opt_in` chips require explicit activation. |
+| `auto_activate_threshold` | **0.7** | **Metalearning auto-activation sensitivity.** Higher = fewer auto-activations. |
+| `trigger_deprecation_threshold` | **0.2** | **Deprecation threshold** for weak triggers in metalearning strategy. |
+| `provisional_chip_confidence` | **0.3** | **Minimum confidence** to promote a provisional chip. |
+| `SPARK_CHIP_SCHEMA_VALIDATION` | **warn** | **Schema validation mode**: `warn` (default) or `block` to reject invalid chips. |
+
+### When to Tune
+
+| Scenario | Adjustment |
+|----------|------------|
+| Too many chips auto-activating | Raise `auto_activate_threshold` or set more chips to `opt_in` |
+| Trigger noise persists | Raise `trigger_deprecation_threshold` |
+| Provisional chips too aggressive | Raise `provisional_chip_confidence` |
+| CI wants strict validation | Set `SPARK_CHIP_SCHEMA_VALIDATION=block` |
+
+---
+
 ## Monitoring Commands
 
 ```bash

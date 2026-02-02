@@ -22,6 +22,8 @@ Status legend: TODO | DOING | BLOCKED | DONE
 - DONE: Set default activation policy (auto: `spark-core`, opt-in: all others + examples). (2026-02-02)
 - DONE: Added schema validation mode switch via `SPARK_CHIP_SCHEMA_VALIDATION` (warn vs block). (2026-02-02)
 - DONE: Ran benchmark replay (limit 500) and generated `benchmarks/out/report.md`. (2026-02-02)
+- DONE: Added Spark Pulse chips + tuneables rail (right sidebar) and API. (2026-02-02)
+- DONE: Documented chip tuneables in `TUNEABLES.md`. (2026-02-02)
 - DONE: Normalize `spark-core` triggers to include `post_tool`, `post_tool_failure`, `user_prompt` and add safety metadata. (2026-02-02)
 - DONE: Precision pass on noisy triggers in `vibecoding`, `marketing`, `game-dev`, `market-intel`. (2026-02-02)
 - DONE: Audit required chip identity fields across runtime chips (no missing fields found). (2026-02-02)
@@ -72,6 +74,11 @@ Step 7 (DONE): Run benchmark replay to check signal quality.
 - Scope: benchmark replay.
 - Goal: quantify accept rates and outcome hits after trigger changes.
 - Exit criteria: `benchmarks/out/report.md` generated and reviewed.
+
+Step 8 (DONE): Add Spark Pulse chips + tuneables rail.
+- Scope: Spark Pulse UI.
+- Goal: expose chip activation + tuneables + integration actions in right sidebar.
+- Exit criteria: Spark Pulse renders Episode, Tuneables, Chips rails.
 
 ## Chip-by-Chip Checklist
 
