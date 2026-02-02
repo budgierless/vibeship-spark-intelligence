@@ -30,7 +30,7 @@ triggers:
     - "feedback shows"
 
   events:
-    - UserPromptSubmit
+    - user_prompt
 
 observers:
   - name: user_feedback

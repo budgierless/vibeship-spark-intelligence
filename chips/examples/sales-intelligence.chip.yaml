@@ -30,7 +30,7 @@ triggers:
     - "proposal sent"
 
   events:
-    - UserPromptSubmit
+    - user_prompt
 
 observers:
   - name: deal_outcome

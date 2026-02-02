@@ -62,6 +62,14 @@ nul
 .coverage
 htmlcov/
 
+# Local runtime artifacts
+logs/
+tmp/
+
+# Local npm scratch files (not tracked in repo)
+package.json
+package-lock.json
+
 # Benchmark artifacts
 benchmarks/out/
 benchmarks/logs/

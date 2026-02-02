@@ -29,7 +29,7 @@ triggers:
     - "click through"
 
   events:
-    - UserPromptSubmit
+    - user_prompt
 
 observers:
   - name: campaign_metric
