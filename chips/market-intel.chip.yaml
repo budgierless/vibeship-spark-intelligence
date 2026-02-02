@@ -8,6 +8,7 @@ chip:
   id: market-intel
   name: Market Intelligence
   version: 1.0.0
+  activation: opt_in
   description: |
     Makes Spark intelligent about market trends, competitor gaps, and viral patterns.
     Learns from X/Twitter research, competitor analysis, and ecosystem evolution.

@@ -73,6 +73,7 @@ chip:
   safety_tests:
     - "no_deceptive_growth"
     - "no_harmful_targeting"
+  activation: opt_in
   domains:
     - marketing
     - growth
@@ -149,6 +150,13 @@ questions:
 ```
 
 ## Core Concepts
+
+### Activation
+
+Chips can be auto-activated from content matching, or left opt-in:
+
+- `activation: auto` — eligible for auto-activation based on content.
+- `activation: opt_in` — only activates when explicitly enabled.
 
 ### 1. Triggers
 

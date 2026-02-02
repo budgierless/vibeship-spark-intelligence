@@ -190,6 +190,8 @@ class ChipRegistry:
                 continue
             if project_path and project_path in self._active and chip.id in self._active[project_path]:
                 continue
+            if getattr(chip, "activation", "auto") != "auto":
+                continue
 
             # Check triggers
             matches = chip.matches_content(content)

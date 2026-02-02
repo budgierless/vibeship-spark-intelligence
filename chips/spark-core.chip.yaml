@@ -5,6 +5,7 @@ chip:
   id: spark-core
   name: Spark Core Intelligence
   version: 1.0.0
+  activation: auto
   description: |
     Core intelligence for coding and tool patterns.
     Learns what works in software development workflows.

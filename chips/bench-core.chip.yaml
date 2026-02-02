@@ -4,6 +4,7 @@ chip:
   id: bench_core
   name: Benchmark Core Intelligence
   version: 0.1.0
+  activation: opt_in
   description: |
     Lightweight chip for benchmarking methodology variants.
     Captures generic tool and prompt signals without domain assumptions.

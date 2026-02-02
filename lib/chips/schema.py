@@ -19,6 +19,7 @@ REQUIRED_CHIP_FIELDS = [
 ]
 
 ALLOWED_RISK_LEVELS = {"low", "medium", "high"}
+ALLOWED_ACTIVATION = {"auto", "opt_in"}
 
 
 def validate_chip_spec(spec: Dict[str, Any]) -> List[str]:
@@ -46,6 +47,10 @@ def validate_chip_spec(spec: Dict[str, Any]) -> List[str]:
     safety_tests = chip.get("safety_tests")
     if safety_tests is not None and not isinstance(safety_tests, list):
         errors.append("chip.safety_tests must be a list if provided")
+
+    activation = chip.get("activation")
+    if activation and activation not in ALLOWED_ACTIVATION:
+        errors.append(f"invalid chip.activation: {activation}")
 
     return errors
 

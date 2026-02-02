@@ -5,6 +5,7 @@ chip:
   id: sales-intelligence
   name: Sales Intelligence
   version: 1.0.0
+  activation: opt_in
   description: |
     Learns sales patterns that close deals.
     Tracks objection handling, deal progression, and win/loss patterns.

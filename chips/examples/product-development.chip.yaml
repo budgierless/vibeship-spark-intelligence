@@ -5,6 +5,7 @@ chip:
   id: product-dev
   name: Product Development Intelligence
   version: 1.0.0
+  activation: opt_in
   description: |
     Learns product development patterns that lead to success.
     Tracks user feedback, feature decisions, and launch outcomes.

@@ -4,6 +4,7 @@ chip:
   id: vibecoding
   name: Vibecoding Intelligence
   version: 0.2.0
+  activation: opt_in
   description: |
     Learns engineering signals from code to outcomes.
     Focuses on quality, velocity, and reliability without harm.

@@ -4,6 +4,7 @@ chip:
   id: marketing
   name: Marketing Intelligence
   version: 0.1.0
+  activation: opt_in
   description: |
     Learns campaign, funnel, and messaging signals while avoiding manipulation.
   author: Vibeship

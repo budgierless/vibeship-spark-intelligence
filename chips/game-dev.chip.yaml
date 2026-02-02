@@ -4,6 +4,7 @@ chip:
   id: game_dev
   name: Game Dev Intelligence
   version: 0.2.0
+  activation: opt_in
   description: |
     Learns gameplay, balance, and retention signals to improve player outcomes.
   author: Vibeship

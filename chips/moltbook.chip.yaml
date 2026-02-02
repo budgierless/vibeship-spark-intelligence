@@ -8,6 +8,7 @@ chip:
   id: moltbook
   name: Moltbook Social Intelligence
   version: 1.0.0
+  activation: opt_in
   description: |
     Makes Spark intelligent about AI agent social networking on Moltbook.
     Learns what content resonates, which communities engage,

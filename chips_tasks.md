@@ -19,6 +19,9 @@ Status legend: TODO | DOING | BLOCKED | DONE
 - DONE: Updated `marketing` metric extraction + outcomes to avoid CAC false positives. (2026-02-02)
 - DONE: Tightened `spark-core` preference triggers to reduce generic matches. (2026-02-02)
 - DONE: Added warn-only chip schema validation on load. (2026-02-02)
+- DONE: Set default activation policy (auto: `spark-core`, opt-in: all others + examples). (2026-02-02)
+- DONE: Added schema validation mode switch via `SPARK_CHIP_SCHEMA_VALIDATION` (warn vs block). (2026-02-02)
+- DONE: Ran benchmark replay (limit 500) and generated `benchmarks/out/report.md`. (2026-02-02)
 - DONE: Normalize `spark-core` triggers to include `post_tool`, `post_tool_failure`, `user_prompt` and add safety metadata. (2026-02-02)
 - DONE: Precision pass on noisy triggers in `vibecoding`, `marketing`, `game-dev`, `market-intel`. (2026-02-02)
 - DONE: Audit required chip identity fields across runtime chips (no missing fields found). (2026-02-02)
@@ -30,12 +33,7 @@ Status legend: TODO | DOING | BLOCKED | DONE
 - (none)
 
 ## Next Up (priority order)
-1) Decide default activation policy (which chips are auto/opt-in).
-   - Why: controls noise and performance; aligns with product expectations.
-2) Add a config switch for schema validation (warn vs block).
-   - Why: production installs may want strict validation.
-3) Run benchmark replay to quantify trigger precision/recall drift.
-   - Why: verify recent trigger changes didn't harm signal quality.
+- (none)
 
 ## Step-by-Step Build
 Status legend: TODO | DOING | DONE
@@ -59,6 +57,21 @@ Step 4 (DONE): Wire chip schema validation (warn-only).
 - Scope: chip loading.
 - Goal: surface missing required identity/safety fields without breaking loads.
 - Exit criteria: loader logs validation errors but still loads chips.
+
+Step 5 (DONE): Set default activation policy for chips.
+- Scope: all runtime + example chips.
+- Goal: auto-activate only `spark-core`; keep others opt-in by default.
+- Exit criteria: chips carry `chip.activation` and auto-activation respects it.
+
+Step 6 (DONE): Add schema validation mode switch (warn vs block).
+- Scope: chip loading.
+- Goal: allow strict validation via config/env without breaking dev flows.
+- Exit criteria: `SPARK_CHIP_SCHEMA_VALIDATION=block` prevents invalid chip loads.
+
+Step 7 (DONE): Run benchmark replay to check signal quality.
+- Scope: benchmark replay.
+- Goal: quantify accept rates and outcome hits after trigger changes.
+- Exit criteria: `benchmarks/out/report.md` generated and reviewed.
 
 ## Chip-by-Chip Checklist
 

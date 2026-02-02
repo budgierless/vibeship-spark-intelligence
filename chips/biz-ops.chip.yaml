@@ -4,6 +4,7 @@ chip:
   id: biz-ops
   name: Business Ops Intelligence
   version: 0.1.0
+  activation: opt_in
   description: |
     Learns operational and pricing signals with clear ethics and transparency.
   author: Vibeship

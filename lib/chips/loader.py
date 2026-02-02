@@ -5,6 +5,7 @@ This was the first missing piece: we had beautiful YAML specs
 but no code to read them.
 """
 
+import os
 import yaml
 import logging
 from pathlib import Path
@@ -48,6 +49,7 @@ class Chip:
     trigger_patterns: List[str] = field(default_factory=list)
     trigger_events: List[str] = field(default_factory=list)
     trigger_tools: List[Dict[str, Any]] = field(default_factory=list)
+    activation: str = "auto"
     source_path: Optional[Path] = None
     raw_yaml: Dict[str, Any] = field(default_factory=dict)
 
@@ -92,6 +94,10 @@ class ChipLoader:
             spec_for_validation = data if isinstance(data, dict) and "chip" in data else {"chip": data}
             errors = validate_chip_spec(spec_for_validation)
             if errors:
+                validation_mode = os.getenv("SPARK_CHIP_SCHEMA_VALIDATION", "warn").strip().lower()
+                if validation_mode in ("block", "strict", "error"):
+                    log.error(f"Chip spec validation failed for {path}: {errors}")
+                    return None
                 log.warning(f"Chip spec validation failed for {path}: {errors}")
 
             # Handle nested 'chip' key
@@ -120,6 +126,7 @@ class ChipLoader:
                 version=chip_data.get('version', '0.1.0'),
                 description=chip_data.get('description', ''),
                 domains=chip_data.get('domains', []),
+                activation=chip_data.get('activation', 'auto'),
                 triggers=triggers,
                 trigger_patterns=trigger_patterns,
                 trigger_events=trigger_events,
