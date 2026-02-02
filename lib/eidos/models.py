@@ -105,7 +105,7 @@ class Budget:
     max_steps: int = 25
     max_time_seconds: int = 720  # 12 minutes
     max_retries_per_error: int = 2  # After 2 failures, stop modifying
-    max_file_touches: int = 2  # Max times to modify same file per episode
+    max_file_touches: int = 3  # Max times to modify same file per episode (raised from 2)
     no_evidence_limit: int = 5  # Force DIAGNOSE after N steps without evidence
 
     def to_dict(self) -> Dict[str, Any]:

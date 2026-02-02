@@ -40,7 +40,7 @@ EFFECTIVENESS_FILE = ADVISOR_DIR / "effectiveness.json"
 MIN_RELIABILITY_FOR_ADVICE = 0.6
 MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
 MAX_ADVICE_ITEMS = 5
-ADVICE_CACHE_TTL_SECONDS = 300  # 5 minutes
+ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
 
 
 # ============= Data Classes =============

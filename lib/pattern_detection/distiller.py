@@ -55,7 +55,8 @@ class PatternDistiller:
 
     def __init__(
         self,
-        min_occurrences: int = 3,
+        min_occurrences: int = 2,  # Lowered from 3 for faster learning
+        min_occurrences_critical: int = 1,  # CRITICAL tier: learn from single occurrence
         min_confidence: float = 0.6,
         gate_threshold: float = 0.5
     ):
@@ -63,11 +64,13 @@ class PatternDistiller:
         Initialize the distiller.
 
         Args:
-            min_occurrences: Minimum times a pattern must occur
+            min_occurrences: Minimum times a pattern must occur (default)
+            min_occurrences_critical: Minimum for CRITICAL importance (fast-track)
             min_confidence: Minimum confidence for a distillation
             gate_threshold: Memory gate score threshold
         """
         self.min_occurrences = min_occurrences
+        self.min_occurrences_critical = min_occurrences_critical
         self.min_confidence = min_confidence
         self.gate_threshold = gate_threshold
         self.store = get_store()
@@ -78,6 +81,7 @@ class PatternDistiller:
             "candidates_generated": 0,
             "distillations_created": 0,
             "gate_rejections": 0,
+            "critical_fast_tracked": 0,  # CRITICAL tier fast-track count
         }
 
     def distill_from_steps(self, steps: List[Step]) -> List[Distillation]:
@@ -626,9 +630,20 @@ class PatternDistiller:
         return {
             **self._stats,
             "min_occurrences": self.min_occurrences,
+            "min_occurrences_critical": self.min_occurrences_critical,
             "min_confidence": self.min_confidence,
             "gate_threshold": self.gate_threshold,
         }
+
+    def get_effective_min_occurrences(self, importance_tier: str = "medium") -> int:
+        """
+        Get the effective minimum occurrences based on importance tier.
+
+        CRITICAL tier items are fast-tracked with lower occurrence requirement.
+        """
+        if importance_tier.lower() == "critical":
+            return self.min_occurrences_critical
+        return self.min_occurrences
 
 
 # Singleton instance

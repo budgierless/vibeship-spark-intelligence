@@ -64,7 +64,7 @@ class MemoryGate:
         "novelty": 0.20,     # Is this new?
         "surprise": 0.30,    # Was outcome unexpected?
         "recurrence": 0.20,  # Multiple occurrences?
-        "irreversible": 0.40, # High stakes?
+        "irreversible": 0.60, # High stakes? (raised from 0.40 - should dominate)
         "evidence": 0.10,    # Has validation?
     }
 

@@ -36,7 +36,8 @@ from ..importance_scorer import get_importance_scorer, ImportanceTier
 
 
 # Confidence threshold to trigger learning
-CONFIDENCE_THRESHOLD = 0.7
+# Lowered from 0.7 to let importance scorer do quality filtering
+CONFIDENCE_THRESHOLD = 0.6
 
 # Patterns log file
 PATTERNS_LOG = Path.home() / ".spark" / "detected_patterns.jsonl"

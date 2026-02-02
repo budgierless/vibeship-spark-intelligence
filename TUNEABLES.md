@@ -28,7 +28,7 @@ Final Score = Σ(signal_present × signal_weight)
 | `WEIGHTS["novelty"]` | 0.20 | **New pattern signal.** Is this something we haven't seen before? Detects first-time tool combinations, new error types, or unique approaches. |
 | `WEIGHTS["surprise"]` | 0.30 | **Prediction error signal.** Did the outcome differ from what was predicted? Surprises indicate learning opportunities - the system's model was wrong. |
 | `WEIGHTS["recurrence"]` | 0.20 | **Frequency signal.** Has this pattern appeared 3+ times? Recurring patterns are likely stable and worth remembering. |
-| `WEIGHTS["irreversible"]` | 0.40 | **Stakes signal.** Is this a high-stakes action (production deploy, security change, data deletion)? Irreversible actions get extra weight because mistakes are costly. |
+| `WEIGHTS["irreversible"]` | 0.60 | **Stakes signal.** Is this a high-stakes action (production deploy, security change, data deletion)? Irreversible actions get dominant weight because mistakes are costly. Raised from 0.40. |
 | `WEIGHTS["evidence"]` | 0.10 | **Validation signal.** Is there concrete evidence (test pass, user confirmation) supporting this? Evidence-backed items are more trustworthy. |
 
 ### Scoring Examples
@@ -59,7 +59,7 @@ Total: 0.0 ✗ REJECTED
 | Missing important learnings | Lower `threshold` to 0.4 |
 | Want more emphasis on errors | Raise `surprise` weight |
 | Learning too slowly | Lower `recurrence` weight |
-| High-stakes project (finance, security) | Raise `irreversible` weight to 0.5+ |
+| High-stakes project (finance, security) | Weight already at 0.60, raise to 0.7+ if needed |
 
 ---
 
@@ -80,7 +80,8 @@ The Pattern Distiller analyzes completed Steps to extract reusable rules (Distil
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `min_occurrences` | **3** | **Evidence threshold.** A pattern must appear at least this many times before being distilled into a rule. Prevents one-off flukes from becoming permanent guidance. |
+| `min_occurrences` | **2** | **Evidence threshold.** A pattern must appear at least this many times before being distilled into a rule. Lowered from 3 for faster learning. |
+| `min_occurrences_critical` | **1** | **Fast-track for CRITICAL tier.** Critical importance items (explicit "remember this", corrections) are learned from a single occurrence. |
 | `min_confidence` | **0.6** | **Success rate threshold.** For heuristics (if X then Y), the pattern must have worked at least 60% of the time. Filters out unreliable patterns. |
 | `gate_threshold` | **0.5** | **Memory gate threshold** (inherited from Memory Gate). Distillations must score above this to be stored. |
 
@@ -98,10 +99,11 @@ The Pattern Distiller analyzes completed Steps to extract reusable rules (Distil
 
 | Scenario | Adjustment |
 |----------|------------|
-| Learning too slowly | Lower `min_occurrences` to 2 |
-| Distillations are unreliable | Raise `min_occurrences` to 5 |
+| Learning too slowly | Lower `min_occurrences` to 1 |
+| Distillations are unreliable | Raise `min_occurrences` to 4-5 |
 | Too many weak heuristics | Raise `min_confidence` to 0.7-0.8 |
 | Missing edge case patterns | Lower `min_confidence` to 0.5 |
+| Want more one-shot learning | Lower `min_occurrences_critical` (already at 1) |
 
 ---
 
@@ -158,7 +160,7 @@ Event → All Detectors Run → Patterns Collected → Corroboration Check → L
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `CONFIDENCE_THRESHOLD` | **0.7** | **Learning trigger threshold.** Patterns must have at least 70% confidence to trigger learning. Below this, patterns are detected but not acted on. |
+| `CONFIDENCE_THRESHOLD` | **0.6** | **Learning trigger threshold.** Patterns must have at least 60% confidence to trigger learning. Lowered from 0.7 to let importance scorer do quality filtering. |
 | `DEDUPE_TTL_SECONDS` | **600** | **Deduplication window (10 min).** The same pattern won't be processed twice within this window. Prevents spammy patterns from flooding the system. |
 | `DISTILLATION_INTERVAL` | **20** | **Batch size for distillation.** After every 20 events processed, the distiller runs to analyze completed Steps. Lower = more frequent distillation. |
 
@@ -197,7 +199,7 @@ These are **circuit breakers** - when tripped, they force the system to stop and
 | `max_steps` | **25** | **Step limit per episode.** After 25 actions without completing the goal, force DIAGNOSE phase. Prevents endless looping. |
 | `max_time_seconds` | **720** | **Time limit (12 minutes).** Episodes taking longer than this are force-stopped. Protects against infinite loops and runaway processes. |
 | `max_retries_per_error` | **2** | **Error retry limit.** After failing the same way twice, stop retrying and diagnose. Prevents "try harder" loops. |
-| `max_file_touches` | **2** | **File modification limit.** Can only modify the same file twice per episode. Third touch triggers DIAGNOSE. Prevents diff thrash. |
+| `max_file_touches` | **3** | **File modification limit.** Can only modify the same file three times per episode. Fourth touch triggers DIAGNOSE. Raised from 2 to allow legitimate iteration. |
 | `no_evidence_limit` | **5** | **Evidence requirement.** After 5 steps without gathering new evidence (file reads, test runs, etc.), force DIAGNOSE. Prevents blind flailing. |
 
 ### What Happens When Limits Hit
@@ -238,7 +240,7 @@ Each watcher monitors a specific metric. When the threshold is exceeded, it fire
 |---------|-----------|-----------------|----------|
 | **Repeat Error** | **2** | Same error signature appearing twice. | → DIAGNOSE. Stop modifying, investigate root cause. |
 | **No New Info** | **5** | Five consecutive steps without gathering new evidence. | → DIAGNOSE. Must read/test before acting. |
-| **Diff Thrash** | **3** | Same file modified three times. | → SIMPLIFY. Freeze file, find alternative. |
+| **Diff Thrash** | **4** | Same file modified four times (after max_file_touches=3). | → SIMPLIFY. Freeze file, find alternative. |
 | **Confidence Stagnation** | **0.05 × 3** | Confidence delta < 5% for three steps. | → PLAN. Step back, reconsider approach. |
 | **Memory Bypass** | **1** | Action taken without citing retrieved memory. | BLOCK. Must acknowledge memory or declare absent. |
 | **Budget Half No Progress** | **50%** | Budget >50% consumed with no progress. | → SIMPLIFY. Reduce scope, focus on core. |
@@ -444,7 +446,7 @@ Tool + Context → Query Memory Banks + Cognitive Insights + Mind → Rank by Re
 | `MIN_RELIABILITY_FOR_ADVICE` | **0.6** | **Quality filter.** Only include insights with 60%+ reliability in advice. Lower than promotion threshold because advice is just suggestions. |
 | `MIN_VALIDATIONS_FOR_STRONG_ADVICE` | **2** | **Strong advice threshold.** Insights validated 2+ times are marked as "strong" advice. |
 | `MAX_ADVICE_ITEMS` | **5** | **Advice limit.** Maximum advice items returned per query. More advice = more context but slower decisions. |
-| `ADVICE_CACHE_TTL_SECONDS` | **300** | **Cache duration (5 min).** Same query within 5 minutes returns cached advice. Reduces redundant lookups. |
+| `ADVICE_CACHE_TTL_SECONDS` | **120** | **Cache duration (2 min).** Same query within 2 minutes returns cached advice. Lowered from 5 min for fresher context. |
 
 ### Advice Sources
 
@@ -463,7 +465,7 @@ Tool + Context → Query Memory Banks + Cognitive Insights + Mind → Rank by Re
 |----------|------------|
 | Getting too much advice | Lower `MAX_ADVICE_ITEMS` to 3 |
 | Missing relevant warnings | Lower `MIN_RELIABILITY_FOR_ADVICE` to 0.5 |
-| Advice is stale | Lower `ADVICE_CACHE_TTL_SECONDS` to 60 |
+| Advice is stale | Lower `ADVICE_CACHE_TTL_SECONDS` to 60 (already lowered to 120) |
 | Performance issues | Raise cache TTL to 600 (10 min) |
 
 ---
