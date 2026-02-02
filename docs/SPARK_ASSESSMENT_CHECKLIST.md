@@ -7,6 +7,7 @@ Status: documentation only. Use before any implementation changes.
 - SparkEventV1 schema compliance across all adapters.
 - Event queue growth and drop behavior under load.
 - Hook latency and failure modes (PreToolUse/PostToolUse).
+- Hook names normalize to runtime event types for chips: post_tool, post_tool_failure, user_prompt.
 
 ### Risks
 - Schema drift between adapters.

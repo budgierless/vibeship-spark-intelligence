@@ -50,10 +50,10 @@ class Chip:
     raw_yaml: Dict[str, Any] = field(default_factory=dict)
 
     def matches_content(self, content: str) -> List[str]:
-        """Check which triggers match the content. Returns matched triggers."""
+        """Check which pattern triggers match the content (exclude event triggers)."""
         content_lower = content.lower()
         matched = []
-        for trigger in self.triggers:
+        for trigger in self.trigger_patterns:
             if trigger.lower() in content_lower:
                 matched.append(trigger)
         return matched

@@ -58,19 +58,25 @@ triggers:
   # Pattern-based triggers (match against event content)
   patterns:
     - "moltbook"
-    - "posted to"
-    - "commented on"
-    - "upvote"
-    - "karma"
+    - "posted to moltbook"
+    - "commented on moltbook"
+    - "moltbook upvote"
+    - "moltbook karma"
     - "submolt"
-    - "agent community"
-    - "trending"
-    - "engagement"
-    - "viral"
-    - "social post"
+    - "moltbook community"
+    - "moltbook trending"
+    - "moltbook engagement"
+    - "moltbook viral"
+    - "moltbook post"
 
   # Event type triggers
   events:
+    - post_tool
+    - post_tool_failure
+    - user_prompt
+    - PostToolUse
+    - PostToolUseFailure
+    - UserPromptSubmit
     - moltbook_post_created
     - moltbook_comment_created
     - moltbook_vote_cast
@@ -81,6 +87,14 @@ triggers:
 
   # Tool triggers (when specific tools are used in moltbook context)
   tools:
+    - name: Edit
+      context_contains: ["moltbook", "submolt", "karma", "moltbook.com"]
+    - name: Write
+      context_contains: ["moltbook", "submolt", "karma", "moltbook.com"]
+    - name: Read
+      context_contains: ["moltbook", "submolt", "karma", "moltbook.com"]
+    - name: Bash
+      context_contains: ["moltbook", "submolt", "karma", "moltbook.com"]
     - name: WebFetch
       context_contains: ["moltbook.com", "agent social", "submolt"]
     - name: moltbook_post
@@ -98,8 +112,9 @@ observers:
 
     triggers:
       - "posted to moltbook"
-      - "created post"
+      - "moltbook post created"
       - "shared on moltbook"
+      - "moltbook post"
 
     capture:
       required:
@@ -119,8 +134,8 @@ observers:
     extraction:
       - field: submolt
         patterns:
-          - "submolt[:\\s]+[\"']?([^\"']+)[\"']?"
-          - "posted to[:\\s]+[\"']?([^\"']+)[\"']?"
+          - "\\bsubmolt\\b[:\\s]+[\"']?([^\"']+)[\"']?"
+          - "\\bposted to\\b[:\\s]+[\"']?([^\"']+)[\"']?"
           - '/m/([a-zA-Z0-9_-]+)'
 
       - field: content_type
@@ -133,10 +148,10 @@ observers:
     description: Captures post engagement metrics
 
     triggers:
-      - "post performance"
-      - "karma update"
-      - "engagement report"
-      - "post stats"
+      - "moltbook post performance"
+      - "moltbook karma update"
+      - "moltbook engagement report"
+      - "moltbook post stats"
 
     capture:
       required:
@@ -157,9 +172,9 @@ observers:
     description: Tracks comments and their reception
 
     triggers:
-      - "commented on"
-      - "replied to"
-      - "added comment"
+      - "commented on moltbook"
+      - "replied on moltbook"
+      - "moltbook comment added"
 
     capture:
       required:
@@ -178,8 +193,8 @@ observers:
     description: Tracks comment engagement
 
     triggers:
-      - "comment karma"
-      - "comment engagement"
+      - "moltbook comment karma"
+      - "moltbook comment engagement"
 
     capture:
       required:
@@ -195,9 +210,10 @@ observers:
     description: Captures trending content patterns
 
     triggers:
-      - "fetched feed"
-      - "trending posts"
-      - "hot content"
+      - "moltbook feed fetched"
+      - "moltbook trending posts"
+      - "moltbook hot content"
+      - "moltbook feed analysis"
 
     capture:
       required:
@@ -214,8 +230,9 @@ observers:
     description: Tracks periodic check-in activity
 
     triggers:
-      - "heartbeat"
-      - "periodic check"
+      - "moltbook heartbeat"
+      - "moltbook periodic check"
+      - "moltbook check-in"
 
     capture:
       required:

@@ -31,26 +31,99 @@ triggers:
     - "latency spike"
     - "incident"
     - "merge"
-    - "pr"
+    - "pull request"
   events:
+    - "post_tool"
+    - "post_tool_failure"
+    - "user_prompt"
+    - "PostToolUse"
+    - "PostToolUseFailure"
+    - "UserPromptSubmit"
     - "code_change"
     - "pr_opened"
     - "test_failed"
     - "deploy_finished"
     - "incident_opened"
+  tools:
+    - name: Edit
+      context_contains:
+        - "src/"
+        - "lib/"
+        - "app/"
+        - "tests/"
+        - "test/"
+        - ".py"
+        - ".js"
+        - ".tsx"
+        - ".go"
+        - ".rs"
+        - "package.json"
+        - "pyproject.toml"
+        - "Cargo.toml"
+        - "go.mod"
+        - "pom.xml"
+    - name: Write
+      context_contains:
+        - "src/"
+        - "lib/"
+        - "app/"
+        - "tests/"
+        - "test/"
+        - ".py"
+        - ".js"
+        - ".tsx"
+        - ".go"
+        - ".rs"
+        - "package.json"
+        - "pyproject.toml"
+        - "Cargo.toml"
+        - "go.mod"
+        - "pom.xml"
+    - name: Read
+      context_contains:
+        - "src/"
+        - "lib/"
+        - "app/"
+        - "tests/"
+        - "test/"
+        - ".py"
+        - ".js"
+        - ".tsx"
+        - ".go"
+        - ".rs"
+        - "package.json"
+        - "pyproject.toml"
+        - "Cargo.toml"
+        - "go.mod"
+        - "pom.xml"
+    - name: Bash
+      context_contains:
+        - "pytest"
+        - "npm test"
+        - "pnpm test"
+        - "yarn test"
+        - "bun test"
+        - "go test"
+        - "cargo test"
+        - "mvn test"
+        - "gradle test"
+        - "make test"
+        - "lint"
+        - "build"
+        - "deploy"
 
 observers:
   - name: code_change
     description: Tracks code changes and their scope
     triggers: ["commit", "code change", "diff", "refactor"]
     capture:
-      required:
+      optional:
         repo: "Repository name"
         commit_id: "Commit SHA"
-      optional:
         branch: "Branch name"
         files_changed: "Count of files changed"
         diff_lines: "Lines added/removed"
+        file_path: "File path (if available)"
     extraction:
       - field: repo
         patterns:
@@ -73,12 +146,12 @@ observers:
     description: Tracks CI/test failures
     triggers: ["test failed", "ci failed", "build failed", "flaky test"]
     capture:
-      required:
+      optional:
         repo: "Repository name"
         test_name: "Failing test identifier"
-      optional:
         error_code: "Error/exception identifier"
         build_id: "Build ID"
+        file_path: "File path (if available)"
     extraction:
       - field: repo
         patterns:
@@ -99,13 +172,13 @@ observers:
     description: Tracks deploys and rollbacks
     triggers: ["deploy", "release", "rollback"]
     capture:
-      required:
+      optional:
         repo: "Repository name"
         env: "Environment"
-      optional:
         status: "success/failure"
         release_id: "Release identifier"
         rollback: "true/false"
+        file_path: "File path (if available)"
     extraction:
       - field: repo
         patterns:

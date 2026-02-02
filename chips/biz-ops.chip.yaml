@@ -23,21 +23,85 @@ chip:
 
 triggers:
   patterns:
-    - "pricing"
-    - "forecast"
+    - "pricing experiment"
+    - "pricing test"
+    - "revenue forecast"
     - "runway"
     - "ops brief"
     - "operational risk"
-    - "budget"
+    - "budget forecast"
   events:
+    - "post_tool"
+    - "post_tool_failure"
+    - "user_prompt"
+    - "PostToolUse"
+    - "PostToolUseFailure"
+    - "UserPromptSubmit"
     - "pricing_experiment"
     - "forecast_created"
     - "ops_plan"
+  tools:
+    - name: Edit
+      context_contains:
+        - "pricing"
+        - "pricing experiment"
+        - "forecast"
+        - "runway"
+        - "budget"
+        - "ops brief"
+        - "operational"
+        - "dependency"
+        - "risk"
+        - "assumption"
+        - "revenue"
+        - "burn"
+        - "variant"
+        - "segment"
+    - name: Write
+      context_contains:
+        - "pricing"
+        - "pricing experiment"
+        - "forecast"
+        - "runway"
+        - "budget"
+        - "ops brief"
+        - "operational"
+        - "dependency"
+        - "risk"
+        - "assumption"
+        - "revenue"
+        - "burn"
+        - "variant"
+        - "segment"
+    - name: Read
+      context_contains:
+        - "pricing"
+        - "pricing experiment"
+        - "forecast"
+        - "runway"
+        - "budget"
+        - "ops brief"
+        - "operational"
+        - "dependency"
+        - "risk"
+        - "assumption"
+        - "revenue"
+        - "burn"
+        - "variant"
+        - "segment"
+    - name: Bash
+      context_contains:
+        - "pricing"
+        - "forecast"
+        - "runway"
+        - "budget"
+        - "revenue"
+        - "burn"
 
 observers:
   - name: ops_brief
     description: Tracks operational brief and risks
-    triggers: ["ops brief", "operational risk", "dependencies"]
+    triggers: ["ops brief", "operational risk", "ops dependency", "operational dependency", "ops dependencies", "operational dependencies"]
     capture:
       required:
         owner: "Owner or team"
@@ -48,21 +112,21 @@ observers:
     extraction:
       - field: owner
         patterns:
-          - "owner\\s*[:=]\\s*(.+)"
-          - "team\\s*[:=]\\s*(.+)"
+          - "\\bowner\\b\\s*[:=]\\s*(.+)"
+          - "\\bteam\\b\\s*[:=]\\s*(.+)"
       - field: risk
         patterns:
-          - "risk\\s*[:=]\\s*(.+)"
+          - "\\brisk\\b\\s*[:=]\\s*(.+)"
       - field: dependency
         patterns:
-          - "dependency\\s*[:=]\\s*(.+)"
+          - "\\bdependency\\b\\s*[:=]\\s*(.+)"
       - field: mitigation
         patterns:
-          - "mitigation\\s*[:=]\\s*(.+)"
+          - "\\bmitigation\\b\\s*[:=]\\s*(.+)"
 
   - name: pricing_experiment
     description: Tracks pricing experiment setup
-    triggers: ["pricing", "experiment", "plan", "variant"]
+    triggers: ["pricing experiment", "pricing test", "pricing plan", "pricing variant", "experiment plan"]
     capture:
       required:
         variant_id: "Pricing variant"
@@ -74,24 +138,24 @@ observers:
     extraction:
       - field: variant_id
         patterns:
-          - "variant\\s*#?\\s*([A-Za-z0-9_-]+)"
+          - "\\bvariant\\b\\s*#?\\s*([A-Za-z0-9_-]+)"
           - "variant_id\\s*[:=]\\s*([A-Za-z0-9_-]+)"
       - field: target_segment
         patterns:
-          - "segment\\s*[:=]\\s*(.+)"
+          - "\\bsegment\\b\\s*[:=]\\s*(.+)"
       - field: price_point
         patterns:
-          - "price\\s*point\\s*[:=]\\s*(.+)"
+          - "\\bprice\\s*point\\b\\s*[:=]\\s*(.+)"
       - field: duration
         patterns:
-          - "duration\\s*[:=]\\s*(.+)"
+          - "\\bduration\\b\\s*[:=]\\s*(.+)"
       - field: success_metric
         patterns:
-          - "success\\s*metric\\s*[:=]\\s*(.+)"
+          - "\\bsuccess\\s*metric\\b\\s*[:=]\\s*(.+)"
 
   - name: forecast
     description: Tracks forecast assumptions and outputs
-    triggers: ["forecast", "runway", "assumptions", "projection"]
+    triggers: ["forecast", "runway", "forecast assumptions", "revenue projection", "burn projection"]
     capture:
       required:
         horizon: "Forecast horizon"
@@ -102,16 +166,18 @@ observers:
     extraction:
       - field: horizon
         patterns:
-          - "horizon\\s*[:=]\\s*(.+)"
+          - "\\bhorizon\\b\\s*[:=]\\s*(.+)"
       - field: assumption
         patterns:
-          - "assumption\\s*[:=]\\s*(.+)"
+          - "\\bassumption\\b\\s*[:=]\\s*(.+)"
+        keywords:
+          missing: ["assumption missing", "assumptions missing", "no assumption", "assumption: tbd", "assumptions: tbd", "assumption unknown"]
       - field: revenue
         patterns:
-          - "revenue\\s*[:=]\\s*(.+)"
+          - "\\brevenue\\b\\s*[:=]\\s*(.+)"
       - field: burn
         patterns:
-          - "burn\\s*[:=]\\s*(.+)"
+          - "\\bburn\\b\\s*[:=]\\s*(.+)"
 
 outcomes:
   positive:
@@ -119,7 +185,7 @@ outcomes:
       insight: "Pricing experiment uses retention metric"
       weight: 1.0
   negative:
-    - condition: "assumption == ''"
+    - condition: "assumption == missing"
       insight: "Forecast missing assumptions"
       weight: 1.0
 

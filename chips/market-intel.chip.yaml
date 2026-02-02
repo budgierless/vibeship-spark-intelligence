@@ -48,13 +48,13 @@ triggers:
     - "moltbook"
     - "openclaw"
     - "competitor"
-    - "viral"
-    - "trending"
+    - "viral content"
+    - "trending topic"
     - "x trend"
     - "twitter trend"
-    - "engagement"
+    - "engagement spike"
     - "what's working"
-    - "gap in"
+    - "competitor gap"
     - "missing feature"
     - "users want"
     - "market opportunity"
@@ -64,6 +64,12 @@ triggers:
 
   # Event type triggers
   events:
+    - post_tool
+    - post_tool_failure
+    - user_prompt
+    - PostToolUse
+    - PostToolUseFailure
+    - UserPromptSubmit
     - x_research  # From X research event pipeline
     - x_search_completed
     - competitor_analyzed

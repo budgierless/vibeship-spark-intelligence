@@ -281,10 +281,27 @@ Add to `.claude/settings.json`:
         "type": "command",
         "command": "python3 /path/to/Spark/hooks/observe.py"
       }]
+    }],
+    "PostToolUseFailure": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /path/to/Spark/hooks/observe.py"
+      }]
+    }],
+    "UserPromptSubmit": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /path/to/Spark/hooks/observe.py"
+      }]
     }]
   }
 }
 ```
+
+Spark maps these hook names to runtime event types used by chips:
+`post_tool`, `post_tool_failure`, `user_prompt`.
 
 ## Directory Structure
 

@@ -86,8 +86,8 @@ triggers:
     - "conversion rate"
     - "audience responded"
   events:
-    - UserPromptSubmit
-    - PostToolUse
+    - user_prompt
+    - post_tool
 
 # Observers - What data to capture?
 observers:
@@ -157,8 +157,13 @@ Triggers determine when a chip activates:
 | Type | Example | Use Case |
 |------|---------|----------|
 | `patterns` | `"worked because"` | Natural language signals |
-| `events` | `PostToolUse` | Hook events from Claude Code |
+| `events` | `post_tool` | Hook events from Claude Code |
 | `tools` | `{name: "Bash"}` | Specific tool usage |
+
+Note: Claude Code hook names (PostToolUse, PostToolUseFailure, UserPromptSubmit)
+are normalized to runtime event types (`post_tool`, `post_tool_failure`,
+`user_prompt`). Use runtime names in chip triggers; add legacy hook names only
+if your environment emits them directly.
 
 ### 2. Observers
 

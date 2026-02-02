@@ -30,20 +30,110 @@ triggers:
     - "balance"
     - "difficulty"
     - "retention"
-    - "bug"
-    - "fun"
     - "frustrating"
+    - "not fun"
   events:
+    - "post_tool"
+    - "post_tool_failure"
+    - "user_prompt"
+    - "PostToolUse"
+    - "PostToolUseFailure"
+    - "UserPromptSubmit"
     - "playtest_result"
     - "balance_change"
     - "build_released"
     - "bug_reported"
     - "user_feedback"
+  tools:
+    - name: Edit
+      context_contains:
+        - "game"
+        - "playtest"
+        - "balance"
+        - "difficulty"
+        - "retention"
+        - "churn"
+        - "session length"
+        - "loot"
+        - "drop rate"
+        - "combat"
+        - "enemy"
+        - "player"
+        - "level"
+        - "unity"
+        - "unreal"
+        - "godot"
+        - ".unity"
+        - ".uproject"
+        - ".tscn"
+        - ".gd"
+        - ".cs"
+        - ".cpp"
+        - "assets/"
+    - name: Write
+      context_contains:
+        - "game"
+        - "playtest"
+        - "balance"
+        - "difficulty"
+        - "retention"
+        - "churn"
+        - "session length"
+        - "loot"
+        - "drop rate"
+        - "combat"
+        - "enemy"
+        - "player"
+        - "level"
+        - "unity"
+        - "unreal"
+        - "godot"
+        - ".unity"
+        - ".uproject"
+        - ".tscn"
+        - ".gd"
+        - ".cs"
+        - ".cpp"
+        - "assets/"
+    - name: Read
+      context_contains:
+        - "game"
+        - "playtest"
+        - "balance"
+        - "difficulty"
+        - "retention"
+        - "churn"
+        - "session length"
+        - "loot"
+        - "drop rate"
+        - "combat"
+        - "enemy"
+        - "player"
+        - "level"
+        - "unity"
+        - "unreal"
+        - "godot"
+        - ".unity"
+        - ".uproject"
+        - ".tscn"
+        - ".gd"
+        - ".cs"
+        - ".cpp"
+        - "assets/"
+    - name: Bash
+      context_contains:
+        - "unity"
+        - "unreal"
+        - "godot"
+        - "build"
+        - "playtest"
+        - "assets"
+        - "scene"
 
 observers:
   - name: playtest_feedback
     description: Captures playtest feedback and satisfaction
-    triggers: ["playtest", "feedback", "fun", "frustrating"]
+    triggers: ["playtest", "feedback", "frustrating", "not fun"]
     capture:
       required:
         playtest_id: "Playtest identifier"
@@ -114,7 +204,7 @@ observers:
           churn: ["churn"]
       - field: metric_value
         patterns:
-          - "(?:retention|churn|session length)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)"
+          - "(?:retention|churn|session length)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*%|\\b)"
       - field: period
         patterns:
           - "period\\s*[:=]\\s*([A-Za-z0-9_-]+)"

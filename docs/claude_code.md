@@ -31,3 +31,7 @@ We intentionally **do not auto-merge** settings.json to avoid clobbering custom 
 - sparkd health: http://127.0.0.1:8787/health
 
 If you want richer capture (chat text), ensure `UserPromptSubmit` is enabled.
+Spark normalizes hook names to runtime event types used by chips:
+- PostToolUse -> post_tool
+- PostToolUseFailure -> post_tool_failure
+- UserPromptSubmit -> user_prompt

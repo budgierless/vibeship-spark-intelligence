@@ -25,6 +25,9 @@ triggers:
     - "post_tool"
     - "post_tool_failure"
     - "user_prompt"
+    - "PostToolUse"
+    - "PostToolUseFailure"
+    - "UserPromptSubmit"
   patterns:
     - "tool"
     - "command"

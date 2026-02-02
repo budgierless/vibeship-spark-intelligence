@@ -47,6 +47,10 @@ triggers:
     - "conversion rate"
     - "bounce rate"
     - "A/B test"
+  events:
+    - user_prompt
+    - post_tool
+    - post_tool_failure
 ```
 
 ### Phase 3: Data Capture Design (5 min)
@@ -161,6 +165,10 @@ triggers:
     - "success phrase 1"
     - "failure phrase 1"
     - "decision phrase 1"
+  events:
+    - user_prompt
+    - post_tool
+    - post_tool_failure
 
 # 3. OBSERVERS
 observers:

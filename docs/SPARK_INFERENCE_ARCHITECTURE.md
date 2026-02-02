@@ -80,6 +80,7 @@ What we have:
 - Tool call hooks (PreToolUse, PostToolUse, PostToolUseFailure)
 - User prompt capture
 - Success/failure tracking
+- Runtime event names used by chips: post_tool, post_tool_failure, user_prompt (normalized from hook names)
 
 What's missing:
 - **Conversation flow capture** - What led to what?

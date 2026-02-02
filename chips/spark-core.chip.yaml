@@ -10,6 +10,14 @@ chip:
     Learns what works in software development workflows.
   author: Vibeship
   license: MIT
+  human_benefit: "Improve coding outcomes and debugging speed through reusable patterns."
+  harm_avoidance:
+    - "No unsafe automation in production"
+    - "No misleading or unverified claims"
+  risk_level: medium
+  safety_tests:
+    - "no_unsafe_automation"
+    - "no_misleading_claims"
   domains:
     - coding
     - development
@@ -23,12 +31,16 @@ triggers:
     - "the issue was"
     - "fixed by"
     - "better approach"
-    - "prefer"
-    - "always"
-    - "never"
+    - "prefer to"
+    - "prefer using"
+    - "always use"
+    - "never use"
     - "remember to"
 
   events:
+    - post_tool
+    - post_tool_failure
+    - user_prompt
     - PostToolUse
     - PostToolUseFailure
     - UserPromptSubmit
@@ -82,10 +94,12 @@ observers:
   - name: preference
     description: Captures user preferences
     triggers:
-      - "prefer"
-      - "better"
-      - "always"
-      - "never"
+      - "prefer to"
+      - "prefer using"
+      - "better to"
+      - "better when"
+      - "always use"
+      - "never use"
     capture:
       required:
         preference: The preference

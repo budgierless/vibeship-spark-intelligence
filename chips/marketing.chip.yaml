@@ -34,14 +34,73 @@ triggers:
     - "cac"
     - "roas"
   events:
+    - "post_tool"
+    - "post_tool_failure"
+    - "user_prompt"
+    - "PostToolUse"
+    - "PostToolUseFailure"
+    - "UserPromptSubmit"
     - "campaign_brief"
     - "ad_copy_created"
     - "experiment_defined"
+  tools:
+    - name: Edit
+      context_contains:
+        - "campaign"
+        - "funnel"
+        - "landing page"
+        - "landing"
+        - "headline"
+        - "ad copy"
+        - "cta"
+        - "positioning"
+        - "value prop"
+        - "ad variant"
+        - "copy variant"
+        - "marketing/"
+    - name: Write
+      context_contains:
+        - "campaign"
+        - "funnel"
+        - "landing page"
+        - "landing"
+        - "headline"
+        - "ad copy"
+        - "cta"
+        - "positioning"
+        - "value prop"
+        - "ad variant"
+        - "copy variant"
+        - "marketing/"
+    - name: Read
+      context_contains:
+        - "campaign"
+        - "funnel"
+        - "landing page"
+        - "landing"
+        - "headline"
+        - "ad copy"
+        - "cta"
+        - "positioning"
+        - "value prop"
+        - "ad variant"
+        - "copy variant"
+        - "marketing/"
+    - name: Bash
+      context_contains:
+        - "utm"
+        - "ga4"
+        - "analytics"
+        - "ctr"
+        - "cpc"
+        - "cac"
+        - "roas"
+        - "conversion"
 
 observers:
   - name: campaign_brief
     description: Tracks campaign positioning and target audience
-    triggers: ["brief", "positioning", "target audience", "value prop"]
+    triggers: ["campaign brief", "positioning", "target audience", "value prop"]
     capture:
       required:
         product: "Product or offer"
@@ -71,7 +130,7 @@ observers:
 
   - name: ad_copy
     description: Tracks ad copy variants and messaging
-    triggers: ["ad copy", "headline", "cta", "variant"]
+    triggers: ["ad copy", "headline", "cta", "ad variant", "copy variant"]
     capture:
       required:
         channel: "Distribution channel"
@@ -120,7 +179,7 @@ observers:
           conversion_rate: ["conversion rate"]
       - field: metric_value
         patterns:
-          - "(?:ctr|cpc|cac|roas|conversion rate)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)"
+          - "(?:ctr|cpc|cac|roas|conversion rate)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*%|\\b)"
       - field: channel
         keywords:
           email: ["email", "newsletter"]
@@ -139,7 +198,7 @@ outcomes:
       insight: "ROAS reported"
       weight: 1.0
   negative:
-    - condition: "metric_value > 200"
+    - condition: "metric_name == CAC and metric_value > 200"
       insight: "CAC too high"
       weight: 1.0
 
