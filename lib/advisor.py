@@ -153,7 +153,8 @@ class SparkAdvisor:
         tool_name: str,
         tool_input: Dict[str, Any],
         task_context: str = "",
-        include_mind: bool = True
+        include_mind: bool = True,
+        track_retrieval: bool = True
     ) -> List[Advice]:
         """
         Get relevant advice before executing an action.
@@ -165,6 +166,8 @@ class SparkAdvisor:
             tool_input: The input to the tool
             task_context: Optional description of what we're trying to do
             include_mind: Whether to query Mind for additional context
+            track_retrieval: Whether to track this retrieval for outcome measurement.
+                Set to False for sampling/analysis to avoid polluting metrics.
 
         Returns:
             List of Advice objects, sorted by relevance
@@ -214,22 +217,23 @@ class SparkAdvisor:
         # Limit to top N
         advice_list = advice_list[:MAX_ADVICE_ITEMS]
 
-        # Log advice given
-        self._log_advice(advice_list, tool_name, context)
+        # Log advice given (only for operational use, not sampling)
+        if track_retrieval:
+            self._log_advice(advice_list, tool_name, context)
 
-        # Track retrievals in Meta-Ralph for outcome tracking
-        try:
-            from .meta_ralph import get_meta_ralph
-            ralph = get_meta_ralph()
-            for adv in advice_list:
-                ralph.track_retrieval(
-                    adv.advice_id,
-                    adv.text,
-                    insight_key=adv.insight_key,
-                    source=adv.source,
-                )
-        except Exception:
-            pass  # Don't break advice flow if tracking fails
+            # Track retrievals in Meta-Ralph for outcome tracking
+            try:
+                from .meta_ralph import get_meta_ralph
+                ralph = get_meta_ralph()
+                for adv in advice_list:
+                    ralph.track_retrieval(
+                        adv.advice_id,
+                        adv.text,
+                        insight_key=adv.insight_key,
+                        source=adv.source,
+                    )
+            except Exception:
+                pass  # Don't break advice flow if tracking fails
 
         # Cache for reuse
         self._cache_advice(cache_key, advice_list)
@@ -661,6 +665,11 @@ class SparkAdvisor:
     def _get_recent_advice_entry(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Return the most recent advice entry for a tool within TTL.
 
+        Uses fuzzy matching to handle tool name variations:
+        - "Bash" matches "Bash command"
+        - "Edit" matches "Edit file"
+        - "Read" matches "Read code"
+
         Falls back to 'task' advice if no specific tool advice found,
         since Task tool spawns sub-agents that use other tools.
         """
@@ -674,6 +683,7 @@ class SparkAdvisor:
         now = time.time()
         tool_lower = tool_name.lower()  # Case-insensitive matching
         task_fallback = None  # Track most recent task advice as fallback
+        prefix_match = None  # Track prefix matches (e.g., "Bash" in "Bash command")
 
         for line in reversed(lines[-RECENT_ADVICE_MAX_LINES:]):
             try:
@@ -691,13 +701,19 @@ class SparkAdvisor:
             if entry_tool == tool_lower:
                 return entry
 
+            # Prefix match: "Bash" matches "bash command", "Edit" matches "edit file"
+            if prefix_match is None:
+                if entry_tool.startswith(tool_lower + " ") or entry_tool.startswith(tool_lower + "_"):
+                    prefix_match = entry
+                elif tool_lower.startswith(entry_tool + " ") or tool_lower.startswith(entry_tool + "_"):
+                    prefix_match = entry
+
             # Track task advice as fallback (sub-agents use tools spawned by Task)
             if entry_tool == "task" and task_fallback is None:
                 task_fallback = entry
 
-        # Fall back to task advice if no specific tool match
-        # This links outcomes from Bash/Edit/etc to the Task that spawned them
-        return task_fallback
+        # Return prefix match if found, else fall back to task advice
+        return prefix_match or task_fallback
 
     def _find_recent_advice_by_id(self, advice_id: str) -> Optional[Dict[str, Any]]:
         """Find recent advice entry containing a specific advice_id."""

@@ -192,6 +192,82 @@ This is the ultimate filter for what Spark should learn.
 
 ---
 
+### CATEGORY D: MULTI-DOMAIN EVOLUTION (Rules 16-20)
+
+#### Rule 16: Spark Evolves Across All Domains
+
+> **Spark is not just for coding - it learns across vibe coding, marketing, UI/UX, trends, business, and more.**
+
+Active domain chips in `~/.spark/chip_insights/`:
+- `game_dev` - Game balance, physics, feel
+- `marketing` - Audience, campaigns, metrics
+- `vibecoding` - Flow state, iteration patterns
+- `market-intel` - Trends, competitors, opportunities
+- `biz-ops` - Operations, processes, decisions
+- `spark-core` - Self-improvement learnings
+
+Every session should activate relevant chips and capture domain-specific insights.
+
+#### Rule 17: Data-Grounded Iteration Only
+
+> **ALL metrics, findings, and improvements MUST come from persistent storage.**
+
+```python
+# CORRECT: Read from storage
+from pathlib import Path
+import json
+data = json.loads((Path.home() / '.spark' / 'cognitive_insights.json').read_text())
+
+# WRONG: Trust terminal output or in-memory state
+print("I saw 100 insights")  # Ephemeral, unverifiable
+```
+
+Never claim improvement without storage evidence. Never hallucinate progress.
+
+#### Rule 18: Rolling Window for Active Metrics
+
+> **For rate-based metrics, use rolling windows to avoid historical debt.**
+
+Old records without outcomes dilute current performance. When measuring acted-on rate:
+- Prefer last 24h window over all-time
+- Document which window is used
+- Separate "historical debt" from "current health"
+
+```python
+# Good: Rolling window
+recent_records = [r for r in records if age(r) < timedelta(hours=24)]
+rate = acted_on_recent / len(recent_records)
+
+# Misleading: All-time (includes stale records)
+rate = acted_on_total / len(all_records)
+```
+
+#### Rule 19: Cross-Domain Learning Synthesis
+
+> **Insights from one domain should inform others when applicable.**
+
+Examples:
+- Game balance insights → Product feature prioritization
+- Marketing audience patterns → UI/UX decisions
+- Vibe coding flow states → Documentation style
+- Trend analysis → Feature roadmap
+
+Use chip merger (`lib/chip_merger.py`) to promote cross-domain patterns to cognitive system.
+
+#### Rule 20: Resonance Over Metrics
+
+> **Spark should resonate with user intentions, not just optimize numbers.**
+
+The goal is not perfect metrics. The goal is:
+- Useful advice at the right moment
+- Learning what actually helps
+- Evolving understanding of preferences
+- Building genuine intelligence, not gaming scores
+
+Ask: "Does this make Spark more helpful?" not "Does this improve the metric?"
+
+---
+
 ### Quick Commands Reference
 
 ```bash
@@ -753,19 +829,19 @@ When domain detected, chips should:
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-03T19:06:41
+Last updated: 2026-02-03T22:05:02
 
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (22% reliable, 889 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (21% reliable, 1483 validations)
-- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (20% reliable, 778 validations)
-- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 424 validations)
-- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (10% reliable, 361 validations)
-- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (10% reliable, 356 validations)
-- [self_awareness] I struggle with Bash fails with permission_denied -> Fix: Check file permissions or run with ele tasks (10% reliable, 255 validations)
-- [self_awareness] I struggle with Bash fails with json_error -> Fix: Verify JSON format is valid (recovered 100%) tasks (10% reliable, 269 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (21% reliable, 991 validations)
-- [user_understanding] All right, what else should we do next right now? What else do you want to test and iterate? make sure that whenever we are doing these tests, they're always information coming directly from the mind memory and Spark intelligence itself instead of things that are coming from the terminal please let's add this into META_RALPH as a very primary rule and @CLAUDE.md as a very key rule too (100% reliable, 4 validations)
-- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (76% reliable, 108 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (22% reliable, 950 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (20% reliable, 1520 validations)
+- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (19% reliable, 811 validations)
+- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 453 validations)
+- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (10% reliable, 390 validations)
+- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (10% reliable, 385 validations)
+- [self_awareness] I struggle with Bash fails with permission_denied -> Fix: Check file permissions or run with ele tasks (10% reliable, 284 validations)
+- [self_awareness] I struggle with Bash fails with json_error -> Fix: Verify JSON format is valid (recovered 100%) tasks (10% reliable, 298 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (21% reliable, 1026 validations)
+- [user_understanding] All right, what else should we do next right now? What else do you want to test and iterate? make sure that whenever we are doing these tests, they're always information coming directly from the mind memory and Spark intelligence itself instead of things that are coming from the terminal please let's add this into META_RALPH as a very primary rule and @CLAUDE.md as a very key rule too (100% reliable, 7 validations)
+- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (76% reliable, 112 validations)
 - [self_awareness] Pattern 'Edit' risky: Edit without prior Read may cause content mismatch (2% reliable, 50 validations)
 
 ## Project Focus
