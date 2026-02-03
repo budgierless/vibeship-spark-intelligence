@@ -214,6 +214,8 @@ Patterns that Meta-Ralph has learned to reject:
 ### Generic Templates
 - "For X tasks, use standard approach"
 - "Recurring Y errors (Nx)"
+- "Validation count: N"
+- "Tool timeout: N"
 
 ### Operational Sequences
 - "Bash → Edit sequence"
@@ -281,6 +283,7 @@ curl http://localhost:8788/api/stats
 | 2026-02-03 | Integrated importance scorer | Pattern matching alone missed semantic value | Pass rate 8.1%→26.4%, dual scoring system |
 | 2026-02-03 | Fixed decision detection | "use/using" matched primitives like "use standard approach" | Now only matches "decided/chose/went with/switched to" |
 | 2026-02-03 | Validated quality items | Need to verify learnings are genuinely useful | 100% of passed items are human-valuable |
+| 2026-02-03 | Fixed primitive patterns | 65 items stuck in needs_work (score 2-3) were operational | Added patterns for "Recurring X errors", "File modified:", fixed "use standard" regex |
 
 ---
 
@@ -339,10 +342,29 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| Quality Rate | 36.6% | Good |
+| Quality Rate | 38.9% | Good |
 | Trend | Improving | On track |
-| Total Roasted | 153 | Growing |
+| Total Roasted | 203 | Growing |
 | Refinements Made | 4 | Active |
+| Filter Accuracy | 100% | Optimal |
+
+### Latest Fix: Needs_Work Cleanup
+
+**Problem:** 65 items stuck in needs_work zone (score 2-3) were actually operational primitives.
+
+**Root Cause:** Primitive patterns weren't catching:
+- "For X tasks, use standard approach" (regex had required comma)
+- "Recurring X errors (Nx)" (pattern missing entirely)
+
+**Fix:** Added/improved patterns in `PRIMITIVE_PATTERNS`:
+```python
+r"for \w+ tasks,? use standard"      # Fixed: comma now optional
+r"recurring \w+ errors? \(\d+x\)"    # New pattern
+r"file modified:"                     # New pattern
+r"tool timeout"                       # New pattern
+```
+
+**Result:** These items now score 0 and are rejected as primitive.
 
 ### Skill Domain Coverage
 
