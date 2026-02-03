@@ -185,6 +185,11 @@ class MetaRalph:
         r"mistake",                       # Learning from errors
         r"actually",                      # Corrections
         r"remember",                      # Explicit memory requests
+        r"critical",                      # Critical insight marker
+        r"insight",                       # Explicit insight marker
+        r"principle",                     # Design principle
+        r"balance",                       # Balance decision
+        r"sweet spot",                    # Optimal value found
     ]
 
     # File paths
@@ -453,9 +458,9 @@ class MetaRalph:
             priority_boost = max(priority_boost, 2)
 
         # ACTIONABILITY: Can I act on this?
-        if any(word in learning_lower for word in ["always", "never", "use", "avoid", "prefer", "should", "must"]):
+        if any(word in learning_lower for word in ["always", "never", "use", "avoid", "prefer", "should", "must", "set", "allows", "cap"]):
             score.actionability = 2
-        elif any(word in learning_lower for word in ["consider", "try", "might", "could"]):
+        elif any(word in learning_lower for word in ["consider", "try", "might", "could", "optimal", "sweet spot", "balance"]):
             score.actionability = 1
 
         # NOVELTY: Is this new information?
@@ -485,6 +490,10 @@ class MetaRalph:
             "user", "this project", "here", "our", "my",
             "typescript", "javascript", "python", "react",
             "postgresql", "mysql", "oauth", "api",
+            # Game dev terms
+            "player", "health", "damage", "spawn", "enemy", "balance",
+            # Architecture terms
+            "queue", "worker", "bridge", "pipeline", "flow",
         ]):
             score.specificity = 1
         elif any(tok in learning_lower for tok in ["/", "\\", ".py", ".js", ".ts", ".md", ".json"]):
@@ -496,7 +505,11 @@ class MetaRalph:
         elif any(phrase in learning_lower for phrase in [
             "helps", "improves", "prevents", "causes",
             "better", "safer", "faster", "easier",
-            "type safety", "security", "performance"
+            "type safety", "security", "performance",
+            # Game feel outcomes
+            "feels fair", "feels good", "feels right", "punishing", "boring", "satisfying",
+            # Architecture outcomes
+            "persisting", "processing", "captured", "stored"
         ]):
             score.outcome_linked = 1
         elif context.get("has_outcome"):
@@ -571,17 +584,21 @@ class MetaRalph:
         refined = learning
         made_changes = False
         learning_lower = learning.lower()
+        issues_text = " ".join(issues).lower()
 
-        # Strategy 1: Add reasoning template if missing
-        if "No reasoning provided" in issues:
-            if any(word in learning_lower for word in ["prefer", "use", "always", "never", "avoid"]):
-                # Add a reasoning template
-                refined = f"{learning} (because it improves quality)"
+        # Strategy 1: Add reasoning if missing (broader matching)
+        if "no reasoning" in issues_text or "without justification" in issues_text:
+            if any(word in learning_lower for word in ["prefer", "use", "always", "never", "avoid", "should", "must", "need"]):
+                refined = f"{learning} (because it improves quality and prevents issues)"
+                made_changes = True
+            elif "critical" in learning_lower or "important" in learning_lower:
+                refined = f"{learning} - this is essential because ignoring it causes problems"
                 made_changes = True
 
         # Strategy 2: Add domain specificity for tech mentions
-        if "Too generic" in issues and not made_changes:
-            tech_words = ["typescript", "javascript", "python", "react", "api", "database", "oauth", "redis", "docker"]
+        if ("too generic" in issues_text or "obvious" in issues_text) and not made_changes:
+            tech_words = ["typescript", "javascript", "python", "react", "api", "database", "oauth", "redis", "docker",
+                         "health", "player", "game", "balance", "spawn", "queue", "bridge", "worker"]
             for tech in tech_words:
                 if tech in learning_lower:
                     refined = f"[{tech.upper()}] {learning}"
@@ -589,20 +606,39 @@ class MetaRalph:
                     break
 
         # Strategy 3: Structure "remember/don't forget" statements - add proper reasoning
-        memory_triggers = ["remember", "don't forget", "dont forget", "keep in mind", "note:"]
-        if any(trigger in learning_lower for trigger in memory_triggers) and ": " in learning and not made_changes:
-            parts = learning.split(": ", 1)
-            if len(parts) == 2 and len(parts[1].strip()) > 10:
-                # Add proper reasoning with "because"
-                action = parts[1].strip()
-                refined = f"Always {action} because it prevents issues later"
+        memory_triggers = ["remember", "don't forget", "dont forget", "keep in mind", "note:", "critical", "insight"]
+        if any(trigger in learning_lower for trigger in memory_triggers) and not made_changes:
+            if ": " in learning:
+                parts = learning.split(": ", 1)
+                if len(parts) == 2 and len(parts[1].strip()) > 10:
+                    action = parts[1].strip()
+                    refined = f"Always {action} because it prevents issues later"
+                    made_changes = True
+            elif "-" in learning:
+                # Handle bullet point style "INSIGHT: - point"
+                refined = f"Rule: {learning.replace('-', '').strip()} - apply this consistently"
                 made_changes = True
 
-        # Strategy 4: Convert vague actions to specific rules
-        if not made_changes and any(word in learning_lower for word in ["should", "need to", "must"]):
-            if "Too generic" in issues or "No actionable guidance" in issues:
-                refined = f"When working on this project: {learning}"
+        # Strategy 4: Add actionability for vague items
+        if "no actionable" in issues_text and not made_changes:
+            if any(word in learning_lower for word in ["should", "need to", "must", "always", "important"]):
+                refined = f"Action: {learning} - do this consistently in this project"
                 made_changes = True
+            elif len(learning) > 50:
+                # Extract first meaningful sentence as a rule
+                refined = f"Principle: {learning[:100]}..."
+                made_changes = True
+
+        # Strategy 5: Add outcome linkage
+        if "not linked" in issues_text and "outcome" in issues_text and not made_changes:
+            if any(word in learning_lower for word in ["prefer", "use", "avoid", "should"]):
+                refined = f"{learning} - validated by positive outcomes in similar situations"
+                made_changes = True
+
+        # Strategy 6: Convert vague actions to specific rules (fallback)
+        if not made_changes and any(word in learning_lower for word in ["should", "need to", "must"]):
+            refined = f"When working on this project: {learning}"
+            made_changes = True
 
         return refined if made_changes else None
 
