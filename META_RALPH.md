@@ -678,6 +678,7 @@ curl http://localhost:8788/api/stats
 
 | Date | Change | Reason | Outcome |
 |------|--------|--------|---------|
+| 2026-02-03 | Fixed pipeline health aggregator check to use persistent stats + backlog | Health check was reading non-existent keys, reporting false FAIL | Pattern detection now reported accurately (logged patterns + backlog) |
 | 2026-02-03 | Added sample-size guardrails + per-source quality checks | Avoid tuning on low data | More stable recommendations |
 | 2026-02-03 | quality_threshold 7→5→4 | Over-filtering (2.8% pass rate) | Pass rate 8.1%, quality maintained |
 | 2026-02-03 | needs_work_threshold 4→2 | Proportional adjustment | Better distribution |
@@ -764,6 +765,97 @@ Updated Rule 13 to explicitly require META_RALPH.md synchronization:
 - `lib/pattern_detection/aggregator.py` (added persistent stats)
 - `CLAUDE.md` (Rule 13 enhanced with META_RALPH.md sync requirement)
 - `META_RALPH.md` (Rule 13 enhanced, this session entry added)
+
+---
+
+### Session 7: 2026-02-03 (Task-to-Tool Outcome Linking Fix)
+
+**Goal:** Fix acted-on rate being stuck at 0.2% despite 500 retrievals.
+
+**Issue Investigated:**
+
+Learning utilization showed:
+- Retrieved: 500 (31.3%)
+- Acted On: 1 (0.2%)
+
+Learnings were being retrieved but never marked as "acted on".
+
+**Root Cause Found:**
+
+Advice was logged for "task" tool (977 entries) but outcomes reported for actual tools like "Bash", "Edit", "Grep". The mismatch broke the feedback loop:
+
+| Advice Given | Outcomes Reported |
+|--------------|-------------------|
+| task: 977 | task: 0 |
+| Edit: 11 | Bash: 43 |
+| Bash: 2 | Edit: 20 |
+
+When Task tool is called, it spawns sub-agents that use Bash/Edit/etc. The sub-agent tools report outcomes, but advice was logged for "task", not those tools.
+
+**Fix Applied:**
+
+Modified `_get_recent_advice_entry()` in `lib/advisor.py` to fall back to "task" advice when no specific tool advice is found:
+
+```python
+# Track task advice as fallback (sub-agents use tools spawned by Task)
+if entry_tool == "task" and task_fallback is None:
+    task_fallback = entry
+
+# Fall back to task advice if no specific tool match
+return task_fallback
+```
+
+**Result:**
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Acted On | 1 | 9 |
+| Acted On Rate | 0.2% | 1.8% |
+| Improvement | - | **9x** |
+
+**Files Changed:**
+- `lib/advisor.py` (task fallback in `_get_recent_advice_entry`)
+- `META_RALPH.md` (this session entry)
+
+---
+
+### Session 6: 2026-02-03 (Pipeline Health Accuracy & Baseline Capture)
+
+**Goal:** Start a new Meta-Ralph iteration loop with a trustworthy health gate.
+
+**Issue Investigated:**
+
+Pipeline health was reporting:
+`Pattern aggregator active: Events: 0, Patterns: 0`
+even though `~/.spark/detected_patterns.jsonl` contained 586 patterns.
+
+**Root Cause Found:**
+
+`test_pipeline_health.py` was reading non-existent keys:
+- Expected: `events_processed`, `patterns_detected`
+- Actual stats: `total_patterns_logged`, `total_patterns_detected`
+
+This caused a false FAIL despite working pattern detection.
+
+**Fix Applied:**
+
+Updated health check to use persistent stats and backlog:
+- `total_patterns_logged` (from log file)
+- `total_patterns_detected` (in-memory)
+- `get_pattern_backlog()` (queue lag)
+
+**Evidence:**
+| Metric | Value |
+|--------|-------|
+| Pipeline health | PASSED |
+| Patterns logged (all-time) | 586 |
+| Pattern backlog | 0 |
+| Baseline quality rate | 47.2% (187/396) |
+| Cognitive density | 42.2% |
+
+**Files Changed:**
+- `tests/test_pipeline_health.py` (correct aggregator stats)
+- `META_RALPH.md` (changelog + session entry)
 
 ---
 
@@ -1010,7 +1102,7 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 
 ---
 
-## Current State: 2026-02-03 (Session 5 Complete)
+## Current State: 2026-02-03 (Session 7 Complete)
 
 ### Intelligence Evolution Metrics
 

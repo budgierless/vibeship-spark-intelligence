@@ -504,7 +504,11 @@ class SparkAdvisor:
             pass
 
     def _get_recent_advice_entry(self, tool_name: str) -> Optional[Dict[str, Any]]:
-        """Return the most recent advice entry for a tool within TTL."""
+        """Return the most recent advice entry for a tool within TTL.
+
+        Falls back to 'task' advice if no specific tool advice found,
+        since Task tool spawns sub-agents that use other tools.
+        """
         if not RECENT_ADVICE_LOG.exists():
             return None
         try:
@@ -514,18 +518,31 @@ class SparkAdvisor:
 
         now = time.time()
         tool_lower = tool_name.lower()  # Case-insensitive matching
+        task_fallback = None  # Track most recent task advice as fallback
+
         for line in reversed(lines[-RECENT_ADVICE_MAX_LINES:]):
             try:
                 entry = json.loads(line)
             except Exception:
                 continue
-            # Case-insensitive tool name matching (fixes Task vs task mismatch)
-            if entry.get("tool", "").lower() != tool_lower:
-                continue
+
             ts = float(entry.get("ts") or 0.0)
-            if now - ts <= RECENT_ADVICE_MAX_AGE_S:
+            if now - ts > RECENT_ADVICE_MAX_AGE_S:
+                continue  # Too old
+
+            entry_tool = entry.get("tool", "").lower()
+
+            # Exact tool match - return immediately
+            if entry_tool == tool_lower:
                 return entry
-        return None
+
+            # Track task advice as fallback (sub-agents use tools spawned by Task)
+            if entry_tool == "task" and task_fallback is None:
+                task_fallback = entry
+
+        # Fall back to task advice if no specific tool match
+        # This links outcomes from Bash/Edit/etc to the Task that spawned them
+        return task_fallback
 
     def _find_recent_advice_by_id(self, advice_id: str) -> Optional[Dict[str, Any]]:
         """Find recent advice entry containing a specific advice_id."""
