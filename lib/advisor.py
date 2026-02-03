@@ -45,7 +45,7 @@ ADVISOR_DIR = Path.home() / ".spark" / "advisor"
 ADVICE_LOG = ADVISOR_DIR / "advice_log.jsonl"
 EFFECTIVENESS_FILE = ADVISOR_DIR / "effectiveness.json"
 RECENT_ADVICE_LOG = ADVISOR_DIR / "recent_advice.jsonl"
-RECENT_ADVICE_MAX_AGE_S = 900  # 15 min (was 5 min) - longer tasks need more time
+RECENT_ADVICE_MAX_AGE_S = 1200  # 20 min (was 15 min) - Ralph Loop tuning for better acted-on rate
 RECENT_ADVICE_MAX_LINES = 200
 
 # Thresholds (Improvement #8: Advisor Integration tuneables)
@@ -296,7 +296,20 @@ class SparkAdvisor:
                 continue
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(text):
                 continue
+            # Filter metadata patterns like "X: Y = Z" (Task #16)
+            if self._is_metadata_pattern(text):
+                continue
             context_match = self._calculate_context_match(text, context)
+
+            # Add reason from memory metadata (always provide a reason)
+            reason = "From memory bank"  # Default fallback
+            if mem.get("project_key"):
+                reason = f"From project: {mem.get('project_key')}"
+            elif mem.get("created_at"):
+                created = mem.get('created_at', '')
+                if isinstance(created, str):
+                    reason = f"Stored: {created[:10]}"
+
             advice.append(Advice(
                 advice_id=self._generate_advice_id(text),
                 insight_key=f"bank:{mem.get('entry_id', '')}",
@@ -304,6 +317,7 @@ class SparkAdvisor:
                 confidence=0.65,
                 source="bank",
                 context_match=context_match,
+                reason=reason,
             ))
 
         return advice
@@ -383,6 +397,12 @@ class SparkAdvisor:
                 if tool_name.lower() not in str(surprise.context).lower():
                     continue
                 lesson = surprise.lesson_extracted or "Be careful - this failed unexpectedly before"
+
+                # Add reason with timestamp and context
+                reason = f"Failed on {surprise.timestamp[:10] if hasattr(surprise, 'timestamp') else 'recently'}"
+                if hasattr(surprise, 'context') and surprise.context:
+                    reason += f" in {str(surprise.context)[:30]}"
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(lesson),
                     insight_key=f"surprise:{surprise.surprise_type}",
@@ -390,6 +410,7 @@ class SparkAdvisor:
                     confidence=0.8,
                     source="surprise",
                     context_match=0.9,
+                    reason=reason,
                 ))
         except Exception:
             pass  # aha_tracker might not be available
@@ -412,6 +433,10 @@ class SparkAdvisor:
                 text = f"Consider skill [{sid}]: {desc[:120]}"
             else:
                 text = f"Consider skill [{sid}]"
+
+            # Add reason from skill relevance
+            reason = f"Matched: {s.get('match_reason', 'context keywords')}" if s.get('match_reason') else "Relevant to context"
+
             advice.append(Advice(
                 advice_id=self._generate_advice_id(text),
                 insight_key=f"skill:{sid}",
@@ -419,6 +444,7 @@ class SparkAdvisor:
                 confidence=0.6,
                 source="skill",
                 context_match=0.7,
+                reason=reason,
             ))
 
         return advice
@@ -443,6 +469,11 @@ class SparkAdvisor:
                 # Determine advice type label based on distillation type
                 type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
 
+                # Add reason from distillation confidence and usage
+                reason = f"Confidence: {d.confidence:.0%}"
+                if hasattr(d, 'usage_count') and d.usage_count:
+                    reason += f", used {d.usage_count}x"
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(d.statement),
                     insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
@@ -450,6 +481,7 @@ class SparkAdvisor:
                     confidence=d.confidence,
                     source="eidos",
                     context_match=0.85,
+                    reason=reason,
                 ))
                 # Record usage (will mark helped=True on positive outcome)
                 retriever.record_usage(d.distillation_id, helped=False)
@@ -472,6 +504,49 @@ class SparkAdvisor:
 
         overlap = len(insight_words & current_words)
         return min(1.0, overlap / max(len(insight_words), 1) + 0.3)
+
+    def _is_metadata_pattern(self, text: str) -> bool:
+        """Detect metadata patterns that aren't actionable advice.
+
+        Filters patterns like:
+        - "User communication style: detail_level = concise"
+        - "X: Y = Z" key-value metadata
+        - Incomplete sentence fragments
+        """
+        import re
+
+        text_stripped = text.strip()
+
+        # Pattern 1: Key-value metadata "X: Y = Z" or "X: Y"
+        # e.g., "User communication style: detail_level = concise"
+        if re.match(r'^[A-Za-z\s]+:\s*[a-z_]+\s*=\s*.+$', text_stripped):
+            return True
+
+        # Pattern 2: Simple "Label: value" metadata without actionable content
+        # e.g., "Principle: it is according to..."
+        if re.match(r'^(Principle|Style|Setting|Config|Meta|Mode|Level|Type):\s*', text_stripped, re.I):
+            # Only filter if it doesn't contain action verbs
+            action_verbs = ['use', 'avoid', 'check', 'verify', 'ensure', 'always',
+                           'never', 'remember', "don't", 'prefer', 'try', 'run']
+            if not any(v in text_stripped.lower() for v in action_verbs):
+                return True
+
+        # Pattern 3: Underscore-style metadata keys
+        # e.g., "detail_level", "code_style", "response_format"
+        if re.match(r'^[a-z_]+\s*[:=]\s*.+$', text_stripped):
+            return True
+
+        # Pattern 4: Very short fragments (likely metadata, not advice)
+        if len(text_stripped) < 15 and ':' in text_stripped:
+            return True
+
+        # Pattern 5: Incomplete sentences ending with conjunctions/prepositions
+        incomplete_endings = [' that', ' the', ' a', ' an', ' of', ' to', ' for',
+                             ' with', ' and', ' or', ' but', ' in', ' on', ' we']
+        if any(text_stripped.lower().endswith(e) for e in incomplete_endings):
+            return True
+
+        return False
 
     def _score_actionability(self, text: str) -> float:
         """Score how actionable advice is (0.0 to 1.0).

@@ -19,6 +19,7 @@ from lib.chips import process_chip_events
 from lib.chip_merger import merge_chip_insights
 from lib.context_sync import sync_context
 from lib.diagnostics import log_debug
+from lib.advisor import report_outcome
 
 
 BRIDGE_HEARTBEAT_FILE = Path.home() / ".spark" / "bridge_worker_heartbeat.json"
@@ -126,6 +127,24 @@ def run_bridge_cycle(
     except Exception as e:
         stats["errors"].append("content_learning")
         log_debug("bridge_worker", "content learning failed", e)
+
+    # Outcome reporting - close the advice feedback loop
+    try:
+        outcome_count = 0
+        for ev in events:
+            tool = (ev.tool_name or "").strip()
+            if not tool:
+                continue
+            if ev.event_type == EventType.POST_TOOL:
+                report_outcome(tool, success=True, advice_helped=True)
+                outcome_count += 1
+            elif ev.event_type == EventType.POST_TOOL_FAILURE:
+                report_outcome(tool, success=False, advice_helped=False)
+                outcome_count += 1
+        stats["outcomes_reported"] = outcome_count
+    except Exception as e:
+        stats["errors"].append("outcome_reporting")
+        log_debug("bridge_worker", "outcome reporting failed", e)
 
     # Chip processing - domain-specific insights
     try:
