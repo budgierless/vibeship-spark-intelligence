@@ -1,46 +1,218 @@
 # CLAUDE
 
-## 🚨 PRIMARY RULES (Non-Negotiable)
+## SPARK INTELLIGENCE CONSTITUTION
 
-### Rule 1: Test Data from Spark/Mind, Not Terminal
+### The 15 Non-Negotiable Rules
 
-**CRITICAL:** When testing and validating Spark learning:
+These rules govern ALL work on Spark Intelligence. They exist to ensure every improvement is real, grounded in architecture, and produces actual learning - not hallucinated progress.
 
-> **Always retrieve test results directly from Mind memory and Spark Intelligence - NEVER rely on terminal output.**
+> **"Perfect scoring with broken pipeline = zero learning"**
 
-### Rule 2: Architecture-Grounded Changes
+---
 
-**CRITICAL:** Before making improvements to Spark:
+### CATEGORY A: REALITY GROUNDING (Rules 1-5)
 
-> **Read Intelligence_Flow.md and Intelligence_Flow_Map.md to understand where your change applies in the actual data flow.**
+#### Rule 1: Data from Storage, Not Terminal
 
-The real flow is:
+> **Always retrieve test results from persistent storage - NEVER rely on terminal output.**
+
+Terminal output is ephemeral. The truth lives in:
+- `~/.spark/cognitive_insights.json` (cognitive learnings)
+- `~/.spark/eidos.db` (EIDOS distillations)
+- `~/.mind/lite/memories.db` (Mind memories)
+
+#### Rule 2: Pipeline Health Before Everything
+
+> **Run `python tests/test_pipeline_health.py` FIRST before any tuning or improvement.**
+
+If this fails, STOP. Fix the pipeline before proceeding. Scoring improvements mean nothing if the pipeline isn't running.
+
+#### Rule 3: Anti-Hallucination Verification
+
+> **Every claimed improvement must have storage evidence.**
+
+Never accept:
+- "I saw X in terminal" (ephemeral)
+- "The code looks correct" (may not be in data path)
+- "Scoring improved" (scoring ≠ storage)
+
+Always verify:
+```bash
+python -c "from pathlib import Path; import json; print(len(json.loads((Path.home()/'.spark'/'cognitive_insights.json').read_text()).get('insights',[])))"
 ```
-observe.py → queue → bridge_worker → bridge_cycle → {cognitive_learner, eidos, chips} → persistence
+
+#### Rule 4: End-to-End Flow Verification
+
+> **After any change, verify events flow through the complete pipeline.**
+
+```bash
+python tests/test_pipeline_health.py flow
 ```
 
-If you change `observe.py` but `bridge_worker` isn't running, nothing will be learned.
-If you fix `cognitive_learner` but it's not being called by `bridge_cycle`, nothing changes.
+A change that isn't in the active data path does nothing.
 
-**Always verify:** Is bridge_worker running? Is the queue being processed?
+#### Rule 5: Utilization Over Storage
 
-### Rule 3: Pipeline Health Before Tuning
+> **Stored learnings that never get used provide zero value.**
 
-**CRITICAL:** Before ANY tuning or iteration session:
+Track the full loop: `Learn → Store → Retrieve → Use → Outcome → Validate`
 
-> **Run `python tests/test_pipeline_health.py` FIRST. Scoring metrics are meaningless if the pipeline isn't operational.**
+```bash
+python tests/test_learning_utilization.py
+```
 
-Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`. Perfect scoring, broken pipeline = zero learning.
+---
 
-### Rule 4: Anti-Hallucination
+### CATEGORY B: ARCHITECTURE AWARENESS (Rules 6-10)
 
-**CRITICAL:** Never claim improvements based on:
-- Terminal output (ephemeral)
-- "I saw X happen" (observation ≠ storage)
-- Code changes alone (may not be in data path)
-- Scoring improvements alone (scoring ≠ learning)
+#### Rule 6: Consult the Architecture Before Changing
 
-**Always verify from storage:** `cognitive_insights.json`, `eidos.db`, Mind API.
+> **Read Intelligence_Flow.md and Intelligence_Flow_Map.md before ANY improvement.**
+
+These files are the source of truth for how data flows through Spark.
+
+#### Rule 7: Know the Real Data Flow
+
+> **Memorize this flow - it's the backbone of everything:**
+
+```
+Sources (observe.py, sparkd.py)
+    → Queue (~/.spark/queue/events.jsonl)
+    → bridge_worker.py (runs every 60s)
+    → bridge_cycle.run_bridge_cycle
+    → {cognitive_learner, pattern_detection, eidos, chips}
+    → Storage (cognitive_insights.json, eidos.db, chip_insights/)
+    → promoter → CLAUDE.md/AGENTS.md
+```
+
+#### Rule 8: Verify Component Connectivity
+
+> **Before modifying a component, verify it's being called.**
+
+Check:
+- What calls this component? (trace upstream)
+- What does this component call? (trace downstream)
+- Is it in the active data path?
+
+Session 2 lesson: `observe.py` wasn't calling `aggregator.process_event()` - pattern detection had 0 events.
+
+#### Rule 9: Bridge Worker is Critical
+
+> **If bridge_worker isn't running, NOTHING gets processed.**
+
+Always check:
+```bash
+python -c "import json; from pathlib import Path; print(json.loads((Path.home()/'.spark'/'bridge_worker_heartbeat.json').read_text()))"
+```
+
+Heartbeat should be < 120 seconds old.
+
+#### Rule 10: Layer-Aware Changes
+
+> **Identify which layer you're modifying before making changes.**
+
+| Layer | Components | Purpose |
+|-------|------------|---------|
+| Sources | observe.py, sparkd.py, adapters | Event capture |
+| Queue | lib/queue.py | Event buffering |
+| Bridge | bridge_worker.py, bridge_cycle.py | Processing orchestration |
+| Processing | cognitive_learner, pattern_detection, eidos, chips | Learning extraction |
+| Storage | cognitive_insights.json, eidos.db, chip_insights/ | Persistence |
+| Output | promoter, context_sync, output_adapters | Promotion to docs |
+
+---
+
+### CATEGORY C: QUALITY & ITERATION (Rules 11-15)
+
+#### Rule 11: Baseline Before Tuning
+
+> **Always capture baseline metrics FROM STORAGE before making changes.**
+
+```bash
+python tests/test_cognitive_capture.py baseline
+```
+
+#### Rule 12: Compare Against Baseline with Evidence
+
+> **After changes, compare to baseline with storage evidence.**
+
+```bash
+python tests/test_cognitive_capture.py compare
+```
+
+Show: Before count → After count, with file paths.
+
+#### Rule 13: Document with Evidence
+
+> **Every improvement claim must include:**
+
+- Pipeline health check: PASSED
+- Storage before: X insights
+- Storage after: Y insights
+- Delta: +Z insights
+- Utilization: N retrievals, M outcomes
+
+#### Rule 14: Evolve, Don't Disable
+
+> **Never disable a component that produces bad output. Improve it.**
+
+Meta-Ralph's philosophy: "Roast until it's good."
+
+#### Rule 15: The Human Test
+
+> **Would a human find this useful to know next time?**
+
+If yes → Quality learning. If no → Primitive (reject).
+
+This is the ultimate filter for what Spark should learn.
+
+---
+
+### Quick Commands Reference
+
+```bash
+# MANDATORY: Pipeline health (run FIRST)
+python tests/test_pipeline_health.py
+
+# Quick status
+python tests/test_pipeline_health.py quick
+
+# Learning utilization
+python tests/test_learning_utilization.py
+
+# Baseline before tuning
+python tests/test_cognitive_capture.py baseline
+
+# Compare after tuning
+python tests/test_cognitive_capture.py compare
+```
+
+```python
+# Meta-Ralph quality stats
+from lib.meta_ralph import get_meta_ralph
+print(get_meta_ralph().get_stats())
+
+# EIDOS distillations
+from lib.eidos import get_store
+print(get_store().get_stats())
+
+# Pattern aggregator
+from lib.pattern_detection import get_aggregator
+print(get_aggregator().get_stats())
+
+# Mind stats
+import requests
+print(requests.get("http://localhost:8080/v1/stats").json())
+
+# Verify storage (not just scoring)
+from pathlib import Path
+import json
+f = Path.home() / '.spark' / 'cognitive_insights.json'
+data = json.loads(f.read_text())
+print(f'Stored insights: {len(data.get("insights", []))}')
+```
+
+---
 
 ### Quick Access Commands
 
