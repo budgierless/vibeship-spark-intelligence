@@ -45,7 +45,7 @@ ADVISOR_DIR = Path.home() / ".spark" / "advisor"
 ADVICE_LOG = ADVISOR_DIR / "advice_log.jsonl"
 EFFECTIVENESS_FILE = ADVISOR_DIR / "effectiveness.json"
 RECENT_ADVICE_LOG = ADVISOR_DIR / "recent_advice.jsonl"
-RECENT_ADVICE_MAX_AGE_S = 300
+RECENT_ADVICE_MAX_AGE_S = 900  # 15 min (was 5 min) - longer tasks need more time
 RECENT_ADVICE_MAX_LINES = 200
 
 # Thresholds (Improvement #8: Advisor Integration tuneables)
@@ -65,6 +65,7 @@ class Advice:
     confidence: float
     source: str  # "cognitive", "mind", "pattern", "surprise"
     context_match: float  # How well it matches current context
+    reason: str = ""  # Task #13: WHY this advice matters (evidence/context)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -261,6 +262,13 @@ class SparkAdvisor:
             # Calculate context match
             context_match = self._calculate_context_match(insight.context, context)
 
+            # Task #13: Extract reason from evidence
+            reason = ""
+            if hasattr(insight, 'evidence') and insight.evidence:
+                reason = insight.evidence[0][:100] if insight.evidence[0] else ""
+            elif hasattr(insight, 'context') and insight.context:
+                reason = f"From context: {insight.context[:80]}"
+
             advice.append(Advice(
                 advice_id=self._generate_advice_id(insight.insight),
                 insight_key=insight_key,
@@ -268,6 +276,7 @@ class SparkAdvisor:
                 confidence=insight.reliability,
                 source="cognitive",
                 context_match=context_match,
+                reason=reason,
             ))
 
         return advice
@@ -317,6 +326,12 @@ class SparkAdvisor:
                 if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(content):
                     continue
 
+                # Task #13: Add reason from Mind metadata
+                reason = f"Salience: {salience:.1f}"
+                if mem.get("temporal_level"):
+                    levels = {1: "immediate", 2: "situational", 3: "seasonal", 4: "identity"}
+                    reason = f"{levels.get(mem['temporal_level'], 'memory')} level memory"
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(content),
                     insight_key=f"mind:{mem.get('memory_id', 'unknown')[:12]}",
@@ -324,6 +339,7 @@ class SparkAdvisor:
                     confidence=salience,
                     source="mind",
                     context_match=0.7,  # Mind already does semantic matching
+                    reason=reason,
                 ))
         except Exception:
             pass  # Mind unavailable, gracefully skip
@@ -337,6 +353,9 @@ class SparkAdvisor:
         # Get self-awareness insights about this tool
         for insight in self.cognitive.get_self_awareness_insights():
             if tool_name.lower() in insight.insight.lower():
+                # Task #13: Add validation count as reason
+                reason = f"Validated {insight.times_validated}x" if hasattr(insight, 'times_validated') else ""
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(insight.insight),
                     insight_key=f"tool:{tool_name}",
@@ -344,6 +363,7 @@ class SparkAdvisor:
                     confidence=insight.reliability,
                     source="self_awareness",
                     context_match=1.0,  # Direct tool match
+                    reason=reason,
                 ))
 
         return advice
@@ -453,16 +473,76 @@ class SparkAdvisor:
         overlap = len(insight_words & current_words)
         return min(1.0, overlap / max(len(insight_words), 1) + 0.3)
 
+    def _score_actionability(self, text: str) -> float:
+        """Score how actionable advice is (0.0 to 1.0).
+
+        Actionable advice tells you WHAT TO DO, not just observations.
+        """
+        text_lower = text.lower()
+        score = 0.5  # Base score
+
+        # Strong action verbs = highly actionable (+0.3)
+        action_verbs = ['use ', 'avoid ', 'check ', 'verify ', 'ensure ', 'always ',
+                        'never ', 'remember ', "don't ", 'prefer ', 'try ', 'run ']
+        if any(v in text_lower for v in action_verbs):
+            score += 0.3
+
+        # When-then patterns = conditional guidance (+0.2)
+        conditional_patterns = ['when ', 'if ', 'before ', 'after ', 'instead of']
+        if any(p in text_lower for p in conditional_patterns):
+            score += 0.2
+
+        # Vague/observational = less actionable (-0.2)
+        vague_patterns = ['user prefers', 'user likes', 'seems to', 'might be', 'probably']
+        if any(p in text_lower for p in vague_patterns):
+            score -= 0.2
+
+        # EIDOS/Caution tags = already validated (+0.1)
+        if text.startswith('[EIDOS') or text.startswith('[Caution]'):
+            score += 0.1
+
+        return max(0.1, min(1.0, score))
+
     def _rank_advice(self, advice_list: List[Advice]) -> List[Advice]:
-        """Rank advice by relevance and effectiveness."""
+        """Rank advice by relevance, actionability, and effectiveness."""
+        # Source quality tiers (Task #10: boost validated sources)
+        SOURCE_BOOST = {
+            "eidos": 1.4,           # EIDOS distillations are validated patterns
+            "self_awareness": 1.3,  # Tool-specific cautions from past failures
+            "cognitive": 1.0,       # Standard cognitive insights
+            "mind": 1.0,            # Mind memories
+            "bank": 0.9,            # Memory banks (less curated)
+        }
+
+        # Get insight-level effectiveness from Meta-Ralph (Task #11)
+        try:
+            from .meta_ralph import get_meta_ralph
+            ralph = get_meta_ralph()
+        except Exception:
+            ralph = None
+
         def score(a: Advice) -> float:
             base_score = a.confidence * a.context_match
 
-            # Boost based on past effectiveness
+            # Source quality boost (Task #10)
+            source_boost = SOURCE_BOOST.get(a.source, 1.0)
+            base_score *= source_boost
+
+            # Actionability boost (Task #9)
+            actionability = self._score_actionability(a.text)
+            base_score *= (0.5 + actionability)  # 0.5x to 1.5x based on actionability
+
+            # Insight-level outcome boost (Task #11)
+            if ralph and a.insight_key:
+                insight_effectiveness = ralph.get_insight_effectiveness(a.insight_key)
+                # Scale: 0.5 (neutral) = no change, 1.0 = 1.5x boost, 0.0 = 0.5x penalty
+                base_score *= (0.5 + insight_effectiveness)
+
+            # Boost based on source-level past effectiveness (fallback)
             source_stats = self.effectiveness.get("by_source", {}).get(a.source, {})
             if source_stats.get("total", 0) > 0:
                 helpful_rate = source_stats.get("helpful", 0) / source_stats["total"]
-                base_score *= (0.5 + helpful_rate)  # 0.5x to 1.5x boost
+                base_score *= (0.8 + helpful_rate * 0.4)  # 0.8x to 1.2x (reduced weight, insight-level is primary)
 
             return base_score
 

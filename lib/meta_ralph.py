@@ -766,6 +766,29 @@ class MetaRalph:
             "effectiveness_rate": good_outcomes / max(len(with_outcome), 1)
         }
 
+    def get_insight_effectiveness(self, insight_key: str) -> float:
+        """Get effectiveness rate for a specific insight (0.0 to 1.0).
+
+        Returns 0.5 (neutral) if no outcome data available.
+        Used by Advisor for outcome-based ranking (Task #11).
+        """
+        if not insight_key:
+            return 0.5
+
+        # Check outcome records that match this insight key
+        matching = [
+            r for r in self.outcome_records.values()
+            if r.insight_key == insight_key and r.acted_on and r.outcome
+        ]
+
+        if not matching:
+            return 0.5  # No data = neutral
+
+        good = len([r for r in matching if r.outcome == "good"])
+        total = len(matching)
+
+        return good / total
+
     # =========================================================================
     # STATS AND REPORTING
     # =========================================================================

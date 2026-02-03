@@ -669,6 +669,28 @@ class CognitiveLearner:
             if tool_mentions / len(words) > 0.4:
                 return True
 
+        # 8. Vague observations without action (Task #12)
+        vague_starts = [
+            "user seems to", "user appears to", "it seems", "it appears",
+            "might be", "could be", "probably", "possibly",
+        ]
+        if any(tl.startswith(v) for v in vague_starts):
+            return True
+
+        # 9. Pure metrics/stats
+        if re.search(r"^\d+%?\s+(success|failure|error)", tl):
+            return True
+        if re.search(r"(success|error|failure)\s+rate[:\s]+\d+", tl):
+            return True
+
+        # 10. Too short to be actionable (< 20 chars after stripping)
+        if len(t) < 20:
+            return True
+
+        # 11. "User prefers X over Y" without reasoning (short form)
+        if re.match(r"^user prefers .{5,30} over .{5,30}$", tl):
+            return True
+
         return False
 
     def is_noise_insight(self, text: str) -> bool:
