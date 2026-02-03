@@ -230,6 +230,52 @@ Patterns that Meta-Ralph has learned to reject:
 
 ---
 
+## Code Content Extraction (NEW)
+
+### The Problem
+
+Code written via Write/Edit tools contains valuable learning signals in:
+- Docstrings with design decisions
+- Comments with "REMEMBER:", "PRINCIPLE:", "CORRECTION:"
+- Architecture explanations
+- Balance formulas with reasoning
+
+**Before:** These were completely ignored. Only user messages were analyzed.
+
+### The Solution
+
+Added to `observe.py` PostToolUse handler:
+```python
+if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
+    content = tool_input.get("content") or tool_input.get("new_string") or ""
+    if content and len(content) > 50:
+        extract_cognitive_signals(content, session_id)
+```
+
+### What Gets Captured Now
+
+| In Code | Detected As | Score |
+|---------|-------------|-------|
+| `REMEMBER: armor cap 0.75` | explicit_remember_colon | CRITICAL |
+| `CORRECTION: No pure RNG` | explicit_correction | CRITICAL |
+| `PRINCIPLE: Bug never where you look` | explicit_principle | CRITICAL |
+| `INSIGHT: 300 health = 3-4 hits` | explicit_insight | CRITICAL |
+| `BALANCE: 5s/3s/1.5s spawn rates` | explicit_balance | CRITICAL |
+| `# because it prevents X` | reasoned_decision | CRITICAL |
+| `# the reason is Y` | explicit_reasoning | CRITICAL |
+
+### Best Practices for Capture
+
+When writing code that should be learned:
+```python
+# REMEMBER: Player health = 300 because 3-4 hits feels fair
+# CORRECTION: Don't use pure RNG - pity system after 400 drops
+# PRINCIPLE: Variety > difficulty for player engagement
+# The reason for 1.5 exponent: linear too easy, quadratic impossible
+```
+
+---
+
 ## Valuable Patterns Database
 
 Patterns that Meta-Ralph has learned to promote:
@@ -301,10 +347,89 @@ curl http://localhost:8788/api/stats
 | 2026-02-03 | Fixed track_outcome() | Outcomes tracked but acted_on never set True | Now properly sets acted_on=True |
 | 2026-02-03 | Lowered promotion thresholds | Insights not reaching CLAUDE.md fast enough | DEFAULT_PROMOTION_THRESHOLD 0.7→0.65, MIN_VALIDATIONS 3→2 |
 | 2026-02-03 | Connected pattern aggregator | Aggregator had 0 events, pattern detection not working | observe.py now calls aggregator.process_event() |
+| 2026-02-03 | **SESSION 3 START** | --- | --- |
+| 2026-02-03 | Domain detection expansion | Only 3 domains had triggers | 10 domains with 170+ triggers (game_dev, fintech, marketing, etc.) |
+| 2026-02-03 | Distillation quality | Distillations lacked reasoning | Added _extract_reasoning() for "because" clauses |
+| 2026-02-03 | Advisor threshold tuning | Advice not surfacing | MIN_RELIABILITY 0.6→0.5, MAX_ITEMS 5→8 |
+| 2026-02-03 | Importance scorer expansion | Missing domain keywords | Added decouple, batch, job, queue, scheduler weights |
+| 2026-02-03 | Chips auto-activation | Threshold too high | auto_activate_threshold 0.7→0.5, get_active_chips() added |
+| 2026-02-03 | **CRITICAL FIX**: Code content extraction | Write/Edit content not analyzed for cognitive signals | Now extracts REMEMBER:, PRINCIPLE:, CORRECTION:, etc. from code |
+| 2026-02-03 | Importance patterns expansion | REMEMBER:, CORRECTION:, PRINCIPLE: not scoring as CRITICAL | Added 5 new CRITICAL patterns for explicit learning markers |
 
 ---
 
 ## Session History
+
+### Session 3: 2026-02-03 (Code Content Extraction & Live Testing)
+
+**Goal:** Complete remaining improvements, create live test environment, fix gap where code content wasn't being analyzed.
+
+**Starting State:**
+- Quality Rate: 47.2% (good)
+- Total Insights: 1,525
+- Domain Detection: 10 domains working
+- EIDOS: 17 episodes, 152 steps, 7 distillations
+- **Critical Gap:** Code written via Write/Edit tools was NOT analyzed for cognitive signals
+
+**Critical Discovery:**
+
+When building a game simulator with explicit learning markers in code comments:
+```python
+# REMEMBER: Player health = 300 because 3-4 hits feels fair
+# CORRECTION: Do NOT use pure RNG for legendaries - use pity system
+# PRINCIPLE: The bug is never where you first look
+```
+
+These insights were **NOT being captured** because:
+- `extract_cognitive_signals()` was only called on user messages (line 702)
+- Write/Edit tool content was ignored
+
+**The Fix (Commit 66c137e):**
+
+Added cognitive signal extraction for Write/Edit content in `observe.py`:
+```python
+# COGNITIVE SIGNAL EXTRACTION FROM CODE CONTENT
+if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
+    content = tool_input.get("content") or tool_input.get("new_string") or ""
+    if content and len(content) > 50:
+        extract_cognitive_signals(content, session_id)
+```
+
+**New Importance Patterns (lib/importance_scorer.py):**
+
+| Pattern | Signal Name | Score |
+|---------|-------------|-------|
+| `\bremember:\s` | explicit_remember_colon | CRITICAL |
+| `\bcorrection:\s` | explicit_correction | CRITICAL |
+| `\bprinciple:\s` | explicit_principle | CRITICAL |
+| `\binsight:\s` | explicit_insight | CRITICAL |
+| `\bbalance:\s` | explicit_balance | CRITICAL |
+
+**Verified Working:**
+```
+[reasoning] (90%) CRITICAL GAME BALANCE INSIGHT:
+- Player base health: 300 (sweet spot - allows 3-4 hits)...
+```
+
+**Live Test Environment Created:**
+
+Location: `C:\Users\USER\Desktop\spark-live-test`
+
+Files:
+- `SPARK_MONITOR.py` - Real-time learning observation
+- `PROJECT_PROMPT.md` - Comprehensive game dev project with 20+ explicit learnings
+- `check_learning.py` - Check learning state anytime
+
+The project exercises 5 domains (game_dev, architecture, orchestration, debugging, product) with explicit "Remember this" statements for validation.
+
+**Final Stats:**
+- Cognitive Insights: 1,525
+- Meta-Ralph Quality Rate: 47.2%
+- Domain Detection: 10 domains, 170+ triggers
+- Mind Memories: 32,335
+- EIDOS Distillations: 7
+
+---
 
 ### Session 2: 2026-02-03 (10 Improvements Initiative)
 
@@ -417,17 +542,30 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 
 ---
 
-## Current State: 2026-02-03 Deep Analysis
+## Current State: 2026-02-03 (Session 3 Complete)
 
 ### Intelligence Evolution Metrics
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| Quality Rate | 38.9% | Good |
-| Trend | Improving | On track |
-| Total Roasted | 203 | Growing |
-| Refinements Made | 4 | Active |
+| Quality Rate | 47.2% | Excellent |
+| Total Roasted | 391 | Growing |
+| Quality Passed | 182 | Strong |
+| Primitive Rejected | 76 | Working |
+| Duplicates Caught | 10 | Active |
 | Filter Accuracy | 100% | Optimal |
+
+### Learning Pipeline Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| User Message Extraction | ✅ Working | Captures preferences, decisions |
+| **Code Content Extraction** | ✅ **NEW** | Now analyzes Write/Edit content |
+| Domain Detection | ✅ 10 domains | 170+ trigger patterns |
+| Importance Scoring | ✅ Enhanced | 5 new CRITICAL patterns |
+| Meta-Ralph Quality Gate | ✅ 47.2% | Good signal/noise ratio |
+| EIDOS Distillation | ✅ 7 rules | Heuristics and policies |
+| Mind Persistence | ✅ 32,335 | Cross-session memory |
 
 ### Latest Fix: Needs_Work Cleanup
 
@@ -447,17 +585,20 @@ r"tool timeout"                       # New pattern
 
 **Result:** These items now score 0 and are rejected as primitive.
 
-### Skill Domain Coverage
+### Skill Domain Coverage (All 10 Domains Active)
 
-| Domain | Learnings | Status |
-|--------|-----------|--------|
-| product | 17 | Strong |
-| debugging | 1 | Emerging |
-| ui_ux | 1 | Emerging |
-| orchestration | 0 | Gap |
-| architecture | 0 | Gap |
-| agent_coordination | 0 | Gap |
-| team_management | 0 | Gap |
+| Domain | Triggers | Example Keywords |
+|--------|----------|------------------|
+| game_dev | 24 | player, health, balance, spawn, physics |
+| fintech | 20 | payment, compliance, transaction, risk |
+| marketing | 18 | campaign, conversion, roi, audience |
+| product | 17 | feature, feedback, roadmap, sprint |
+| orchestration | 17 | workflow, pipeline, queue, batch |
+| architecture | 16 | pattern, decouple, interface, module |
+| agent_coordination | 16 | agent, routing, context, handoff |
+| team_management | 15 | delegation, blocker, standup |
+| ui_ux | 21 | layout, component, responsive, accessibility |
+| debugging | 16 | error, trace, root cause, stack |
 
 ### Learning Pattern Distribution
 
@@ -481,47 +622,50 @@ r"tool timeout"                       # New pattern
 
 ## Future Improvements Roadmap
 
-### Phase 1: Deepen Skill Coverage (Next)
+### ✅ Phase 1: Skill Coverage (COMPLETE)
 
-**Gap:** No learnings in orchestration, architecture, agent_coordination, team_management
+**Status:** All 10 domains now have triggers (170+ total)
+- game_dev, fintech, marketing, product, orchestration
+- architecture, agent_coordination, team_management, ui_ux, debugging
+
+### ✅ Phase 2: Code Content Extraction (COMPLETE)
+
+**Status:** Write/Edit content now analyzed for cognitive signals
+- Added extraction in observe.py PostToolUse
+- 5 new CRITICAL patterns (REMEMBER:, CORRECTION:, PRINCIPLE:, etc.)
+
+### 🔄 Phase 3: Outcome Tracking (In Progress)
+
+**Current:** Infrastructure exists but acted_on outcomes = 0
+
+**Remaining Work:**
+1. Ensure report_outcome() is called after actions
+2. Track which learnings led to good/bad outcomes
+3. Use outcome data to adjust learning reliability
+4. Demote learnings with consistently bad outcomes
+
+### 📋 Phase 4: Auto-Refinement Enhancement
+
+**Current:** Refinement logic exists, refinements_made = 0
+
+**Target:** 80% needs_work → quality conversion
 
 **Actions:**
-1. Add onboarding questions for these domains
-2. Trigger domain detection from project context
-3. Create domain-specific quality signal patterns
+1. Trigger refinement more aggressively
+2. Add better refinement templates
+3. Track which refinement strategies work
 
-### Phase 2: Outcome Tracking Integration
-
-**Gap:** `outcome_stats` is all zeros - not measuring if learnings actually help
-
-**Actions:**
-1. Track when learnings are retrieved and used
-2. Record outcomes (good/bad/neutral) after actions
-3. Use outcome data to validate quality scoring
-4. Demote learnings with bad outcomes
-
-### Phase 3: Auto-Refinement Enhancement
-
-**Current:** 50% of needs_work items refine to quality
-
-**Target:** 80% refinement success rate
-
-**Actions:**
-1. Add LLM-powered refinement for complex cases
-2. Learn which refinement strategies work best
-3. Track refinement success/failure patterns
-
-### Phase 4: Cross-Session Learning
+### 📋 Phase 5: Cross-Session Learning
 
 **Goal:** Learnings compound across sessions and projects
 
 **Actions:**
-1. Promote high-reliability learnings to CLAUDE.md
-2. Build user preference profiles
+1. Promote high-reliability learnings to CLAUDE.md automatically
+2. Build user preference profiles from patterns
 3. Create domain expertise summaries
 4. Track what works across different project types
 
-### Phase 5: Predictive Intelligence
+### 📋 Phase 6: Predictive Intelligence
 
 **Goal:** Anticipate what the user needs before they ask
 
@@ -529,7 +673,7 @@ r"tool timeout"                       # New pattern
 1. Pattern recognition for common workflows
 2. Proactive suggestions based on context
 3. Early warning for potential pitfalls
-4. Recommend relevant past learnings
+4. Recommend relevant past learnings before action
 
 ---
 
@@ -542,18 +686,25 @@ r"tool timeout"                       # New pattern
 3. **Quality rate is healthy** (36.6%) - not over-filtering or under-filtering
 4. **Trend is improving** - more quality items than primitives
 
-### What Needs Attention
+### What's Now Working (Fixed This Session)
 
-1. **Skill coverage gaps** - Missing orchestration, architecture, agent domains
-2. **Outcome tracking** - Not yet measuring if learnings help
-3. **Cross-domain learning** - Insights don't transfer between project types
+1. ✅ **Skill coverage complete** - All 10 domains have triggers
+2. ✅ **Code content extraction** - Write/Edit now analyzed for learnings
+3. ✅ **Importance patterns** - REMEMBER:, CORRECTION:, PRINCIPLE: score CRITICAL
+4. ✅ **Chips auto-activation** - Context-based chip loading
+
+### Remaining Opportunities
+
+1. **Outcome tracking refinement** - Currently 0 acted_on outcomes recorded
+2. **Cross-project learning** - Insights don't yet transfer between project types
+3. **Auto-refinement rate** - Could improve needs_work → quality conversion
 
 ### Meta-Ralph's Self-Assessment
 
-> "The system is capturing valuable insights with good reasoning depth.
-> The main opportunity is expanding skill domain coverage and connecting
-> learnings to actual outcomes. The foundation is solid - now it's about
-> breadth and validation."
+> "The learning pipeline is now complete from input to storage. Code content
+> is being analyzed, all domains are covered, and quality filtering is
+> working at 47%. The main opportunity is connecting learnings to actual
+> outcomes and improving cross-session intelligence compounding."
 
 ---
 
