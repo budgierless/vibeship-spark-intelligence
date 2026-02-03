@@ -103,6 +103,32 @@ python tests/test_meta_ralph.py
 - Importance scorer + pattern matching = better than either alone
 - Blocked items scoring 1.5+ below threshold are genuinely low-value
 - Filter accuracy should be 90%+ before trusting pass rate metrics
+- Quality items must be STORED, not just logged (critical bug fixed 2026-02-03)
+- Auto-refinement must RE-SCORE the refined version to change verdict
+- Outcome tracking requires both retrieval tracking AND outcome reporting
+
+#### Session History
+
+**Session 2 (2026-02-03): 10 Improvements Initiative**
+
+Completed 5 critical fixes:
+
+| Fix | Problem | Solution | Commit |
+|-----|---------|----------|--------|
+| Persistence | Quality items logged but not stored | Added `cognitive.add_insight()` call | 546c965 |
+| Auto-refinement | Refined versions not re-scored | Re-score refined, use if QUALITY | db56747 |
+| Outcome tracking | track_retrieval/track_outcome never called | Integrated with Advisor | ea43727 |
+| Promotion speed | Threshold 0.7/3 too strict | Lowered to 0.65/2 | 2b830c3 |
+| Pattern aggregator | 0 events reaching pattern detection | Added aggregator call in observe.py | 8b3993d |
+
+**Session 1 (2026-02-03): Meta-Ralph Calibration**
+
+Tuned Meta-Ralph thresholds and detection patterns:
+- quality_threshold: 7 → 5 → 4
+- Filter accuracy: 70% → 100%
+- Pass rate: 2.8% → 39.4%
+
+See META_RALPH.md for full changelog.
 
 ### 📊 MONITORING: Distillation Quality (ACTIVE WATCHER)
 
