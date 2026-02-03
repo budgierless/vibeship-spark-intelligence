@@ -76,6 +76,11 @@ class ImportanceScore:
 CRITICAL_SIGNALS = [
     # Explicit learning requests
     (r"\bremember\s+(?:this|that)\b", "explicit_remember"),
+    (r"\bremember:\s", "explicit_remember_colon"),  # "REMEMBER: ..."
+    (r"\bcorrection:\s", "explicit_correction"),    # "CORRECTION: ..."
+    (r"\bprinciple:\s", "explicit_principle"),      # "PRINCIPLE: ..."
+    (r"\binsight:\s", "explicit_insight"),          # "INSIGHT: ..."
+    (r"\bbalance:\s", "explicit_balance"),          # "BALANCE: ..."
     (r"\balways\s+do\s+(?:it\s+)?this\s+way\b", "explicit_preference"),
     (r"\bnever\s+do\s+(?:it\s+)?this\s+way\b", "explicit_prohibition"),
     (r"\bthis\s+is\s+(?:very\s+)?important\b", "importance_flag"),
@@ -148,6 +153,17 @@ LOW_SIGNALS = [
     (r"\balright\b", "acknowledgment"),
     (r"\bgot\s+it\b", "acknowledgment"),
     (r"\bthanks?\b", "acknowledgment"),
+]
+
+# Signals that indicate telemetry/operational noise to ignore entirely
+TELEMETRY_SIGNALS = [
+    r"\b(?:read|edit|bash|write|glob|grep)\b\s*(?:->)\b",  # tool sequence arrows
+    r"\bsequence\b.*\bworked\b",
+    r"\bpattern\b.*->",
+    r"\bheavy\s+\w+\s+usage\b",
+    r"\busage\s*\(\d+\s*calls?\)",
+    r"^user was satisfied after:",
+    r"^user frustrated after:",
 ]
 
 
@@ -382,6 +398,11 @@ class ImportanceScorer:
         signals = []
         base_score = 0.5
         tier = ImportanceTier.MEDIUM
+
+        for pattern in TELEMETRY_SIGNALS:
+            if re.search(pattern, text_lower, re.I):
+                signals.append("ignore:telemetry")
+                return signals, 0.0, ImportanceTier.IGNORE
 
         # Check CRITICAL signals
         for pattern, signal_name in CRITICAL_SIGNALS:

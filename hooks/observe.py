@@ -66,6 +66,9 @@ else:
 
 PREDICTION_FILE = Path.home() / ".spark" / "active_predictions.json"
 CHECKIN_MIN_S = int(os.environ.get("SPARK_OUTCOME_CHECKIN_MIN_S", "1800"))
+ADVICE_FEEDBACK_ENABLED = os.environ.get("SPARK_ADVICE_FEEDBACK", "1") == "1"
+ADVICE_FEEDBACK_PROMPT = os.environ.get("SPARK_ADVICE_FEEDBACK_PROMPT", "1") == "1"
+ADVICE_FEEDBACK_MIN_S = int(os.environ.get("SPARK_ADVICE_FEEDBACK_MIN_S", "600"))
 
 
 def save_prediction(session_id: str, tool_name: str, prediction: dict):
@@ -547,6 +550,17 @@ def main():
             advice = advise_on_tool(tool_name, tool_input)
             if advice:
                 log_debug("observe", f"Got {len(advice)} advice items for {tool_name}", None)
+                if ADVICE_FEEDBACK_ENABLED:
+                    try:
+                        from lib.advice_feedback import record_advice_request
+                        record_advice_request(
+                            session_id=session_id,
+                            tool=tool_name,
+                            advice_ids=[a.advice_id for a in advice],
+                            min_interval_s=ADVICE_FEEDBACK_MIN_S,
+                        )
+                    except Exception:
+                        pass
         except Exception as e:
             log_debug("observe", "advisor failed", e)
         save_prediction(session_id, tool_name, prediction)
@@ -600,6 +614,19 @@ def main():
                 )
             except Exception as e:
                 log_debug("observe", "EIDOS post-action failed", e)
+
+        # COGNITIVE SIGNAL EXTRACTION FROM CODE CONTENT
+        # Analyze code comments, docstrings for learning signals like REMEMBER:, PRINCIPLE:, CORRECTION:
+        if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
+            # For Write: analyze "content", for Edit: analyze "new_string"
+            content = tool_input.get("content") or tool_input.get("new_string") or ""
+            if content and len(content) > 50:  # Skip tiny writes
+                try:
+                    # Extract signals from the written/edited content
+                    extract_cognitive_signals(content, session_id)
+                    log_debug("observe", f"Analyzed {tool_name} content for cognitive signals ({len(content)} chars)")
+                except Exception as e:
+                    log_debug("observe", f"{tool_name} content signal extraction failed", e)
 
         try:
             update_self_awareness_reliability(tool_name, success=True)
@@ -724,6 +751,15 @@ def main():
         )
         if recorded and os.environ.get("SPARK_OUTCOME_CHECKIN_PROMPT") == "1":
             sys.stderr.write("[SPARK] Outcome check-in: run `spark outcome`\\n")
+
+    # Optional: prompt for advice feedback at session end.
+    if hook_event in ("Stop", "SessionEnd") and ADVICE_FEEDBACK_PROMPT:
+        try:
+            from lib.advice_feedback import has_recent_requests
+            if has_recent_requests():
+                sys.stderr.write("[SPARK] Advice feedback pending: run `spark advice-feedback --pending`\\n")
+        except Exception:
+            pass
 
     # EIDOS: Complete episode on session end (triggers distillation)
     if hook_event in ("Stop", "SessionEnd") and EIDOS_AVAILABLE:
