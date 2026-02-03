@@ -36,10 +36,10 @@ ADVISOR_DIR = Path.home() / ".spark" / "advisor"
 ADVICE_LOG = ADVISOR_DIR / "advice_log.jsonl"
 EFFECTIVENESS_FILE = ADVISOR_DIR / "effectiveness.json"
 
-# Thresholds
-MIN_RELIABILITY_FOR_ADVICE = 0.6
+# Thresholds (Improvement #8: Advisor Integration tuneables)
+MIN_RELIABILITY_FOR_ADVICE = 0.5  # Lowered from 0.6 for more advice coverage
 MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
-MAX_ADVICE_ITEMS = 5
+MAX_ADVICE_ITEMS = 8  # Raised from 5 for complex tasks
 ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
 
 
