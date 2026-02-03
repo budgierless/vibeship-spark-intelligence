@@ -251,14 +251,20 @@ class PatternDistiller:
         # Extract the intent category
         intent_desc = intent_key.replace("intent:", "").replace("_", " ")
 
-        # Combine lessons for richer context
-        lessons = [s.lesson for s in successes if s.lesson]
-        combined_lesson = "; ".join(set(lessons[:3])) if lessons else ""
+        # Extract reasoning from lessons (Improvement #7: Distillation Quality)
+        lessons = [s.lesson for s in successes if s.lesson and len(s.lesson) > 10]
+        reasoning = self._extract_reasoning(lessons)
+
+        # Create actionable statement with reasoning
+        if reasoning:
+            statement = f"When {intent_desc}, use {best_decision[:100]} because {reasoning}"
+        else:
+            statement = f"When {intent_desc}, use {best_decision[:120]}. This approach succeeded {len(successes)} times."
 
         distillation = Distillation(
             distillation_id="",  # Auto-generated
             type=DistillationType.HEURISTIC,
-            statement=f"When user requests {intent_desc}, use approach: {best_decision[:150]}",
+            statement=statement[:250],  # Cap length but keep reasoning
             domains=["user_interaction", intent_desc],
             triggers=[intent_key, intent_desc],
             source_steps=[s.step_id for s in successes[:10]],
@@ -289,10 +295,20 @@ class PatternDistiller:
         # Extract the intent category
         intent_desc = intent_key.replace("intent:", "").replace("_", " ")
 
+        # Extract failure reasons from lessons (Improvement #7: Distillation Quality)
+        lessons = [s.lesson for s in failures if s.lesson and len(s.lesson) > 10]
+        failure_reason = self._extract_failure_reason(lessons)
+
+        # Create anti-pattern with explanation
+        if failure_reason:
+            statement = f"When {intent_desc}, avoid {worst_decision[:80]} because {failure_reason}"
+        else:
+            statement = f"When {intent_desc}, avoid {worst_decision[:100]}. This approach failed {len(failures)} times."
+
         distillation = Distillation(
             distillation_id="",
             type=DistillationType.ANTI_PATTERN,
-            statement=f"When user requests {intent_desc}, avoid: {worst_decision[:150]}",
+            statement=statement[:250],
             domains=["user_interaction", intent_desc],
             anti_triggers=[intent_key],
             source_steps=[s.step_id for s in failures[:10]],
@@ -305,6 +321,71 @@ class PatternDistiller:
             distillation=distillation,
             source_steps=failures,
         )
+
+    def _extract_reasoning(self, lessons: List[str]) -> Optional[str]:
+        """Extract reasoning from lessons for actionable distillations."""
+        if not lessons:
+            return None
+
+        # Look for explicit reasoning patterns
+        reasoning_patterns = [
+            (r"because\s+(.{20,100})", 1),
+            (r"this\s+(?:works|worked|helps?)\s+(?:because\s+)?(.{20,80})", 1),
+            (r"(?:it|this)\s+(?:prevents?|avoids?|ensures?)\s+(.{15,80})", 1),
+            (r"resolved\s+by[:\s]+(.{20,80})", 1),
+        ]
+
+        for lesson in lessons:
+            lesson_lower = lesson.lower()
+            for pattern, group in reasoning_patterns:
+                match = re.search(pattern, lesson_lower, re.I)
+                if match:
+                    reason = match.group(group).strip()
+                    # Clean up the reason
+                    reason = re.sub(r'\s+', ' ', reason)
+                    if len(reason) > 15:
+                        return reason[:100]
+
+        # Fallback: extract actionable verbs
+        action_keywords = ["verify", "check", "ensure", "validate", "confirm", "use", "avoid"]
+        for lesson in lessons:
+            for keyword in action_keywords:
+                if keyword in lesson.lower():
+                    # Extract the action clause
+                    idx = lesson.lower().find(keyword)
+                    action = lesson[idx:idx+80].strip()
+                    if len(action) > 20:
+                        return f"it's important to {action.lower()}"
+
+        return None
+
+    def _extract_failure_reason(self, lessons: List[str]) -> Optional[str]:
+        """Extract failure reason from lessons."""
+        if not lessons:
+            return None
+
+        # Look for failure explanation patterns
+        failure_patterns = [
+            (r"failed\s+(?:because|due to)\s+(.{20,100})", 1),
+            (r"(?:error|issue|problem)[:\s]+(.{20,80})", 1),
+            (r"(?:didn't|doesn't|won't)\s+work\s+(?:because\s+)?(.{15,80})", 1),
+            (r"(?:causes?|leads?\s+to)\s+(.{20,80})", 1),
+        ]
+
+        for lesson in lessons:
+            lesson_lower = lesson.lower()
+            for pattern, group in failure_patterns:
+                match = re.search(pattern, lesson_lower, re.I)
+                if match:
+                    reason = match.group(group).strip()
+                    reason = re.sub(r'\s+', ' ', reason)
+                    if len(reason) > 15:
+                        # Clean up grammar: remove leading articles
+                        reason = re.sub(r'^(the|a|an|it)\s+', '', reason.lower())
+                        return reason[:100]
+
+        # Fallback: just note it's unreliable
+        return "it tends to fail in this context"
 
     # ==================== Strategy 2: Tool Patterns ====================
 
@@ -348,10 +429,19 @@ class PatternDistiller:
 
             intent_desc = best_intent.replace("intent:", "").replace("_", " ")
 
+            # Extract reasoning from successful uses (Improvement #7)
+            tool_lessons = [s.lesson for s in successes if s.lesson and len(s.lesson) > 10]
+            reasoning = self._extract_reasoning(tool_lessons)
+
+            if reasoning:
+                statement = f"For {intent_desc}, use {tool} because {reasoning}"
+            else:
+                statement = f"For {intent_desc}, {tool} is reliable ({count}/{len(tool_steps)} success rate)"
+
             distillation = Distillation(
                 distillation_id="",
                 type=DistillationType.HEURISTIC,
-                statement=f"Tool '{tool}' is effective for {intent_desc} requests ({count} successes)",
+                statement=statement[:250],
                 domains=["tool_usage", tool.lower()],
                 triggers=[f"tool:{tool}", intent_desc],
                 source_steps=[s.step_id for s in successes[:5]],
@@ -400,20 +490,28 @@ class PatternDistiller:
 
             intent_desc = intent_key.replace("intent:", "").replace("_", " ")
 
-            # Extract what was surprising
-            lessons = [s.lesson for s in surprise_steps if s.lesson]
+            # Extract what was surprising (Improvement #7: Better sharp edge quality)
+            lessons = [s.lesson for s in surprise_steps if s.lesson and len(s.lesson) > 10]
             predictions = [s.prediction for s in surprise_steps if s.prediction]
             results = [s.result for s in surprise_steps if s.result]
 
-            # Create sharp edge
-            edge_description = f"Unexpected outcomes when handling {intent_desc}"
+            # Create actionable sharp edge with context
             if lessons:
-                edge_description += f". Learned: {lessons[0][:100]}"
+                # Extract the key insight from lessons
+                key_lesson = self._extract_reasoning(lessons)
+                if key_lesson:
+                    edge_description = f"Watch out when {intent_desc}: {key_lesson}"
+                else:
+                    edge_description = f"Watch out when {intent_desc}: {lessons[0][:100]}"
+            elif predictions and results:
+                edge_description = f"When {intent_desc}, expected {predictions[0][:40]}... but got {results[0][:40]}..."
+            else:
+                edge_description = f"Unexpected behavior when {intent_desc}. Check assumptions before proceeding."
 
             distillation = Distillation(
                 distillation_id="",
                 type=DistillationType.SHARP_EDGE,
-                statement=edge_description,
+                statement=edge_description[:250],
                 domains=["gotchas", intent_desc],
                 triggers=[intent_key],
                 source_steps=[s.step_id for s in surprise_steps[:5]],
@@ -513,26 +611,47 @@ class PatternDistiller:
         return clusters
 
     def _synthesize_policy(self, lessons: List[str]) -> Optional[str]:
-        """Synthesize a general policy from multiple lessons."""
+        """Synthesize a general policy from multiple lessons (Improvement #7)."""
         if not lessons:
             return None
 
-        # Find common structure
-        # Simple approach: use the shortest lesson as base
-        lessons_sorted = sorted(lessons, key=len)
-        base = lessons_sorted[0]
+        # Extract common reasoning
+        reasoning = self._extract_reasoning(lessons)
 
-        # Clean up for policy format
-        if base.startswith("Request '"):
-            # Extract the actionable part
-            parts = base.split("resolved by:", 1)
-            if len(parts) > 1:
-                return f"Policy: For similar requests, {parts[1].strip()}"
-            parts = base.split("failed", 1)
-            if len(parts) > 1:
-                return f"Policy: Avoid approach that led to failure in similar requests"
+        # Find common action patterns
+        action_verbs = Counter()
+        for lesson in lessons:
+            for verb in ["verify", "check", "ensure", "validate", "confirm", "use", "avoid", "always", "never"]:
+                if verb in lesson.lower():
+                    # Extract the action clause
+                    idx = lesson.lower().find(verb)
+                    action = lesson[idx:idx+60].strip()
+                    if len(action) > 10:
+                        action_verbs[action] += 1
 
-        return f"Policy: {base[:200]}"
+        if action_verbs:
+            best_action, count = action_verbs.most_common(1)[0]
+            if reasoning:
+                return f"Always {best_action} because {reasoning}"
+            else:
+                return f"Always {best_action} (validated {count} times)"
+
+        # Fallback: extract from request pattern
+        for lesson in lessons:
+            if "resolved by:" in lesson.lower():
+                parts = lesson.split("resolved by:", 1)
+                if len(parts) > 1:
+                    action = parts[1].strip()[:100]
+                    if reasoning:
+                        return f"When facing similar issues, {action} because {reasoning}"
+                    return f"When facing similar issues, {action}"
+
+        # Last fallback
+        shortest = min(lessons, key=len)
+        if len(shortest) > 30:
+            return f"Learned pattern: {shortest[:150]}"
+
+        return None
 
     # ==================== Memory Gate ====================
 
