@@ -41,6 +41,48 @@ Key tuneables to test:
 - `distiller.min_confidence` = 0.6 (success rate threshold)
 - `aggregator.DISTILLATION_INTERVAL` = 20 (events between distillation)
 
+### 🎯 Meta-Ralph: Quality Gate Methodology
+
+**[META_RALPH.md](./META_RALPH.md)** - The iterative improvement system for Spark's learning quality
+
+**Core Philosophy:** "Evolve, don't disable. Roast until it's good."
+
+**The Test:** Would a human find this useful to know next time? If yes → Quality. If no → Primitive.
+
+#### Scoring Dimensions (0-2 each, total 0-10)
+
+| Dimension | What It Measures |
+|-----------|------------------|
+| **Actionability** | Can you act on this insight? |
+| **Novelty** | Is this new information? |
+| **Reasoning** | Does it explain "why"? |
+| **Specificity** | Is it context-specific? |
+| **Outcome Linked** | Is there validated evidence? |
+
+#### Verdicts
+
+| Score | Verdict | Action |
+|-------|---------|--------|
+| >= 4 | QUALITY | Store in memory |
+| 2-3 | NEEDS_WORK | Hold for refinement |
+| < 2 | PRIMITIVE | Reject |
+
+#### Iteration Methodology
+
+1. **Measure** - Run `cognitive_capture_test.py` to get baseline metrics
+2. **Analyze** - Check what's passing vs blocked, verify quality
+3. **Tune** - Adjust thresholds or detection patterns
+4. **Test** - Run test again, compare to baseline
+5. **Validate** - Manually verify passed items are genuinely useful
+6. **Document** - Update META_RALPH.md changelog
+
+#### Key Learnings
+
+- Don't chase pass rate - chase quality of passed items
+- "use/using" is too broad for decision detection
+- Importance scorer + pattern matching = better than either alone
+- Blocked items scoring 1.5+ below threshold are genuinely low-value
+
 ### 📊 MONITORING: Distillation Quality (ACTIVE WATCHER)
 
 **CRITICAL:** Monitor distillation quality in real sessions.

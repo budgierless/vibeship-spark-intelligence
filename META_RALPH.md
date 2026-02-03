@@ -278,6 +278,42 @@ curl http://localhost:8788/api/stats
 | 2026-02-03 | Added priority/decision boosts | "Remember this" not boosting score | Priority items get +2 novelty, decisions get +1 |
 | 2026-02-03 | Expanded reasoning patterns | Only explicit "because" detected | Now detects "for better X", "to avoid Y" |
 | 2026-02-03 | Added cognitive extraction hook | Only capturing tool events (94%) | Now extracts cognitive signals from user prompts |
+| 2026-02-03 | Integrated importance scorer | Pattern matching alone missed semantic value | Pass rate 8.1%→26.4%, dual scoring system |
+| 2026-02-03 | Fixed decision detection | "use/using" matched primitives like "use standard approach" | Now only matches "decided/chose/went with/switched to" |
+| 2026-02-03 | Validated quality items | Need to verify learnings are genuinely useful | 100% of passed items are human-valuable |
+
+---
+
+## Validation Session: 2026-02-03
+
+### Verified Quality Items (What Spark Actually Learns)
+
+| Score | Learning | Why It's Valuable |
+|-------|----------|-------------------|
+| 7 | "Dark theme preference because reduces eye strain" | User context for future sessions |
+| 6 | "OAuth with PKCE because prevents token interception" | Technical decision with rationale |
+| 5 | "Remember this: validate input before DB operations" | Explicit memory request |
+| 4 | "Iterative small fixes vs big rewrites" | Work style preference |
+| 6 | "Authentication decision with reasoning" | Architecture insight |
+| 4 | "Config file location correction" | Project-specific knowledge |
+
+### Correctly Blocked Primitives
+
+| Score | Learning | Why It's Blocked |
+|-------|----------|------------------|
+| 0 | "Read task succeeded with Read tool" | Tautology |
+| 0 | "Success rate: 95% over 1000 uses" | Pure metrics |
+| 2 | "For shell tasks, use standard approach" | Generic, no reasoning |
+| 0 | "Pattern found: Edit follows Read" | Operational sequence |
+
+### Detection Pattern Fix
+
+**Problem:** Decision detection was matching "use/using" which caught primitives.
+
+**Before:** "For X tasks, use standard approach" → counted as decision (wrong)
+**After:** Only matches explicit decisions: "decided to", "chose to", "went with", "switched to"
+
+**Impact:** Decision count dropped from 42 to 4 (all genuine decisions)
 
 ---
 
