@@ -37,6 +37,7 @@ from lib.cognitive_learner import get_cognitive_learner
 from lib.feedback import update_skill_effectiveness, update_self_awareness_reliability
 from lib.diagnostics import log_debug
 from lib.outcome_checkin import record_checkin_request
+from lib.pattern_detection import get_aggregator
 
 # EIDOS Integration
 EIDOS_ENABLED = os.environ.get("SPARK_EIDOS_ENABLED", "1") == "1"
@@ -604,6 +605,21 @@ def main():
             kwargs["error"] = str(error)[:500]
     
     quick_capture(event_type, session_id, data, **kwargs)
+
+    # Feed event to pattern aggregator (enables pattern detection + distillation)
+    try:
+        aggregator = get_aggregator()
+        event_data = {
+            "event_type": event_type.value,
+            "session_id": session_id,
+            "tool_name": tool_name,
+            "tool_input": tool_input,
+            "hook_event": hook_event,
+            **data
+        }
+        aggregator.process_event(event_data)
+    except Exception as e:
+        log_debug("observe", "aggregator failed", e)
 
     # Optional: emit a lightweight outcome check-in request at session end.
     if hook_event in ("Stop", "SessionEnd") and os.environ.get("SPARK_OUTCOME_CHECKIN") == "1":
