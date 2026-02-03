@@ -69,19 +69,40 @@ Key tuneables to test:
 
 #### Iteration Methodology
 
-1. **Measure** - Run `cognitive_capture_test.py` to get baseline metrics
+1. **Measure** - Run `test_cognitive_capture.py baseline` to save current metrics
 2. **Analyze** - Check what's passing vs blocked, verify quality
 3. **Tune** - Adjust thresholds or detection patterns
-4. **Test** - Run test again, compare to baseline
-5. **Validate** - Manually verify passed items are genuinely useful
-6. **Document** - Update META_RALPH.md changelog
+4. **Test** - Run `test_cognitive_capture.py test` to verify filter accuracy
+5. **Compare** - Run `test_cognitive_capture.py compare` to measure improvement
+6. **Validate** - Manually verify passed items are genuinely useful
+7. **Document** - Update META_RALPH.md changelog
+
+#### Test Suite Commands
+
+```bash
+# Save baseline before tuning
+python tests/test_cognitive_capture.py baseline
+
+# After tuning, compare to baseline
+python tests/test_cognitive_capture.py compare
+
+# Test filter accuracy (cognitive vs operational)
+python tests/test_cognitive_capture.py test
+
+# Run deep analysis
+python tests/test_cognitive_capture.py deep
+
+# Run Meta-Ralph unit tests
+python tests/test_meta_ralph.py
+```
 
 #### Key Learnings
 
 - Don't chase pass rate - chase quality of passed items
-- "use/using" is too broad for decision detection
+- "use/using" is too broad for decision detection (use "decided/chose/switched to")
 - Importance scorer + pattern matching = better than either alone
 - Blocked items scoring 1.5+ below threshold are genuinely low-value
+- Filter accuracy should be 90%+ before trusting pass rate metrics
 
 ### 📊 MONITORING: Distillation Quality (ACTIVE WATCHER)
 

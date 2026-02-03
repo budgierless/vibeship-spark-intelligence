@@ -469,3 +469,115 @@ python -c "from lib.meta_ralph import get_meta_ralph; import json; print(json.du
 # Tuneable recommendations
 python -c "from lib.meta_ralph import get_meta_ralph; import json; print(json.dumps(get_meta_ralph().analyze_tuneables(), indent=2))"
 ```
+
+---
+
+## Cognitive Capture Test Suite
+
+**Location:** `tests/test_cognitive_capture.py`
+
+A dedicated test suite for measuring and improving capture quality over time.
+
+### Usage
+
+```bash
+# Save current metrics as baseline (before tuning)
+python tests/test_cognitive_capture.py baseline
+
+# Compare current metrics to baseline (after tuning)
+python tests/test_cognitive_capture.py compare
+
+# Just analyze current state
+python tests/test_cognitive_capture.py analyze
+
+# Test filter accuracy with sample data
+python tests/test_cognitive_capture.py test
+
+# Run deep analysis
+python tests/test_cognitive_capture.py deep
+```
+
+### What It Measures
+
+| Metric | Description |
+|--------|-------------|
+| **Pass Rate** | % of items that pass quality threshold |
+| **Avg Score** | Average score across all roasted items |
+| **Cognitive Density** | % of items with reasoning/preference/decision signals |
+| **Skill Coverage** | Which domains have learnings |
+| **Filter Accuracy** | Correctly classifies cognitive vs operational |
+
+### Improvement Workflow
+
+```
+1. BASELINE
+   python tests/test_cognitive_capture.py baseline
+
+2. TUNE
+   - Adjust thresholds in lib/meta_ralph.py
+   - Add detection patterns in lib/importance_scorer.py
+   - Modify scoring weights
+
+3. TEST
+   python tests/test_cognitive_capture.py test
+   → Verify filter accuracy (should be 90%+)
+
+4. COMPARE
+   python tests/test_cognitive_capture.py compare
+   → Check improvement in pass rate, cognitive density
+
+5. VALIDATE
+   - Manually review passed items
+   - Confirm they're genuinely useful
+
+6. DOCUMENT
+   - Update changelog in META_RALPH.md
+   - Record what worked, what didn't
+```
+
+### Sample Output
+
+```
+============================================================
+ CURRENT CAPTURE QUALITY METRICS
+ 2026-02-03T14:30:00
+============================================================
+
+META-RALPH FILTERING:
+  Total roasted: 153
+  Quality passed: 56 (36.6%)
+  Needs work: 45
+  Primitive: 52
+  Avg score: 3.8/10
+
+COGNITIVE SIGNALS:
+  Has reasoning ('because'): 26
+  Has preference ('prefer'): 19
+  Has decision ('decided'): 6
+  Has correction ('instead'): 13
+  Cognitive density: 41.8%
+
+SKILL DOMAIN COVERAGE:
+  product              ################ (17)
+  debugging            # (1)
+  ui_ux                # (1)
+
+OVERALL GRADE: B
+  (Based on cognitive density: 41.8%)
+```
+
+### Filter Accuracy Test
+
+Tests that cognitive samples pass and operational samples fail:
+
+**Cognitive Samples (should pass):**
+- "User prefers dark theme because it reduces eye strain"
+- "Remember this: always validate input before database operations"
+- "I decided to use TypeScript instead of JavaScript for better type safety"
+
+**Operational Samples (should fail):**
+- "Read task succeeded with Read tool"
+- "Success rate: 95% over 1000 uses"
+- "Pattern found: Edit follows Read"
+
+**Target:** 100% accuracy (currently achieved)
