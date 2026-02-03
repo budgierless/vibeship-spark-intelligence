@@ -464,12 +464,14 @@ class SparkAdvisor:
             return None
 
         now = time.time()
+        tool_lower = tool_name.lower()  # Case-insensitive matching
         for line in reversed(lines[-RECENT_ADVICE_MAX_LINES:]):
             try:
                 entry = json.loads(line)
             except Exception:
                 continue
-            if entry.get("tool") != tool_name:
+            # Case-insensitive tool name matching (fixes Task vs task mismatch)
+            if entry.get("tool", "").lower() != tool_lower:
                 continue
             ts = float(entry.get("ts") or 0.0)
             if now - ts <= RECENT_ADVICE_MAX_AGE_S:

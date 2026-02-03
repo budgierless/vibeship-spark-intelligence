@@ -1,26 +1,34 @@
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-01-30T17:53:48
+Last updated: 2026-02-03T19:06:41
 
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (46% reliable, 627 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (41% reliable, 1191 validations)
-- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (41% reliable, 514 validations)
-- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (18% reliable, 162 validations)
-- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (12% reliable, 100 validations)
-- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (12% reliable, 95 validations)
-- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (38% reliable, 730 validations)
-- [reasoning] Pattern 'Read -> Edit' works well: Verify content before editing (100% reliable, 14 validations)
-- [reasoning] Sequence 'Bash -> TaskOutput -> Bash -> Bash' worked well (100% reliable, 8 validations)
-- [reasoning] Sequence 'TaskOutput -> Bash -> Bash -> Bash' worked well (100% reliable, 5 validations)
-- [reasoning] Sequence 'Bash -> Bash -> TaskOutput -> Bash' worked well (100% reliable, 7 validations)
-- [reasoning] Sequence 'Bash -> Bash -> Bash -> TaskOutput' worked well (100% reliable, 3 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (22% reliable, 889 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (21% reliable, 1483 validations)
+- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (20% reliable, 778 validations)
+- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 424 validations)
+- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (10% reliable, 361 validations)
+- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (10% reliable, 356 validations)
+- [self_awareness] I struggle with Bash fails with permission_denied -> Fix: Check file permissions or run with ele tasks (10% reliable, 255 validations)
+- [self_awareness] I struggle with Bash fails with json_error -> Fix: Verify JSON format is valid (recovered 100%) tasks (10% reliable, 269 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (21% reliable, 991 validations)
+- [user_understanding] All right, what else should we do next right now? What else do you want to test and iterate? make sure that whenever we are doing these tests, they're always information coming directly from the mind memory and Spark intelligence itself instead of things that are coming from the terminal please let's add this into META_RALPH as a very primary rule and @CLAUDE.md as a very key rule too (100% reliable, 4 validations)
+- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (76% reliable, 108 validations)
+- [self_awareness] Pattern 'Edit' risky: Edit without prior Read may cause content mismatch (2% reliable, 50 validations)
+
+## Project Focus
+- Phase: discovery
+
+## Project Questions
+- What is the project goal in one sentence?
+- How will we know it's complete?
+- What could make this fail later?
 
 ## Promoted Learnings (Docs)
-- I tend to be overconfident about Edit tasks *When: When attempting Edit* (100% reliable, 4 validations)
-- I struggle with regex_patterns tasks *When: Tasks involving regex_patterns* (100% reliable, 4 validations)
-- I struggle with WebFetch fails with other tasks *When: Tasks involving WebFetch fails with other* (95% reliable, 75 validations)
-- I struggle with WebFetch fails with other (recovered 67%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 257 validations)
-- I struggle with WebFetch fails with other (recovered 55%) tasks *When: Tasks involving WebFetch fails with other (recover* (91% reliable, 40 validations)
-- I struggle with WebFetch fails with other (recovered 56%) tasks *When: Tasks involving WebFetch fails with other (recover* (98% reliable, 169 validations)
+- User learns by building - figure it out as they go, hands-on *When: Learning style* (100% reliable, 3 validations)
+- User prefers Just try it, user will correct if wrong for assumptions *When: When assumptions is relevant* (73% reliable, 8 validations)
+- User prefers Try different angles - brute force approaches for unstuck_method *When: When unstuck_method is relevant* (100% reliable, 7 validations)
+- User prefers Build something - learn by doing for learning_style *When: When learning_style is relevant* (86% reliable, 6 validations)
+- User aversion: when we are using rounded corners for components *When: Chat message: I hate when we are using rounded cor* (100% reliable, 15 validations)
+- User wanted: no, I meant...")
 <!-- SPARK_LEARNINGS_END -->

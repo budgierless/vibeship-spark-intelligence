@@ -6,26 +6,64 @@ Meta-Ralph is Spark's internal quality gate - a system that evaluates every prop
 
 ---
 
-## 🚨 PRIMARY RULES
+## THE SPARK INTELLIGENCE CONSTITUTION
 
-### Rule 1: Source of Truth for Testing
+### GOVERNING DOCUMENT - READ FIRST, FOLLOW ALWAYS
 
-**CRITICAL:** When testing and iterating on Spark learning quality:
+**This Constitution is the PRIMARY rule set for ALL Spark Intelligence work.**
 
-> **Always retrieve test data directly from Mind memory and Spark Intelligence (via MCP tools or Python imports) - NEVER rely on terminal output.**
+Before making ANY change, fix, improvement, or tuning to Spark:
+1. Read this Constitution
+2. Follow all 15 rules
+3. No exceptions
 
-### Rule 2: Architecture-Grounded Improvements
+**Violations of these rules produce hallucinated progress - changes that look good but don't actually improve Spark.**
 
-**CRITICAL:** Before making any improvement or fix:
+Also in: **CLAUDE.md** (same Constitution, single source of truth)
 
-> **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
+---
 
-Without understanding the architecture, you will:
-- Fix code that isn't in the active data path
-- Add features that never get triggered
-- "Improve" components that aren't connected
+### The 15 Non-Negotiable Rules
 
-### The Real Data Flow (From Architecture Docs)
+These rules govern ALL work on Spark Intelligence. They exist to ensure every improvement is real, grounded in architecture, and produces actual learning - not hallucinated progress.
+
+> **"Perfect scoring with broken pipeline = zero learning"**
+
+---
+
+### CATEGORY A: REALITY GROUNDING (Rules 1-5)
+
+| # | Rule | Summary |
+|---|------|---------|
+| 1 | **Data from Storage, Not Terminal** | Always retrieve from persistent storage, never terminal output |
+| 2 | **Pipeline Health Before Everything** | Run `test_pipeline_health.py` FIRST before any tuning |
+| 3 | **Anti-Hallucination Verification** | Every improvement claim must have storage evidence |
+| 4 | **End-to-End Flow Verification** | After any change, verify events flow through complete pipeline |
+| 5 | **Utilization Over Storage** | Stored learnings that never get used provide zero value |
+
+### CATEGORY B: ARCHITECTURE AWARENESS (Rules 6-10)
+
+| # | Rule | Summary |
+|---|------|---------|
+| 6 | **Consult Architecture Before Changing** | Read Intelligence_Flow.md and Intelligence_Flow_Map.md first |
+| 7 | **Know the Real Data Flow** | Memorize: Sources → Queue → Bridge → Processing → Storage → Output |
+| 8 | **Verify Component Connectivity** | Before modifying, verify component is being called |
+| 9 | **Bridge Worker is Critical** | If bridge_worker isn't running, NOTHING gets processed |
+| 10 | **Layer-Aware Changes** | Identify which layer (Sources/Queue/Bridge/Processing/Storage/Output) |
+
+### CATEGORY C: QUALITY & ITERATION (Rules 11-15)
+
+| # | Rule | Summary |
+|---|------|---------|
+| 11 | **Baseline Before Tuning** | Capture baseline metrics FROM STORAGE before changes |
+| 12 | **Compare Against Baseline with Evidence** | After changes, compare with storage evidence |
+| 13 | **Document with Evidence** | Include: pipeline check, before/after counts, utilization |
+| 14 | **Evolve, Don't Disable** | Never disable bad components - improve them |
+| 15 | **The Human Test** | Would a human find this useful next time? |
+
+---
+
+### The Real Data Flow (MEMORIZE THIS)
 
 ```
 Sources (observe.py, sparkd.py)
@@ -37,12 +75,6 @@ Sources (observe.py, sparkd.py)
     → promoter → CLAUDE.md/AGENTS.md/etc.
 ```
 
-**If learnings aren't persisting, check:**
-1. Is bridge_worker running? (check heartbeat)
-2. Are events reaching the queue?
-3. Is bridge_cycle processing events?
-4. Is cognitive_learner being called?
-
 ### Architecture Files (MUST READ)
 
 | File | Purpose |
@@ -50,103 +82,31 @@ Sources (observe.py, sparkd.py)
 | **Intelligence_Flow.md** | Exhaustive data flow, tuneables, file interactions |
 | **Intelligence_Flow_Map.md** | Visual mermaid diagram of component connections |
 
-Before ANY Spark improvement session, verify you understand WHERE in the flow your change applies.
+### Storage Locations (Source of Truth)
 
-### Why This Matters
+| Data Type | Location | Access Method |
+|-----------|----------|---------------|
+| Cognitive Insights | `~/.spark/cognitive_insights.json` | Direct file read |
+| EIDOS Store | `~/.spark/eidos.db` | `get_store().get_stats()` |
+| Pattern Detection | `~/.spark/detected_patterns.jsonl` | `get_aggregator().get_stats()` |
+| Chip Insights | `~/.spark/chip_insights/` | Direct file read |
+| Mind Memories | `~/.mind/lite/memories.db` | `GET /v1/stats` |
+| Meta-Ralph State | `~/.spark/meta_ralph/` | `get_meta_ralph().get_stats()` |
 
-Terminal output is ephemeral and incomplete. The real data lives in:
-- **Spark Intelligence**: `~/.spark/cognitive_insights.json`, EIDOS store, pattern aggregator
-- **Mind Memory**: SQLite at `~/.mind/lite/memories.db` with 32,335+ memories
-- **MCP Tools**: `mcp__spark__spark_learnings`, `mcp__spark__spark_stats`
-
-### How to Test Correctly
-
-```python
-# ✅ CORRECT: Query Spark directly
-from lib.meta_ralph import get_meta_ralph
-stats = get_meta_ralph().get_stats()
-print(f"Quality Rate: {stats['quality_rate']:.1%}")
-
-# ✅ CORRECT: Query Mind directly
-import requests
-response = requests.get("http://localhost:8080/v1/stats")
-print(response.json())
-
-# ❌ WRONG: Relying on terminal output
-# "I saw in the terminal that 5 learnings were captured..."
-```
-
-### Test Data Sources
-
-| Data Type | Source | Access Method |
-|-----------|--------|---------------|
-| Quality Metrics | Meta-Ralph | `get_meta_ralph().get_stats()` |
-| Cognitive Insights | Spark | `~/.spark/cognitive_insights.json` |
-| EIDOS Distillations | EIDOS Store | `get_store().get_all_distillations()` |
-| Pattern Aggregator | Aggregator | `get_aggregator().get_stats()` |
-| Mind Memories | Mind API | `GET /v1/memories/` or `/v1/stats` |
-| Spark MCP | MCP Server | `spark_learnings`, `spark_stats` |
-
-### Validation Checklist
-
-Before claiming test results:
-- [ ] Data retrieved via Python import or API call?
-- [ ] Stats from persistent storage, not terminal output?
-- [ ] Can reproduce by running the same query?
-- [ ] Evidence is from durable source, not ephemeral logs?
-
-### Rule 3: Pipeline Health Before Tuning (NEW)
-
-**CRITICAL:** Before ANY tuning or iteration session:
-
-> **Run pipeline health check FIRST. Scoring metrics are meaningless if the pipeline isn't operational.**
+### Mandatory Pre-Tuning Checklist
 
 ```bash
-# MANDATORY: Run this before tuning
+# STEP 0: Pipeline health (BLOCKS all other steps if fails)
 python tests/test_pipeline_health.py
-```
 
-**The Session 2 Lesson:**
-In Session 2, Meta-Ralph was scoring correctly (39.4% quality rate), but:
-- `learnings_stored=0` - Nothing was being persisted!
-- `aggregator_events=0` - Pattern detection wasn't receiving events!
-- Components were correct but **not connected**
-
-Perfect scoring with broken pipeline = zero learning.
-
-### Rule 4: Anti-Hallucination (NEW)
-
-**CRITICAL:** Never claim improvements based on:
-
-| Hallucination Source | Why It's Wrong | What To Do Instead |
-|---------------------|----------------|---------------------|
-| Terminal output | Ephemeral, may not persist | Query storage directly |
-| "I saw X happen" | Observation ≠ storage | Verify in data files |
-| Code changes alone | Code may not be in data path | Run end-to-end flow test |
-| Scoring improvements | Scoring ≠ learning | Verify storage + utilization |
-
-**The Anti-Hallucination Test:**
-```bash
-# Before claiming improvement, verify:
-# 1. Pipeline is running
-python tests/test_pipeline_health.py quick
-
-# 2. Changes are in the active data path
-# (consult Intelligence_Flow_Map.md)
-
-# 3. Data is actually being stored
-python -c "
-from pathlib import Path
-import json
-f = Path.home() / '.spark' / 'cognitive_insights.json'
-data = json.loads(f.read_text())
-print(f'Insights stored: {len(data.get(\"insights\", []))}')
-"
+# If PASS, continue to:
+python tests/test_cognitive_capture.py baseline
+python tests/test_learning_utilization.py quick
 ```
 
 ---
 
-## Reality-Grounded Iteration Methodology (NEW)
+## Reality-Grounded Iteration Methodology
 
 > "Perfect scoring with broken pipeline = zero learning"
 
@@ -755,6 +715,7 @@ curl http://localhost:8788/api/stats
 | 2026-02-03 | Added Rule 4: Anti-Hallucination | Claims based on terminal output instead of storage | Must verify from persistent storage, not ephemeral logs |
 | 2026-02-03 | Added Learning Utilization Tracking | Stored learnings might never be used | Track retrieval → acted-on → outcome feedback loop |
 | 2026-02-03 | Updated Improvement Workflow | Old workflow skipped pipeline verification | 7-step workflow starting with mandatory health check |
+| 2026-02-03 | **FIX**: Case-insensitive tool name matching | Advice logged as `task` but looked up as `Task` - no match | `_get_recent_advice_entry` now uses case-insensitive comparison, acted_on rate 0.5% → 1.0%+ |
 
 ---
 

@@ -1,6 +1,21 @@
 # CLAUDE
 
-## SPARK INTELLIGENCE CONSTITUTION
+---
+
+## THE SPARK INTELLIGENCE CONSTITUTION
+
+### GOVERNING DOCUMENT - READ FIRST, FOLLOW ALWAYS
+
+**This Constitution is the PRIMARY rule set for ALL Spark Intelligence work.**
+
+Before making ANY change, fix, improvement, or tuning to Spark:
+1. Read this Constitution
+2. Follow all 15 rules
+3. No exceptions
+
+**Violations of these rules produce hallucinated progress - changes that look good but don't actually improve Spark.**
+
+---
 
 ### The 15 Non-Negotiable Rules
 
@@ -727,39 +742,38 @@ When domain detected, chips should:
 *Cognitive insights from `~/.spark/cognitive_insights.json` (231 total)*
 
 <!-- SPARK_LEARNINGS_START -->
-<!--
-  Phase 1 Complete (2026-02-02): Removed 1,196 primitive learnings
-  Only human-useful cognitive insights remain.
--->
+## Spark Bootstrap
+Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
+Last updated: 2026-02-03T19:06:41
 
-### User Understanding (171 insights)
-- User prefers Vibeship style - dark theme, monospace fonts, clean grids
-- User hates gradients - use solid colors, flat design
-- User prefers clean and thorough code - quality over speed
-- User works best late night - quiet, no interruptions, flow state
-- Main frustration with AI: not remembering context
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (22% reliable, 889 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (21% reliable, 1483 validations)
+- [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (20% reliable, 778 validations)
+- [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 424 validations)
+- [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (10% reliable, 361 validations)
+- [self_awareness] I struggle with Bash fails with connection_error -> Fix: Check if service is running on expected tasks (10% reliable, 356 validations)
+- [self_awareness] I struggle with Bash fails with permission_denied -> Fix: Check file permissions or run with ele tasks (10% reliable, 255 validations)
+- [self_awareness] I struggle with Bash fails with json_error -> Fix: Verify JSON format is valid (recovered 100%) tasks (10% reliable, 269 validations)
+- [self_awareness] I struggle with Bash fails with timeout -> Fix: Reduce scope or increase timeout tasks (21% reliable, 991 validations)
+- [user_understanding] All right, what else should we do next right now? What else do you want to test and iterate? make sure that whenever we are doing these tests, they're always information coming directly from the mind memory and Spark intelligence itself instead of things that are coming from the terminal please let's add this into META_RALPH as a very primary rule and @CLAUDE.md as a very key rule too (100% reliable, 4 validations)
+- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (76% reliable, 108 validations)
+- [self_awareness] Pattern 'Edit' risky: Edit without prior Read may cause content mismatch (2% reliable, 50 validations)
 
-### Self-Awareness (14 insights)
-- I struggle with Bash errors (449 validations)
-- I tend to be overconfident about Bash tasks (187v)
-- I struggle with Edit errors (46v)
-- Blind spot: File permissions before operation
+## Project Focus
+- Phase: discovery
 
-### Wisdom (17 insights)
-- Ship fast, iterate faster
-- Never fail silently - always surface errors clearly
-- Maintainable > clever
-- Security is non-negotiable
-- Lightweight solutions - avoid bloat
+## Project Questions
+- What is the project goal in one sentence?
+- How will we know it's complete?
+- What could make this fail later?
 
-### Context (23 insights)
-- Windows Unicode crash - cp1252 can't encode emojis
-- Two Spark directories - old vibeship-spark vs new vibeship-spark-intelligence
-- Bash vs cmd syntax mismatch on Windows
-
-### Reasoning (6 insights)
-- Assumption 'File exists at expected path' often wrong → Use Glob first
-
+## Promoted Learnings (Docs)
+- User learns by building - figure it out as they go, hands-on *When: Learning style* (100% reliable, 3 validations)
+- User prefers Just try it, user will correct if wrong for assumptions *When: When assumptions is relevant* (73% reliable, 8 validations)
+- User prefers Try different angles - brute force approaches for unstuck_method *When: When unstuck_method is relevant* (100% reliable, 7 validations)
+- User prefers Build something - learn by doing for learning_style *When: When learning_style is relevant* (86% reliable, 6 validations)
+- User aversion: when we are using rounded corners for components *When: Chat message: I hate when we are using rounded cor* (100% reliable, 15 validations)
+- User wanted: no, I meant...")
 <!-- SPARK_LEARNINGS_END -->
 
 ---
