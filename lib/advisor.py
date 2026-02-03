@@ -30,6 +30,15 @@ from .cognitive_learner import get_cognitive_learner, CognitiveCategory
 from .mind_bridge import get_mind_bridge, HAS_REQUESTS
 from .memory_banks import retrieve as bank_retrieve, infer_project_key
 
+# EIDOS integration for distillation retrieval
+try:
+    from .eidos import get_retriever, StructuralRetriever
+    HAS_EIDOS = True
+except ImportError:
+    HAS_EIDOS = False
+    get_retriever = None
+    StructuralRetriever = None
+
 
 # ============= Configuration =============
 ADVISOR_DIR = Path.home() / ".spark" / "advisor"
@@ -193,6 +202,10 @@ class SparkAdvisor:
 
         # 6. Get skill-based hints
         advice_list.extend(self._get_skill_advice(context))
+
+        # 7. Get EIDOS distillations (extracted rules from patterns)
+        if HAS_EIDOS:
+            advice_list.extend(self._get_eidos_advice(tool_name, context))
 
         # Sort by relevance (confidence * context_match * effectiveness_boost)
         advice_list = self._rank_advice(advice_list)
@@ -387,6 +400,42 @@ class SparkAdvisor:
                 source="skill",
                 context_match=0.7,
             ))
+
+        return advice
+
+    def _get_eidos_advice(self, tool_name: str, context: str) -> List[Advice]:
+        """Get advice from EIDOS distillations (extracted rules from patterns)."""
+        advice = []
+
+        if not HAS_EIDOS:
+            return advice
+
+        try:
+            retriever = get_retriever()
+
+            # Build intent from tool and context
+            intent = f"{tool_name} {context[:80]}"
+
+            # Get distillations for this intent (includes policies, heuristics, anti-patterns)
+            distillations = retriever.retrieve_for_intent(intent)
+
+            for d in distillations[:5]:
+                # Determine advice type label based on distillation type
+                type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
+
+                advice.append(Advice(
+                    advice_id=self._generate_advice_id(d.statement),
+                    insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
+                    text=f"[EIDOS {type_label}] {d.statement}",
+                    confidence=d.confidence,
+                    source="eidos",
+                    context_match=0.85,
+                ))
+                # Record usage (will mark helped=True on positive outcome)
+                retriever.record_usage(d.distillation_id, helped=False)
+
+        except Exception:
+            pass  # Don't break advice flow if EIDOS retrieval fails
 
         return advice
 
