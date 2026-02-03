@@ -13,6 +13,7 @@ This ensures:
 import json
 import os
 import time
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -70,7 +71,7 @@ class SparkEvent:
 
 def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
                   tool_name: Optional[str] = None, tool_input: Optional[Dict] = None,
-                  error: Optional[str] = None) -> bool:
+                  error: Optional[str] = None, trace_id: Optional[str] = None) -> bool:
     """
     Capture an event as fast as possible.
     
@@ -87,11 +88,23 @@ def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
 
         QUEUE_DIR.mkdir(parents=True, exist_ok=True)
         
+        event_ts = time.time()
+        data_out = dict(data)
+        trace_hint = ""
+        if trace_id:
+            data_out["trace_id"] = trace_id
+        if not data_out.get("trace_id"):
+            payload = data_out.get("payload")
+            if isinstance(payload, dict):
+                trace_hint = str(payload.get("text") or payload.get("intent") or payload.get("command") or "")[:80]
+            raw = f"{session_id}|{event_type.value}|{event_ts}|{tool_name or ''}|{trace_hint}"
+            data_out["trace_id"] = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
         event = SparkEvent(
             event_type=event_type,
             session_id=session_id,
-            timestamp=time.time(),
-            data=data,
+            timestamp=event_ts,
+            data=data_out,
             tool_name=tool_name,
             tool_input=tool_input,
             error=error

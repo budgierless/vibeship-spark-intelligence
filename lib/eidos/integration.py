@@ -17,6 +17,7 @@ Action → Prediction → Outcome → Evaluation → Policy Update → Distillat
 import json
 import os
 import time
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -39,6 +40,7 @@ from .elevated_control import (
     WatcherAlert, EscapeProtocolResult,
     validate_step_envelope
 )
+from .minimal_mode import get_minimal_mode_controller
 
 
 # ===== Session/Episode Tracking =====
@@ -188,7 +190,8 @@ def create_step_before_action(
     session_id: str,
     tool_name: str,
     tool_input: Dict[str, Any],
-    prediction: Dict[str, Any]
+    prediction: Dict[str, Any],
+    trace_id: Optional[str] = None
 ) -> Tuple[Optional[Step], Optional[ControlDecision]]:
     """
     Create a step BEFORE the tool executes.
@@ -206,11 +209,17 @@ def create_step_before_action(
     store = get_store()
     elevated = get_elevated_control_plane()
     guardrails = GuardrailEngine()
+    minimal = get_minimal_mode_controller()
+
+    if not trace_id:
+        raw = f"{session_id}|{tool_name}|{time.time()}"
+        trace_id = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     # Create step with FULL Step Envelope
     step = Step(
         step_id="",
         episode_id=episode.episode_id,
+        trace_id=trace_id,
         intent=f"Execute {tool_name}",
         decision=f"Use {tool_name} tool",
         hypothesis=prediction.get("reason", ""),  # Falsifiable hypothesis
@@ -233,6 +242,15 @@ def create_step_before_action(
         memory_cited=False,
         memory_absent_declared=True,  # Declare no memories found for now
     )
+
+    # Minimal mode gate
+    allowed_mm, mm_reason = minimal.check_action_allowed(tool_name, tool_input)
+    if not allowed_mm:
+        return step, ControlDecision(
+            allowed=False,
+            message=mm_reason,
+            required_action="diagnostics only until minimal mode exits"
+        )
 
     # Get recent steps for context
     recent_steps = store.get_episode_steps(episode.episode_id)[-10:]
@@ -275,6 +293,7 @@ def create_step_before_action(
         "episode_id": episode.episode_id,
         "tool_name": tool_name,
         "prediction": prediction,
+        "trace_id": trace_id,
         "timestamp": time.time(),
     })
 
@@ -313,6 +332,7 @@ def complete_step_after_action(
     gate = MemoryGate()
 
     prediction = step_data.get("prediction", {})
+    trace_id = step_data.get("trace_id")
     predicted_success = prediction.get("outcome", "success") == "success"
     confidence_before = prediction.get("confidence", 0.5)
 
@@ -345,6 +365,7 @@ def complete_step_after_action(
     step = Step(
         step_id=step_data.get("step_id", ""),
         episode_id=episode.episode_id,
+        trace_id=trace_id,
         intent=f"Execute {tool_name}",
         decision=f"Use {tool_name} tool",
         hypothesis=prediction.get("reason", ""),
@@ -470,6 +491,11 @@ def should_block_action(session_id: str, tool_name: str, tool_input: Dict) -> Op
     store = get_store()
     control = get_control_plane()
     guardrails = GuardrailEngine()
+    minimal = get_minimal_mode_controller()
+
+    allowed_mm, mm_reason = minimal.check_action_allowed(tool_name, tool_input)
+    if not allowed_mm:
+        return mm_reason
 
     # Create minimal step for checking
     step = Step(

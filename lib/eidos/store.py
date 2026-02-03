@@ -78,6 +78,7 @@ class EidosStore:
                 CREATE TABLE IF NOT EXISTS steps (
                     step_id TEXT PRIMARY KEY,
                     episode_id TEXT REFERENCES episodes(episode_id),
+                    trace_id TEXT,
 
                     -- Before action
                     intent TEXT NOT NULL,
@@ -145,12 +146,27 @@ class EidosStore:
                 -- Indexes for efficient retrieval
                 CREATE INDEX IF NOT EXISTS idx_steps_episode ON steps(episode_id);
                 CREATE INDEX IF NOT EXISTS idx_steps_created ON steps(created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_steps_trace ON steps(trace_id);
                 CREATE INDEX IF NOT EXISTS idx_distillations_type ON distillations(type);
                 CREATE INDEX IF NOT EXISTS idx_distillations_confidence ON distillations(confidence DESC);
                 CREATE INDEX IF NOT EXISTS idx_policies_scope ON policies(scope);
                 CREATE INDEX IF NOT EXISTS idx_policies_priority ON policies(priority DESC);
             """)
+            # Lightweight migration for existing databases.
+            try:
+                if not self._column_exists(conn, "steps", "trace_id"):
+                    conn.execute("ALTER TABLE steps ADD COLUMN trace_id TEXT")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_steps_trace ON steps(trace_id)")
+            except Exception:
+                pass
             conn.commit()
+
+    def _column_exists(self, conn: sqlite3.Connection, table: str, column: str) -> bool:
+        try:
+            rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            return any(r[1] == column for r in rows)
+        except Exception:
+            return False
 
     # ==================== Episode Operations ====================
 
@@ -253,15 +269,16 @@ class EidosStore:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO steps (
-                    step_id, episode_id, intent, decision, alternatives, assumptions,
+                    step_id, episode_id, trace_id, intent, decision, alternatives, assumptions,
                     prediction, confidence_before, action_type, action_details,
                     result, evaluation, surprise_level, lesson, confidence_after,
                     retrieved_memories, memory_cited, memory_useful,
                     validated, validation_method, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 step.step_id,
                 step.episode_id,
+                step.trace_id,
                 step.intent,
                 step.decision,
                 json.dumps(step.alternatives),
@@ -327,9 +344,12 @@ class EidosStore:
         if memory_useful is not None:
             memory_useful = bool(memory_useful)
 
+        trace_id = row["trace_id"] if "trace_id" in row.keys() else None
+
         return Step(
             step_id=row["step_id"],
             episode_id=row["episode_id"],
+            trace_id=trace_id,
             intent=row["intent"],
             decision=row["decision"],
             alternatives=json.loads(row["alternatives"] or "[]"),

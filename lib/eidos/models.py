@@ -299,8 +299,9 @@ class Step:
     episode_id: str
 
     # ===== BEFORE ACTION (mandatory) =====
-    intent: str                           # What I'm trying to accomplish
-    decision: str                         # What I chose to do
+    intent: str = ""                      # What I'm trying to accomplish
+    decision: str = ""                    # What I chose to do
+    trace_id: Optional[str] = None        # Optional trace ID for debugging
     hypothesis: str = ""                  # Falsifiable claim being tested
     alternatives: List[str] = field(default_factory=list)  # What I considered but didn't do
     assumptions: List[str] = field(default_factory=list)   # What must be true for this to work
@@ -394,6 +395,7 @@ class Step:
         return {
             "step_id": self.step_id,
             "episode_id": self.episode_id,
+            "trace_id": self.trace_id,
             "intent": self.intent,
             "decision": self.decision,
             "hypothesis": self.hypothesis,
@@ -429,6 +431,7 @@ class Step:
         return cls(
             step_id=data["step_id"],
             episode_id=data["episode_id"],
+            trace_id=data.get("trace_id"),
             intent=data.get("intent", ""),
             decision=data.get("decision", ""),
             hypothesis=data.get("hypothesis", ""),

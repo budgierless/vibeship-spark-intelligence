@@ -101,7 +101,8 @@ class RequestTracker:
         self,
         message: str,
         episode_id: str = "default",
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None
     ) -> Step:
         """
         Wrap user request in EIDOS Step structure.
@@ -130,6 +131,7 @@ class RequestTracker:
         step = Step(
             step_id="",  # Auto-generated in __post_init__
             episode_id=episode_id,
+            trace_id=trace_id,
             intent=intent,
             decision="pending",  # Filled after action
             hypothesis=hypothesis,

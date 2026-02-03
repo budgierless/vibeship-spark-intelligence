@@ -27,6 +27,7 @@ import sys
 import json
 import time
 import os
+import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -250,6 +251,11 @@ def detect_domain(text: str) -> Optional[str]:
     # Return domain with highest score (at least 1 match)
     best_domain = max(domain_scores, key=domain_scores.get)
     return best_domain
+
+
+def _make_trace_id(*parts: str) -> str:
+    raw = "|".join(str(p or "") for p in parts).encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()[:16]
 
 
 # ===== Cognitive Signal Extraction =====
@@ -539,9 +545,11 @@ def main():
     tool_input = input_data.get("tool_input", {})
     
     event_type = get_event_type(hook_event)
+    trace_id = None
     
     # ===== PreToolUse: Make prediction + Get advice + EIDOS step creation =====
     if event_type == EventType.PRE_TOOL and tool_name:
+        trace_id = _make_trace_id(session_id, tool_name, hook_event, time.time())
         prediction = make_prediction(tool_name, tool_input)
 
         # Get advice from Advisor (tracks retrieval in Meta-Ralph)
@@ -572,8 +580,11 @@ def main():
                     session_id=session_id,
                     tool_name=tool_name,
                     tool_input=tool_input,
-                    prediction=prediction
+                    prediction=prediction,
+                    trace_id=trace_id
                 )
+                if step and step.trace_id:
+                    trace_id = step.trace_id
 
                 # If EIDOS blocks the action, output blocking message
                 if decision and not decision.allowed:
@@ -606,12 +617,14 @@ def main():
                 elif result:
                     result = str(result)[:500]
 
-                complete_step_after_action(
+                step = complete_step_after_action(
                     session_id=session_id,
                     tool_name=tool_name,
                     success=True,
                     result=result
                 )
+                if step and step.trace_id:
+                    trace_id = step.trace_id
             except Exception as e:
                 log_debug("observe", "EIDOS post-action failed", e)
 
@@ -662,12 +675,14 @@ def main():
         # EIDOS: Complete step with failure
         if EIDOS_AVAILABLE:
             try:
-                complete_step_after_action(
+                step = complete_step_after_action(
                     session_id=session_id,
                     tool_name=tool_name,
                     success=False,
                     error=str(error)[:500] if error else ""
                 )
+                if step and step.trace_id:
+                    trace_id = step.trace_id
             except Exception as e:
                 log_debug("observe", "EIDOS post-failure failed", e)
 
@@ -706,6 +721,7 @@ def main():
             txt = txt.get("text") or ""
         txt = str(txt).strip()
         if txt:
+            trace_id = _make_trace_id(session_id, "user_prompt", txt, time.time())
             data["payload"] = {"role": "user", "text": txt}
             data["source"] = "claude_code"
             data["kind"] = "message"
@@ -714,10 +730,15 @@ def main():
             # Look for high-value cognitive signals in user messages
             extract_cognitive_signals(txt, session_id)
     
+    if trace_id:
+        data["trace_id"] = trace_id
+
     kwargs = {}
     if tool_name:
         kwargs["tool_name"] = tool_name
         kwargs["tool_input"] = tool_input
+    if trace_id:
+        kwargs["trace_id"] = trace_id
     
     if event_type == EventType.POST_TOOL_FAILURE:
         error = input_data.get("tool_error") or input_data.get("error") or ""
@@ -735,6 +756,7 @@ def main():
             "tool_name": tool_name,
             "tool_input": tool_input,
             "hook_event": hook_event,
+            "trace_id": trace_id,
             **data
         }
         aggregator.process_event(event_data)

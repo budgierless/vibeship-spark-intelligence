@@ -139,6 +139,11 @@ class PatternAggregator:
 
         # === EIDOS INTEGRATION: Handle user requests ===
         event_type = event.get("type", "")
+        trace_id = event.get("trace_id")
+        if not trace_id:
+            payload = event.get("payload") or {}
+            if isinstance(payload, dict):
+                trace_id = payload.get("trace_id")
         step_id = event.get("step_id")
 
         # If user message, wrap in Step envelope
@@ -151,7 +156,8 @@ class PatternAggregator:
                     "phase": event.get("phase"),
                     "prior_actions": event.get("prior_actions", []),
                     "session_id": event.get("session_id"),
-                }
+                },
+                trace_id=trace_id
             )
             event["step_id"] = step.step_id
             self._eidos_stats["steps_created"] += 1

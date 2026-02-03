@@ -50,6 +50,12 @@ Dashboards and ops:
 2) lib.bridge_cycle.run_bridge_cycle reads recent events and orchestrates learning tasks.
 3) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
 
+### 2.2.1 Trace context propagation (v1)
+- trace_id is attached at ingest (hooks/observe.py, sparkd.py, lib.queue.quick_capture).
+- trace_id is carried into pattern events and EIDOS Steps.
+- evidence is linked to steps; outcomes include trace_id when available.
+- dashboards should drill down by trace_id for audit and validation.
+
 ### 2.3 Context sync + promotion (docs + agent context)
 1) lib.bridge.update_spark_context builds a context pack (insights, warnings, advice, skills, taste, outcomes).
 2) lib.context_sync filters + syncs high-signal insights (and optionally sends to Mind).
@@ -126,6 +132,7 @@ Pattern + EIDOS:
 - ~/.spark/eidos.db
 - ~/.spark/truth_ledger.json
 - ~/.spark/acceptance_plans.json
+  - steps table includes trace_id (v1 trace context)
 
 Memory banks + store:
 - ~/.spark/banks/*.jsonl
@@ -138,6 +145,7 @@ Outcomes + prediction:
 - ~/.spark/outcome_links.jsonl
 - ~/.spark/outcome_requests.jsonl
 - ~/.spark/outcome_checkin_state.json
+  - outcomes may include trace_id when derived from queue events
 - ~/.spark/outcome_tracker.json
 - ~/.spark/exposures.jsonl
 - ~/.spark/last_exposure.json

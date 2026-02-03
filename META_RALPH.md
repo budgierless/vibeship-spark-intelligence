@@ -117,6 +117,8 @@ This methodology replaces the old "tune and test" approach with a reality-ground
 ```
 STEP 0: PIPELINE HEALTH     (MANDATORY - Blocks all other steps)
    ↓
+STEP 0.5: META-RALPH QUALITY RATE (if 0.0% or suspicious)
+   ↓
 STEP 1: ARCHITECTURE REVIEW (Which components are you changing?)
    ↓
 STEP 2: BASELINE           (Measure current reality from storage)
@@ -161,6 +163,24 @@ python tests/test_pipeline_health.py quick
 2. Fix the pipeline issue first
 3. Re-run health check
 4. Only then continue to Step 1
+
+### Step 0.5: Meta-Ralph Quality Rate Investigation
+
+**Trigger:** If `Quality rate` is `0.0%` (or looks wrong), resolve before tuning.
+
+**Hypotheses:**
+- H1: Quality rate is computed but not exposed (missing key / wrong name).
+- H2: Meta-Ralph is receiving events but not classifying them (signals not matching).
+- H3: Output is written but the dashboard/health check reads the wrong file.
+
+**Test (known QUALITY_SIGNALS):**
+```bash
+python -c "from lib.meta_ralph import get_meta_ralph; r=get_meta_ralph(); r.roast('Because this is critical, avoid X instead of Y, prefer Z when A then B.'); print(r.get_stats())"
+```
+
+**Pass criteria:**
+- `get_stats()` shows a non-zero `quality_rate` (or `pass_rate`)
+- Recent roast history includes the test string with verdict `QUALITY`
 
 ### Step 1: Architecture Review
 
@@ -678,6 +698,11 @@ curl http://localhost:8788/api/stats
 
 | Date | Change | Reason | Outcome |
 |------|--------|--------|---------|
+| 2026-02-03 | Added trace_id propagation (queue -> EIDOS steps -> outcomes) | Enable trace-first drilldowns and unified run timelines | Steps and outcomes now linkable by trace_id |
+| 2026-02-03 | Added dashboard playbook + flow updates | Make control-layer usage explicit and map trace context | Operators have a clear usage loop and updated flow map |
+| 2026-02-03 | Added quality_rate alias to Meta-Ralph stats | Pipeline health showed 0.0% due to missing key | Health check now reflects true pass rate |
+| 2026-02-03 | Added EIDOS ops dashboards (Mission, Learning, Rabbit Hole, Acceptance) + global funnel KPI | Control-layer visibility and operator enforcement | Core control primitives now observable and actionable |
+| 2026-02-03 | Persisted Minimal Mode state/history for UI | Minimal mode existed but was invisible across processes | Timeline + active state now visible in dashboards |
 | 2026-02-03 | Fixed pipeline health aggregator check to use persistent stats + backlog | Health check was reading non-existent keys, reporting false FAIL | Pattern detection now reported accurately (logged patterns + backlog) |
 | 2026-02-03 | Added sample-size guardrails + per-source quality checks | Avoid tuning on low data | More stable recommendations |
 | 2026-02-03 | quality_threshold 7→5→4 | Over-filtering (2.8% pass rate) | Pass rate 8.1%, quality maintained |
@@ -807,6 +832,51 @@ Updated Rule 13 to explicitly require META_RALPH.md synchronization:
 
 ---
 
+### Session 9: 2026-02-03 (Metadata Pattern Filtering & Mind Investigation)
+
+**Goal:** Complete remaining advisor improvements - metadata filtering and Mind source investigation.
+
+**Tasks Completed:**
+
+| # | Task | Status | Result |
+|---|------|--------|--------|
+| 16 | Filter metadata patterns from bank advice | ✅ | Implemented `_is_metadata_pattern()` method |
+| 17 | Investigate Mind source returning 0 advice | ✅ | Expected behavior - Mind API not running |
+
+**Metadata Pattern Filter:**
+
+Added `_is_metadata_pattern()` to filter non-actionable patterns from bank memories:
+
+| Pattern Type | Example | Action |
+|--------------|---------|--------|
+| Key-value metadata | `User communication style: detail_level = concise` | Filter |
+| Label: value | `Principle: it is according to...` | Filter (unless has action verbs) |
+| Underscore keys | `detail_level = concise` | Filter |
+| Short fragments | `<15 chars with :` | Filter |
+| Incomplete sentences | Ends with "that", "the", "and" | Filter |
+
+**Mind Source Investigation:**
+
+Mind returns 0 advice because Mind API isn't running (localhost:8080). This is **expected graceful degradation**. When Mind Lite is started with `start_mind_lite.bat`, it will contribute advice. Not a bug.
+
+**Audit Results:**
+
+| Metric | Session 8 | Session 9 |
+|--------|-----------|-----------|
+| Grade | C | D |
+| Acted-on rate | 3.4% | 1.7% |
+| Bank items | 2 | 1 |
+| Noise detected | 1 | 1 |
+| With reasons | 32/48 (67%) | 33/47 (70%) |
+
+Note: Grade dropped due to effectiveness being 0% (9 bad outcomes). This needs investigation - may be test methodology counting all outcomes as "bad" when tool succeeds after advice.
+
+**Files Changed:**
+- `lib/advisor.py` (`_is_metadata_pattern()` method added)
+- `META_RALPH.md` (this session entry)
+
+---
+
 ### Session 7: 2026-02-03 (Task-to-Tool Outcome Linking Fix)
 
 **Goal:** Fix acted-on rate being stuck at 0.2% despite 500 retrievals.
@@ -894,6 +964,41 @@ Updated health check to use persistent stats and backlog:
 
 **Files Changed:**
 - `tests/test_pipeline_health.py` (correct aggregator stats)
+- `META_RALPH.md` (changelog + session entry)
+
+---
+
+### Session 7: 2026-02-03 (EIDOS Ops Dashboards v1)
+
+**Goal:** Surface existing EIDOS control primitives in operator-grade dashboards without adding new concepts.
+
+**Decision:** Build four dashboards only:
+- Mission Control (services + queue + bridge + active episode + watchers)
+- Learning Factory (distillations, truth ledger, utilization, promotions)
+- Rabbit Hole Recovery (repeat failures, no-evidence streaks, diff thrash, escape/minimal mode)
+- Acceptance & Validation Board (acceptance plans + deferrals + validation gaps)
+
+**What Was Missing:**
+- Control primitives existed but were invisible across processes.
+- Minimal Mode state lived in-memory only; dashboards could not read it.
+
+**Fixes Applied:**
+- Dashboard v1 built directly on existing artifacts (queue, bridge heartbeat, eidos.db, truth_ledger.json, acceptance_plans.json, evidence.db).
+- Added persistent Minimal Mode state/history so UI can show timeline and status.
+- Enforced Minimal Mode gating in EIDOS integration (blocks disallowed tools/actions).
+
+**Evidence:**
+| Metric | Value |
+|--------|-------|
+| Active episodes | from `eidos_active_episodes.json` |
+| Distillations | from `~/.spark/eidos.db` |
+| Truth ledger | from `~/.spark/truth_ledger.json` |
+| Acceptance plans | from `~/.spark/acceptance_plans.json` |
+
+**Files Changed:**
+- `dashboard.py` (new mission/learning/rabbit/acceptance dashboards + funnel KPI + actions)
+- `lib/eidos/minimal_mode.py` (persist state/history for UI)
+- `lib/eidos/integration.py` (minimal mode gate before tool actions)
 - `META_RALPH.md` (changelog + session entry)
 
 ---
@@ -1141,7 +1246,7 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 
 ---
 
-## Current State: 2026-02-03 (Session 8 Complete)
+## Current State: 2026-02-03 (Session 9 Complete)
 
 ### Intelligence Evolution Metrics
 
@@ -1151,6 +1256,7 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 | Patterns Logged | 579 | Verified |
 | Cognitive Insights | 1,580 | Growing |
 | Filter Accuracy | 100% | Optimal |
+| Actionability | 70% | With reasons |
 
 ### Learning Pipeline Status
 
@@ -1165,6 +1271,20 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 | EIDOS Distillation | 7 rules | Heuristics and policies |
 | Mind Persistence | 32,335+ | Cross-session memory |
 | **Aggregator Stats** | **Fixed** | Now shows persistent counts |
+| **Bank Metadata Filter** | **New** | Filters key-value patterns |
+
+### Session 9 Summary
+
+**Completed:**
+- Task #16: Metadata pattern filtering (e.g., "X: Y = Z")
+- Task #17: Mind investigation (expected - API not running)
+
+**Audit Grade:** D (effectiveness tracking needs investigation)
+
+**Next Steps:**
+1. Investigate why outcomes are all "bad" (9 bad, 0 good)
+2. Verify outcome tracking methodology in advisor_audit.py
+3. Consider starting Mind Lite for cross-session memory
 
 ### Latest Fix: Needs_Work Cleanup
 

@@ -144,6 +144,9 @@ def build_predictions(max_age_s: float = 6 * 3600) -> int:
             "source": source,
             "session_id": session_id,
         }
+        trace_id = ex.get("trace_id")
+        if trace_id:
+            pred["trace_id"] = trace_id
         preds.append(pred)
 
     _append_jsonl(PREDICTIONS_FILE, preds)
@@ -237,6 +240,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
     processed = 0
     for ev in events:
         processed += 1
+        trace_id = (ev.data or {}).get("trace_id")
         if ev.event_type == EventType.USER_PROMPT:
             payload = (ev.data or {}).get("payload") or {}
             role = payload.get("role") or "user"
@@ -248,7 +252,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
             polarity = _outcome_polarity(text)
             if not polarity:
                 continue
-            rows.append({
+            row = {
                 "outcome_id": make_outcome_id(str(ev.timestamp), text[:100]),
                 "event_type": "user_prompt",
                 "tool": None,
@@ -256,7 +260,10 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "polarity": polarity,
                 "created_at": ev.timestamp,
                 "session_id": ev.session_id,
-            })
+            }
+            if trace_id:
+                row["trace_id"] = trace_id
+            rows.append(row)
         elif ev.event_type in (EventType.POST_TOOL_FAILURE,):
             tool = ev.tool_name or ""
             error = ev.error or ""
@@ -266,7 +273,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
             if not error:
                 continue
             text = f"{tool} error: {str(error)[:200]}"
-            rows.append({
+            row = {
                 "outcome_id": make_outcome_id(str(ev.timestamp), tool, "error"),
                 "event_type": "tool_error",
                 "tool": tool,
@@ -274,7 +281,10 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "polarity": "neg",
                 "created_at": ev.timestamp,
                 "session_id": ev.session_id,
-            })
+            }
+            if trace_id:
+                row["trace_id"] = trace_id
+            rows.append(row)
 
     append_outcomes(rows)
     state["offset"] = offset + len(events)

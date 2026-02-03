@@ -14,7 +14,13 @@ EXPOSURES_FILE = Path.home() / ".spark" / "exposures.jsonl"
 LAST_EXPOSURE_FILE = Path.home() / ".spark" / "last_exposure.json"
 
 
-def record_exposures(source: str, items: Iterable[Dict], *, session_id: Optional[str] = None) -> int:
+def record_exposures(
+    source: str,
+    items: Iterable[Dict],
+    *,
+    session_id: Optional[str] = None,
+    trace_id: Optional[str] = None
+) -> int:
     """Append exposure entries. Returns count written."""
     rows: List[Dict] = []
     now = time.time()
@@ -31,6 +37,7 @@ def record_exposures(source: str, items: Iterable[Dict], *, session_id: Optional
             "category": item.get("category"),
             "text": text,
             "session_id": session_id,
+            "trace_id": trace_id,
         })
 
     if not rows:

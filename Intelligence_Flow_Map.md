@@ -76,12 +76,18 @@ flowchart LR
     service_ctl["lib/service_control"]
   end
 
+  %% ===== Trace Context =====
+  subgraph Trace
+    trace_ctx["trace_id (v1)"]
+  end
+
   %% ===== Edges =====
   hooks_observe --> queue
   adapters --> sparkd --> queue
   scripts_emit --> queue
 
   queue --> bridge_worker --> bridge_cycle
+  queue --> trace_ctx
 
   bridge_cycle --> memory_capture --> cognitive --> banks
   cognitive --> store
@@ -89,10 +95,13 @@ flowchart LR
   bridge_cycle --> pattern_agg --> request_tracker --> distiller --> memory_gate --> eidos_store
   eidos_store --> eidos_retriever
   eidos_store --> control_plane
+  trace_ctx --> pattern_agg
+  trace_ctx --> eidos_store
   pattern_agg --> cognitive
 
   bridge_cycle --> validation_loop --> cognitive
   bridge_cycle --> prediction_loop --> outcome_log --> aha --> cognitive
+  trace_ctx --> outcome_log
 
   bridge_cycle --> content_learner
 
@@ -107,5 +116,6 @@ flowchart LR
 
   queue --> dashboard
   bridge_cycle --> dashboard
+  trace_ctx --> dashboard
   service_ctl --> watchdog
 ```

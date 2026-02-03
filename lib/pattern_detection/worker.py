@@ -67,6 +67,9 @@ def process_pattern_events(limit: int = 200) -> int:
             "tool_input": ev.tool_input,
             "payload": payload,
         }
+        trace_id = (ev.data or {}).get("trace_id")
+        if trace_id:
+            pattern_event["trace_id"] = trace_id
 
         if ev.error:
             pattern_event["error"] = ev.error

@@ -663,15 +663,20 @@ class MetaRalph:
         insight_key: Optional[str] = None,
         source: Optional[str] = None,
     ):
-        """Track when a learning is retrieved."""
-        self.outcome_records[learning_id] = OutcomeRecord(
-            learning_id=learning_id,
-            learning_content=learning_content,
-            retrieved_at=datetime.now().isoformat(),
-            insight_key=insight_key,
-            source=source,
-        )
-        self._save_state()
+        """Track when a learning is retrieved.
+
+        Only creates a new record if one doesn't exist.
+        This preserves acted_on status from previous retrievals.
+        """
+        if learning_id not in self.outcome_records:
+            self.outcome_records[learning_id] = OutcomeRecord(
+                learning_id=learning_id,
+                learning_content=learning_content,
+                retrieved_at=datetime.now().isoformat(),
+                insight_key=insight_key,
+                source=source,
+            )
+            self._save_state()
 
     def track_outcome(self, learning_id: str, outcome: str, evidence: str = ""):
         """Track the outcome of acting on a learning."""
@@ -802,6 +807,8 @@ class MetaRalph:
             "duplicates_caught": self.duplicates_caught,
             "refinements_made": self.refinements_made,
             "pass_rate": self.quality_passed / max(self.total_roasted, 1),
+            # Alias for health checks / dashboards expecting quality_rate.
+            "quality_rate": self.quality_passed / max(self.total_roasted, 1),
             "reject_rate": self.primitive_rejected / max(self.total_roasted, 1),
             "outcome_stats": self.get_outcome_stats(),
             "learnings_stored": len(self.learnings_stored)
