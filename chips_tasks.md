@@ -7,6 +7,11 @@ Last updated: 2026-02-02
 Status legend: TODO | DOING | BLOCKED | DONE
 
 ## Recent Changes
+- DONE: Added TOOLS tab to Spark Pulse right-rail (Episode / Tuneables / Chips / Tools). (2026-02-03)
+  - Shows X Trends Radar status, patterns, predictions, accuracy
+  - Lists MCP integrations (x-twitter, spark, spawner, h70-skills)
+  - Added API endpoints: `/api/tools`, `/api/tools/xtrends/status`, `/api/tools/xtrends/patterns`, `/api/tools/xtrends/predictions`
+- DONE: Added tabbed right-rail nav (Episode / Tuneables / Chips) in Spark Pulse. (2026-02-02)
 - DONE: Aligned runtime trigger names across remaining chips and updated `docs/CHIP_WORKFLOW.md`. (2026-02-02)
 - DONE: Clarified hook-name normalization in docs (`docs/CHIPS.md`, `docs/QUICKSTART.md`, `docs/claude_code.md`, `docs/SPARK_INFERENCE_ARCHITECTURE.md`, `docs/SPARK_ASSESSMENT_CHECKLIST.md`). (2026-02-02)
 - DONE: Auto-activation now ignores event triggers (match patterns only) to avoid global activation on `post_tool`/`user_prompt`. (2026-02-02)
@@ -81,6 +86,11 @@ Step 8 (DONE): Add Spark Pulse chips + tuneables rail.
 - Scope: Spark Pulse UI.
 - Goal: expose chip activation + tuneables + integration actions in right sidebar.
 - Exit criteria: Spark Pulse renders Episode, Tuneables, Chips rails.
+
+Step 9 (DONE): Add tabbed right-rail navigation to Spark Pulse.
+- Scope: Spark Pulse UI.
+- Goal: make Episode / Tuneables / Chips discoverable as tabs.
+- Exit criteria: right rail shows tabs and switches content.
 
 ## Chip-by-Chip Checklist
 
