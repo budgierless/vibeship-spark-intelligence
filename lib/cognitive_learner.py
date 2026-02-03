@@ -691,6 +691,30 @@ class CognitiveLearner:
         if re.match(r"^user prefers .{5,30} over .{5,30}$", tl):
             return True
 
+        # 12. Chip insight patterns - these are telemetry, not cognitive insights
+        # Examples: "[Vibecoding Intelligence] post_tool Edit C:\Users\..."
+        #           "[Market Intelligence] pre_tool Bash..."
+        #           "Triggered by 'post_tool_failure'"
+        chip_intel_pattern = r"^\[[\w\s-]+ intelligence\]\s*(post_tool|pre_tool)"
+        if re.search(chip_intel_pattern, tl):
+            return True
+
+        # 13. Triggered by telemetry
+        if re.search(r"triggered by ['\"]?(post_tool|pre_tool)", tl):
+            return True
+
+        # 14. Benchmark/Intelligence chip outputs with tool events
+        if "] post_tool " in t or "] pre_tool " in t:
+            return True
+
+        # 15. Chip status telemetry: "status: success, tool_name: X"
+        if re.search(r"status:\s*(success|failure|error),?\s*tool_name:", tl):
+            return True
+
+        # 16. Success factor without reasoning (short)
+        if t.startswith("Success factor:") and len(t) < 100:
+            return True
+
         return False
 
     def is_noise_insight(self, text: str) -> bool:
@@ -819,7 +843,8 @@ class CognitiveLearner:
         if not dry_run and to_remove:
             for key in to_remove:
                 self.insights.pop(key, None)
-            self._save_insights()
+            # Pass drop_keys to ensure removed items don't get merged back from disk
+            self._save_insights(drop_keys=set(to_remove))
 
         return {
             "removed": len(to_remove),
