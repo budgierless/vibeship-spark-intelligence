@@ -444,9 +444,18 @@ def main():
     
     event_type = get_event_type(hook_event)
     
-    # ===== PreToolUse: Make prediction + EIDOS step creation =====
+    # ===== PreToolUse: Make prediction + Get advice + EIDOS step creation =====
     if event_type == EventType.PRE_TOOL and tool_name:
         prediction = make_prediction(tool_name, tool_input)
+
+        # Get advice from Advisor (tracks retrieval in Meta-Ralph)
+        try:
+            from lib.advisor import advise_on_tool
+            advice = advise_on_tool(tool_name, tool_input)
+            if advice:
+                log_debug("observe", f"Got {len(advice)} advice items for {tool_name}", None)
+        except Exception as e:
+            log_debug("observe", "advisor failed", e)
         save_prediction(session_id, tool_name, prediction)
 
         # EIDOS: Create step and check control plane
@@ -468,10 +477,17 @@ def main():
             except Exception as e:
                 log_debug("observe", "EIDOS pre-action failed", e)
     
-    # ===== PostToolUse: Check for surprise + EIDOS step completion =====
+    # ===== PostToolUse: Check for surprise + Track outcome + EIDOS step completion =====
     if event_type == EventType.POST_TOOL and tool_name:
         check_for_surprise(session_id, tool_name, success=True)
         learn_from_success(tool_name, tool_input, {})
+
+        # Track outcome in Advisor (flows to Meta-Ralph)
+        try:
+            from lib.advisor import report_outcome
+            report_outcome(tool_name, success=True, advice_helped=True)
+        except Exception as e:
+            log_debug("observe", "outcome tracking failed", e)
 
         # EIDOS: Complete step with success
         if EIDOS_AVAILABLE:
@@ -504,7 +520,7 @@ def main():
         except Exception:
             pass
     
-    # ===== PostToolUseFailure: Check for surprise + learn + EIDOS step completion =====
+    # ===== PostToolUseFailure: Check for surprise + Track outcome + learn + EIDOS step completion =====
     if event_type == EventType.POST_TOOL_FAILURE and tool_name:
         error = (
             input_data.get("tool_error") or
@@ -514,6 +530,13 @@ def main():
         )
         check_for_surprise(session_id, tool_name, success=False, error=str(error))
         learn_from_failure(tool_name, error, tool_input)
+
+        # Track failure outcome in Advisor (flows to Meta-Ralph)
+        try:
+            from lib.advisor import report_outcome
+            report_outcome(tool_name, success=False, advice_helped=False)
+        except Exception as e:
+            log_debug("observe", "failure outcome tracking failed", e)
 
         # EIDOS: Complete step with failure
         if EIDOS_AVAILABLE:

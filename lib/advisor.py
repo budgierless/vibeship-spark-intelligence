@@ -200,6 +200,15 @@ class SparkAdvisor:
         # Log advice given
         self._log_advice(advice_list, tool_name, context)
 
+        # Track retrievals in Meta-Ralph for outcome tracking
+        try:
+            from .meta_ralph import get_meta_ralph
+            ralph = get_meta_ralph()
+            for adv in advice_list:
+                ralph.track_retrieval(adv.advice_id, adv.text)
+        except Exception:
+            pass  # Don't break advice flow if tracking fails
+
         # Cache for reuse
         self._cache_advice(cache_key, advice_list)
 
@@ -449,6 +458,15 @@ class SparkAdvisor:
             self.effectiveness["total_helpful"] += 1
 
         self._save_effectiveness()
+
+        # Track outcome in Meta-Ralph
+        try:
+            from .meta_ralph import get_meta_ralph
+            ralph = get_meta_ralph()
+            outcome_str = "good" if was_helpful else ("bad" if was_helpful is False else "unknown")
+            ralph.track_outcome(advice_id, outcome_str, notes)
+        except Exception:
+            pass  # Don't break outcome flow if tracking fails
 
         # Log outcome
         with open(ADVICE_LOG, "a", encoding="utf-8") as f:

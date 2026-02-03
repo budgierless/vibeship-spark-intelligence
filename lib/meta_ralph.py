@@ -566,6 +566,7 @@ class MetaRalph:
     def track_outcome(self, learning_id: str, outcome: str, evidence: str = ""):
         """Track the outcome of acting on a learning."""
         if learning_id in self.outcome_records:
+            self.outcome_records[learning_id].acted_on = True
             self.outcome_records[learning_id].outcome = outcome
             self.outcome_records[learning_id].outcome_evidence = evidence
             self._save_state()
