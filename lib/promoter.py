@@ -12,8 +12,8 @@ Promotion targets:
 - SOUL.md - Behavioral patterns, communication style (Clawdbot)
 
 Promotion criteria:
-- Reliability >= 70%
-- Times validated >= 3
+- Reliability >= 65%
+- Times validated >= 2
 - Not already promoted
 - Category matches target file
 """
@@ -29,8 +29,8 @@ from .project_profile import load_profile
 
 
 # ============= Configuration =============
-DEFAULT_PROMOTION_THRESHOLD = 0.7  # 70% reliability
-DEFAULT_MIN_VALIDATIONS = 3
+DEFAULT_PROMOTION_THRESHOLD = 0.65  # 65% reliability (lowered from 70% for faster promotion)
+DEFAULT_MIN_VALIDATIONS = 2  # 2 validations (lowered from 3 for faster learning)
 PROJECT_SECTION = "## Project Intelligence"
 PROJECT_START = "<!-- SPARK_PROJECT_START -->"
 PROJECT_END = "<!-- SPARK_PROJECT_END -->"

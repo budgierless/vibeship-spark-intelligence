@@ -583,8 +583,8 @@ Cognitive Insights → Filter by Reliability/Validations → Filter Operational 
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `DEFAULT_PROMOTION_THRESHOLD` | **0.7** | **Reliability requirement.** Insights must have 70%+ reliability to be promoted. |
-| `DEFAULT_MIN_VALIDATIONS` | **3** | **Validation requirement.** Insights must be validated 3+ times before promotion. |
+| `DEFAULT_PROMOTION_THRESHOLD` | **0.65** | **Reliability requirement.** Insights must have 65%+ reliability to be promoted. (Lowered from 0.7 for faster learning) |
+| `DEFAULT_MIN_VALIDATIONS` | **2** | **Validation requirement.** Insights must be validated 2+ times before promotion. (Lowered from 3 for faster learning) |
 
 ### Safety Filters
 
