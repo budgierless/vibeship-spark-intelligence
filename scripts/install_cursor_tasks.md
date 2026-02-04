@@ -13,13 +13,13 @@ Create `.vscode/tasks.json` in your project:
     {
       "label": "Spark: Remember",
       "type": "shell",
-      "command": "python3 ${workspaceFolder}/scripts/emit_event.py --source cursor --kind command --session ${workspaceFolderBasename} --intent remember --text \"${input:rememberText}\" | python3 ${workspaceFolder}/adapters/stdin_ingest.py --sparkd http://127.0.0.1:8787",
+      "command": "python3 ${workspaceFolder}/scripts/emit_event.py --source cursor --kind command --session ${workspaceFolderBasename} --intent remember --text \"${input:rememberText}\" | python3 ${workspaceFolder}/adapters/stdin_ingest.py --sparkd ${SPARKD_URL:-http://127.0.0.1:${SPARKD_PORT:-8787}}",
       "problemMatcher": []
     },
     {
       "label": "Spark: Like (post/UI/art)",
       "type": "shell",
-      "command": "python3 ${workspaceFolder}/scripts/emit_event.py --source cursor --kind message --session ${workspaceFolderBasename} --role user --text \"I like this: ${input:tasteText}\" | python3 ${workspaceFolder}/adapters/stdin_ingest.py --sparkd http://127.0.0.1:8787",
+      "command": "python3 ${workspaceFolder}/scripts/emit_event.py --source cursor --kind message --session ${workspaceFolderBasename} --role user --text \"I like this: ${input:tasteText}\" | python3 ${workspaceFolder}/adapters/stdin_ingest.py --sparkd ${SPARKD_URL:-http://127.0.0.1:${SPARKD_PORT:-8787}}",
       "problemMatcher": []
     }
   ]

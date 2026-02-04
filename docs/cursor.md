@@ -41,7 +41,7 @@ python3 scripts/emit_event.py \
     {
       "label": "Spark: Remember",
       "type": "shell",
-      "command": "python3 scripts/emit_event.py --source cursor --kind command --session ${workspaceFolderBasename} --intent remember --text \"${input:rememberText}\" | python3 adapters/stdin_ingest.py --sparkd http://127.0.0.1:8787",
+      "command": "python3 scripts/emit_event.py --source cursor --kind command --session ${workspaceFolderBasename} --intent remember --text \"${input:rememberText}\" | python3 adapters/stdin_ingest.py --sparkd ${SPARKD_URL:-http://127.0.0.1:${SPARKD_PORT:-8787}}",
       "problemMatcher": []
     }
   ]
