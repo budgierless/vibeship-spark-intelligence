@@ -396,48 +396,50 @@ def find_python():
 
     raise RuntimeError("Python 3 not found")
 
-def start_daemon(port: int = 8787):
+def start_daemon(port: int = int(os.environ.get("SPARKD_PORT", "8787"))):
     """Start Spark daemon cross-platform."""
     python = find_python()
     daemon_path = Path(__file__).parent / "sparkd.py"
 
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"  # Unicode support
+    env["SPARKD_PORT"] = str(port)
 
     if IS_WINDOWS:
         # Windows: use subprocess with CREATE_NEW_CONSOLE
         subprocess.Popen(
-            [python, str(daemon_path), "--port", str(port)],
+            [python, str(daemon_path)],
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             env=env
         )
     else:
         # Unix: use nohup or screen
         subprocess.Popen(
-            ["nohup", python, str(daemon_path), "--port", str(port)],
+            ["nohup", python, str(daemon_path)],
             stdout=open(SPARK_HOME / "daemon.log", "w"),
             stderr=subprocess.STDOUT,
             start_new_session=True,
             env=env
         )
 
-def start_dashboard(port: int = 8585):
+def start_dashboard(port: int = int(os.environ.get("SPARK_DASHBOARD_PORT", "8585"))):
     """Start dashboard cross-platform."""
     python = find_python()
     dashboard_path = Path(__file__).parent / "dashboard.py"
 
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["SPARK_DASHBOARD_PORT"] = str(port)
 
     if IS_WINDOWS:
         subprocess.Popen(
-            [python, str(dashboard_path), "--port", str(port)],
+            [python, str(dashboard_path)],
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             env=env
         )
     else:
         subprocess.Popen(
-            ["nohup", python, str(dashboard_path), "--port", str(port)],
+            ["nohup", python, str(dashboard_path)],
             stdout=open(SPARK_HOME / "dashboard.log", "w"),
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -448,8 +450,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Spark Intelligence Launcher")
     parser.add_argument("command", choices=["start", "stop", "status", "bootstrap"])
-    parser.add_argument("--daemon-port", type=int, default=8787)
-    parser.add_argument("--dashboard-port", type=int, default=8585)
+    parser.add_argument("--daemon-port", type=int, default=int(os.environ.get("SPARKD_PORT", "8787")))
+    parser.add_argument("--dashboard-port", type=int, default=int(os.environ.get("SPARK_DASHBOARD_PORT", "8585")))
 
     args = parser.parse_args()
 
