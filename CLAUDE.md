@@ -91,13 +91,19 @@ These files are the source of truth for how data flows through Spark.
 > **Memorize this flow - it's the backbone of everything:**
 
 ```
-Sources (observe.py, sparkd.py)
-    → Queue (~/.spark/queue/events.jsonl)
+Sources (observe.py, sparkd.py, adapters/*)
+    → Queue (~/.spark/queue/events.jsonl) [+trace_id]
     → bridge_worker.py (runs every 60s)
     → bridge_cycle.run_bridge_cycle
-    → {cognitive_learner, pattern_detection, eidos, chips}
-    → Storage (cognitive_insights.json, eidos.db, chip_insights/)
-    → promoter → CLAUDE.md/AGENTS.md
+    ├── memory_capture → cognitive_learner → cognitive_insights.json
+    ├── pattern_detection (aggregator → distiller → memory_gate) → eidos_store
+    ├── chips_router → chips_runtime → chip_insights/
+    └── context_sync → output_adapters → CLAUDE.md/AGENTS.md
+
+Advisor Feedback Loop (parallel path):
+    observe.py (PreToolUse) → advisor.get_advice() → advice given
+    observe.py (PostToolUse) → advisor.report_outcome() → meta_ralph.track_outcome()
+    meta_ralph → cognitive_learner (reliability updates)
 ```
 
 #### Rule 8: Verify Component Connectivity
@@ -144,13 +150,15 @@ Use `DASHBOARD_PLAYBOOK.md` for full setup and usage (start commands, pages, dri
 Quick start:
 1. `python -m spark.cli up`
 2. Or `python dashboard.py`
+3. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port 8586)
 
 Key pages:
-1. `http://localhost:8585/mission`
-2. `http://localhost:8585/learning`
-3. `http://localhost:8585/rabbit`
-4. `http://localhost:8585/acceptance`
-5. `http://localhost:8585/ops`
+1. `http://localhost:8585/mission` - Mission Control
+2. `http://localhost:8585/learning` - Learning Factory
+3. `http://localhost:8585/rabbit` - Rabbit Hole Recovery
+4. `http://localhost:8585/acceptance` - Acceptance Board
+5. `http://localhost:8585/ops` - Ops Overview
+6. **`http://localhost:8586`** - Meta-Ralph Quality Analyzer (advice quality metrics)
 
 ---
 
@@ -846,7 +854,7 @@ When domain detected, chips should:
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-04T14:31:17
+Last updated: 2026-02-04T14:48:03
 
 - [user_understanding] ## ðŸš¨ PRIMARY RULES
 
@@ -863,8 +871,8 @@ Last updated: 2026-02-04T14:31:17
 > **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
 
 Witho... (100% reliable, 4 validations)
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (27% reliable, 1345 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (25% reliable, 2119 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (27% reliable, 1353 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (25% reliable, 2129 validations)
 - [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (24% reliable, 1185 validations)
 - [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 495 validations)
 - [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (11% reliable, 426 validations)
@@ -884,7 +892,7 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
 
 ### Rule 4: Anti-Hallucination
 
-**CRITICAL:** Never claim improvement... (100% reliable, 19 validations)
+**CRITICAL:** Never claim improvement... (100% reliable, 29 validations)
 - [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (99% reliable, 89 validations)
 
 ## Project Focus

@@ -1,6 +1,6 @@
 # Intelligence_Flow.md
 
-Generated: 2026-02-03
+Generated: 2026-02-04
 Repository: vibeship-spark-intelligence
 Scope:
 - Runtime Python modules: root *.py, lib/, hooks/, adapters/, spark/
@@ -27,12 +27,13 @@ Processing loop:
 - bridge_worker.py -> lib/bridge_cycle.run_bridge_cycle
 
 High-level flow (ASCII):
-sources -> queue -> bridge_cycle -> {context sync, memory capture, pattern detection, validation/prediction, content learning, chips}
-                         -> {cognitive insights, memory banks/store, eidos store, mind sync, outputs}
+sources -> queue -> bridge_cycle -> {update_spark_context, memory capture, pattern detection, validation/prediction, content learning, chips}
+                         -> {cognitive insights, memory banks/store, eidos store, advisor loop, outputs}
 
 Mind integration:
 - mind_server.py (Mind Lite+ API, sqlite at ~/.mind/lite/memories.db)
-- lib/mind_bridge.py (sync + retrieval) used by advisor/context_sync
+- lib/mind_bridge.py (retrieval used by advisor + lib.bridge for SPARK_CONTEXT)
+- Mind sync is manual (spark sync / lib.mind_bridge.sync_all_to_mind); offline queue used when Mind is down.
 
 Dashboards and ops:
 - dashboard.py (status + UI)
@@ -44,6 +45,7 @@ Dashboards and ops:
 1) hooks/observe.py captures tool/user events and emits SparkEvent payloads.
 2) sparkd.py validates SparkEventV1 and writes queue events via lib.queue.quick_capture.
 3) adapters (stdin_ingest, clawdbot_tailer, moltbook) also feed sparkd or queue.
+4) hooks/observe.py also runs EIDOS pre/post step tracking and Meta-Ralph roasting for cognitive signals (direct calls, not via bridge_cycle).
 
 ### 2.2 Queue -> bridge cycle
 1) bridge_worker.py loops every interval (default 60s, min 10s sleep).
@@ -57,11 +59,12 @@ Dashboards and ops:
 - trace binding enforcement: steps, evidence, and outcomes should record trace_id; TRACE_GAP watcher warns on missing bindings. Set `SPARK_TRACE_STRICT=1` to block actions on trace gaps.
 - dashboards should drill down by trace_id for audit and validation.
 
-### 2.3 Context sync + promotion (docs + agent context)
-1) lib.bridge.update_spark_context builds a context pack (insights, warnings, advice, skills, taste, outcomes).
-2) lib.context_sync filters + syncs high-signal insights (and optionally sends to Mind).
-3) lib.promoter writes durable insights into CLAUDE.md / AGENTS.md / TOOLS.md / SOUL.md.
-4) lib/output_adapters/* inject updated context into tool-specific files (clawdbot, cursor, windsurf, claude_code).
+### 2.3 Context sync + promotion (live vs durable)
+1) lib.bridge.update_spark_context builds a live context pack (insights, warnings, advice, skills, taste, outcomes) and writes SPARK_CONTEXT.md.
+2) lib.context_sync selects high-confidence insights and writes live context to output adapters (clawdbot, cursor, windsurf, claude_code).
+   - context_sync can include promoted lines already present in CLAUDE.md / AGENTS.md / TOOLS.md / SOUL.md.
+   - context_sync does not sync to Mind (see 2.8).
+3) lib.promoter is a separate, manual step (spark promote) that writes durable learnings into CLAUDE.md / AGENTS.md / TOOLS.md / SOUL.md.
 
 ### 2.4 Memory capture + cognitive learning
 1) lib.memory_capture scans user messages for memory triggers.
@@ -69,7 +72,7 @@ Dashboards and ops:
 3) lib.cognitive_learner stores insights + reliability/validation + decay.
 4) lib.memory_banks stores per-project and global memory.
 5) lib.memory_store persists hybrid memory (SQLite FTS + embeddings + graph edges).
-6) lib.advisor retrieves from cognitive/memory/mind and returns action guidance.
+6) hooks/observe.py uses Meta-Ralph to roast cognitive signals before add_insight.
 
 ### 2.5 Pattern -> distillation -> EIDOS
 1) lib.pattern_detection.aggregator runs detectors (correction, sentiment, repetition, semantic, why).
@@ -86,6 +89,12 @@ Dashboards and ops:
 4) lib.aha_tracker captures surprises for learning.
 5) lib.exposure_tracker records exposure timing for prediction evaluation.
 
+### 2.6.1 Advisor retrieval + Meta-Ralph feedback loop
+1) PreToolUse: hooks/observe.py calls lib.advisor.advise_on_tool for retrieval (cognitive, banks, mind, EIDOS, aha, skills).
+2) Advisor logs retrievals and notifies Meta-Ralph via track_retrieval.
+3) PostToolUse: hooks/observe.py and lib.bridge_cycle.report_outcome call back into advisor.
+4) Meta-Ralph records outcomes and applies them back to cognitive (apply_outcome).
+
 ### 2.7 Chips pipeline (domain intelligence)
 1) lib.chips.router detects triggers in events.
 2) lib.chips.runtime runs observers/learners; writes chip insights under ~/.spark/chip_insights.
@@ -93,18 +102,17 @@ Dashboards and ops:
 4) lib.chips.evolution updates trigger stats and can create provisional chips.
 5) lib.chip_merger merges chip insights into cognitive categories.
 
-### 2.8 Mind sync + retrieval
-1) lib.context_sync selects insights to sync.
-2) lib.mind_bridge writes to Mind API (with offline queue and sync state).
-3) mind_server.py retrieves via keyword + optional FTS, fuses scores (RRF + salience).
-4) lib.advisor and lib.context_sync read from Mind for advice/context.
+### 2.8 Mind retrieval + manual sync
+1) lib.mind_bridge retrieves from mind_server.py (keyword + optional FTS, RRF + salience).
+2) lib.advisor and lib.bridge (SPARK_CONTEXT) read from Mind for advice/context.
+3) Mind sync is manual via spark sync (lib.mind_bridge.sync_all_to_mind); offline queue stores when Mind is down.
 
 ### 2.9 Self-evolution and meta-learning
-- lib/meta_ralph.py: quality gate for new insights.
-- lib/metalearning/*: strategy, evaluator, reporter, metrics.
-- lib/resonance.py + lib/spark_voice.py: internal state and voice calibration.
+- lib/meta_ralph.py: quality gate for observe.py cognitive capture + advisor outcome loop.
+- lib/metalearning/*: strategy, evaluator, reporter, metrics (used by chips auto-activation).
+- lib/resonance.py + lib/spark_voice.py: internal state and voice calibration (used by bridge context).
 - lib/growth_tracker.py: milestones and long-term growth stats.
-- lib/curiosity_engine.py, lib/contradiction_detector.py, lib/hypothesis_tracker.py: gap finding and hypothesis tracking.
+- lib/curiosity_engine.py, lib/contradiction_detector.py, lib/hypothesis_tracker.py: triggered in pattern_detection.aggregator.
 
 ### 2.10 Research / external sources
 - lib/research/* and lib/x_research_events.py use config/learning_sources.yaml to drive external research.
@@ -126,6 +134,8 @@ Context + promotion:
 - ~/.spark/pending_memory.json
 - ~/.spark/memory_capture_state.json
 - ~/.spark/bridge_worker_heartbeat.json
+Workspace context:
+- SPARK_CONTEXT.md (workspace, written by lib.bridge.update_spark_context)
 
 Pattern + EIDOS:
 - ~/.spark/detected_patterns.jsonl
@@ -163,6 +173,16 @@ Skills + advisor + sync:
 - ~/.spark/skills_effectiveness.json
 - ~/.spark/advisor/
 - ~/.spark/sync_stats.json
+
+Meta-Ralph:
+- ~/.spark/meta_ralph/roast_history.json
+- ~/.spark/meta_ralph/outcome_tracking.json
+- ~/.spark/meta_ralph/learnings_store.json
+- ~/.spark/meta_ralph/self_roast.json
+
+Mind sync state:
+- ~/.spark/mind_sync_state.json
+- ~/.spark/mind_offline_queue.jsonl
 
 Other:
 - ~/.spark/projects.json
@@ -223,7 +243,7 @@ Cognitive learning and promotion:
 - context_sync DEFAULT_MIN_RELIABILITY=0.7, DEFAULT_MIN_VALIDATIONS=3, DEFAULT_MAX_ITEMS=12, DEFAULT_MAX_PROMOTED=6
 
 Advisor / skills:
-- advisor MIN_RELIABILITY_FOR_ADVICE=0.6, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=5, ADVICE_CACHE_TTL_SECONDS=120
+- advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120
 - skills_router scoring weights (query/name/desc/owns/etc) and limit clamp to 1..10
 
 Mind bridge:
@@ -753,9 +773,9 @@ Moltbook adapter:
   - ADVISOR_DIR = 'Path.home() / ".spark" / "advisor"' line=35 ctx=ADVISOR_DIR = Path.home() / ".spark" / "advisor"
   - ADVICE_LOG = 'ADVISOR_DIR / "advice_log.jsonl"' line=36 ctx=ADVICE_LOG = ADVISOR_DIR / "advice_log.jsonl"
   - EFFECTIVENESS_FILE = 'ADVISOR_DIR / "effectiveness.json"' line=37 ctx=EFFECTIVENESS_FILE = ADVISOR_DIR / "effectiveness.json"
-  - MIN_RELIABILITY_FOR_ADVICE = 0.6 line=40 ctx=MIN_RELIABILITY_FOR_ADVICE = 0.6
+  - MIN_RELIABILITY_FOR_ADVICE = 0.5 line=40 ctx=MIN_RELIABILITY_FOR_ADVICE = 0.5
   - MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2 line=41 ctx=MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
-  - MAX_ADVICE_ITEMS = 5 line=42 ctx=MAX_ADVICE_ITEMS = 5
+  - MAX_ADVICE_ITEMS = 8 line=42 ctx=MAX_ADVICE_ITEMS = 8
   - ADVICE_CACHE_TTL_SECONDS = 120 line=43 ctx=ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
 - dataclass_defaults:
   - AdviceOutcome.outcome_notes = '' line=65 ctx=outcome_notes: str = ""
