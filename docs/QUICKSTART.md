@@ -58,6 +58,8 @@ Windows (repo):
 ```bat
 start_spark.bat
 ```
+This also starts Mind on `SPARK_MIND_PORT` (default `8080`) if `mind.exe` is available.  
+Set `SPARK_NO_MIND=1` to skip Mind startup.
 
 Check status:
 ```bash
