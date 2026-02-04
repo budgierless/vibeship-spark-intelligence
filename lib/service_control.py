@@ -133,7 +133,14 @@ def _process_snapshot() -> list[tuple[int, str]]:
         return []
 
 
-def _pid_matches(pid: Optional[int], keywords: list[str], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
+def _cmd_matches(cmd: str, patterns: list[list[str]]) -> bool:
+    for pattern in patterns:
+        if pattern and all(k in cmd for k in pattern):
+            return True
+    return False
+
+
+def _pid_matches(pid: Optional[int], patterns: list[list[str]], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
     if not pid:
         return False
     if snapshot is None:
@@ -141,9 +148,32 @@ def _pid_matches(pid: Optional[int], keywords: list[str], snapshot: Optional[lis
     for spid, cmd in snapshot:
         if spid != pid:
             continue
-        if all(k in cmd for k in keywords):
+        if _cmd_matches(cmd, patterns):
             return True
     return False
+
+
+def _any_process_matches(patterns: list[list[str]], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
+    if not patterns:
+        return False
+    if snapshot is None:
+        snapshot = _process_snapshot()
+    for _, cmd in snapshot:
+        if _cmd_matches(cmd, patterns):
+            return True
+    return False
+
+
+def _find_pids_by_patterns(patterns: list[list[str]], snapshot: Optional[list[tuple[int, str]]] = None) -> list[int]:
+    if not patterns:
+        return []
+    if snapshot is None:
+        snapshot = _process_snapshot()
+    matches = []
+    for pid, cmd in snapshot:
+        if _cmd_matches(cmd, patterns):
+            matches.append(pid)
+    return matches
 
 
 def _http_ok(url: str, timeout: float = 1.5) -> bool:
@@ -282,12 +312,19 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
     watchdog_pid = _read_pid("watchdog")
 
     snapshot = _process_snapshot()
-    sparkd_running = sparkd_ok or _pid_matches(sparkd_pid, ["sparkd.py", "-m sparkd"], snapshot)
-    dash_running = dash_ok or _pid_matches(dash_pid, ["dashboard.py", "-m dashboard"], snapshot)
-    pulse_running = pulse_ok or _pid_matches(pulse_pid, ["spark_pulse.py"], snapshot)
-    meta_running = meta_ok or _pid_matches(meta_pid, ["meta_ralph_dashboard.py"], snapshot)
-    bridge_running = (hb_age is not None and hb_age <= bridge_stale_s) or _pid_matches(bridge_pid, ["bridge_worker.py", "-m bridge_worker"], snapshot)
-    watchdog_running = _pid_matches(watchdog_pid, ["spark_watchdog.py", "-m spark_watchdog"], snapshot)
+    sparkd_keys = [["-m sparkd"], ["sparkd.py"]]
+    dash_keys = [["-m dashboard"], ["dashboard.py"]]
+    pulse_keys = [["spark_pulse.py"]]
+    meta_keys = [["meta_ralph_dashboard.py"]]
+    bridge_keys = [["-m bridge_worker"], ["bridge_worker.py"]]
+    watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"]]
+
+    sparkd_running = sparkd_ok or _pid_matches(sparkd_pid, sparkd_keys, snapshot) or _any_process_matches(sparkd_keys, snapshot)
+    dash_running = dash_ok or _pid_matches(dash_pid, dash_keys, snapshot) or _any_process_matches(dash_keys, snapshot)
+    pulse_running = pulse_ok or _pid_matches(pulse_pid, pulse_keys, snapshot) or _any_process_matches(pulse_keys, snapshot)
+    meta_running = meta_ok or _pid_matches(meta_pid, meta_keys, snapshot) or _any_process_matches(meta_keys, snapshot)
+    bridge_running = (hb_age is not None and hb_age <= bridge_stale_s) or _pid_matches(bridge_pid, bridge_keys, snapshot) or _any_process_matches(bridge_keys, snapshot)
+    watchdog_running = _pid_matches(watchdog_pid, watchdog_keys, snapshot) or _any_process_matches(watchdog_keys, snapshot)
 
     return {
         "sparkd": {
@@ -389,24 +426,33 @@ def stop_services() -> dict[str, str]:
     snapshot = _process_snapshot()
     for name in ["watchdog", "meta_ralph", "pulse", "dashboard", "bridge_worker", "sparkd"]:
         pid = _read_pid(name)
-        if not pid:
-            results[name] = "no_pid"
-            continue
-        keywords = {
-            "sparkd": ["sparkd.py", "-m sparkd"],
-            "bridge_worker": ["bridge_worker.py", "-m bridge_worker"],
-            "dashboard": ["dashboard.py", "-m dashboard"],
-            "pulse": ["spark_pulse.py"],
-            "meta_ralph": ["meta_ralph_dashboard.py"],
-            "watchdog": ["spark_watchdog.py", "-m spark_watchdog"],
+        patterns = {
+            "sparkd": [["-m sparkd"], ["sparkd.py"]],
+            "bridge_worker": [["-m bridge_worker"], ["bridge_worker.py"]],
+            "dashboard": [["-m dashboard"], ["dashboard.py"]],
+            "pulse": [["spark_pulse.py"]],
+            "meta_ralph": [["meta_ralph_dashboard.py"]],
+            "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"]],
         }.get(name, [])
-        if keywords and not _pid_matches(pid, keywords, snapshot):
-            results[name] = "pid_mismatch"
-        elif _pid_alive(pid):
-            ok = _terminate_pid(pid)
-            results[name] = "stopped" if ok else "failed"
+
+        matched_pids = _find_pids_by_patterns(patterns, snapshot)
+        killed_any = False
+
+        if matched_pids:
+            for mpid in matched_pids:
+                if _terminate_pid(mpid):
+                    killed_any = True
+            results[name] = "stopped" if killed_any else "failed"
+        elif pid and _pid_matches(pid, patterns, snapshot):
+            if _pid_alive(pid):
+                ok = _terminate_pid(pid)
+                killed_any = ok
+                results[name] = "stopped" if ok else "failed"
+            else:
+                results[name] = "not_running"
         else:
-            results[name] = "not_running"
+            results[name] = "pid_mismatch" if pid else "no_pid"
+
         try:
             _pid_file(name).unlink(missing_ok=True)
         except Exception:

@@ -35,10 +35,21 @@ def _check_single_instance() -> bool:
     """Ensure only one watchdog runs. Returns True if we can proceed, False if another is running."""
     PID_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    def _pid_is_watchdog(pid: int) -> bool:
+        snapshot = _process_snapshot()
+        for spid, cmd in snapshot:
+            if spid != pid:
+                continue
+            if "-m spark_watchdog" in cmd or "spark_watchdog.py" in cmd:
+                return True
+        return False
+
     # Check if another watchdog is already running
     if PID_FILE.exists():
         try:
             old_pid = int(PID_FILE.read_text().strip())
+            if old_pid == os.getpid():
+                return True
             # Check if that process is still alive
             if os.name == "nt":
                 out = subprocess.check_output(
@@ -46,12 +57,13 @@ def _check_single_instance() -> bool:
                     text=True,
                     errors="ignore",
                 )
-                if str(old_pid) in out:
+                if str(old_pid) in out and _pid_is_watchdog(old_pid):
                     return False  # Another watchdog is running
             else:
                 try:
                     os.kill(old_pid, 0)
-                    return False  # Another watchdog is running
+                    if _pid_is_watchdog(old_pid):
+                        return False  # Another watchdog is running
                 except ProcessLookupError:
                     pass  # Process doesn't exist, we can proceed
         except Exception:

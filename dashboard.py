@@ -4485,6 +4485,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(get_mission_control_data(), indent=2).encode())
+        elif path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(b"ok")
         elif path == '/api/mission':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
