@@ -102,7 +102,7 @@ trace_id: Propagates from queue → EIDOS steps → outcomes → dashboards
 | Meta-Ralph State | `~/.spark/meta_ralph/` | `get_meta_ralph().get_stats()` |
 | **Roast History** | `~/.spark/meta_ralph/roast_history.json` | Quality verdicts + scores |
 | **Outcome Tracking** | `~/.spark/meta_ralph/outcome_tracking.json` | Retrieval + outcome links |
-| **Advisor Effectiveness** | `~/.spark/advisor_effectiveness.json` | Advice → outcome correlation |
+| **Advisor Effectiveness** | `~/.spark/advisor/effectiveness.json` | Advice → outcome correlation |
 | **Bridge Heartbeat** | `~/.spark/bridge_worker_heartbeat.json` | Bridge worker health |
 
 ### Mandatory Pre-Tuning Checklist
@@ -122,8 +122,11 @@ Use `DASHBOARD_PLAYBOOK.md` for full setup and usage (start commands, pages, dri
 
 Quick start:
 1. `python -m spark.cli up`
-2. Or `python dashboard.py`
-3. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port 8586)
+2. Or `python dashboard.py` (Spark Lab only)
+3. Pulse: `python spark_pulse.py` (port 8765)
+4. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port 8586)
+
+`spark up` starts Spark Lab + Pulse + Meta-Ralph by default (use `--no-pulse` / `--no-meta-ralph` to skip).
 
 Key pages:
 1. `http://localhost:8585/mission` - Mission Control
@@ -131,7 +134,9 @@ Key pages:
 3. `http://localhost:8585/rabbit` - Rabbit Hole Recovery
 4. `http://localhost:8585/acceptance` - Acceptance Board
 5. `http://localhost:8585/ops` - Ops Overview
-6. **`http://localhost:8586`** - Meta-Ralph Quality Analyzer (dedicated dashboard)
+6. `http://localhost:8585/dashboards` - Dashboards Index
+7. **`http://localhost:8765`** - Spark Pulse (chips + tuneables)
+8. **`http://localhost:8586`** - Meta-Ralph Quality Analyzer (dedicated dashboard)
 
 **Meta-Ralph Dashboard Features:**
 - Real-time advice quality metrics (from roast_history.json)

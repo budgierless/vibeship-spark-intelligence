@@ -301,7 +301,7 @@ COGNITIVE_PATTERNS = {
 
 import re
 
-def extract_cognitive_signals(text: str, session_id: str):
+def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str] = None):
     """
     Extract cognitive signals from user messages and route to Meta-Ralph.
 
@@ -364,6 +364,7 @@ def extract_cognitive_signals(text: str, session_id: str):
                 context={
                     "signals": signals_found,
                     "session_id": session_id,
+                    "trace_id": trace_id,
                     "importance_score": importance_score,
                     "is_priority": importance_score and importance_score >= 0.7,
                     "domain": detected_domain,  # Improvement #6: Domain context
@@ -545,7 +546,7 @@ def main():
     tool_input = input_data.get("tool_input", {})
     
     event_type = get_event_type(hook_event)
-    trace_id = None
+    trace_id = input_data.get("trace_id")
     
     # ===== PreToolUse: Make prediction + Get advice + EIDOS step creation =====
     if event_type == EventType.PRE_TOOL and tool_name:
@@ -555,7 +556,7 @@ def main():
         # Get advice from Advisor (tracks retrieval in Meta-Ralph)
         try:
             from lib.advisor import advise_on_tool
-            advice = advise_on_tool(tool_name, tool_input)
+            advice = advise_on_tool(tool_name, tool_input, trace_id=trace_id)
             if advice:
                 log_debug("observe", f"Got {len(advice)} advice items for {tool_name}", None)
                 if ADVICE_FEEDBACK_ENABLED:
@@ -600,14 +601,6 @@ def main():
         check_for_surprise(session_id, tool_name, success=True)
         learn_from_success(tool_name, tool_input, {})
 
-        # Track outcome in Advisor (flows to Meta-Ralph)
-        try:
-            from lib.advisor import report_outcome
-            # Only mark advice as helpful with explicit evidence (avoid hallucinated outcomes).
-            report_outcome(tool_name, success=True, advice_helped=False)
-        except Exception as e:
-            log_debug("observe", "outcome tracking failed", e)
-
         # EIDOS: Complete step with success
         if EIDOS_AVAILABLE:
             try:
@@ -628,6 +621,14 @@ def main():
             except Exception as e:
                 log_debug("observe", "EIDOS post-action failed", e)
 
+        # Track outcome in Advisor (flows to Meta-Ralph)
+        try:
+            from lib.advisor import report_outcome
+            # Only mark advice as helpful with explicit evidence (avoid hallucinated outcomes).
+            report_outcome(tool_name, success=True, advice_helped=False, trace_id=trace_id)
+        except Exception as e:
+            log_debug("observe", "outcome tracking failed", e)
+
         # COGNITIVE SIGNAL EXTRACTION FROM CODE CONTENT
         # Analyze code comments, docstrings for learning signals like REMEMBER:, PRINCIPLE:, CORRECTION:
         if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
@@ -636,7 +637,7 @@ def main():
             if content and len(content) > 50:  # Skip tiny writes
                 try:
                     # Extract signals from the written/edited content
-                    extract_cognitive_signals(content, session_id)
+                    extract_cognitive_signals(content, session_id, trace_id=trace_id)
                     log_debug("observe", f"Analyzed {tool_name} content for cognitive signals ({len(content)} chars)")
                 except Exception as e:
                     log_debug("observe", f"{tool_name} content signal extraction failed", e)
@@ -668,7 +669,7 @@ def main():
         # Track failure outcome in Advisor (flows to Meta-Ralph)
         try:
             from lib.advisor import report_outcome
-            report_outcome(tool_name, success=False, advice_helped=False)
+            report_outcome(tool_name, success=False, advice_helped=False, trace_id=trace_id)
         except Exception as e:
             log_debug("observe", "failure outcome tracking failed", e)
 
@@ -728,7 +729,7 @@ def main():
 
             # COGNITIVE SIGNAL EXTRACTION
             # Look for high-value cognitive signals in user messages
-            extract_cognitive_signals(txt, session_id)
+            extract_cognitive_signals(txt, session_id, trace_id=trace_id)
     
     if trace_id:
         data["trace_id"] = trace_id

@@ -135,11 +135,12 @@ def run_bridge_cycle(
             tool = (ev.tool_name or "").strip()
             if not tool:
                 continue
+            trace_id = (ev.data or {}).get("trace_id")
             if ev.event_type == EventType.POST_TOOL:
-                report_outcome(tool, success=True, advice_helped=True)
+                report_outcome(tool, success=True, advice_helped=True, trace_id=trace_id)
                 outcome_count += 1
             elif ev.event_type == EventType.POST_TOOL_FAILURE:
-                report_outcome(tool, success=False, advice_helped=False)
+                report_outcome(tool, success=False, advice_helped=False, trace_id=trace_id)
                 outcome_count += 1
         stats["outcomes_reported"] = outcome_count
     except Exception as e:

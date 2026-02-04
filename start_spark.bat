@@ -1,6 +1,6 @@
 @echo off
 REM Spark Intelligence - Windows Startup Script
-REM Starts: sparkd (8787), bridge_worker, dashboard (8585), watchdog
+REM Starts: sparkd (8787), bridge_worker, dashboard (8585), pulse (8765), meta-ralph (8586), watchdog
 
 setlocal
 chcp 65001 > nul

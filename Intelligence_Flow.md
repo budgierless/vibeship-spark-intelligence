@@ -37,6 +37,8 @@ Mind integration:
 
 Dashboards and ops:
 - dashboard.py (status + UI)
+- meta_ralph_dashboard.py (quality analyzer, port 8586)
+- spark_pulse.py (chips + tuneables, port 8765)
 - spark_watchdog.py + lib/service_control.py (monitor/restart services)
 
 ## 2) Primary workflows (end-to-end)
@@ -311,7 +313,7 @@ Moltbook adapter:
 
 ## 6) Known gaps / mismatches
 
-- lib/service_control.py references spark_pulse.py, but that file is not present in this repo (as of 2026-02-03).
+- spark_pulse.py is present and serves Spark Pulse on port 8765 (chips + tuneables).
 - Some docs mention SPARK_MIND_URL; code uses a fixed MIND_API_URL constant instead (lib/mind_bridge.py).
 - build/ contains duplicated code artifacts; excluded from analysis.
 

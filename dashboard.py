@@ -2394,7 +2394,9 @@ def generate_html():
         <div class="navbar-links">
             <a class="nav-link active" href="/">Overview</a>
             <a class="nav-link" href="/ops">Orchestration</a>
+            <a class="nav-link" href="/dashboards">Dashboards</a>
             <a class="nav-link" href="http://localhost:8765">Pulse</a>
+            <a class="nav-link" href="http://localhost:8586">Meta-Ralph</a>
         </div>
     </nav>
     
@@ -3391,7 +3393,9 @@ def generate_ops_html():
         <div class="navbar-links">
             <a class="nav-link" href="/">Overview</a>
             <a class="nav-link active" href="/ops">Orchestration</a>
+            <a class="nav-link" href="/dashboards">Dashboards</a>
             <a class="nav-link" href="http://localhost:8765">Pulse</a>
+            <a class="nav-link" href="http://localhost:8586">Meta-Ralph</a>
         </div>
     </nav>
 
@@ -3518,6 +3522,10 @@ def _nav_html(active: str) -> str:
         ("learning", "/learning", "Learning Factory"),
         ("rabbit", "/rabbit", "Rabbit Hole Recovery"),
         ("acceptance", "/acceptance", "Acceptance Board"),
+        ("ops", "/ops", "Ops"),
+        ("dashboards", "/dashboards", "Dashboards"),
+        ("pulse", "http://localhost:8765", "Pulse"),
+        ("meta_ralph", "http://localhost:8586", "Meta-Ralph"),
     ]
     items = []
     for key, href, label in links:
@@ -4355,6 +4363,48 @@ def generate_acceptance_html() -> str:
     return _base_page("Acceptance & Validation Board", "acceptance", body, data, "/api/acceptance", page_js)
 
 
+def generate_dashboards_html() -> str:
+    data = get_mission_control_data()
+    body = """
+    <section class="grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Web Dashboards</span></div>
+        <div class="list">
+          <div class="row"><span>Spark Lab (Mission/learning/rabbit/acceptance/ops)</span><span class="mono"><a href="http://localhost:8585">:8585</a></span></div>
+          <div class="row"><span>Meta-Ralph Quality Analyzer</span><span class="mono"><a href="http://localhost:8586">:8586</a></span></div>
+          <div class="row"><span>Spark Pulse (chips + tuneables)</span><span class="mono"><a href="http://localhost:8765">:8765</a></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">CLI Dashboards</span></div>
+        <div class="list">
+          <div class="row"><span>EIDOS quick health</span><span class="mono">python scripts/eidos_dashboard.py</span></div>
+          <div class="row"><span>Spark Intelligence CLI</span><span class="mono">python scripts/spark_dashboard.py</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Start/Stop</span></div>
+        <div class="list">
+          <div class="row"><span>All services</span><span class="mono">spark up</span></div>
+          <div class="row"><span>Stop services</span><span class="mono">spark down</span></div>
+          <div class="row"><span>Status</span><span class="mono">spark services</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Data Sources (No Hallucinations)</span></div>
+        <div class="list">
+          <div class="row"><span>Spark Lab</span><span class="mono">~/.spark/queue, eidos.db, truth_ledger.json, acceptance_plans.json, evidence.db</span></div>
+          <div class="row"><span>Meta-Ralph</span><span class="mono">~/.spark/meta_ralph/*.json, ~/.spark/advisor/*.jsonl</span></div>
+          <div class="row"><span>Pulse</span><span class="mono">~/.spark/chip_*, chip_registry.json</span></div>
+        </div>
+      </div>
+    </section>
+    """
+    return _base_page("Dashboards", "dashboards", body, data, "/api/status", "")
+
+
 class DashboardHandler(SimpleHTTPRequestHandler):
     def _serve_sse(self, data_fn, interval: float = 2.0) -> None:
         self.send_response(200)
@@ -4411,6 +4461,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(generate_ops_html().encode())
+        elif path == '/dashboards' or path == '/dashboards.html':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(generate_dashboards_html().encode())
         elif path == '/api/status':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')

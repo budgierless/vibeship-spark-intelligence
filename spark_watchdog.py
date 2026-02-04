@@ -159,6 +159,22 @@ def main() -> None:
             elif not args.no_restart:
                 _start_process("dashboard", [sys.executable, "-m", "dashboard"])
 
+        # spark pulse
+        pulse_ok = _http_ok("http://127.0.0.1:8765/api/pulse")
+        if not pulse_ok:
+            if _process_exists(["spark_pulse.py"]):
+                _log("pulse unhealthy but process exists")
+            elif not args.no_restart:
+                _start_process("pulse", [sys.executable, str(SPARK_DIR / "spark_pulse.py")])
+
+        # meta-ralph dashboard
+        meta_ok = _http_ok("http://127.0.0.1:8586/health")
+        if not meta_ok:
+            if _process_exists(["meta_ralph_dashboard.py"]):
+                _log("meta_ralph unhealthy but process exists")
+            elif not args.no_restart:
+                _start_process("meta_ralph", [sys.executable, str(SPARK_DIR / "meta_ralph_dashboard.py")])
+
         # bridge_worker
         hb_age = _bridge_heartbeat_age()
         bridge_ok = hb_age is not None and hb_age <= args.bridge_stale_s

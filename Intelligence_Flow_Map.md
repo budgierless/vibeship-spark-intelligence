@@ -90,6 +90,7 @@ flowchart LR
   subgraph Ops
     dashboard["dashboard.py"]
     meta_ralph_dashboard["meta_ralph_dashboard.py"]
+    pulse_dashboard["spark_pulse.py"]
     watchdog["spark_watchdog.py"]
     service_ctl["lib/service_control"]
   end
@@ -168,5 +169,6 @@ flowchart LR
   bridge_cycle --> dashboard
   trace_ctx --> dashboard
   meta_ralph --> meta_ralph_dashboard
+  service_ctl --> pulse_dashboard
   service_ctl --> watchdog
 ```

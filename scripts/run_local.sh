@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run Spark local services (lightweight, compatible)
-# Starts: sparkd (8787), bridge_worker, dashboard (8585), watchdog
+# Starts: sparkd (8787), bridge_worker, dashboard (8585), pulse (8765), meta-ralph (8586), watchdog
 
 set -e
 

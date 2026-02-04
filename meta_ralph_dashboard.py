@@ -111,6 +111,7 @@ def get_ralph_stats() -> Dict[str, Any]:
                 "text": result.get("original", "")[:100],
                 "verdict": verdict,
                 "total_score": score.get("total", 0),
+                "trace_id": item.get("trace_id"),
                 "scores": {
                     "act": score.get("actionability", 0),
                     "nov": score.get("novelty", 0),
@@ -130,11 +131,24 @@ def get_ralph_stats() -> Dict[str, Any]:
             avg_scores[dim] = 0
 
     # Outcome stats from tracking file
-    outcomes = outcome_data.get("outcomes", {})
-    total_tracked = len(outcomes)
-    acted_on = sum(1 for o in outcomes.values() if o.get("acted_on"))
-    good_outcomes = sum(1 for o in outcomes.values() if o.get("outcome") == "helpful")
-    bad_outcomes = sum(1 for o in outcomes.values() if o.get("outcome") == "unhelpful")
+    records = outcome_data.get("records")
+    if records is None:
+        # Back-compat: older dashboards wrote {"outcomes": {...}}
+        outcomes = outcome_data.get("outcomes", {})
+        records = list(outcomes.values())
+
+    def _is_good(outcome: Optional[str]) -> bool:
+        o = (outcome or "").strip().lower()
+        return o in ("good", "helpful", "success")
+
+    def _is_bad(outcome: Optional[str]) -> bool:
+        o = (outcome or "").strip().lower()
+        return o in ("bad", "unhelpful", "failure")
+
+    total_tracked = len(records)
+    acted_on = sum(1 for r in records if r.get("acted_on"))
+    good_outcomes = sum(1 for r in records if _is_good(r.get("outcome")))
+    bad_outcomes = sum(1 for r in records if _is_bad(r.get("outcome")))
 
     return {
         "totals": {
@@ -729,10 +743,11 @@ HTML_TEMPLATE = """
                             <th>Dimensions</th>
                             <th>Text Preview</th>
                             <th>Issues</th>
+                            <th>Trace</th>
                         </tr>
                     </thead>
                     <tbody id="roasts-tbody">
-                        <tr><td colspan="6">Loading...</td></tr>
+                        <tr><td colspan="7">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -861,6 +876,7 @@ HTML_TEMPLATE = """
                 for (const roast of r.recent_roasts) {
                     const verdictClass = roast.verdict || 'unknown';
                     const scores = roast.scores;
+                    const traceLink = roast.trace_id ? `<a href="http://localhost:8585/mission?trace_id=${roast.trace_id}" target="_blank">trace</a>` : '-';
                     tbody += `
                         <tr>
                             <td>${formatTime(roast.timestamp)}</td>
@@ -877,10 +893,11 @@ HTML_TEMPLATE = """
                             </td>
                             <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${roast.text}</td>
                             <td class="issues-list">${roast.issues.slice(0,2).join(', ')}</td>
+                            <td>${traceLink}</td>
                         </tr>
                     `;
                 }
-                document.getElementById('roasts-tbody').innerHTML = tbody || '<tr><td colspan="6">No roasts yet</td></tr>';
+                document.getElementById('roasts-tbody').innerHTML = tbody || '<tr><td colspan="7">No roasts yet</td></tr>';
 
             } catch (err) {
                 console.error('Load error:', err);
@@ -920,6 +937,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             data = get_dashboard_data()
             self.wfile.write(json.dumps(data).encode())
+        elif parsed.path == "/api/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True}).encode())
+        elif parsed.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"ok")
 
         else:
             self.send_error(404)

@@ -26,6 +26,7 @@ Ports:
 2. Spark Pulse (chips/tuneables): `http://localhost:8765`
 3. sparkd health: `http://127.0.0.1:8787/health`
 4. Mind server health (if running): `http://127.0.0.1:8080/health`
+5. Meta-Ralph Quality Analyzer: `http://localhost:8586`
 
 **Dashboards (Spark Lab)**
 Mission Control (default):
@@ -48,11 +49,42 @@ Ops Console:
 1. `/ops`
 2. Skills, orchestration, and operational stats.
 
+Dashboards Index:
+1. `/dashboards`
+2. Links + start commands + data sources.
+
+**Dashboards (Separate Apps)**
+1. Meta-Ralph Quality Analyzer: `http://localhost:8586`
+2. Spark Pulse (chips/tuneables): `http://localhost:8765`
+
+**CLI Dashboards (No Server)**
+1. EIDOS quick health: `python scripts/eidos_dashboard.py`
+2. Spark Intelligence CLI: `python scripts/spark_dashboard.py`
+
 **Daily operator loop (10 minutes)**
 1. Open Mission Control and confirm green status for services, queue, and EIDOS activity.
 2. Scan Watchers feed for new red/yellow alerts and click into the triggering episode.
 3. Check Learning Factory funnel. If retrieved >> used or helped drops, investigate top ignored items.
 4. Check Acceptance Board for pending critical tests or expired deferrals.
+5. Open Meta-Ralph Quality Analyzer and confirm pass rate and outcome tracking are non-zero.
+6. If Meta-Ralph outcome stats are flat, verify `track_retrieval()` and `track_outcome()` wiring.
+
+**Cross-dashboard iteration loop (15 minutes)**
+1. Mission Control: pick a weak KPI or alert and open its `trace_id`.
+2. Learning Factory: find the top offending pattern and its distillation source.
+3. Meta-Ralph: inspect verdict mix and the weakest score dimension.
+4. Acceptance Board: confirm evidence exists for the change, or log a validation gap.
+5. Rabbit Hole: check for repeated failures of the same signature.
+6. Apply a small fix, then re-check Mission Control + Meta-Ralph for movement.
+
+**Data Sources (No Hallucinations)**
+1. Spark Lab: `~/.spark/queue/events.jsonl`, `~/.spark/bridge_worker_heartbeat.json`, `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/acceptance_plans.json`, `~/.spark/evidence.db`, `~/.spark/cognitive_insights.json`.
+2. Meta-Ralph Quality Analyzer: `~/.spark/meta_ralph/roast_history.json`, `~/.spark/meta_ralph/outcome_tracking.json`, `~/.spark/meta_ralph/learnings_store.json`, `~/.spark/advisor/effectiveness.json`, `~/.spark/advisor/recent_advice.jsonl`.
+3. EIDOS CLI: `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/policy_patches.json`, `~/.spark/minimal_mode_state.json`, `~/.spark/minimal_mode_history.jsonl`.
+4. Spark Intelligence CLI: `~/.spark/cognitive_insights.json`, `~/.spark/research_reports/`, `~/.spark/sparknet/collective/`.
+
+**Known Gaps**
+1. Legacy Meta-Ralph roast records without `trace_id` won't deep-link; new records include it.
 
 **Per-change checklist (before and after edits)**
 1. Run pipeline health check: `python tests/test_pipeline_health.py`

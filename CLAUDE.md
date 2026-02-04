@@ -149,8 +149,11 @@ Use `DASHBOARD_PLAYBOOK.md` for full setup and usage (start commands, pages, dri
 
 Quick start:
 1. `python -m spark.cli up`
-2. Or `python dashboard.py`
-3. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port 8586)
+2. Or `python dashboard.py` (Spark Lab only)
+3. Pulse: `python spark_pulse.py` (port 8765)
+4. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port 8586)
+
+`spark up` starts Spark Lab + Pulse + Meta-Ralph by default (use `--no-pulse` / `--no-meta-ralph` to skip).
 
 Key pages:
 1. `http://localhost:8585/mission` - Mission Control
@@ -158,7 +161,9 @@ Key pages:
 3. `http://localhost:8585/rabbit` - Rabbit Hole Recovery
 4. `http://localhost:8585/acceptance` - Acceptance Board
 5. `http://localhost:8585/ops` - Ops Overview
-6. **`http://localhost:8586`** - Meta-Ralph Quality Analyzer (advice quality metrics)
+6. `http://localhost:8585/dashboards` - Dashboards Index
+7. **`http://localhost:8765`** - Spark Pulse (chips + tuneables)
+8. **`http://localhost:8586`** - Meta-Ralph Quality Analyzer (advice quality metrics)
 
 ---
 
@@ -854,7 +859,7 @@ When domain detected, chips should:
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-04T14:48:03
+Last updated: 2026-02-04T16:05:38
 
 - [user_understanding] ## ðŸš¨ PRIMARY RULES
 
@@ -871,8 +876,8 @@ Last updated: 2026-02-04T14:48:03
 > **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
 
 Witho... (100% reliable, 4 validations)
-- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (27% reliable, 1353 validations)
-- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (25% reliable, 2129 validations)
+- [self_awareness] I struggle with Bash fails with windows_path -> Fix: Use forward slashes (/) instead of backslas tasks (27% reliable, 1359 validations)
+- [self_awareness] I struggle with Bash fails with file_not_found -> Fix: Verify path exists with Read or ls first tasks (25% reliable, 2135 validations)
 - [self_awareness] I struggle with Bash fails with syntax_error -> Fix: Check syntax, look for missing quotes or br tasks (24% reliable, 1185 validations)
 - [self_awareness] I struggle with Bash fails with command_not_found -> Fix: Check command spelling or install requ tasks (12% reliable, 495 validations)
 - [self_awareness] I struggle with Bash fails with windows_encoding -> Fix: Use ASCII characters or set UTF-8 encod tasks (11% reliable, 426 validations)

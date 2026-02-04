@@ -219,7 +219,8 @@ class SparkAdvisor:
         tool_input: Dict[str, Any],
         task_context: str = "",
         include_mind: bool = True,
-        track_retrieval: bool = True
+        track_retrieval: bool = True,
+        trace_id: Optional[str] = None,
     ) -> List[Advice]:
         """
         Get relevant advice before executing an action.
@@ -233,6 +234,7 @@ class SparkAdvisor:
             include_mind: Whether to query Mind for additional context
             track_retrieval: Whether to track this retrieval for outcome measurement.
                 Set to False for sampling/analysis to avoid polluting metrics.
+            trace_id: Optional trace_id for linking advice retrievals to traces.
 
         Returns:
             List of Advice objects, sorted by relevance
@@ -296,6 +298,7 @@ class SparkAdvisor:
                         adv.text,
                         insight_key=adv.insight_key,
                         source=adv.source,
+                        trace_id=trace_id,
                     )
             except Exception:
                 pass  # Don't break advice flow if tracking fails
@@ -805,7 +808,8 @@ class SparkAdvisor:
         advice_id: str,
         was_followed: bool,
         was_helpful: Optional[bool] = None,
-        notes: str = ""
+        notes: str = "",
+        trace_id: Optional[str] = None,
     ):
         """
         Report whether advice was followed and if it helped.
@@ -838,7 +842,7 @@ class SparkAdvisor:
             from .meta_ralph import get_meta_ralph
             ralph = get_meta_ralph()
             outcome_str = "good" if was_helpful else ("bad" if was_helpful is False else "unknown")
-            ralph.track_outcome(advice_id, outcome_str, notes)
+            ralph.track_outcome(advice_id, outcome_str, notes, trace_id=trace_id)
         except Exception:
             pass  # Don't break outcome flow if tracking fails
 
@@ -850,7 +854,8 @@ class SparkAdvisor:
         self,
         tool_name: str,
         success: bool,
-        advice_was_relevant: bool = False
+        advice_was_relevant: bool = False,
+        trace_id: Optional[str] = None,
     ):
         """
         Simplified outcome reporting after any action.
@@ -885,18 +890,19 @@ class SparkAdvisor:
             if entry:
                 advice_ids = entry.get("advice_ids") or []
                 for aid in advice_ids:
-                    ralph.track_outcome(aid, outcome_str, evidence)
+                    ralph.track_outcome(aid, outcome_str, evidence, trace_id=trace_id)
                     # Also update total_followed - this was missing!
                     self.report_outcome(
                         aid,
                         was_followed=True,  # Tool was executed, so advice was "followed"
                         was_helpful=success,  # Success = helpful
-                        notes=f"Auto-linked from {tool_name}"
+                        notes=f"Auto-linked from {tool_name}",
+                        trace_id=trace_id,
                     )
 
             # Also track tool-level outcome (even without specific advice)
             tool_outcome_id = f"tool:{tool_name}"
-            ralph.track_outcome(tool_outcome_id, outcome_str, evidence)
+            ralph.track_outcome(tool_outcome_id, outcome_str, evidence, trace_id=trace_id)
         except Exception:
             pass
 
@@ -1057,9 +1063,14 @@ def get_advisor() -> SparkAdvisor:
 
 
 # ============= Convenience Functions =============
-def advise_on_tool(tool_name: str, tool_input: Dict = None, context: str = "") -> List[Advice]:
+def advise_on_tool(
+    tool_name: str,
+    tool_input: Dict = None,
+    context: str = "",
+    trace_id: Optional[str] = None,
+) -> List[Advice]:
     """Get advice before using a tool."""
-    return get_advisor().advise(tool_name, tool_input or {}, context)
+    return get_advisor().advise(tool_name, tool_input or {}, context, trace_id=trace_id)
 
 
 def get_quick_advice(tool_name: str) -> Optional[str]:
@@ -1072,9 +1083,14 @@ def should_be_careful(tool_name: str) -> Tuple[bool, str]:
     return get_advisor().should_be_careful(tool_name)
 
 
-def report_outcome(tool_name: str, success: bool, advice_helped: bool = False):
+def report_outcome(
+    tool_name: str,
+    success: bool,
+    advice_helped: bool = False,
+    trace_id: Optional[str] = None,
+):
     """Report action outcome to close the feedback loop."""
-    get_advisor().report_action_outcome(tool_name, success, advice_helped)
+    get_advisor().report_action_outcome(tool_name, success, advice_helped, trace_id=trace_id)
 
 
 def record_advice_feedback(

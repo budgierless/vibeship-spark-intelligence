@@ -127,6 +127,7 @@ class OutcomeRecord:
     retrieved_at: str
     insight_key: Optional[str] = None
     source: Optional[str] = None
+    trace_id: Optional[str] = None
     acted_on: bool = False
     outcome: Optional[str] = None  # "good", "bad", "neutral"
     outcome_evidence: Optional[str] = None
@@ -138,6 +139,7 @@ class OutcomeRecord:
             "retrieved_at": self.retrieved_at,
             "insight_key": self.insight_key,
             "source": self.source,
+            "trace_id": self.trace_id,
             "acted_on": self.acted_on,
             "outcome": self.outcome,
             "outcome_evidence": self.outcome_evidence
@@ -333,7 +335,7 @@ class MetaRalph:
                 issues_found=issues_found,
                 refinement_suggestions=["Extract the cognitive insight, not the operational pattern"]
             )
-            self._record_roast(result, source)
+            self._record_roast(result, source, context)
             return result
 
         # Step 2: Check for duplicates
@@ -348,7 +350,7 @@ class MetaRalph:
                 issues_found=["This learning already exists"],
                 refinement_suggestions=[]
             )
-            self._record_roast(result, source)
+            self._record_roast(result, source, context)
             return result
 
         # Step 3: Score on each dimension
@@ -403,7 +405,7 @@ class MetaRalph:
             refined_version=refined_version if refined_version != learning else None
         )
 
-        self._record_roast(result, source)
+        self._record_roast(result, source, context)
         return result
 
     def _is_primitive(self, learning: str) -> bool:
@@ -644,11 +646,15 @@ class MetaRalph:
 
         return refined if made_changes else None
 
-    def _record_roast(self, result: RoastResult, source: str):
+    def _record_roast(self, result: RoastResult, source: str, context: Optional[Dict] = None):
         """Record roast for history and learning."""
+        trace_id = None
+        if context and isinstance(context, dict):
+            trace_id = context.get("trace_id")
         record = {
             "timestamp": datetime.now().isoformat(),
             "source": source,
+            "trace_id": trace_id,
             "result": result.to_dict()
         }
         self.roast_history.append(record)
@@ -664,6 +670,7 @@ class MetaRalph:
         learning_content: str,
         insight_key: Optional[str] = None,
         source: Optional[str] = None,
+        trace_id: Optional[str] = None,
     ):
         """Track when a learning is retrieved.
 
@@ -677,10 +684,16 @@ class MetaRalph:
                 retrieved_at=datetime.now().isoformat(),
                 insight_key=insight_key,
                 source=source,
+                trace_id=trace_id,
             )
             self._save_state()
+        else:
+            rec = self.outcome_records[learning_id]
+            if trace_id and not rec.trace_id:
+                rec.trace_id = trace_id
+                self._save_state()
 
-    def track_outcome(self, learning_id: str, outcome: str, evidence: str = ""):
+    def track_outcome(self, learning_id: str, outcome: str, evidence: str = "", trace_id: Optional[str] = None):
         """Track the outcome of acting on a learning."""
         # Create record if it doesn't exist (for tool-level outcomes)
         if learning_id not in self.outcome_records:
@@ -688,10 +701,13 @@ class MetaRalph:
                 learning_id=learning_id,
                 learning_content=learning_id,  # Use ID as content for tool-level
                 retrieved_at=datetime.now().isoformat(),
-                source="auto_created"
+                source="auto_created",
+                trace_id=trace_id,
             )
 
         rec = self.outcome_records[learning_id]
+        if trace_id and not rec.trace_id:
+            rec.trace_id = trace_id
         rec.acted_on = True
         rec.outcome = outcome
         rec.outcome_evidence = evidence

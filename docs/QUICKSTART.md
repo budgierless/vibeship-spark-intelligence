@@ -77,9 +77,11 @@ python3 -m spark.cli down
 ### Dashboards
 
 - Spark Lab (overview + orchestration): http://localhost:8585
+- Dashboards Index: http://localhost:8585/dashboards
 - Spark Pulse (chips + tuneables rail): http://localhost:8765
+- Meta-Ralph Quality Analyzer: http://localhost:8586
 
-Tip: `spark up` starts Spark Lab + Spark Pulse by default. Use `--no-pulse` to skip Pulse.
+Tip: `spark up` starts Spark Lab + Spark Pulse + Meta-Ralph by default. Use `--no-pulse` or `--no-meta-ralph` to skip.
 
 ### Automated Always-On (Quick Start)
 
