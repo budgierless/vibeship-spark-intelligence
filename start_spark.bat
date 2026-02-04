@@ -20,7 +20,14 @@ echo   SPARK - Self-Evolving Intelligence Layer
 echo =============================================
 echo.
 
-python -m spark.cli up
+set "SPARK_ARGS="
+if /I "%SPARK_LITE%"=="1" set "SPARK_ARGS=--lite"
+if /I "%SPARK_NO_DASHBOARD%"=="1" set "SPARK_ARGS=%SPARK_ARGS% --no-dashboard"
+if /I "%SPARK_NO_PULSE%"=="1" set "SPARK_ARGS=%SPARK_ARGS% --no-pulse"
+if /I "%SPARK_NO_META_RALPH%"=="1" set "SPARK_ARGS=%SPARK_ARGS% --no-meta-ralph"
+if /I "%SPARK_NO_WATCHDOG%"=="1" set "SPARK_ARGS=%SPARK_ARGS% --no-watchdog"
+
+python -m spark.cli up %SPARK_ARGS%
 python -m spark.cli services
 
 echo.

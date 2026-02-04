@@ -6,6 +6,20 @@
 **Status:** Design REFINED after multi-LLM feedback - ready for implementation
 **Goal:** Build a self-evolving intelligence system that surfaces the RIGHT knowledge at the RIGHT time
 
+## Implementation Status (2026-02-05)
+
+What is already in the repo now:
+- `lib/semantic_retriever.py` (hybrid triggers + semantic + outcomes, MMR, fusion, intent extraction)
+- `lib/advisor.py` integration (semantic-first with keyword fallback)
+- `lib/cognitive_learner.py` indexing on write
+- `scripts/semantic_reindex.py` for full index rebuilds
+- `TUNEABLES.md` and `~/.spark/trigger_rules.yaml` for tuneables + triggers
+
+Operational notes:
+- Enable with `semantic.enabled=true` and `triggers.enabled=true` in `~/.spark/tuneables.json`
+- Build/refresh index: `python scripts/semantic_reindex.py`
+- To reduce background load during quickstart, use `spark up --lite` (or `SPARK_LITE=1` in launch scripts)
+
 ---
 
 ## LLM Feedback Summary (3 Reviewers)

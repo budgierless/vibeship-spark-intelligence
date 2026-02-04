@@ -48,6 +48,10 @@ These keep the bridge worker running and the dashboard live.
 python3 -m spark.cli up
 # or: spark up
 ```
+Lightweight mode (core services only: sparkd + bridge_worker):
+```bash
+python3 -m spark.cli up --lite
+```
 
 Repo shortcuts:
 ```bash
@@ -60,6 +64,7 @@ start_spark.bat
 ```
 This also starts Mind on `SPARK_MIND_PORT` (default `8080`) if `mind.exe` is available.  
 Set `SPARK_NO_MIND=1` to skip Mind startup.
+Set `SPARK_LITE=1` to skip dashboards/pulse/watchdog (core services only).
 
 Check status:
 ```bash
@@ -92,6 +97,7 @@ Port overrides:
 - `SPARK_MIND_PORT`
 
 Tip: `spark up` starts Spark Lab + Spark Pulse + Meta-Ralph by default. Use `--no-pulse` or `--no-meta-ralph` to skip.
+Tip: `spark up --lite` skips all dashboards/pulse/watchdog to reduce background load.
 
 ### Automated Always-On (Quick Start)
 
@@ -355,7 +361,7 @@ CLAUDE.md                      # Promoted conventions
 |---------|-------------|
 | `status` | Show full system status |
 | `services` | Show daemon/service status |
-| `up` | Start background services |
+| `up` | Start background services (`--lite` for core-only) |
 | `ensure` | Start missing services if not running |
 | `down` | Stop background services |
 | `health` | Quick health check |

@@ -26,6 +26,23 @@ from lib.ports import (
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
+# External Spark Pulse directory (full-featured FastAPI app with neural visualization)
+# Defaults to vibeship-spark-pulse on Desktop, falls back to internal spark_pulse.py
+SPARK_PULSE_DIR = Path(os.environ.get(
+    "SPARK_PULSE_DIR",
+    str(Path.home() / "Desktop" / "vibeship-spark-pulse")
+))
+
+
+def _get_pulse_command() -> list[str]:
+    """Get the command to start Spark Pulse, preferring external if available."""
+    import sys
+    external_app = SPARK_PULSE_DIR / "app.py"
+    if external_app.exists():
+        return [sys.executable, str(external_app)]
+    # Fallback to internal spark_pulse.py
+    return [sys.executable, str(ROOT_DIR / "spark_pulse.py")]
+
 
 def _pid_dir() -> Path:
     return Path.home() / ".spark" / "pids"
@@ -150,6 +167,23 @@ def _pid_matches(pid: Optional[int], patterns: list[list[str]], snapshot: Option
             continue
         if _cmd_matches(cmd, patterns):
             return True
+    return False
+
+
+def _pid_alive_fallback(pid: Optional[int], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
+    """Fallback when command line matching is unavailable (avoid duplicate spawns)."""
+    if not pid:
+        return False
+    if snapshot is None:
+        snapshot = _process_snapshot()
+    if not snapshot:
+        return _pid_alive(pid)
+    for spid, cmd in snapshot:
+        if spid != pid:
+            continue
+        if not cmd:
+            return _pid_alive(pid)
+        return False
     return False
 
 
@@ -282,7 +316,7 @@ def _service_cmds(
             str(bridge_interval),
         ],
         "dashboard": [sys.executable, "-m", "dashboard"],
-        "pulse": [sys.executable, str(ROOT_DIR / "spark_pulse.py")],
+        "pulse": _get_pulse_command(),
         "meta_ralph": [sys.executable, str(ROOT_DIR / "meta_ralph_dashboard.py")],
         "watchdog": [
             sys.executable,
@@ -314,17 +348,46 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
     snapshot = _process_snapshot()
     sparkd_keys = [["-m sparkd"], ["sparkd.py"]]
     dash_keys = [["-m dashboard"], ["dashboard.py"]]
-    pulse_keys = [["spark_pulse.py"]]
+    pulse_keys = [["spark_pulse.py"], ["vibeship-spark-pulse", "app.py"]]
     meta_keys = [["meta_ralph_dashboard.py"]]
     bridge_keys = [["-m bridge_worker"], ["bridge_worker.py"]]
     watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"]]
 
-    sparkd_running = sparkd_ok or _pid_matches(sparkd_pid, sparkd_keys, snapshot) or _any_process_matches(sparkd_keys, snapshot)
-    dash_running = dash_ok or _pid_matches(dash_pid, dash_keys, snapshot) or _any_process_matches(dash_keys, snapshot)
-    pulse_running = pulse_ok or _pid_matches(pulse_pid, pulse_keys, snapshot) or _any_process_matches(pulse_keys, snapshot)
-    meta_running = meta_ok or _pid_matches(meta_pid, meta_keys, snapshot) or _any_process_matches(meta_keys, snapshot)
-    bridge_running = (hb_age is not None and hb_age <= bridge_stale_s) or _pid_matches(bridge_pid, bridge_keys, snapshot) or _any_process_matches(bridge_keys, snapshot)
-    watchdog_running = _pid_matches(watchdog_pid, watchdog_keys, snapshot) or _any_process_matches(watchdog_keys, snapshot)
+    sparkd_running = (
+        sparkd_ok
+        or _pid_matches(sparkd_pid, sparkd_keys, snapshot)
+        or _any_process_matches(sparkd_keys, snapshot)
+        or _pid_alive_fallback(sparkd_pid, snapshot)
+    )
+    dash_running = (
+        dash_ok
+        or _pid_matches(dash_pid, dash_keys, snapshot)
+        or _any_process_matches(dash_keys, snapshot)
+        or _pid_alive_fallback(dash_pid, snapshot)
+    )
+    pulse_running = (
+        pulse_ok
+        or _pid_matches(pulse_pid, pulse_keys, snapshot)
+        or _any_process_matches(pulse_keys, snapshot)
+        or _pid_alive_fallback(pulse_pid, snapshot)
+    )
+    meta_running = (
+        meta_ok
+        or _pid_matches(meta_pid, meta_keys, snapshot)
+        or _any_process_matches(meta_keys, snapshot)
+        or _pid_alive_fallback(meta_pid, snapshot)
+    )
+    bridge_running = (
+        (hb_age is not None and hb_age <= bridge_stale_s)
+        or _pid_matches(bridge_pid, bridge_keys, snapshot)
+        or _any_process_matches(bridge_keys, snapshot)
+        or _pid_alive_fallback(bridge_pid, snapshot)
+    )
+    watchdog_running = (
+        _pid_matches(watchdog_pid, watchdog_keys, snapshot)
+        or _any_process_matches(watchdog_keys, snapshot)
+        or _pid_alive_fallback(watchdog_pid, snapshot)
+    )
 
     return {
         "sparkd": {
@@ -430,7 +493,7 @@ def stop_services() -> dict[str, str]:
             "sparkd": [["-m sparkd"], ["sparkd.py"]],
             "bridge_worker": [["-m bridge_worker"], ["bridge_worker.py"]],
             "dashboard": [["-m dashboard"], ["dashboard.py"]],
-            "pulse": [["spark_pulse.py"]],
+            "pulse": [["spark_pulse.py"], ["vibeship-spark-pulse", "app.py"]],
             "meta_ralph": [["meta_ralph_dashboard.py"]],
             "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"]],
         }.get(name, [])

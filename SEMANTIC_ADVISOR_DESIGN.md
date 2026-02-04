@@ -4,6 +4,22 @@
 
 ---
 
+## Implementation Status (2026-02-05)
+
+Already implemented in this repo:
+- `lib/semantic_retriever.py` with trigger rules, MMR diversity, fusion scoring, and intent extraction
+- `lib/advisor.py` semantic-first advice with keyword fallback
+- `lib/cognitive_learner.py` indexes embeddings on write
+- `scripts/semantic_reindex.py` for full reindex
+- `TUNEABLES.md` + `~/.spark/trigger_rules.yaml` for configuration
+
+Ops notes:
+- Enable via `semantic.enabled=true` and `triggers.enabled=true` in `~/.spark/tuneables.json`
+- Rebuild index with `python scripts/semantic_reindex.py`
+- Use `spark up --lite` when you want only core services (no dashboards/pulse/watchdog)
+
+---
+
 ## Current State
 
 ```
