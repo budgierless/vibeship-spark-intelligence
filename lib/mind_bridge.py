@@ -13,6 +13,7 @@ Features:
 
 import json
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -35,6 +36,7 @@ MIND_API_URL = MIND_URL
 SYNC_STATE_FILE = Path.home() / ".spark" / "mind_sync_state.json"
 OFFLINE_QUEUE_FILE = Path.home() / ".spark" / "mind_offline_queue.jsonl"
 DEFAULT_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+MAX_CONTENT_CHARS = int(os.environ.get("MIND_MAX_CONTENT_CHARS", "4000"))
 
 
 class SyncStatus(Enum):
@@ -83,7 +85,7 @@ class MindBridge:
     def _insight_hash(self, insight: CognitiveInsight) -> str:
         """Generate unique hash for an insight."""
         content = f"{insight.category.value}:{insight.insight}:{insight.context}"
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
+        return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
     
     def _is_synced(self, insight: CognitiveInsight) -> bool:
         """Check if insight was already synced."""
@@ -159,6 +161,8 @@ class MindBridge:
             content_parts.append(f"Exceptions: {counter_str}")
         
         content = "\n".join(content_parts)
+        if len(content) > MAX_CONTENT_CHARS:
+            content = content[:MAX_CONTENT_CHARS]
         salience = max(0.5, min(0.95, insight.reliability))
         
         return {
@@ -223,11 +227,9 @@ class MindBridge:
                     status=SyncStatus.SUCCESS,
                     memory_id=result.get("memory_id")
                 )
-            else:
-                return SyncResult(
-                    status=SyncStatus.ERROR,
-                    error=f"HTTP {response.status_code}: {response.text[:100]}"
-                )
+            error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+            print(f"[SPARK] Mind sync error: {error_msg}")
+            return SyncResult(status=SyncStatus.ERROR, error=error_msg)
                 
         except Exception as e:
             self._queue_for_later(insight, memory_data)

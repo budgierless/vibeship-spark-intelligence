@@ -20,6 +20,33 @@ function Get-MindExe {
     return $null
 }
 
+function Test-TruthyEnv {
+    param([string]$Value)
+    if (-not $Value) { return $false }
+    $v = $Value.ToLower().Trim()
+    return @("1","true","yes","on") -contains $v
+}
+
+function Test-MindServe {
+    param([string]$Exe)
+    try {
+        $out = & $Exe --help 2>&1
+        return ($out -match "serve")
+    } catch {
+        return $false
+    }
+}
+
+function Test-MindModule {
+    param([string]$Module)
+    try {
+        $null = & python -c "import $Module" 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
 function Test-Port {
     param([int]$Port)
     try {
@@ -58,13 +85,15 @@ if (Test-Mind -Port $MindPort) {
     exit 0
 }
 
+$forceBuiltin = Test-TruthyEnv $env:SPARK_FORCE_BUILTIN_MIND
+
 $mindExe = Get-MindExe
 if (-not $mindExe) {
-    Write-Warning "[mind] mind.exe not found; skipping Mind startup"
-    exit 0
+    $mindExe = $null
 }
 
 $env:MIND_TIER = "standard"
+$env:SPARK_MIND_PORT = $MindPort
 
 $pgPort = Get-EmbeddedPgPort
 if ($pgPort -and (Test-Port -Port $pgPort)) {
@@ -78,7 +107,17 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $outLog = Join-Path $logDir "mind_out.log"
 $errLog = Join-Path $logDir "mind_err.log"
 
-Start-Process -FilePath $mindExe -ArgumentList @("serve", "--host", "127.0.0.1", "--port", $MindPort.ToString()) -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+if ($forceBuiltin) {
+    $mindServer = Resolve-Path (Join-Path $PSScriptRoot "..\\mind_server.py")
+    Start-Process -FilePath "python" -ArgumentList @($mindServer.Path) -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+} elseif ($mindExe -and (Test-MindServe -Exe $mindExe)) {
+    Start-Process -FilePath $mindExe -ArgumentList @("serve", "--host", "127.0.0.1", "--port", $MindPort.ToString()) -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+} elseif (Test-MindModule -Module "mind.lite_tier") {
+    Start-Process -FilePath "python" -ArgumentList @("-m", "mind.lite_tier") -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+} else {
+    $mindServer = Resolve-Path (Join-Path $PSScriptRoot "..\\mind_server.py")
+    Start-Process -FilePath "python" -ArgumentList @($mindServer.Path) -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+}
 
 $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
 while ((Get-Date) -lt $deadline) {

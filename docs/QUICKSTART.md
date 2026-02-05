@@ -65,6 +65,11 @@ start_spark.bat
 This also starts Mind on `SPARK_MIND_PORT` (default `8080`) if `mind.exe` is available.  
 Set `SPARK_NO_MIND=1` to skip Mind startup.
 Set `SPARK_LITE=1` to skip dashboards/pulse/watchdog (core services only).
+If Mind CLI is installed but unstable, force Spark's built-in Mind server:
+```bat
+set SPARK_FORCE_BUILTIN_MIND=1
+start_spark.bat
+```
 
 Check status:
 ```bash
@@ -288,9 +293,36 @@ pip install vibeship-mind
 
 # Start Mind server
 python3 -m mind.lite_tier
+# If Mind CLI fails, use Spark's built-in server:
+python3 mind_server.py
 
 # Sync Spark learnings to Mind
 python3 -m spark.cli sync
+```
+
+## Semantic Retrieval (Optional)
+
+Enable semantic matching for cognitive insights:
+
+```bash
+# Optional: local embeddings
+pip install fastembed
+
+# Enable semantic + triggers
+# ~/.spark/tuneables.json
+#
+# "semantic": { "enabled": true, ... }
+# "triggers": { "enabled": true, ... }
+
+# Backfill semantic index
+python -m spark.index_embeddings --all
+# (legacy) python scripts/semantic_reindex.py
+```
+
+Use it during real work:
+```python
+from lib.advisor import advise_on_tool
+advice = advise_on_tool("Edit", {"file_path": "src/auth/login.py"}, "edit auth login flow")
 ```
 
 ## Claude Code Integration

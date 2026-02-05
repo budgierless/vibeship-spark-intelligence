@@ -34,6 +34,8 @@ MAX_BODY_BYTES = int(os.environ.get("MIND_MAX_BODY_BYTES", "262144"))
 MAX_CONTENT_CHARS = int(os.environ.get("MIND_MAX_CONTENT_CHARS", "4000"))
 MAX_QUERY_CHARS = int(os.environ.get("MIND_MAX_QUERY_CHARS", "1000"))
 _FTS_AVAILABLE = None
+_FTS_SCHEMA = None  # legacy | extended
+_FTS_TRIGGERS = None
 _RRF_K = 60
 
 
@@ -68,7 +70,7 @@ def _score(content: str, tokens):
 
 
 def _ensure_fts(conn: sqlite3.Connection) -> bool:
-    global _FTS_AVAILABLE
+    global _FTS_AVAILABLE, _FTS_SCHEMA, _FTS_TRIGGERS
     if _FTS_AVAILABLE is False:
         return False
     if _FTS_AVAILABLE is True:
@@ -77,9 +79,39 @@ def _ensure_fts(conn: sqlite3.Connection) -> bool:
         conn.execute(
             """
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
-            USING fts5(content, memory_id UNINDEXED, user_id UNINDEXED);
+            USING fts5(content);
             """
         )
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(memories_fts)").fetchall()]
+        if "memory_id" in cols and "user_id" in cols:
+            _FTS_SCHEMA = "extended"
+        else:
+            _FTS_SCHEMA = "legacy"
+        triggers = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='memories'"
+        ).fetchall()
+        if triggers:
+            for name, in triggers:
+                try:
+                    conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+                except Exception:
+                    pass
+            _FTS_TRIGGERS = False
+        else:
+            _FTS_TRIGGERS = False
+        # Rebuild FTS to keep search consistent when triggers are removed.
+        try:
+            conn.execute("DELETE FROM memories_fts")
+            if _FTS_SCHEMA == "extended":
+                conn.execute(
+                    "INSERT INTO memories_fts (content, memory_id, user_id) SELECT content, memory_id, user_id FROM memories"
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO memories_fts (rowid, content) SELECT rowid, content FROM memories"
+                )
+        except Exception:
+            pass
         _FTS_AVAILABLE = True
     except sqlite3.OperationalError:
         _FTS_AVAILABLE = False
@@ -113,6 +145,14 @@ def _build_fts_query(tokens):
     if not terms:
         return ""
     return " OR ".join(terms)
+
+
+def _sanitize_text(value: str) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    return value.encode("utf-8", errors="replace").decode("utf-8")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -202,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _create_memory(self, data):
         user_id = data.get("user_id")
-        content = data.get("content")
+        content = _sanitize_text(data.get("content"))
         if not user_id or not content:
             return self._json(400, {"error": "missing_user_id_or_content"})
         if len(str(content)) > MAX_CONTENT_CHARS:
@@ -214,6 +254,16 @@ class Handler(BaseHTTPRequestHandler):
         content_type = data.get("content_type")
         temporal_level = data.get("temporal_level")
         salience = data.get("salience")
+        try:
+            if temporal_level is not None:
+                temporal_level = max(1, min(4, int(temporal_level)))
+        except Exception:
+            temporal_level = None
+        try:
+            if salience is not None:
+                salience = max(0.0, min(1.0, float(salience)))
+        except Exception:
+            salience = None
 
         conn = self._db()
         try:
@@ -221,11 +271,17 @@ class Handler(BaseHTTPRequestHandler):
                 "INSERT INTO memories (memory_id, user_id, content, content_type, temporal_level, salience, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (memory_id, user_id, content, content_type, temporal_level, salience, created_at),
             )
-            if _ensure_fts(conn):
-                conn.execute(
-                    "INSERT INTO memories_fts (content, memory_id, user_id) VALUES (?, ?, ?)",
-                    (content, memory_id, user_id),
-                )
+            if _ensure_fts(conn) and not _FTS_TRIGGERS:
+                if _FTS_SCHEMA == "extended":
+                    conn.execute(
+                        "INSERT INTO memories_fts (content, memory_id, user_id) VALUES (?, ?, ?)",
+                        (content, memory_id, user_id),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO memories_fts (rowid, content) VALUES (?, ?)",
+                        (conn.execute("SELECT last_insert_rowid()").fetchone()[0], content),
+                    )
             conn.commit()
         finally:
             conn.close()
@@ -234,7 +290,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _retrieve(self, data):
         user_id = data.get("user_id")
-        query = data.get("query", "")
+        query = _sanitize_text(data.get("query", ""))
         limit = int(data.get("limit") or 5)
         limit = max(1, min(limit, 50))
 
@@ -248,25 +304,38 @@ class Handler(BaseHTTPRequestHandler):
         conn = self._db()
         try:
             rows = conn.execute(
-                "SELECT memory_id, user_id, content, content_type, temporal_level, salience, created_at FROM memories WHERE user_id = ?",
+                "SELECT rowid as rid, memory_id, user_id, content, content_type, temporal_level, salience, created_at FROM memories WHERE user_id = ?",
                 (user_id,),
             ).fetchall()
             fts_rows = []
             if fts_query and _ensure_fts(conn):
-                fts_rows = conn.execute(
-                    """
-                    SELECT memory_id, bm25(memories_fts) AS bm25
-                    FROM memories_fts
-                    WHERE memories_fts MATCH ? AND user_id = ?
-                    ORDER BY bm25
-                    LIMIT ?
-                    """,
-                    (fts_query, user_id, max(limit * 5, 20)),
-                ).fetchall()
+                if _FTS_SCHEMA == "extended":
+                    fts_rows = conn.execute(
+                        """
+                        SELECT memory_id, bm25(memories_fts) AS bm25
+                        FROM memories_fts
+                        WHERE memories_fts MATCH ? AND user_id = ?
+                        ORDER BY bm25
+                        LIMIT ?
+                        """,
+                        (fts_query, user_id, max(limit * 5, 20)),
+                    ).fetchall()
+                else:
+                    fts_rows = conn.execute(
+                        """
+                        SELECT rowid, bm25(memories_fts) AS bm25
+                        FROM memories_fts
+                        WHERE memories_fts MATCH ?
+                        ORDER BY bm25
+                        LIMIT ?
+                        """,
+                        (fts_query, max(limit * 5, 20)),
+                    ).fetchall()
         finally:
             conn.close()
 
         row_by_id = {r["memory_id"]: r for r in rows}
+        row_by_rid = {r["rid"]: r for r in rows}
         legacy_scores = {}
         for r in rows:
             s = _score(r["content"], tokens)
@@ -278,8 +347,16 @@ class Handler(BaseHTTPRequestHandler):
 
         fts_scores = {}
         for r in fts_rows:
-            mid = r["memory_id"]
-            bm = r["bm25"]
+            if _FTS_SCHEMA == "extended":
+                mid = r["memory_id"]
+                bm = r["bm25"]
+            else:
+                rid = r["rowid"]
+                row = row_by_rid.get(rid)
+                if not row:
+                    continue
+                mid = row["memory_id"]
+                bm = r["bm25"]
             if bm is None:
                 continue
             fts_scores[mid] = 1.0 / (1.0 + float(bm))
