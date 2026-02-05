@@ -781,8 +781,26 @@ class MetaRalph:
                 rec.trace_id = trace_id
                 self._save_state()
 
-    def track_outcome(self, learning_id: str, outcome: str, evidence: str = "", trace_id: Optional[str] = None):
-        """Track the outcome of acting on a learning."""
+    def track_outcome(
+        self,
+        learning_id: str,
+        outcome: str,
+        evidence: str = "",
+        trace_id: Optional[str] = None,
+        insight_key: Optional[str] = None,
+        source: Optional[str] = None,
+    ):
+        """Track the outcome of acting on a learning.
+
+        Args:
+            learning_id: The advice ID or tool-level ID
+            outcome: "good", "bad", or "neutral"
+            evidence: Description of what happened
+            trace_id: Trace ID for linking
+            insight_key: The insight key from the advice entry (critical for
+                closing the feedback loop to cognitive insight reliability)
+            source: The advice source type (e.g., "cognitive", "semantic")
+        """
         if not self.roast_history and self.ROAST_HISTORY_FILE.exists():
             self._load_state()
         # Create record if it doesn't exist (for tool-level outcomes)
@@ -791,13 +809,19 @@ class MetaRalph:
                 learning_id=learning_id,
                 learning_content=learning_id,  # Use ID as content for tool-level
                 retrieved_at=datetime.now().isoformat(),
-                source="auto_created",
+                source=source or "auto_created",
                 trace_id=trace_id,
+                insight_key=insight_key,
             )
 
         rec = self.outcome_records[learning_id]
         if trace_id and not rec.trace_id:
             rec.trace_id = trace_id
+        # Propagate insight_key if not already set (critical for feedback loop)
+        if insight_key and not rec.insight_key:
+            rec.insight_key = insight_key
+        if source and rec.source == "auto_created":
+            rec.source = source
         rec.acted_on = True
         rec.outcome = outcome
         rec.outcome_evidence = evidence

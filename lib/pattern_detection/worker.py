@@ -40,17 +40,27 @@ def _hook_event_from_type(event_type: EventType) -> str:
 
 
 def process_pattern_events(limit: int = 200) -> int:
-    """Process new queued events and run pattern detection."""
+    """Process new queued events and run pattern detection.
+
+    NOTE: When the pipeline's ``consume_processed()`` removes events from
+    the head of the queue, the total line count shrinks.  We detect this
+    and reset the offset so we don't skip events or stall.
+    """
     state = _load_state()
     offset = int(state.get("offset", 0))
 
-    # Handle queue rotation or truncation
+    # Handle queue rotation, truncation, or consumption
     total = count_events()
     if total < offset:
+        # Queue was consumed or rotated -- reset offset relative to new size
         offset = max(0, total - limit)
 
     events = read_events(limit=limit, offset=offset)
     if not events:
+        # If the offset is stale and there are events, reset to 0
+        if total > 0 and offset > 0:
+            state["offset"] = 0
+            _save_state(state)
         return 0
 
     aggregator = get_aggregator()
@@ -83,6 +93,16 @@ def process_pattern_events(limit: int = 200) -> int:
     state["offset"] = offset + processed
     _save_state(state)
     return processed
+
+
+def reset_offset() -> None:
+    """Reset the pattern detection offset to 0.
+
+    Called after queue consumption to keep the offset in sync.
+    """
+    state = _load_state()
+    state["offset"] = 0
+    _save_state(state)
 
 
 def get_pattern_backlog() -> int:

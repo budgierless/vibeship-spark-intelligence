@@ -257,7 +257,7 @@ class CognitiveLearner:
         """Load existing cognitive insights."""
         if self.INSIGHTS_FILE.exists():
             try:
-                data = json.loads(self.INSIGHTS_FILE.read_text())
+                data = json.loads(self.INSIGHTS_FILE.read_text(encoding="utf-8"))
                 for key, info in data.items():
                     self.insights[key] = CognitiveInsight.from_dict(info)
                 # Consolidate duplicate struggle variants (e.g., recovered X%).
@@ -304,7 +304,7 @@ class CognitiveLearner:
             disk_data: Dict[str, Dict[str, Any]] = {}
             if self.INSIGHTS_FILE.exists():
                 try:
-                    disk_data = json.loads(self.INSIGHTS_FILE.read_text())
+                    disk_data = json.loads(self.INSIGHTS_FILE.read_text(encoding="utf-8"))
                 except Exception:
                     disk_data = {}
             if drop_keys:
@@ -330,9 +330,19 @@ class CognitiveLearner:
             self.insights = merged
 
             data = {key: insight.to_dict() for key, insight in self.insights.items()}
-            tmp = self.INSIGHTS_FILE.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(data, indent=2))
-            tmp.replace(self.INSIGHTS_FILE)
+            tmp = self.INSIGHTS_FILE.with_suffix(f".json.tmp.{os.getpid()}")
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            for _ in range(5):
+                try:
+                    tmp.replace(self.INSIGHTS_FILE)
+                    break
+                except Exception:
+                    time.sleep(0.05)
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except Exception:
+                pass
 
     def _touch_validation(self, insight: CognitiveInsight, validated_delta: int = 0, contradicted_delta: int = 0):
         """Update validation counters and timestamp."""

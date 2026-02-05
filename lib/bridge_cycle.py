@@ -1,4 +1,8 @@
-"""Single-cycle bridge worker execution + heartbeat helpers."""
+"""Single-cycle bridge worker execution + heartbeat helpers.
+
+Updated to use the new processing pipeline for adaptive batch sizing,
+priority processing, queue consumption, and deep learning extraction.
+"""
 
 from __future__ import annotations
 
@@ -31,7 +35,11 @@ def run_bridge_cycle(
     memory_limit: int = 60,
     pattern_limit: int = 200,
 ) -> Dict[str, Any]:
-    """Run one bridge_worker cycle and return stats."""
+    """Run one bridge_worker cycle and return stats.
+
+    Uses the new processing pipeline for event consumption and deep learning,
+    while keeping all existing subsystems (memory, tastebank, chips, etc.).
+    """
     stats: Dict[str, Any] = {
         "timestamp": time.time(),
         "context_updated": False,
@@ -45,6 +53,7 @@ def run_bridge_cycle(
         "errors": [],
     }
 
+    # --- Context update ---
     try:
         update_spark_context(query=query)
         stats["context_updated"] = True
@@ -52,12 +61,31 @@ def run_bridge_cycle(
         stats["errors"].append("context")
         log_debug("bridge_worker", "context update failed", e)
 
+    # --- Memory capture ---
     try:
         stats["memory"] = process_recent_memory_events(limit=memory_limit)
     except Exception as e:
         stats["errors"].append("memory")
         log_debug("bridge_worker", "memory capture failed", e)
 
+    # --- NEW: Run the processing pipeline (replaces shallow read_recent_events) ---
+    pipeline_metrics = None
+    try:
+        from lib.pipeline import run_processing_cycle
+        pipeline_metrics = run_processing_cycle()
+        stats["pattern_processed"] = pipeline_metrics.events_processed
+        stats["pipeline"] = pipeline_metrics.to_dict()
+    except Exception as e:
+        stats["errors"].append("pipeline")
+        log_debug("bridge_worker", "pipeline processing failed", e)
+        # Fallback to old pattern detection if pipeline fails
+        try:
+            stats["pattern_processed"] = process_pattern_events(limit=pattern_limit)
+        except Exception as e2:
+            stats["errors"].append("patterns_fallback")
+            log_debug("bridge_worker", "fallback pattern detection failed", e2)
+
+    # --- Tastebank (use recent events for taste extraction) ---
     events = read_recent_events(40)
     try:
         for e in reversed(events[-10:]):
@@ -76,12 +104,7 @@ def run_bridge_cycle(
         stats["errors"].append("tastebank")
         log_debug("bridge_worker", "tastebank capture failed", e)
 
-    try:
-        stats["pattern_processed"] = process_pattern_events(limit=pattern_limit)
-    except Exception as e:
-        stats["errors"].append("patterns")
-        log_debug("bridge_worker", "pattern detection failed", e)
-
+    # --- Validation and prediction loops ---
     try:
         stats["validation"] = process_validation_events(limit=pattern_limit)
     except Exception as e:
@@ -94,7 +117,7 @@ def run_bridge_cycle(
         stats["errors"].append("prediction")
         log_debug("bridge_worker", "prediction loop failed", e)
 
-    # Content learning from Edit/Write events
+    # --- Content learning from Edit/Write events ---
     try:
         content_count = 0
         for ev in events:
@@ -128,7 +151,7 @@ def run_bridge_cycle(
         stats["errors"].append("content_learning")
         log_debug("bridge_worker", "content learning failed", e)
 
-    # Outcome reporting - close the advice feedback loop
+    # --- Outcome reporting ---
     try:
         outcome_count = 0
         for ev in events:
@@ -137,7 +160,7 @@ def run_bridge_cycle(
                 continue
             trace_id = (ev.data or {}).get("trace_id")
             if ev.event_type == EventType.POST_TOOL:
-                report_outcome(tool, success=True, advice_helped=True, trace_id=trace_id)
+                report_outcome(tool, success=True, advice_helped=False, trace_id=trace_id)
                 outcome_count += 1
             elif ev.event_type == EventType.POST_TOOL_FAILURE:
                 report_outcome(tool, success=False, advice_helped=False, trace_id=trace_id)
@@ -147,9 +170,8 @@ def run_bridge_cycle(
         stats["errors"].append("outcome_reporting")
         log_debug("bridge_worker", "outcome reporting failed", e)
 
-    # Chip processing - domain-specific insights
+    # --- Chip processing ---
     try:
-        # Convert events to dict format for chip processing
         chip_events = []
         for ev in events:
             chip_events.append({
@@ -159,7 +181,6 @@ def run_bridge_cycle(
                 "data": ev.data or {},
                 "cwd": (ev.data or {}).get("cwd"),
             })
-        # Extract project path from events if available
         project_path = None
         for ev in events:
             cwd = (ev.data or {}).get("cwd")
@@ -171,7 +192,7 @@ def run_bridge_cycle(
         stats["errors"].append("chips")
         log_debug("bridge_worker", "chip processing failed", e)
 
-    # Chip merger - promote high-value chip insights to cognitive system
+    # --- Chip merger ---
     try:
         merge_stats = merge_chip_insights(min_confidence=0.7, limit=20)
         stats["chip_merge"] = {
@@ -183,10 +204,9 @@ def run_bridge_cycle(
         stats["errors"].append("chip_merge")
         log_debug("bridge_worker", "chip merge failed", e)
 
-    # Context sync - promote insights to CLAUDE.md and sync to Mind
+    # --- Context sync ---
     try:
         sync_result = sync_context()
-        # sync_result is a SyncStats object
         stats["sync"] = {
             "selected": getattr(sync_result, "selected", 0),
             "promoted": getattr(sync_result, "promoted_selected", 0),

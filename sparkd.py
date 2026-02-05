@@ -79,6 +79,13 @@ class Handler(BaseHTTPRequestHandler):
             return _text(self, 200, "ok")
         if path == "/status":
             heartbeat = read_bridge_heartbeat() or {}
+            # Include pipeline health if available
+            pipeline_health = {}
+            try:
+                from lib.pipeline import get_pipeline_health
+                pipeline_health = get_pipeline_health()
+            except Exception:
+                pass
             return _json(self, 200, {
                 "ok": True,
                 "now": time.time(),
@@ -89,6 +96,7 @@ class Handler(BaseHTTPRequestHandler):
                     "pattern_backlog": get_pattern_backlog(),
                     "validation_backlog": get_validation_backlog(),
                 },
+                "pipeline": pipeline_health,
             })
         if path == "/agents":
             orch = get_orchestrator()

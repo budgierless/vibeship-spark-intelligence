@@ -32,9 +32,12 @@ from .project_profile import load_profile
 # ============= Configuration =============
 DEFAULT_PROMOTION_THRESHOLD = 0.65  # 65% reliability (lowered from 70% for faster promotion)
 DEFAULT_MIN_VALIDATIONS = 2  # 2 validations (lowered from 3 for faster learning)
+DEFAULT_CONFIDENCE_FLOOR = 0.80  # Fast-track: promote high-confidence insights without validation gate
+DEFAULT_MIN_AGE_HOURS = 1.0  # Fast-track: insights must be at least 1 hour old
 PROJECT_SECTION = "## Project Intelligence"
 PROJECT_START = "<!-- SPARK_PROJECT_START -->"
 PROJECT_END = "<!-- SPARK_PROJECT_END -->"
+PROMOTION_LOG_FILE = Path.home() / ".spark" / "promotion_log.jsonl"
 
 # Adapter budget policy (caps per target file)
 # Keep these files small; retrieval handles the full corpus.
@@ -87,6 +90,7 @@ SAFETY_BLOCK_PATTERNS = [
 _SAFETY_REGEXES = [re.compile(p, re.IGNORECASE) for p in SAFETY_BLOCK_PATTERNS]
 
 _RE_PROMOTED_SCORE = re.compile(r"\((\d+)% reliable,\s*(\d+)\s+validations?\)\s*$", re.IGNORECASE)
+_AUTO_PROMOTED_LINE = "*Auto-promoted insights from Spark*"
 
 
 def _normalize_text(text: str) -> str:
@@ -105,6 +109,13 @@ def _extract_score(text: str) -> Tuple[float, int, bool]:
         return float(m.group(1)) / 100.0, int(m.group(2)), True
     except Exception:
         return 0.0, 0, False
+
+
+def _clean_text_for_write(text: str) -> str:
+    try:
+        return (text or "").encode("utf-8", "replace").decode("utf-8")
+    except Exception:
+        return text or ""
 
 
 def _load_promotion_config() -> Dict[str, Any]:
@@ -289,27 +300,87 @@ PROMOTION_TARGETS = [
 class Promoter:
     """
     Promotes high-value cognitive insights to project documentation.
-    
+
     The promotion process:
-    1. Find insights meeting promotion criteria
+    1. Find insights meeting promotion criteria (two tracks)
     2. Match insights to appropriate target files
     3. Format insights as concise rules
     4. Append to target files
     5. Mark insights as promoted
+
+    Two-track promotion:
+    - Validated track: reliability >= 65% AND times_validated >= 2 (original)
+    - Confidence track: confidence >= 80% AND age >= 1h AND net-positive
+      (for insights that are high-quality at birth but lack a validation pathway)
     """
-    
+
     def __init__(self, project_dir: Optional[Path] = None,
                  reliability_threshold: float = DEFAULT_PROMOTION_THRESHOLD,
-                 min_validations: int = DEFAULT_MIN_VALIDATIONS):
+                 min_validations: int = DEFAULT_MIN_VALIDATIONS,
+                 confidence_floor: float = DEFAULT_CONFIDENCE_FLOOR,
+                 min_age_hours: float = DEFAULT_MIN_AGE_HOURS):
         self.project_dir = project_dir or Path.cwd()
         self.reliability_threshold = reliability_threshold
         self.min_validations = min_validations
+        self.confidence_floor = confidence_floor
+        self.min_age_hours = min_age_hours
         cfg = _load_promotion_config()
         self.adapter_budgets = _merge_budgets(
             ADAPTER_BUDGETS,
             cfg.get("adapter_budgets") if isinstance(cfg, dict) else {},
         )
+        # Load tuneable overrides for confidence track
+        if isinstance(cfg, dict):
+            self.confidence_floor = float(cfg.get("confidence_floor", self.confidence_floor))
+            self.min_age_hours = float(cfg.get("min_age_hours", self.min_age_hours))
     
+    @staticmethod
+    def _insight_age_hours(insight: CognitiveInsight) -> float:
+        """Compute insight age in hours from created_at."""
+        try:
+            created = datetime.fromisoformat(insight.created_at.replace("Z", "+00:00"))
+            return max(0.0, (datetime.now() - created).total_seconds() / 3600.0)
+        except Exception:
+            return 0.0
+
+    def _passes_confidence_track(self, insight: CognitiveInsight) -> bool:
+        """Check if insight qualifies via the confidence fast-track.
+
+        Criteria (all must be true):
+        - confidence >= confidence_floor (default 0.8)
+        - age >= min_age_hours (default 1h) -- settling period
+        - net-positive: times_validated >= times_contradicted
+        - not noise (double-check with cognitive learner noise filter)
+        """
+        if insight.confidence < self.confidence_floor:
+            return False
+        if self._insight_age_hours(insight) < self.min_age_hours:
+            return False
+        if insight.times_contradicted > insight.times_validated:
+            return False
+        # Final noise gate
+        cognitive = get_cognitive_learner()
+        if cognitive.is_noise_insight(insight.insight):
+            return False
+        return True
+
+    @staticmethod
+    def _log_promotion(insight_key: str, target: str, result: str, reason: str = ""):
+        """Append a promotion event to the promotion log for observability."""
+        try:
+            PROMOTION_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "ts": datetime.now().isoformat(),
+                "key": insight_key,
+                "target": target,
+                "result": result,  # "promoted", "filtered", "failed"
+                "reason": reason,
+            }
+            with open(PROMOTION_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception:
+            pass  # Best-effort logging
+
     def _get_target_for_category(self, category: CognitiveCategory) -> Optional[PromotionTarget]:
         """Find the appropriate promotion target for a category."""
         for target in PROMOTION_TARGETS:
@@ -320,18 +391,19 @@ class Promoter:
     def _format_insight_for_promotion(self, insight: CognitiveInsight) -> str:
         """Format an insight as a concise rule for documentation."""
         # Extract the core insight without verbose details
-        rule = insight.insight
+        rule = _clean_text_for_write(insight.insight)
         
         # Add reliability indicator
         reliability_str = f"({insight.reliability:.0%} reliable, {insight.times_validated} validations)"
         
         # Add context if not generic
         if insight.context and insight.context not in ["General principle", "All interactions"]:
-            context_note = f" *When: {insight.context[:50]}*"
+            ctx = _clean_text_for_write(insight.context[:50])
+            context_note = f" *When: {ctx}*"
         else:
             context_note = ""
         
-        return f"- {rule}{context_note} {reliability_str}"
+        return _clean_text_for_write(f"- {rule}{context_note} {reliability_str}")
     
     def _ensure_section_exists(self, file_path: Path, section: str) -> str:
         """Ensure the target section exists in the file. Returns file content."""
@@ -344,15 +416,15 @@ class Promoter:
 *Auto-promoted insights from Spark*
 
 """
-            file_path.write_text(content)
+            file_path.write_text(_clean_text_for_write(content), encoding="utf-8")
             return content
         
-        content = file_path.read_text()
+        content = file_path.read_text(encoding="utf-8")
         
         if section not in content:
             # Add section at the end
             content += f"\n\n{section}\n\n*Auto-promoted insights from Spark*\n\n"
-            file_path.write_text(content)
+            file_path.write_text(_clean_text_for_write(content), encoding="utf-8")
         
         return content
     
@@ -415,17 +487,16 @@ class Promoter:
         block_lines = block.splitlines()
         preamble = []
         bullets = []
-        tail = []
         in_bullets = False
         for raw in block_lines:
             if raw.strip().startswith("- "):
                 in_bullets = True
                 bullets.append(raw.strip())
             else:
-                if in_bullets:
-                    tail.append(raw)
-                else:
-                    preamble.append(raw)
+                if not in_bullets:
+                    # Keep only the standard auto-promoted marker / blanks.
+                    if not raw.strip() or raw.strip() == _AUTO_PROMOTED_LINE:
+                        preamble.append(raw)
 
         # Dedupe against existing bullets
         existing_keys = {_normalize_text(_strip_reliability_suffix(b[2:].strip())) for b in bullets}
@@ -443,14 +514,9 @@ class Promoter:
             if new_block_lines and new_block_lines[-1].strip():
                 new_block_lines.append("")
             new_block_lines.extend(curated)
-        if tail:
-            if new_block_lines and new_block_lines[-1].strip():
-                new_block_lines.append("")
-            new_block_lines.extend(tail)
-
         new_block = "\n".join(new_block_lines)
         new_content = content[:block_start] + new_block + content[block_end:]
-        file_path.write_text(new_content)
+        file_path.write_text(_clean_text_for_write(new_content), encoding="utf-8")
 
     def _upsert_block(self, content: str, block: str, section: str) -> str:
         """Insert or replace a block wrapped by start/end markers in a section."""

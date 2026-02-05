@@ -238,14 +238,107 @@ def rotate_if_needed() -> bool:
         return False
 
 
+def consume_processed(up_to_offset: int) -> int:
+    """Remove events that have been processed (up to offset line number).
+
+    This is the key mechanism that keeps the queue from growing forever.
+    After the bridge worker processes events 0..N, it calls
+    ``consume_processed(N)`` to strip those lines from the file.
+
+    Returns the number of events removed.
+    """
+    if up_to_offset <= 0 or not EVENTS_FILE.exists():
+        return 0
+
+    try:
+        with _queue_lock():
+            # Read all remaining lines after the offset.
+            remaining: List[str] = []
+            removed = 0
+            with open(EVENTS_FILE, "r", encoding="utf-8", errors="replace") as f:
+                for idx, line in enumerate(f):
+                    if idx < up_to_offset:
+                        removed += 1
+                    else:
+                        remaining.append(line.rstrip("\r\n"))
+            if removed == 0:
+                return 0
+            # Re-write only the un-consumed tail.
+            with open(EVENTS_FILE, "w", encoding="utf-8") as f:
+                for line in remaining:
+                    if line:
+                        f.write(line + "\n")
+            log_debug("queue", f"consumed {removed} events, {len(remaining)} remain", None)
+            return removed
+    except Exception as e:
+        log_debug("queue", "consume_processed failed", e)
+        return 0
+
+
+# ============= Event Priority Classification =============
+
+class EventPriority:
+    """Priority tiers for event processing.
+
+    HIGH  - Events most likely to yield valuable learnings (user prompts,
+            failures, session boundaries).  Always processed first.
+    MEDIUM - Events that occasionally yield insights (Edit, Write, Bash
+             with interesting commands).
+    LOW   - Routine events (Read, Glob, Grep success) that rarely produce
+            novel learnings.  Processed only when backlog is small.
+    """
+    HIGH = 3
+    MEDIUM = 2
+    LOW = 1
+
+
+def classify_event_priority(event: "SparkEvent") -> int:
+    """Classify an event's processing priority.
+
+    Returns an ``EventPriority`` int (higher = more important).
+    """
+    et = event.event_type
+
+    # High-value: user prompts, failures, session boundaries, errors
+    if et in (EventType.USER_PROMPT, EventType.POST_TOOL_FAILURE,
+              EventType.SESSION_START, EventType.SESSION_END,
+              EventType.STOP, EventType.ERROR):
+        return EventPriority.HIGH
+
+    # Learnings are always interesting
+    if et == EventType.LEARNING:
+        return EventPriority.HIGH
+
+    # Medium: post_tool for mutation tools (Edit, Write, Bash)
+    if et == EventType.POST_TOOL:
+        tool = (event.tool_name or "").strip()
+        if tool in ("Edit", "Write", "Bash", "NotebookEdit"):
+            return EventPriority.MEDIUM
+
+    # Everything else (Read, Glob, Grep successes, pre_tool) is low priority
+    return EventPriority.LOW
+
+
+def read_events_prioritized(limit: int = 200, offset: int = 0) -> List["SparkEvent"]:
+    """Read events from the queue, sorted by priority (HIGH first).
+
+    Reads up to ``limit`` events starting at ``offset``, then returns them
+    ordered so that high-priority events come first.  This lets callers
+    process the most valuable events even if they can only handle a subset.
+    """
+    raw = read_events(limit=limit, offset=offset)
+    raw.sort(key=lambda e: classify_event_priority(e), reverse=True)
+    return raw
+
+
 def get_queue_stats() -> Dict:
     """Get queue statistics."""
     count = count_events()
     size_bytes = 0
-    
+
     if EVENTS_FILE.exists():
         size_bytes = EVENTS_FILE.stat().st_size
-    
+
     return {
         "event_count": count,
         "size_bytes": size_bytes,

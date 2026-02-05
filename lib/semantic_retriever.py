@@ -27,8 +27,8 @@ DEFAULT_CONFIG = {
     "enabled": False,
     "embedding_provider": "local",
     "embedding_model": "BAAI/bge-small-en-v1.5",
-    "min_similarity": 0.6,
-    "min_fusion_score": 0.5,
+    "min_similarity": 0.55,
+    "min_fusion_score": 0.45,
     "weight_recency": 0.2,
     "weight_outcome": 0.3,
     "mmr_lambda": 0.5,
@@ -36,7 +36,7 @@ DEFAULT_CONFIG = {
     "max_results": 8,
     "index_on_write": True,
     "index_on_read": True,
-    "index_backfill_limit": 300,
+    "index_backfill_limit": 500,
     "index_cache_ttl_seconds": 120,
     "exclude_categories": [],
     "trigger_rules_file": "~/.spark/trigger_rules.yaml",
@@ -285,19 +285,36 @@ class SemanticIndex:
                 return vec
         return None
 
-    def ensure_index(self, insights: Dict[str, Any], max_items: int = 300) -> int:
+    def ensure_index(
+        self,
+        insights: Dict[str, Any],
+        max_items: int = 300,
+        noise_filter: Any = None,
+    ) -> int:
+        """Index missing or stale insights, filtering noise.
+
+        Args:
+            insights: dict of insight_key -> insight object
+            max_items: max items to embed in a single call (batch limit)
+            noise_filter: optional callable(text) -> bool that returns True for noise
+        """
         if not insights:
             return 0
         hashes = self.existing_hashes()
+
         def _score(item: Tuple[str, Any]) -> float:
             _, insight = item
             rel = getattr(insight, "reliability", 0.5)
             return rel
+
         items = sorted(insights.items(), key=_score, reverse=True)
         missing: List[Tuple[str, str]] = []
         for key, insight in items:
             text = f"{getattr(insight, 'insight', '')} {getattr(insight, 'context', '')}".strip()
             if not text:
+                continue
+            # Skip noise insights
+            if noise_filter and noise_filter(text):
                 continue
             content_hash = self._hash_text(text)
             if hashes.get(key) == content_hash:
@@ -306,6 +323,32 @@ class SemanticIndex:
             if len(missing) >= max_items:
                 break
         return self.add_many(missing)
+
+    def prune_stale(self, valid_keys: set) -> int:
+        """Remove entries from the index that are no longer in the insights dict.
+
+        Returns count of pruned entries.
+        """
+        if not valid_keys:
+            return 0
+        pruned = 0
+        with self._connect() as conn:
+            rows = conn.execute("SELECT insight_key FROM insights_vec").fetchall()
+            for row in rows:
+                if row["insight_key"] not in valid_keys:
+                    conn.execute("DELETE FROM insights_vec WHERE insight_key = ?", (row["insight_key"],))
+                    pruned += 1
+            if pruned:
+                conn.commit()
+        if pruned:
+            self._invalidate_cache()
+        return pruned
+
+    def count(self) -> int:
+        """Return the number of indexed entries."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) FROM insights_vec").fetchone()
+            return row[0] if row else 0
 
     def search(self, query_vec: List[float], limit: int = 10) -> List[Tuple[str, float]]:
         if not query_vec:
@@ -399,10 +442,15 @@ class SemanticRetriever:
                                 )
                             )
 
-        # Ensure index warmed
+        # Ensure index warmed (with noise filtering)
         if self.config.get("index_on_read", True) and not self._index_warmed:
             try:
-                self.index.ensure_index(insights, max_items=int(self.config.get("index_backfill_limit", 300)))
+                noise_fn = self._get_noise_filter()
+                self.index.ensure_index(
+                    insights,
+                    max_items=int(self.config.get("index_backfill_limit", 300)),
+                    noise_filter=noise_fn,
+                )
             finally:
                 self._index_warmed = True
 
@@ -429,6 +477,44 @@ class SemanticRetriever:
                         why=f"Semantic: {sim:.2f} similar",
                     )
                 )
+        else:
+            # Keyword fallback when embeddings unavailable (graceful degradation)
+            query_lower = query.lower()
+            query_words = set(re.findall(r"[a-z0-9]+", query_lower))
+            if query_words:
+                scored: List[Tuple[float, str, Any]] = []
+                for key, insight in insights.items():
+                    if key in seen:
+                        continue
+                    text = getattr(insight, "insight", "") or ""
+                    ctx = getattr(insight, "context", "") or ""
+                    combined = f"{text} {ctx}".lower()
+                    combined_words = set(re.findall(r"[a-z0-9]+", combined))
+                    if not combined_words:
+                        continue
+                    overlap = len(query_words & combined_words)
+                    if overlap == 0:
+                        continue
+                    jaccard = overlap / len(query_words | combined_words)
+                    scored.append((jaccard, key, insight))
+                scored.sort(key=lambda t: t[0], reverse=True)
+                for jaccard, key, insight in scored[:limit * 2]:
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    # Map jaccard to a pseudo-similarity score
+                    pseudo_sim = min(1.0, 0.5 + jaccard)
+                    results.append(
+                        SemanticResult(
+                            insight_key=key,
+                            insight_text=getattr(insight, "insight", ""),
+                            semantic_sim=pseudo_sim,
+                            source_type="semantic",
+                            category=self._infer_category(insight),
+                            priority=self._infer_priority(pseudo_sim),
+                            why=f"Keyword: {jaccard:.2f} overlap (no embeddings)",
+                        )
+                    )
 
         # Enrich scores
         for r in results:
@@ -532,6 +618,17 @@ class SemanticRetriever:
             pass
         return float(getattr(insight, "reliability", 0.5) or 0.5)
 
+    def _get_noise_filter(self):
+        """Return a noise filter callable, or None if unavailable."""
+        try:
+            from .cognitive_learner import get_cognitive_learner
+            learner = get_cognitive_learner()
+            if hasattr(learner, "is_noise_insight"):
+                return learner.is_noise_insight
+        except Exception:
+            pass
+        return None
+
     def _infer_priority(self, sim: float) -> str:
         if sim >= 0.9:
             return "high"
@@ -548,21 +645,44 @@ class SemanticRetriever:
         return "cognitive"
 
     def _extract_intent(self, context: str) -> str:
-        # Remove tool metadata noise
-        intent = re.sub(r"file_path=.*?(?=\\s|$)", "", context)
-        intent = re.sub(r"\\{.*?\\}", "", intent)
-        intent = re.sub(r"\\s+", " ", intent).strip()
+        """Extract semantic intent from context, stripping tool metadata noise.
 
+        Goal: produce a clean query string that captures WHAT the user is doing,
+        not HOW (tool names, file paths, JSON blobs are noise for embedding search).
+        """
+        # Remove JSON blobs (tool_input serializations)
+        intent = re.sub(r"\{[^}]*\}", "", context)
+        # Remove file_path=... key-value metadata
+        intent = re.sub(r"file_path=\S*", "", intent)
+        # Remove common tool input keys that leak into context
+        intent = re.sub(r"(old_string|new_string|command|pattern|query)=\S*", "", intent)
+        # Collapse whitespace
+        intent = re.sub(r"\s+", " ", intent).strip()
+
+        # Strip leading tool name if it's a bare tool name (Edit, Bash, Read, etc.)
+        # but keep it if there's meaningful context after it
+        tool_names = {"edit", "bash", "read", "write", "grep", "glob", "task",
+                      "webfetch", "websearch", "todowrite", "notebookedit"}
+        words = intent.split()
+        if len(words) >= 2 and words[0].lower() in tool_names:
+            # Drop bare tool name prefix, keep the rest as intent
+            remaining = " ".join(words[1:])
+            # If remaining is meaningful (>10 chars), use it
+            if len(remaining) > 10:
+                intent = remaining
+
+        # Extract action-focused phrases (keep FULL remaining text, not just the match)
         action_patterns = [
-            r"(edit|create|delete|update|fix|add|remove|change)\\s+([^\\.]+)",
-            r"working on\\s+(.+?)(?:\\.|$)",
-            r"implementing\\s+(.+?)(?:\\.|$)",
+            r"(?:fix(?:ing)?|implement(?:ing)?|add(?:ing)?|updat(?:e|ing)|remov(?:e|ing)|chang(?:e|ing)|creat(?:e|ing)|delet(?:e|ing)|debug(?:ging)?|refactor(?:ing)?)\s+.+",
+            r"working on\s+.+",
         ]
         for pattern in action_patterns:
             match = re.search(pattern, intent, re.IGNORECASE)
             if match:
-                return match.group(0)
-        return " ".join(intent.split()[:20])
+                return match.group(0).strip()
+
+        # Fallback: return cleaned context (up to 30 words for richer embedding)
+        return " ".join(intent.split()[:30])
 
     def _text_similarity(self, a: str, b: str) -> float:
         if not a or not b:
@@ -743,4 +863,68 @@ def index_insight(insight_key: str, text: str, context: str = "") -> bool:
     combined = f"{text} {context}".strip()
     if not combined:
         return False
+    # Skip noise insights at write time
+    try:
+        from .cognitive_learner import get_cognitive_learner
+        learner = get_cognitive_learner()
+        if hasattr(learner, "is_noise_insight") and learner.is_noise_insight(combined):
+            return False
+    except Exception:
+        pass
     return retriever.index.add(insight_key, combined)
+
+
+def backfill_index(force: bool = False) -> Dict[str, Any]:
+    """Backfill the semantic index with all cognitive insights.
+
+    This is the manual/CLI entry point for ensuring the index is complete.
+    Can be called from scripts or the CLI.
+
+    Args:
+        force: if True, re-index even if hashes match (full rebuild)
+
+    Returns:
+        dict with backfill stats (indexed, pruned, skipped, total)
+    """
+    from .cognitive_learner import get_cognitive_learner
+
+    config = _load_config()
+    # Force-enable for backfill even if disabled in config
+    config["enabled"] = True
+
+    retriever = SemanticRetriever(config=config)
+    learner = get_cognitive_learner()
+    insights = learner.insights
+
+    noise_fn = None
+    if hasattr(learner, "is_noise_insight"):
+        noise_fn = learner.is_noise_insight
+
+    if force:
+        # Clear the index for full rebuild
+        with retriever.index._connect() as conn:
+            conn.execute("DELETE FROM insights_vec")
+            conn.commit()
+        retriever.index._invalidate_cache()
+
+    # Index all insights (no batch limit for backfill)
+    indexed = retriever.index.ensure_index(
+        insights,
+        max_items=len(insights) + 100,
+        noise_filter=noise_fn,
+    )
+
+    # Prune stale entries (insights that were deleted from cognitive store)
+    valid_keys = set(insights.keys())
+    pruned = retriever.index.prune_stale(valid_keys)
+
+    total = retriever.index.count()
+    skipped = len(insights) - total
+
+    return {
+        "indexed": indexed,
+        "pruned": pruned,
+        "skipped_noise": skipped,
+        "total_in_index": total,
+        "total_insights": len(insights),
+    }

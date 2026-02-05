@@ -48,6 +48,9 @@ from .minimal_mode import get_minimal_mode_controller
 ACTIVE_EPISODES_FILE = Path.home() / ".spark" / "eidos_active_episodes.json"
 ACTIVE_STEPS_FILE = Path.home() / ".spark" / "eidos_active_steps.json"
 
+# Stale episode threshold: episodes older than 30 min with no end_ts are abandoned
+STALE_EPISODE_THRESHOLD_S = 1800
+
 
 def _load_active_episodes() -> Dict[str, str]:
     """Load session_id -> episode_id mapping."""
@@ -105,22 +108,38 @@ def _save_active_step(session_id: str, step_data: Optional[Dict]):
 
 def get_or_create_episode(
     session_id: str,
-    goal: str = "Claude Code session",
+    goal: str = "",
     cwd: str = ""
 ) -> Episode:
-    """Get existing episode for session or create new one."""
+    """Get existing episode for session or create new one.
+
+    If no goal is provided, a generic placeholder is used and can be
+    refined later via ``update_episode_goal``.
+    """
     store = get_store()
     mapping = _load_active_episodes()
 
     if session_id in mapping:
         episode = store.get_episode(mapping[session_id])
         if episode and episode.outcome == Outcome.IN_PROGRESS:
-            return episode
+            # Check if episode is stale (no activity for STALE_EPISODE_THRESHOLD_S)
+            elapsed = time.time() - episode.start_ts
+            if elapsed > STALE_EPISODE_THRESHOLD_S and episode.step_count > 0:
+                # Auto-close stale episode with partial outcome
+                _auto_close_episode(store, episode)
+                del mapping[session_id]
+                _save_active_episodes(mapping)
+                # Fall through to create a new one
+            else:
+                return episode
+
+    # Derive a meaningful goal from cwd if none provided
+    effective_goal = goal or _derive_goal_from_cwd(cwd)
 
     # Create new episode
     episode = Episode(
         episode_id="",
-        goal=goal,
+        goal=effective_goal,
         success_criteria="Complete user request successfully",
         constraints=[f"Working directory: {cwd}"] if cwd else [],
         budget=Budget(max_steps=50, max_time_seconds=1800)  # 30 min default
@@ -137,6 +156,59 @@ def get_or_create_episode(
     _save_active_episodes(mapping)
 
     return episode
+
+
+def update_episode_goal(session_id: str, goal: str):
+    """Update the goal of an active episode with a more specific description.
+
+    Called when we get richer context (e.g., from a UserPromptSubmit event).
+    """
+    store = get_store()
+    mapping = _load_active_episodes()
+    if session_id not in mapping:
+        return
+    episode = store.get_episode(mapping[session_id])
+    if not episode or episode.outcome != Outcome.IN_PROGRESS:
+        return
+    # Only update if current goal is generic
+    if episode.goal and not episode.goal.startswith("Session in"):
+        return
+    episode.goal = goal[:200]
+    store.save_episode(episode)
+
+
+def _derive_goal_from_cwd(cwd: str) -> str:
+    """Derive a meaningful goal from the working directory."""
+    if not cwd:
+        return "Session in unknown project"
+    # Extract the last directory component
+    parts = cwd.replace("\\", "/").rstrip("/").split("/")
+    project = parts[-1] if parts else "unknown"
+    return f"Session in {project}"
+
+
+def _auto_close_episode(store, episode: Episode):
+    """Auto-close a stale episode and run distillation."""
+    steps = store.get_episode_steps(episode.episode_id)
+    passed = sum(1 for s in steps if s.evaluation == Evaluation.PASS)
+    failed = sum(1 for s in steps if s.evaluation == Evaluation.FAIL)
+
+    if failed > passed:
+        outcome = Outcome.FAILURE
+    elif passed > 0:
+        outcome = Outcome.PARTIAL
+    else:
+        outcome = Outcome.ESCALATED
+
+    episode.outcome = outcome
+    episode.phase = Phase.CONSOLIDATE
+    episode.end_ts = time.time()
+    episode.final_evaluation = f"Auto-closed: {passed} passed, {failed} failed out of {len(steps)} steps"
+    store.save_episode(episode)
+
+    # Run distillation on auto-closed episodes
+    if steps:
+        _run_distillation(episode, steps)
 
 
 def complete_episode(
@@ -159,6 +231,22 @@ def complete_episode(
     if not episode:
         return None
 
+    # Determine outcome from step data if not explicitly set
+    steps = store.get_episode_steps(episode.episode_id)
+    if outcome == Outcome.SUCCESS and steps:
+        passed = sum(1 for s in steps if s.evaluation == Evaluation.PASS)
+        failed = sum(1 for s in steps if s.evaluation == Evaluation.FAIL)
+        if failed > 0 and passed == 0:
+            outcome = Outcome.FAILURE
+        elif failed > passed:
+            outcome = Outcome.PARTIAL
+
+    # Build evaluation summary if none provided
+    if not final_evaluation and steps:
+        passed = sum(1 for s in steps if s.evaluation == Evaluation.PASS)
+        failed = sum(1 for s in steps if s.evaluation == Evaluation.FAIL)
+        final_evaluation = f"{passed} passed, {failed} failed out of {len(steps)} steps"
+
     # Update episode
     episode.outcome = outcome
     episode.phase = Phase.CONSOLIDATE
@@ -167,21 +255,59 @@ def complete_episode(
     store.save_episode(episode)
 
     # Run distillation
-    steps = store.get_episode_steps(episode.episode_id)
     if steps:
-        engine = get_distillation_engine()
-        reflection = engine.reflect_on_episode(episode, steps)
-        candidates = engine.generate_distillations(episode, steps, reflection)
-
-        for candidate in candidates:
-            distillation = engine.finalize_distillation(candidate)
-            store.save_distillation(distillation)
+        _run_distillation(episode, steps)
 
     # Remove from active
     del mapping[session_id]
     _save_active_episodes(mapping)
 
     return episode
+
+
+def _run_distillation(episode: Episode, steps: List[Step]):
+    """Run distillation on a completed episode, filtering low-value outputs."""
+    store = get_store()
+    engine = get_distillation_engine()
+    reflection = engine.reflect_on_episode(episode, steps)
+    candidates = engine.generate_distillations(episode, steps, reflection)
+
+    for candidate in candidates:
+        # Filter out primitive/low-value distillations before saving
+        if _is_primitive_distillation(candidate.statement):
+            continue
+        # Require minimum confidence
+        if candidate.confidence < 0.4:
+            continue
+        distillation = engine.finalize_distillation(candidate)
+        store.save_distillation(distillation)
+
+
+def _is_primitive_distillation(statement: str) -> bool:
+    """Check if a distillation is primitive/operational rather than genuine wisdom.
+
+    Filters out things like 'Tool X is effective' or 'sequence A -> B'.
+    Keeps domain decisions, user preferences, architecture insights, lessons.
+    """
+    s = statement.lower().strip()
+    # Primitive patterns to reject
+    primitive_patterns = [
+        "is effective for",
+        "success rate",
+        "over \\d+ uses",
+        "sequence.*->",
+        "tool '.*' is effective",
+        "took \\d+ steps",
+        "could optimize discovery",
+    ]
+    import re
+    for pat in primitive_patterns:
+        if re.search(pat, s):
+            return True
+    # Too short to be useful
+    if len(s) < 20:
+        return True
+    return False
 
 
 # ===== Step Management =====
@@ -215,6 +341,22 @@ def create_step_before_action(
         raw = f"{session_id}|{tool_name}|{time.time()}"
         trace_id = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
+    # Retrieve relevant distillations/memories for this step
+    retrieved_memory_ids = []
+    memory_cited = False
+    memory_absent = True
+    try:
+        from .retriever import get_retriever
+        retriever = get_retriever()
+        intent_str = f"{tool_name} {str(tool_input)[:100]}"
+        distillations = retriever.retrieve_for_intent(intent_str)
+        if distillations:
+            retrieved_memory_ids = [d.distillation_id for d in distillations[:5]]
+            memory_cited = True
+            memory_absent = False
+    except Exception:
+        pass  # Graceful degradation if retriever fails
+
     # Create step with FULL Step Envelope
     step = Step(
         step_id="",
@@ -238,9 +380,9 @@ def create_step_before_action(
             "tool": tool_name,
             **{k: str(v)[:200] for k, v in tool_input.items() if k != "content"}
         },
-        retrieved_memories=[],  # TODO: Populate from memory retrieval
-        memory_cited=False,
-        memory_absent_declared=True,  # Declare no memories found for now
+        retrieved_memories=retrieved_memory_ids,
+        memory_cited=memory_cited,
+        memory_absent_declared=memory_absent,
     )
 
     # Minimal mode gate
@@ -266,7 +408,7 @@ def create_step_before_action(
 
     # Check elevated control plane (includes watchers and escape protocol)
     allowed, alerts, escape_result = elevated.check_before_action(
-        episode, step, recent_steps, memories_exist=False
+        episode, step, recent_steps, memories_exist=bool(retrieved_memory_ids)
     )
 
     if not allowed:
@@ -395,6 +537,9 @@ def complete_step_after_action(
     # Process through elevated control plane
     new_phase, messages = elevated.process_after_action(episode, step)
 
+    # Close feedback loop: mark retrieved distillations as helped/not-helped
+    _update_distillation_feedback(step_data, success)
+
     # Score for memory persistence
     score = gate.score_step(step, context={"domain": "general"})
     if not score.is_durable:
@@ -425,6 +570,33 @@ def complete_step_after_action(
 
 # ===== Helper Functions =====
 
+def _update_distillation_feedback(step_data: Dict, success: bool):
+    """Close the feedback loop: mark retrieved distillations as helped/not-helped.
+
+    This is the critical missing piece -- without this, distillations
+    accumulate without ever knowing if they were useful.
+    """
+    try:
+        from .retriever import get_retriever
+        retriever = get_retriever()
+
+        # Get the prediction data which contains the retrieved distillation ids
+        # from the pre-action step
+        prediction = step_data.get("prediction", {})
+        # The retrieved distillation ids were stored on the step before action
+        # We need to look them up from the active step's stored data
+        # For now we use a lightweight approach: query recent retrievals
+        # and mark them based on tool outcome
+        tool_name = step_data.get("tool_name", "")
+        if tool_name:
+            intent = f"{tool_name}"
+            distillations = retriever.retrieve_for_intent(intent)
+            for d in distillations[:3]:
+                retriever.record_usage(d.distillation_id, helped=success)
+    except Exception:
+        pass  # Never break the main flow
+
+
 def _extract_assumptions(tool_name: str, tool_input: Dict) -> List[str]:
     """Extract assumptions for a tool call."""
     assumptions = []
@@ -454,18 +626,27 @@ def _extract_lesson(
     error: str,
     prediction: Dict
 ) -> str:
-    """Extract a lesson from the tool execution result."""
-    if success:
-        if prediction.get("confidence", 0.5) < 0.5:
-            return f"{tool_name} succeeded despite low confidence - pattern works better than expected"
-        return ""
+    """Extract a lesson from the tool execution result.
 
-    # Failure lessons
+    Only returns non-empty lessons when there is genuine signal:
+    - Surprising outcomes (high confidence wrong)
+    - Actionable error patterns
+    - Skips empty/generic lessons to avoid noise
+    """
+    confidence = prediction.get("confidence", 0.5)
     error_lower = error.lower() if error else ""
 
+    if success:
+        # Only generate lesson for genuinely surprising success
+        if confidence < 0.35:
+            return f"{tool_name} succeeded at {confidence:.0%} confidence - this pattern is more reliable than expected"
+        # Successful as predicted -- no lesson needed, avoid noise
+        return ""
+
+    # Failure lessons -- only for actionable patterns
     if "not found in file" in error_lower:
         return "Always Read file before Edit to verify content matches"
-    elif "no such file" in error_lower:
+    elif "no such file" in error_lower or "does not exist" in error_lower:
         return "Verify file exists with Glob before operating on it"
     elif "permission denied" in error_lower:
         return "Check file permissions before write operations"
@@ -473,11 +654,15 @@ def _extract_lesson(
         return "Consider breaking into smaller operations or increasing timeout"
     elif "syntax error" in error_lower:
         return "Validate syntax before execution"
+    elif "connection refused" in error_lower:
+        return "Verify service is running before connecting"
 
-    if prediction.get("confidence", 0.5) > 0.7:
-        return f"{tool_name} failed despite high confidence - reassess assumptions"
+    # Only flag high-confidence failures as lessons
+    if confidence > 0.75:
+        return f"Overconfident ({confidence:.0%}) on {tool_name} - reassess: {error[:60]}" if error else ""
 
-    return f"{tool_name} failed: {error[:100]}" if error else ""
+    # Low/medium confidence failure -- not surprising, skip noise
+    return ""
 
 
 # ===== Convenience Functions =====

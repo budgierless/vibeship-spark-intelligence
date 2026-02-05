@@ -71,6 +71,54 @@ ADVICE_FEEDBACK_ENABLED = os.environ.get("SPARK_ADVICE_FEEDBACK", "1") == "1"
 ADVICE_FEEDBACK_PROMPT = os.environ.get("SPARK_ADVICE_FEEDBACK_PROMPT", "1") == "1"
 ADVICE_FEEDBACK_MIN_S = int(os.environ.get("SPARK_ADVICE_FEEDBACK_MIN_S", "600"))
 
+# ===== Session Failure Tracking =====
+# Track which tools failed in this session so we can detect recovery patterns.
+# Recovery = tool fails, then succeeds later = advice may have helped.
+FAILURE_TRACKING_FILE = Path.home() / ".spark" / "session_failures.json"
+
+
+def record_session_failure(session_id: str, tool_name: str):
+    """Record that a tool failed in this session for recovery detection."""
+    try:
+        FAILURE_TRACKING_FILE.parent.mkdir(parents=True, exist_ok=True)
+        failures = {}
+        if FAILURE_TRACKING_FILE.exists():
+            failures = json.loads(FAILURE_TRACKING_FILE.read_text())
+
+        key = f"{session_id}:{tool_name}"
+        failures[key] = {"timestamp": time.time(), "tool": tool_name}
+
+        # Clean entries older than 30 min (session-scoped)
+        cutoff = time.time() - 1800
+        failures = {
+            k: v for k, v in failures.items()
+            if v.get("timestamp", 0) > cutoff
+        }
+        FAILURE_TRACKING_FILE.write_text(json.dumps(failures))
+    except Exception as e:
+        log_debug("observe", "record_session_failure failed", e)
+
+
+def had_prior_failure(session_id: str, tool_name: str) -> bool:
+    """Check if this tool previously failed in this session (recovery detection)."""
+    try:
+        if not FAILURE_TRACKING_FILE.exists():
+            return False
+        failures = json.loads(FAILURE_TRACKING_FILE.read_text())
+        key = f"{session_id}:{tool_name}"
+        entry = failures.get(key)
+        if not entry:
+            return False
+        # Only count failures within last 30 min
+        if time.time() - entry.get("timestamp", 0) > 1800:
+            return False
+        # Clear the failure record (one-shot recovery detection)
+        del failures[key]
+        FAILURE_TRACKING_FILE.write_text(json.dumps(failures))
+        return True
+    except Exception:
+        return False
+
 
 def save_prediction(session_id: str, tool_name: str, prediction: dict):
     """Save a prediction for later comparison."""
@@ -120,50 +168,104 @@ def get_prediction(session_id: str, tool_name: str) -> dict:
         return {}
 
 
+def _load_tool_success_rates() -> dict:
+    """Load historical tool success rates from EIDOS store.
+
+    Returns a dict of {tool_name: success_rate} based on step data.
+    Cached with a 5-minute TTL.
+    """
+    cache_file = Path.home() / ".spark" / "tool_success_cache.json"
+    try:
+        if cache_file.exists():
+            data = json.loads(cache_file.read_text())
+            if time.time() - data.get("ts", 0) < 300:  # 5 min TTL
+                return data.get("rates", {})
+    except Exception:
+        pass
+
+    rates = {}
+    try:
+        if EIDOS_AVAILABLE:
+            from lib.eidos.store import get_store
+            store = get_store()
+            steps = store.get_recent_steps(limit=200)
+            tool_counts = {}
+            for s in steps:
+                tool = s.action_details.get("tool", "")
+                if not tool:
+                    continue
+                if tool not in tool_counts:
+                    tool_counts[tool] = {"total": 0, "pass": 0}
+                tool_counts[tool]["total"] += 1
+                if s.evaluation.value == "pass":
+                    tool_counts[tool]["pass"] += 1
+            for tool, counts in tool_counts.items():
+                if counts["total"] >= 3:
+                    rates[tool] = round(counts["pass"] / counts["total"], 3)
+
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps({"ts": time.time(), "rates": rates}))
+    except Exception:
+        pass
+
+    return rates
+
+
 def make_prediction(tool_name: str, tool_input: dict) -> dict:
     """
     Make a prediction about this tool call.
-    
-    This is where we estimate likelihood of success based on:
-    - Tool type
-    - Input patterns
-    - Historical data
+
+    Uses EIDOS historical success rates as a Bayesian prior,
+    adjusted by input-pattern heuristics.
     """
-    # Default: 70% confident it will succeed
-    confidence = 0.7
-    outcome = "success"
+    historical_rates = _load_tool_success_rates()
+    historical_rate = historical_rates.get(tool_name)
+
+    # Default baseline by tool type
+    baseline = 0.7
     reason = "default assumption"
-    
-    # Adjust based on tool type and input
+
     if tool_name == "Edit":
-        # Edit without knowing file content is risky
-        confidence = 0.5
+        baseline = 0.6
         reason = "Edit can fail if content doesn't match"
-    
     elif tool_name == "Bash":
+        baseline = 0.65
+        reason = "Bash command"
         command = str(tool_input.get("command", ""))
-        # Dangerous commands are risky
         if any(x in command for x in ["rm -rf", "sudo", "chmod"]):
-            confidence = 0.4
+            baseline = 0.4
             reason = "Dangerous command pattern"
-        # Complex pipes are risky
         elif command.count("|") > 2:
-            confidence = 0.5
+            baseline = 0.5
             reason = "Complex pipe chain"
-    
+        elif any(x in command for x in ["git status", "git log", "ls", "pwd"]):
+            baseline = 0.9
+            reason = "Safe read-only command"
     elif tool_name == "Write":
-        # Write is usually safe
-        confidence = 0.85
+        baseline = 0.85
         reason = "Write usually succeeds"
-    
     elif tool_name == "Read":
-        # Read can fail on missing files
-        confidence = 0.75
-        reason = "File might not exist"
-    
+        baseline = 0.8
+        reason = "Read usually succeeds"
+    elif tool_name == "Glob":
+        baseline = 0.9
+        reason = "Glob is reliable"
+    elif tool_name == "Grep":
+        baseline = 0.85
+        reason = "Grep is reliable"
+
+    # Blend historical rate with baseline (trust the data)
+    if historical_rate is not None:
+        confidence = 0.7 * historical_rate + 0.3 * baseline
+        reason = f"Historical: {historical_rate:.0%}, heuristic: {baseline:.0%}"
+    else:
+        confidence = baseline
+
+    outcome = "success" if confidence >= 0.5 else "failure"
+
     return {
         "outcome": outcome,
-        "confidence": confidence,
+        "confidence": round(confidence, 3),
         "reason": reason,
         "tool": tool_name,
     }
@@ -622,10 +724,19 @@ def main():
                 log_debug("observe", "EIDOS post-action failed", e)
 
         # Track outcome in Advisor (flows to Meta-Ralph)
+        # Recovery detection: if this tool previously FAILED in this session
+        # and now succeeds, the advice that was surfaced likely helped.
+        # This is a high-confidence positive signal.
         try:
             from lib.advisor import report_outcome
-            # Only mark advice as helpful with explicit evidence (avoid hallucinated outcomes).
-            report_outcome(tool_name, success=True, advice_helped=False, trace_id=trace_id)
+            is_recovery = had_prior_failure(session_id, tool_name)
+            if is_recovery:
+                # Recovery pattern: fail -> advice surfaced -> succeed = advice helped
+                report_outcome(tool_name, success=True, advice_helped=True, trace_id=trace_id)
+                log_debug("observe", f"RECOVERY detected for {tool_name} - marking advice as helpful", None)
+            else:
+                # Normal success: don't auto-attribute to advice
+                report_outcome(tool_name, success=True, advice_helped=False, trace_id=trace_id)
         except Exception as e:
             log_debug("observe", "outcome tracking failed", e)
 
@@ -666,10 +777,32 @@ def main():
         check_for_surprise(session_id, tool_name, success=False, error=str(error))
         learn_from_failure(tool_name, error, tool_input)
 
-        # Track failure outcome in Advisor (flows to Meta-Ralph)
+        # Record failure for recovery detection (used by PostToolUse handler)
+        record_session_failure(session_id, tool_name)
+
+        # Track failure outcome in Advisor (flows to Meta-Ralph).
+        # When advice WAS surfaced for this tool and the tool STILL failed,
+        # that's a genuine negative signal: the advice wasn't sufficient.
         try:
-            from lib.advisor import report_outcome
-            report_outcome(tool_name, success=False, advice_helped=False, trace_id=trace_id)
+            from lib.advisor import report_outcome, get_advisor
+            advisor = get_advisor()
+            recent_advice = advisor._get_recent_advice_entry(tool_name)
+            if recent_advice and recent_advice.get("advice_ids"):
+                # Advice existed but tool still failed = advice was not helpful
+                report_outcome(tool_name, success=False, advice_helped=False, trace_id=trace_id)
+                # Also record explicit negative feedback for each advice item
+                for aid in recent_advice.get("advice_ids", [])[:5]:
+                    advisor.report_outcome(
+                        aid,
+                        was_followed=True,
+                        was_helpful=False,
+                        notes=f"Tool {tool_name} failed despite advice: {str(error)[:100]}",
+                        trace_id=trace_id,
+                    )
+                log_debug("observe", f"NEGATIVE outcome: {tool_name} failed with advice present ({len(recent_advice.get('advice_ids', []))} items)", None)
+            else:
+                # No advice was given, just track the failure normally
+                report_outcome(tool_name, success=False, advice_helped=False, trace_id=trace_id)
         except Exception as e:
             log_debug("observe", "failure outcome tracking failed", e)
 
@@ -726,6 +859,16 @@ def main():
             data["payload"] = {"role": "user", "text": txt}
             data["source"] = "claude_code"
             data["kind"] = "message"
+
+            # EIDOS: Update episode goal from user prompt (first meaningful prompt)
+            if EIDOS_AVAILABLE and len(txt) > 10:
+                try:
+                    from lib.eidos.integration import update_episode_goal
+                    # Use first 200 chars of user prompt as goal
+                    goal = txt[:200].replace("\n", " ").strip()
+                    update_episode_goal(session_id, goal)
+                except Exception as e:
+                    log_debug("observe", "EIDOS goal update failed", e)
 
             # COGNITIVE SIGNAL EXTRACTION
             # Look for high-value cognitive signals in user messages

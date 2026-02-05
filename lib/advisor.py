@@ -1011,7 +1011,14 @@ class SparkAdvisor:
         Call this after each tool execution to build the feedback loop.
         """
         # Update source effectiveness based on whether advice helped
-        source = "cognitive"  # Default
+        entry = self._get_recent_advice_entry(tool_name)
+
+        # Use actual source from recent advice (not hardcoded "cognitive")
+        source = "cognitive"  # Default fallback
+        if entry:
+            sources = entry.get("sources") or []
+            if sources:
+                source = sources[0]  # Primary source
 
         if source not in self.effectiveness.get("by_source", {}):
             self.effectiveness.setdefault("by_source", {})[source] = {
@@ -1034,14 +1041,26 @@ class SparkAdvisor:
             ralph = get_meta_ralph()
 
             # If there was prior advice, link outcomes to those advice IDs
-            entry = self._get_recent_advice_entry(tool_name)
+            # CRITICAL: propagate insight_keys so outcomes link to actual insights
             if entry:
                 advice_ids = entry.get("advice_ids") or []
-                for aid in advice_ids:
-                    ralph.track_outcome(aid, outcome_str, evidence, trace_id=trace_id)
+                insight_keys = entry.get("insight_keys") or []
+                entry_sources = entry.get("sources") or []
+                for i, aid in enumerate(advice_ids):
+                    # Propagate insight_key to Meta-Ralph so outcome records
+                    # can flow back to cognitive insight reliability scoring
+                    ik = insight_keys[i] if i < len(insight_keys) else None
+                    src = entry_sources[i] if i < len(entry_sources) else None
+                    ralph.track_outcome(
+                        aid, outcome_str, evidence,
+                        trace_id=trace_id,
+                        insight_key=ik,
+                        source=src,
+                    )
                     # Record that advice was seen, but do NOT auto-mark as
                     # helpful just because the tool succeeded.  Only explicit
-                    # feedback (advice_was_relevant=True) should count.
+                    # feedback (advice_was_relevant=True) or failure-after-advice
+                    # (False) should count.  None = unknown.
                     self.report_outcome(
                         aid,
                         was_followed=True,
@@ -1166,6 +1185,94 @@ class SparkAdvisor:
             "follow_rate": followed / max(total, 1),
             "helpfulness_rate": helpful / max(followed, 1) if followed > 0 else 0,
             "by_source": self.effectiveness.get("by_source", {}),
+        }
+
+    def compute_contrast_effectiveness(self) -> Dict[str, Any]:
+        """
+        Compute advice effectiveness by contrasting tool outcomes WITH vs WITHOUT advice.
+
+        This is a background analysis that provides a true measure of advice value
+        by comparing success rates when advice was present vs absent.
+
+        Returns:
+            Dict with per-tool contrast ratios and overall effectiveness estimate.
+        """
+        try:
+            from .meta_ralph import get_meta_ralph
+            ralph = get_meta_ralph()
+        except Exception:
+            return {"error": "Meta-Ralph unavailable"}
+
+        # Collect outcome records that have insight_keys (advice was present)
+        with_advice = {"good": 0, "bad": 0}
+        without_advice = {"good": 0, "bad": 0}
+        by_tool: Dict[str, Dict[str, Dict[str, int]]] = {}
+
+        for rec in ralph.outcome_records.values():
+            outcome = ralph._normalize_outcome(rec.outcome)
+            if outcome not in ("good", "bad"):
+                continue
+
+            # Determine if this was a tool-level record or advice-linked
+            lid = rec.learning_id or ""
+            tool_name = ""
+            has_advice = bool(rec.insight_key)
+
+            if lid.startswith("tool:"):
+                tool_name = lid[5:]
+            elif rec.outcome_evidence:
+                # Extract tool from evidence "tool=X success=Y"
+                for part in rec.outcome_evidence.split():
+                    if part.startswith("tool="):
+                        tool_name = part[5:]
+                        break
+
+            if not tool_name:
+                continue
+
+            if tool_name not in by_tool:
+                by_tool[tool_name] = {
+                    "with_advice": {"good": 0, "bad": 0},
+                    "without_advice": {"good": 0, "bad": 0},
+                }
+
+            if has_advice:
+                with_advice[outcome] += 1
+                by_tool[tool_name]["with_advice"][outcome] += 1
+            else:
+                without_advice[outcome] += 1
+                by_tool[tool_name]["without_advice"][outcome] += 1
+
+        # Compute contrast ratios
+        wa_total = with_advice["good"] + with_advice["bad"]
+        wo_total = without_advice["good"] + without_advice["bad"]
+
+        wa_rate = with_advice["good"] / max(wa_total, 1)
+        wo_rate = without_advice["good"] / max(wo_total, 1)
+
+        # Contrast ratio: how much better is success WITH advice vs WITHOUT
+        contrast = wa_rate - wo_rate if (wa_total >= 5 and wo_total >= 5) else None
+
+        per_tool = {}
+        for tool, data in by_tool.items():
+            wt = data["with_advice"]["good"] + data["with_advice"]["bad"]
+            wot = data["without_advice"]["good"] + data["without_advice"]["bad"]
+            if wt >= 3 and wot >= 3:
+                wr = data["with_advice"]["good"] / max(wt, 1)
+                wor = data["without_advice"]["good"] / max(wot, 1)
+                per_tool[tool] = {
+                    "with_advice_rate": round(wr, 3),
+                    "without_advice_rate": round(wor, 3),
+                    "contrast": round(wr - wor, 3),
+                    "samples": wt + wot,
+                }
+
+        return {
+            "overall_contrast": round(contrast, 3) if contrast is not None else None,
+            "with_advice": with_advice,
+            "without_advice": without_advice,
+            "per_tool": per_tool,
+            "sufficient_data": wa_total >= 5 and wo_total >= 5,
         }
 
     # ============= Context Generation =============
