@@ -1,6 +1,6 @@
 # Intelligence_Flow.md
 
-Generated: 2026-02-04
+Generated: 2026-02-05
 Repository: vibeship-spark-intelligence
 Scope:
 - Runtime Python modules: root *.py, lib/, hooks/, adapters/, spark/
@@ -76,6 +76,13 @@ Dashboards and ops:
 5) lib.memory_store persists hybrid memory (SQLite FTS + embeddings + graph edges).
 6) hooks/observe.py uses Meta-Ralph to roast cognitive signals before add_insight.
 
+### 2.4.1 Semantic index (embeddings)
+1) lib.cognitive_learner calls lib.semantic_retriever.index_insight on write (best-effort).
+2) lib.semantic_retriever stores vectors in ~/.spark/semantic/insights_vec.sqlite.
+3) Backfill command: python -m spark.index_embeddings --all
+4) Legacy reindex script: python scripts/semantic_reindex.py
+5) Harness: python scripts/semantic_harness.py (prints top results + why)
+
 ### 2.5 Pattern -> distillation -> EIDOS
 1) lib.pattern_detection.aggregator runs detectors (correction, sentiment, repetition, semantic, why).
 2) lib.pattern_detection.request_tracker wraps user requests as EIDOS Steps.
@@ -96,6 +103,13 @@ Dashboards and ops:
 2) Advisor logs retrievals and notifies Meta-Ralph via track_retrieval.
 3) PostToolUse: hooks/observe.py and lib.bridge_cycle.report_outcome call back into advisor.
 4) Meta-Ralph records outcomes and applies them back to cognitive (apply_outcome).
+5) Semantic retrieval path (when semantic.enabled=true):
+   - intent = semantic_retriever._extract_intent(context)
+   - triggers (optional) + semantic search (embeddings) + fusion scoring + dedupe + MMR + category caps
+   - retrieval log: ~/.spark/logs/semantic_retrieval.jsonl (intent, candidates, triggers, top-N scores)
+6) Advisor metrics (local): ~/.spark/advisor/metrics.json
+   - cognitive_surface_rate
+   - cognitive_helpful_rate (when explicit feedback recorded)
 
 ### 2.7 Chips pipeline (domain intelligence)
 1) lib.chips.router detects triggers in events.
@@ -150,6 +164,11 @@ Pattern + EIDOS:
 Memory banks + store:
 - ~/.spark/banks/*.jsonl
 - ~/.spark/memory_store.sqlite
+Semantic retrieval:
+- ~/.spark/semantic/insights_vec.sqlite
+- ~/.spark/logs/semantic_retrieval.jsonl
+Advisor metrics:
+- ~/.spark/advisor/metrics.json
 
 Outcomes + prediction:
 - ~/.spark/predictions.jsonl
@@ -247,6 +266,9 @@ Cognitive learning and promotion:
 Advisor / skills:
 - advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120
 - skills_router scoring weights (query/name/desc/owns/etc) and limit clamp to 1..10
+Semantic retrieval:
+- semantic.dedupe_similarity default 0.92 (embedding cosine)
+- semantic.log_retrievals default true (writes semantic_retrieval.jsonl)
 
 Mind bridge:
 - MIND_API_URL default from SPARK_MIND_PORT (default 8080)

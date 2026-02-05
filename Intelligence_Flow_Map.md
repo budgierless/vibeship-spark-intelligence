@@ -66,6 +66,15 @@ flowchart LR
     skills_router["lib/skills_router"]
   end
 
+  %% ===== Semantic Retrieval =====
+  subgraph Semantic
+    semantic_retriever["lib/semantic_retriever"]
+    semantic_index["~/.spark/semantic/insights_vec.sqlite"]
+    embeddings["lib/embeddings"]
+    semantic_logs["~/.spark/logs/semantic_retrieval.jsonl"]
+    advisor_metrics["~/.spark/advisor/metrics.json"]
+  end
+
   %% ===== Meta-Ralph =====
   subgraph MetaRalph
     meta_ralph["lib/meta_ralph"]
@@ -153,6 +162,11 @@ flowchart LR
   advisor --> aha
   advisor --> mind_bridge
   advisor --> meta_ralph
+  advisor --> semantic_retriever
+  advisor --> advisor_metrics
+  semantic_retriever --> semantic_index
+  semantic_retriever --> embeddings
+  semantic_retriever --> semantic_logs
   hooks_observe --> meta_ralph
   meta_ralph --> cognitive
 
