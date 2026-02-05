@@ -707,8 +707,8 @@ class CognitiveLearner:
         if "] post_tool " in t or "] pre_tool " in t:
             return True
 
-        # 15. Chip status telemetry: "status: success, tool_name: X"
-        if re.search(r"status:\s*(success|failure|error),?\s*tool_name:", tl):
+        # 15. Chip status telemetry: "status: success, tool_name: X" or "status=success"
+        if re.search(r"status[=:]\s*(success|failure|error),?\s*tool_name[=:]", tl):
             return True
 
         # 16. Success factor without reasoning (short)
@@ -734,7 +734,7 @@ class CognitiveLearner:
                 return True
 
         # 20. Benchmark/intelligence chip artifacts with tool_name field
-        if re.match(r"^\[[\w\s-]+ Intelligence\]", t) and "tool_name:" in t:
+        if re.match(r"^\[[\w\s-]+ Intelligence\]", t) and re.search(r"tool_name[=:]", t):
             return True
 
         # 21. Screenshot / image paths stored as insights

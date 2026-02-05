@@ -541,6 +541,7 @@ class SparkAdvisor:
                 return advice
             memories = self.mind.retrieve_relevant(context, limit=5)
 
+            seen_texts: set = set()
             for mem in memories:
                 content = mem.get("content", "")
                 salience = mem.get("salience", 0.5)
@@ -549,6 +550,11 @@ class SparkAdvisor:
                     continue
                 if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(content):
                     continue
+                # Deduplicate identical or near-identical Mind memories
+                dedup_key = content[:150].strip().lower()
+                if dedup_key in seen_texts:
+                    continue
+                seen_texts.add(dedup_key)
 
                 # Task #13: Add reason from Mind metadata
                 reason = f"Salience: {salience:.1f}"
