@@ -254,7 +254,8 @@ class SparkAdvisor:
     def _generate_advice_id(self, context: str) -> str:
         """Generate unique advice ID."""
         ts = str(time.time())
-        return hashlib.sha256(f"{context}:{ts}".encode()).hexdigest()[:12]
+        payload = f"{context}:{ts}"
+        return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()[:12]
 
     def _cache_key(self, tool: str, context: str) -> str:
         """Generate cache key for advice."""
