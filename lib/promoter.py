@@ -18,6 +18,7 @@ Promotion criteria:
 - Category matches target file
 """
 
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,17 @@ DEFAULT_MIN_VALIDATIONS = 2  # 2 validations (lowered from 3 for faster learning
 PROJECT_SECTION = "## Project Intelligence"
 PROJECT_START = "<!-- SPARK_PROJECT_START -->"
 PROJECT_END = "<!-- SPARK_PROJECT_END -->"
+
+# Adapter budget policy (caps per target file)
+# Keep these files small; retrieval handles the full corpus.
+ADAPTER_BUDGETS = {
+    "CLAUDE.md": {"max_items": 40},
+    "AGENTS.md": {"max_items": 30},
+    "TOOLS.md": {"max_items": 25},
+    "SOUL.md": {"max_items": 25},
+    ".cursorrules": {"max_items": 40},
+    ".windsurfrules": {"max_items": 40},
+}
 
 
 # ============= Operational vs Cognitive Filter (Phase 1) =============
@@ -73,6 +85,56 @@ SAFETY_BLOCK_PATTERNS = [
 ]
 
 _SAFETY_REGEXES = [re.compile(p, re.IGNORECASE) for p in SAFETY_BLOCK_PATTERNS]
+
+_RE_PROMOTED_SCORE = re.compile(r"\((\d+)% reliable,\s*(\d+)\s+validations?\)\s*$", re.IGNORECASE)
+
+
+def _normalize_text(text: str) -> str:
+    return " ".join((text or "").lower().split())
+
+
+def _strip_reliability_suffix(text: str) -> str:
+    return _RE_PROMOTED_SCORE.sub("", text or "").strip()
+
+
+def _extract_score(text: str) -> Tuple[float, int, bool]:
+    m = _RE_PROMOTED_SCORE.search(text or "")
+    if not m:
+        return 0.0, 0, False
+    try:
+        return float(m.group(1)) / 100.0, int(m.group(2)), True
+    except Exception:
+        return 0.0, 0, False
+
+
+def _load_promotion_config() -> Dict[str, Any]:
+    cfg: Dict[str, Any] = {}
+    try:
+        tuneables = Path.home() / ".spark" / "tuneables.json"
+        if tuneables.exists():
+            data = json.loads(tuneables.read_text(encoding="utf-8"))
+            cfg = data.get("promotion") or data.get("promoter") or {}
+    except Exception:
+        return {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _merge_budgets(defaults: Dict[str, Dict[str, int]], overrides: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+    merged = {k: dict(v) for k, v in defaults.items()}
+    if not overrides:
+        return merged
+    for name, val in overrides.items():
+        if isinstance(val, dict):
+            max_items = val.get("max_items")
+        else:
+            max_items = val
+        if max_items is None:
+            continue
+        try:
+            merged[name] = {"max_items": max(0, int(max_items))}
+        except Exception:
+            continue
+    return merged
 
 
 def is_operational_insight(insight_text: str) -> bool:
@@ -242,6 +304,11 @@ class Promoter:
         self.project_dir = project_dir or Path.cwd()
         self.reliability_threshold = reliability_threshold
         self.min_validations = min_validations
+        cfg = _load_promotion_config()
+        self.adapter_budgets = _merge_budgets(
+            ADAPTER_BUDGETS,
+            cfg.get("adapter_budgets") if isinstance(cfg, dict) else {},
+        )
     
     def _get_target_for_category(self, category: CognitiveCategory) -> Optional[PromotionTarget]:
         """Find the appropriate promotion target for a category."""
@@ -289,24 +356,100 @@ class Promoter:
         
         return content
     
+    def _get_budget(self, file_path: Path) -> int:
+        budget = self.adapter_budgets.get(file_path.name, {})
+        return int(budget.get("max_items", 0) or 0)
+
+    def _curate_lines(self, lines: List[str], max_items: int) -> List[str]:
+        curated = []
+        seen = set()
+        scored = []
+
+        for idx, raw in enumerate(lines):
+            s = raw.strip()
+            if not s.startswith("- "):
+                continue
+            core = s[2:].strip()
+            core_text = _strip_reliability_suffix(core)
+            key = _normalize_text(core_text)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+
+            reliability, validations, has_score = _extract_score(core)
+            if has_score:
+                if reliability < self.reliability_threshold or validations < self.min_validations:
+                    continue
+
+            scored.append({
+                "idx": idx,
+                "line": s,
+                "reliability": reliability,
+                "validations": validations,
+            })
+
+        if max_items > 0:
+            scored.sort(
+                key=lambda x: (x["reliability"], x["validations"], -x["idx"]),
+                reverse=True,
+            )
+            scored = scored[:max_items]
+            scored.sort(key=lambda x: x["idx"])
+
+        curated = [item["line"] for item in scored]
+        return curated
+
     def _append_to_section(self, file_path: Path, section: str, line: str):
-        """Append a line to a specific section in a file."""
+        """Append a line to a specific section in a file with budget enforcement."""
         content = self._ensure_section_exists(file_path, section)
-        
-        # Find the section and append after it
+
         section_idx = content.find(section)
         if section_idx == -1:
             return
-        
-        # Find the next section or end of file
-        next_section = re.search(r'\n## ', content[section_idx + len(section):])
-        if next_section:
-            insert_idx = section_idx + len(section) + next_section.start()
-        else:
-            insert_idx = len(content)
-        
-        # Insert the new line before the next section
-        new_content = content[:insert_idx].rstrip() + "\n" + line + "\n" + content[insert_idx:]
+
+        block_start = section_idx + len(section)
+        next_section = re.search(r'\n## ', content[block_start:])
+        block_end = block_start + (next_section.start() if next_section else len(content) - block_start)
+        block = content[block_start:block_end]
+
+        block_lines = block.splitlines()
+        preamble = []
+        bullets = []
+        tail = []
+        in_bullets = False
+        for raw in block_lines:
+            if raw.strip().startswith("- "):
+                in_bullets = True
+                bullets.append(raw.strip())
+            else:
+                if in_bullets:
+                    tail.append(raw)
+                else:
+                    preamble.append(raw)
+
+        # Dedupe against existing bullets
+        existing_keys = {_normalize_text(_strip_reliability_suffix(b[2:].strip())) for b in bullets}
+        new_key = _normalize_text(_strip_reliability_suffix(line[2:].strip())) if line.strip().startswith("- ") else ""
+        if new_key and new_key not in existing_keys:
+            bullets.append(line.strip())
+
+        max_items = self._get_budget(file_path)
+        curated = self._curate_lines(bullets, max_items)
+
+        new_block_lines = []
+        if preamble:
+            new_block_lines.extend(preamble)
+        if curated:
+            if new_block_lines and new_block_lines[-1].strip():
+                new_block_lines.append("")
+            new_block_lines.extend(curated)
+        if tail:
+            if new_block_lines and new_block_lines[-1].strip():
+                new_block_lines.append("")
+            new_block_lines.extend(tail)
+
+        new_block = "\n".join(new_block_lines)
+        new_content = content[:block_start] + new_block + content[block_end:]
         file_path.write_text(new_content)
 
     def _upsert_block(self, content: str, block: str, section: str) -> str:

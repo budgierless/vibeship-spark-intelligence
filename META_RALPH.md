@@ -754,6 +754,8 @@ curl http://localhost:8788/api/stats
 
 | Date | Change | Reason | Outcome |
 |------|--------|--------|---------|
+| 2026-02-05 | Made adapter budgets configurable via tuneables.json | Allow per‑LLM/IDE rules file caps without code changes | Budget policy now tuneable |
+| 2026-02-05 | Added adapter budget policy + auto-curation in promoter | Prevent rules files from bloating while keeping high-signal items | Promoted sections capped and deduped |
 | 2026-02-05 | Backfilled trace_id bindings + added trace fallbacks | Trace binding check failing across steps/evidence/outcomes | Trace binding now 0 missing |
 | 2026-02-05 | Fixed pipeline flow test queue shape + trace_id | `test_pipeline_health.py flow` broke after queue signature change | End-to-end flow test runs again |
 | 2026-02-05 | Hardened Meta-Ralph state load/save (recompute totals, avoid clobber) | Roast history existed but stats were zeroed by outcome-only writes | Stats now reflect roast history reliably |
@@ -827,6 +829,8 @@ curl http://localhost:8788/api/stats
 - Utilization: Grade A (stored 326, retrieved 500, acted_on 325, good 301)
 - Semantic retrieval logging now includes category; tuneables tightened to reduce noise
 - Trace binding repaired: steps/evidence/outcomes missing trace_id -> 0
+- Adapter budget policy: promoted sections capped and deduped
+- Budget override via tuneables.json for per-adapter caps
 
 **Files Changed:**
 - `tests/test_pipeline_health.py`

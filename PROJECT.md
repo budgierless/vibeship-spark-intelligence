@@ -2,8 +2,7 @@
 
 ## Project Intelligence
 <!-- SPARK_PROJECT_START -->
-Updated: 2026-01-30T20:09:56Z
-Domain: game_dev
+Updated: 2026-02-05T15:48:47Z
+Domain: general
 Phase: discovery
-Done Definition: Game feels complete when core loop is satisfying
 <!-- SPARK_PROJECT_END -->
