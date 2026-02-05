@@ -487,6 +487,7 @@ Semantic retrieval augments Advisor with embeddings + trigger rules. It is
 | `semantic.index_on_read` | **true** | Backfill missing embeddings at retrieval time |
 | `semantic.index_backfill_limit` | **300** | Max insights to backfill per run |
 | `semantic.index_cache_ttl_seconds` | **120** | Cache duration for vector index |
+| `semantic.exclude_categories` | **[]** | Categories to exclude from semantic results (e.g., `["context"]`) |
 | `semantic.log_retrievals` | **true** | Log semantic retrieval events to `~/.spark/logs/semantic_retrieval.jsonl` |
 
 Trigger rules (YAML):

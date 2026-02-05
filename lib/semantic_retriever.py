@@ -38,12 +38,14 @@ DEFAULT_CONFIG = {
     "index_on_read": True,
     "index_backfill_limit": 300,
     "index_cache_ttl_seconds": 120,
+    "exclude_categories": [],
     "trigger_rules_file": "~/.spark/trigger_rules.yaml",
     "category_caps": {
         "cognitive": 3,
         "trigger": 2,
         "default": 2,
     },
+    "category_exclude": [],
     "triggers_enabled": False,
     "log_retrievals": True,
 }
@@ -435,12 +437,28 @@ class SemanticRetriever:
                 r.recency_score = self._compute_recency(insight)
                 r.outcome_score = self._get_outcome_effectiveness(r.insight_key, insight)
 
+        # Category exclusions (semantic results only)
+        exclude = set(self.config.get("category_exclude") or [])
+        if exclude:
+            results = [
+                r for r in results
+                if r.source_type == "trigger" or (r.category not in exclude)
+            ]
+
         # Gate: semantic similarity (triggers bypass)
         min_sim = float(self.config.get("min_similarity", 0.6))
         results = [
             r for r in results
             if r.source_type == "trigger" or r.semantic_sim >= min_sim
         ]
+
+        # Exclude noisy categories if configured
+        exclude = {str(c).lower() for c in (self.config.get("exclude_categories") or []) if c}
+        if exclude:
+            results = [
+                r for r in results
+                if (r.category or "").lower() not in exclude
+            ]
 
         # Fusion score
         for r in results:
@@ -663,6 +681,7 @@ class SemanticRetriever:
                         "recency": round(float(r.recency_score or 0.0), 4),
                         "why": r.why,
                         "source": r.source_type,
+                        "category": r.category,
                     }
                     for r in results
                 ],
