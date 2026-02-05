@@ -50,6 +50,9 @@ def write_marked_section(
 
 
 def write_text(path: Path, content: str) -> bool:
+    if content is None or not str(content).strip():
+        # Safety guard: never truncate a file with empty content.
+        return False
     _ensure_parent(path)
     path.write_text(content, encoding="utf-8")
     return True
