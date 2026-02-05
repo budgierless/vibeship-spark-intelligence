@@ -34,6 +34,7 @@ Mind integration:
 - mind_server.py (Mind Lite+ API, sqlite at ~/.mind/lite/memories.db)
 - lib/mind_bridge.py (retrieval used by advisor + lib.bridge for SPARK_CONTEXT)
 - Mind sync is manual (spark sync / lib.mind_bridge.sync_all_to_mind); offline queue used when Mind is down.
+- If Mind CLI is unstable, Spark can run the built-in Mind server (see start_mind.ps1; SPARK_FORCE_BUILTIN_MIND=1).
 
 Dashboards and ops:
 - dashboard.py (status + UI)
@@ -110,6 +111,12 @@ Dashboards and ops:
 6) Advisor metrics (local): ~/.spark/advisor/metrics.json
    - cognitive_surface_rate
    - cognitive_helpful_rate (when explicit feedback recorded)
+
+### 2.6.2 Learning usage in real work (semantic first)
+1) Advisor is called before actions, so learnings can change the next decision (not just be stored).
+2) Semantic retrieval matches meaning, not just keywords, then surfaces top items with a short reason (why) for fast human validation.
+3) Trigger rules inject critical guardrails immediately (security, destructive ops, deploys).
+4) Outcomes feed back into Meta-Ralph and cognitive reliability so future advice is prioritized by what actually helped.
 
 ### 2.7 Chips pipeline (domain intelligence)
 1) lib.chips.router detects triggers in events.

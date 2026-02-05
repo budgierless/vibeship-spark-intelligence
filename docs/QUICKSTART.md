@@ -325,6 +325,10 @@ from lib.advisor import advise_on_tool
 advice = advise_on_tool("Edit", {"file_path": "src/auth/login.py"}, "edit auth login flow")
 ```
 
+Semantic retrieval logs and metrics:
+- `~/.spark/logs/semantic_retrieval.jsonl`
+- `~/.spark/advisor/metrics.json`
+
 ## Claude Code Integration
 
 Add to `.claude/settings.json`:

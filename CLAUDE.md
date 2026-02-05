@@ -1,3 +1,10 @@
-## Spark Intelligence Overview
+﻿# CLAUDE.md
 
-Spark captures runtime events into a local queue, processes them in a bridge cycle, and extracts learnings (cognitive insights, memory bank entries, EIDOS distillations). Meta-Ralph quality-gates what gets stored, outcomes feed back into reliability, and Advisor/Context Sync surface those learnings before actions. When semantic retrieval is enabled, Advisor extracts intent from the task, applies trigger rules, runs embedding search over stored insights, fuses scores (similarity + recency + outcome), and returns top guidance with "why" so learnings actually show up in real work.
+Spark Intelligence brief:
+- Events flow from hooks/adapters/sparkd into the queue, then bridge_cycle extracts signals into learnings (cognitive insights, memory banks, EIDOS distillations).
+- Meta-Ralph quality-gates and outcomes feed back into reliability.
+- Advisor runs before actions and uses semantic retrieval (intent + triggers + embeddings + fusion) to surface the top guidance with a short "why" so learnings are used in real work.
+- Retrievals log to ~/.spark/logs/semantic_retrieval.jsonl and advisor metrics to ~/.spark/advisor/metrics.json.
+- Mind is optional (mind_server.py or built-in), with manual sync and offline queue when down.
+
+See Intelligence_Flow.md and Intelligence_Flow_Map.md for full details.

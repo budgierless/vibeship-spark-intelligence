@@ -657,10 +657,10 @@ class SemanticRetriever:
                 "final_results": [
                     {
                         "key": r.insight_key,
-                        "fusion": round(r.fusion_score, 4),
-                        "sim": round(r.semantic_sim, 4),
-                        "outcome": round(r.outcome_score, 4),
-                        "recency": round(r.recency_score, 4),
+                        "fusion": round(float(r.fusion_score or 0.0), 4),
+                        "sim": round(float(r.semantic_sim or 0.0), 4),
+                        "outcome": round(float(r.outcome_score or 0.0), 4),
+                        "recency": round(float(r.recency_score or 0.0), 4),
                         "why": r.why,
                         "source": r.source_type,
                     }

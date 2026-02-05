@@ -2,6 +2,9 @@
 
 Purpose: keep the control layer visible, enforceable, and traceable.
 
+Dashboard change rule: if something should appear on a dashboard, add it to
+`DASHBOARD_TODOS.md` first. Ship dashboard updates in batches, not as drive-by edits.
+
 ## Core rule
 Every metric must drill down to `trace_id` -> steps -> evidence -> validation.
 
@@ -86,7 +89,7 @@ Dashboards Index:
 6. Apply a small fix, then re-check Mission Control + Meta-Ralph for movement.
 
 **Data Sources (No Hallucinations)**
-1. Spark Lab: `~/.spark/queue/events.jsonl`, `~/.spark/bridge_worker_heartbeat.json`, `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/acceptance_plans.json`, `~/.spark/evidence.db`, `~/.spark/cognitive_insights.json`.
+1. Spark Lab: `~/.spark/queue/events.jsonl`, `~/.spark/bridge_worker_heartbeat.json`, `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/acceptance_plans.json`, `~/.spark/evidence.db`, `~/.spark/cognitive_insights.json`, `~/.spark/logs/semantic_retrieval.jsonl`, `~/.spark/advisor/metrics.json`.
 2. Meta-Ralph Quality Analyzer: `~/.spark/meta_ralph/roast_history.json`, `~/.spark/meta_ralph/outcome_tracking.json`, `~/.spark/meta_ralph/learnings_store.json`, `~/.spark/advisor/effectiveness.json`, `~/.spark/advisor/recent_advice.jsonl`.
 3. EIDOS CLI: `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/policy_patches.json`, `~/.spark/minimal_mode_state.json`, `~/.spark/minimal_mode_history.jsonl`.
 4. Spark Intelligence CLI: `~/.spark/cognitive_insights.json`, `~/.spark/research_reports/`, `~/.spark/sparknet/collective/`.
