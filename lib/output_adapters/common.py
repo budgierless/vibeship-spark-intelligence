@@ -27,6 +27,9 @@ def write_marked_section(
 
     If markers exist, replace the section. Otherwise, append.
     """
+    if content is None or not str(content).strip():
+        # Safety guard: never truncate a file with empty content.
+        return False
     _ensure_parent(path)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
 
