@@ -1,4 +1,5 @@
 # Chip Workflow Guide
+Navigation hub: `docs/GLOSSARY.md`
 
 ## The 5-Minute Chip Creation Flow
 

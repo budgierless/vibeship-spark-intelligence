@@ -1,6 +1,7 @@
 # Intelligence_Flow.md
 
 Generated: 2026-02-05
+Navigation hub: `docs/GLOSSARY.md`
 Repository: vibeship-spark-intelligence
 Scope:
 - Runtime Python modules: root *.py, lib/, hooks/, adapters/, spark/
@@ -42,7 +43,7 @@ Mind integration:
 Dashboards and ops:
 - dashboard.py (status + UI)
 - meta_ralph_dashboard.py (quality analyzer, port SPARK_META_RALPH_PORT, default 8586)
-- Spark Pulse runs via external vibeship-spark-pulse/app.py (internal spark_pulse.py is a compatibility wrapper).
+- Spark Pulse runs via external vibeship-spark-pulse/app.py (port SPARK_PULSE_PORT, default 8765).
 - spark_watchdog.py + lib/service_control.py (monitor/restart services)
 
 ## 2) Primary workflows (end-to-end)
@@ -362,7 +363,7 @@ Moltbook adapter:
 
 ## 6) Known gaps / mismatches
 
-- internal spark_pulse.py is deprecated wrapper; operational pulse is external vibeship-spark-pulse/app.py.
+- Spark Pulse is the external vibeship-spark-pulse/app.py (set SPARK_PULSE_DIR to override location).
 - Mind host is fixed to localhost; port override supported via `SPARK_MIND_PORT` (see `lib/ports.py`).
 - build/ contains duplicated code artifacts; excluded from analysis.
 

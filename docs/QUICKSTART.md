@@ -2,6 +2,9 @@
 
 Get Spark running in 5 minutes.
 
+For the full active documentation map, see `docs/DOCS_INDEX.md`.
+For term-based navigation, see `docs/GLOSSARY.md`.
+
 ## Prerequisites
 
 - Python 3.10+

@@ -1,6 +1,7 @@
 # Spark Chips - Domain-Specific Intelligence
 
 **Chips teach Spark *what* to learn, not just *how* to learn.**
+Navigation hub: `docs/GLOSSARY.md`
 
 ```
 +------------------+     +------------------+     +------------------+

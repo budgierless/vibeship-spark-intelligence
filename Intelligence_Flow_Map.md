@@ -1,6 +1,7 @@
 # Intelligence_Flow_Map.md
 
 Generated: 2026-02-05
+Navigation hub: `docs/GLOSSARY.md`
 
 This file provides a high-level visual map of Spark Intelligence data flow.
 For exhaustive tuneables and file interactions, see Intelligence_Flow.md.

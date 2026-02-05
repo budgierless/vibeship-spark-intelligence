@@ -1,8 +1,30 @@
 # Meta-Ralph: The Quality Gate for Spark's Self-Evolution
 
 > "Evolve, don't disable. Roast until it's good."
+Navigation hub: `docs/GLOSSARY.md`
 
 Meta-Ralph is Spark's internal quality gate - a system that evaluates every proposed learning before it gets stored, ensuring only valuable cognitive insights make it through while primitive operational patterns are filtered out.
+
+---
+
+## Consolidated Notes
+
+This document now includes key guidance from archived Meta-Ralph support docs.
+
+Merged from:
+- `docs/archive/root/META_RALPH_TELEMETRY.md`
+- `docs/archive/root/METARALPH_FLOW_MAP.md`
+
+Merged policy highlights:
+1. Telemetry and feedback are separate channels:
+   - telemetry tracks operational traces;
+   - feedback tracks usefulness and outcome-linked quality.
+2. Operational telemetry should not be promoted as cognitive wisdom:
+   - sequence-only and tool-volume statements are blocked from promotion paths.
+3. Runtime flow position remains explicit:
+   - Meta-Ralph gates learnings before persistence and receives outcome signals from advisor/hook feedback loops.
+4. Storage evidence is authoritative:
+   - claims about quality and impact must be verifiable in persistent stores.
 
 ---
 
@@ -123,7 +145,7 @@ Use `DASHBOARD_PLAYBOOK.md` for full setup and usage (start commands, pages, dri
 Quick start:
 1. `python -m spark.cli up`
 2. Or `python dashboard.py` (Spark Lab only)
-3. Pulse: `python spark_pulse.py` (port `SPARK_PULSE_PORT`, default 8765)
+3. Pulse: runs from external `vibeship-spark-pulse/app.py` (port `SPARK_PULSE_PORT`, default 8765)
 4. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port `SPARK_META_RALPH_PORT`, default 8586)
 
 `spark up` starts Spark Lab + Pulse + Meta-Ralph by default (use `--no-pulse` / `--no-meta-ralph` to skip).

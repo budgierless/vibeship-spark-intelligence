@@ -1,24 +1,37 @@
-# Agent Startup Builder
+# Spark Intelligence
 
-Build skill.md-driven agent products fast: landing page, onboarding, APIs, security, and abuse prevention.
+Spark is a self-evolving intelligence layer for agent workflows.
+It captures signals, distills learnings, validates outcomes, and reuses proven guidance in future decisions.
 
-## Quickstart
-1. Edit `agent_startup.md` with your product concept.
-2. Use `templates/` to generate your first skill, API spec, and landing copy.
-3. Follow the architecture, security, and abuse docs in `docs/`.
+Navigation hub: `docs/GLOSSARY.md`
 
-## What This Produces
-- `skill.md` onboarding contract for agents
-- Landing page copy and UX flow
-- API surface + data model
-- Security, privacy, and abuse prevention policy
-- Supabase-ready schema and guardrails
+## Start
 
-## Folder Layout
-- `agent_startup.md`: primary spec input
-- `templates/`: starter files (skill, API spec, landing copy, schema)
-- `docs/`: architecture, builder flow, abuse policy, Supabase security, research notes
+1. Install and boot services: `docs/QUICKSTART.md`
+2. Read runtime architecture: `Intelligence_Flow.md`
+3. Tune behavior: `TUNEABLES.md`
+4. Use full docs map: `docs/DOCS_INDEX.md`
 
-## Notes
-- This is a framework. It is designed to be extended into a generator later.
-- The default posture is secure-by-design and privacy-first.
+## Core Runtime Docs
+
+- `Intelligence_Flow.md`
+- `Intelligence_Flow_Map.md`
+- `EIDOS_GUIDE.md`
+- `META_RALPH.md`
+- `SEMANTIC_ADVISOR_DESIGN.md`
+- `docs/PROGRAM_STATUS.md`
+- `docs/VISION.md`
+
+## Strategic Docs Kept Active
+
+- `MoE_Plan.md`
+- `Path to AGI.md`
+- `EVOLUTION_CHIPS_RESEARCH.md`
+
+## Documentation Consolidation
+
+Superseded planning and historical docs have been moved to:
+- `docs/archive/`
+- `docs/reports/`
+
+Use `docs/DOCS_INDEX.md` as the source of truth for active docs.

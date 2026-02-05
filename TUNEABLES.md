@@ -2,6 +2,7 @@
 
 All configurable thresholds, limits, and weights across the system.
 Use this to test and optimize learning quality.
+Navigation hub: `docs/GLOSSARY.md`
 
 ---
 

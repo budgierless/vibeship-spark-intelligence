@@ -1,4 +1,5 @@
 # Spark Adapters (Input Integrations)
+Navigation hub: `docs/GLOSSARY.md`
 
 Spark is **runtime-agnostic**.
 

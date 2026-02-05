@@ -1,6 +1,7 @@
 # EIDOS Guide: The Complete Intelligence System
 
 **EIDOS** = **E**xplicit **I**ntelligence with **D**urable **O**utcomes & **S**emantics
+Navigation hub: `docs/GLOSSARY.md`
 
 > "Intelligence = compression + reuse + behavior change. Not storage. Not retrieval. **Enforcement.**"
 
@@ -22,6 +23,27 @@
 12. [Integration Points](#integration-points)
 13. [CLI Commands](#cli-commands)
 14. [Checklist: Are We Following EIDOS?](#checklist-are-we-following-eidos)
+15. [Consolidated Architecture Notes](#consolidated-architecture-notes)
+
+---
+
+## Consolidated Architecture Notes
+
+This guide now absorbs key points from archived architecture supplements.
+
+Integrated from archived docs:
+- `docs/archive/root/EIDOS_ARCHITECTURE.md`
+- `docs/archive/root/EIDOS_ARCHITECTURE_ADDITIONS.md`
+
+Key merged notes:
+1. Evidence before modification gate:
+   - after repeated failed edits on the same target, require diagnostic evidence before additional code edits.
+2. Layered evidence handling:
+   - keep ephemeral tool evidence separate from canonical memory and enforce retention by evidence type.
+3. Distillation and reuse remain the acceptance criteria:
+   - storage volume is not a success metric unless later reuse measurably improves outcomes.
+4. Control-plane first behavior:
+   - phase control, budget guards, and stuck-state checks should block low-quality loops before more tool actions.
 
 ---
 

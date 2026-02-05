@@ -4,6 +4,8 @@
 >
 > The self-correcting intelligence system that forces learning through prediction loops, memory binding, and automatic rabbit-hole detection.
 
+Navigation hub: `docs/GLOSSARY.md`
+
 ---
 
 ## Table of Contents

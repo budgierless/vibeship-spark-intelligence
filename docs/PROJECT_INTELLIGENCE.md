@@ -1,4 +1,5 @@
 # Project Intelligence Loop
+Navigation hub: `docs/GLOSSARY.md`
 
 This document explains how project-level knowledge flows into Spark's learning,
 prediction, and outcome validation loops.

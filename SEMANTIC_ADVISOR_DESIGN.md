@@ -1,6 +1,7 @@
 # Semantic Advisor Design
 
 **Goal:** Surface the RIGHT learning at the RIGHT time through semantic understanding, not keyword matching.
+Navigation hub: `docs/GLOSSARY.md`
 
 ---
 
@@ -17,6 +18,25 @@ Ops notes:
 - Enable via `semantic.enabled=true` and `triggers.enabled=true` in `~/.spark/tuneables.json`
 - Rebuild index with `python scripts/semantic_reindex.py`
 - Use `spark up --lite` when you want only core services (no dashboards/pulse/watchdog)
+
+---
+
+## Consolidated Proposal Decisions
+
+This design is now the canonical semantic advisor doc and absorbs the archived proposal:
+- `docs/archive/root/SEMANTIC_INTELLIGENCE_PROPOSAL.md`
+
+Decisions carried forward:
+1. Hybrid retrieval is canonical:
+   - triggers + semantic similarity + outcome/reliability weighting.
+2. Diversity constraints are required:
+   - dedupe and MMR-style controls prevent near-duplicate advice bundles.
+3. Intent-aware retrieval is preferred over raw-context embeddings:
+   - extract intent first, then rank candidates.
+4. Safety defaults are conservative:
+   - better to surface fewer high-confidence items than many weak ones.
+5. Outcome attribution is the long-term optimization signal:
+   - ranking quality improves only when advice usefulness is measured and fed back.
 
 ---
 
