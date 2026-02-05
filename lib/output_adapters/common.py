@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from ..diagnostics import log_exception
+
 
 MARKER_START = "<!-- SPARK_LEARNINGS_START -->"
 MARKER_END = "<!-- SPARK_LEARNINGS_END -->"
@@ -29,6 +31,10 @@ def write_marked_section(
     """
     if content is None or not str(content).strip():
         # Safety guard: never truncate a file with empty content.
+        try:
+            log_exception("output_adapter", f"blocked empty write to {path}")
+        except Exception:
+            pass
         return False
     _ensure_parent(path)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -52,6 +58,10 @@ def write_marked_section(
 def write_text(path: Path, content: str) -> bool:
     if content is None or not str(content).strip():
         # Safety guard: never truncate a file with empty content.
+        try:
+            log_exception("output_adapter", f"blocked empty write to {path}")
+        except Exception:
+            pass
         return False
     _ensure_parent(path)
     path.write_text(content, encoding="utf-8")
