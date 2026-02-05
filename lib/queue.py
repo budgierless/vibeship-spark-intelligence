@@ -29,6 +29,8 @@ MAX_EVENTS = int(os.environ.get("SPARK_QUEUE_MAX_EVENTS", "10000"))  # Rotate af
 MAX_QUEUE_BYTES = int(os.environ.get("SPARK_QUEUE_MAX_BYTES", "10485760"))  # 10 MB
 LOCK_FILE = QUEUE_DIR / ".queue.lock"
 OVERFLOW_FILE = QUEUE_DIR / "events.overflow.jsonl"
+QUEUE_STATE_FILE = QUEUE_DIR / "state.json"
+QUEUE_COMPACT_HEAD_BYTES = int(os.environ.get("SPARK_QUEUE_COMPACT_HEAD_BYTES", str(5 * 1024 * 1024)))
 
 # Read the tail in chunks to avoid loading large files into memory.
 TAIL_CHUNK_BYTES = 64 * 1024
@@ -36,6 +38,103 @@ TAIL_CHUNK_BYTES = 64 * 1024
 # Throttle the O(n) count_events() call inside rotate_if_needed.
 _last_count_check: float = 0.0
 _COUNT_CHECK_INTERVAL: float = 60.0
+_last_count_value: Optional[int] = None
+_last_count_value_ts: float = 0.0
+_COUNT_CACHE_TTL_S: float = 1.0
+
+
+def _load_queue_state() -> Dict[str, Any]:
+    if not QUEUE_STATE_FILE.exists():
+        return {}
+    try:
+        return json.loads(QUEUE_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_queue_state(state: Dict[str, Any]) -> None:
+    QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        QUEUE_STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception as e:
+        log_debug("queue", "save state failed", e)
+
+
+def _queue_head_bytes() -> int:
+    state = _load_queue_state()
+    head = int(state.get("head_bytes") or 0)
+    if not EVENTS_FILE.exists():
+        if head != 0:
+            state["head_bytes"] = 0
+            _save_queue_state(state)
+        return 0
+    try:
+        size = EVENTS_FILE.stat().st_size
+    except Exception:
+        size = 0
+    if head < 0:
+        head = 0
+    if head > size:
+        head = 0
+        state["head_bytes"] = 0
+        _save_queue_state(state)
+    return head
+
+
+def _set_queue_head_bytes(head_bytes: int) -> None:
+    state = _load_queue_state()
+    state["head_bytes"] = max(0, int(head_bytes or 0))
+    _save_queue_state(state)
+
+
+def _invalidate_count_cache() -> None:
+    global _last_count_value, _last_count_value_ts
+    _last_count_value = None
+    _last_count_value_ts = 0.0
+
+
+def _active_file_bytes() -> int:
+    if not EVENTS_FILE.exists():
+        return 0
+    try:
+        size = EVENTS_FILE.stat().st_size
+    except Exception:
+        return 0
+    head = _queue_head_bytes()
+    return max(0, size - head)
+
+
+def _iter_active_lines(path: Path) -> List[str]:
+    """Return decoded active lines from queue head to end."""
+    if not path.exists():
+        return []
+    head = _queue_head_bytes()
+    out: List[str] = []
+    try:
+        with path.open("rb") as f:
+            f.seek(head)
+            for raw in f:
+                if not raw:
+                    continue
+                out.append(raw.decode("utf-8", errors="replace").rstrip("\r\n"))
+    except Exception as e:
+        log_debug("queue", "_iter_active_lines failed", e)
+    return out
+
+
+def _merge_overflow_locked() -> None:
+    """Merge overflow sidecar into main queue (requires queue lock held)."""
+    if not OVERFLOW_FILE.exists():
+        return
+    try:
+        overflow_data = OVERFLOW_FILE.read_text(encoding="utf-8")
+        if overflow_data.strip():
+            with open(EVENTS_FILE, "a", encoding="utf-8") as f:
+                f.write(overflow_data)
+        OVERFLOW_FILE.unlink()
+        _invalidate_count_cache()
+    except Exception as e:
+        log_debug("queue", "overflow merge failed", e)
 
 
 class EventType(Enum):
@@ -122,6 +221,7 @@ def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
             if lock.acquired:
                 with open(EVENTS_FILE, "a") as f:
                     f.write(line)
+                _invalidate_count_cache()
             else:
                 # Lock busy (consumer/rotator active) -- write to overflow
                 # sidecar so no events are lost. Merged on next consume.
@@ -147,21 +247,20 @@ def read_events(limit: int = 100, offset: int = 0) -> List[SparkEvent]:
         return events
     
     try:
-        with open(EVENTS_FILE, "r") as f:
-            idx = 0
-            for line in f:
-                if idx < offset:
-                    idx += 1
-                    continue
-                if len(events) >= limit:
-                    break
+        idx = 0
+        for line in _iter_active_lines(EVENTS_FILE):
+            if idx < offset:
                 idx += 1
-                try:
-                    data = json.loads(line.strip())
-                    events.append(SparkEvent.from_dict(data))
-                except Exception:
-                    continue
-                
+                continue
+            if len(events) >= limit:
+                break
+            idx += 1
+            try:
+                data = json.loads(line.strip())
+                events.append(SparkEvent.from_dict(data))
+            except Exception:
+                continue
+
     except Exception as e:
         log_debug("queue", "read_events failed", e)
         pass
@@ -175,7 +274,7 @@ def read_recent_events(count: int = 50) -> List[SparkEvent]:
         return []
     
     try:
-        lines = _tail_lines(EVENTS_FILE, count)
+        lines = _tail_lines(EVENTS_FILE, count, start_offset_bytes=_queue_head_bytes())
         events = []
         for line in lines:
             try:
@@ -190,14 +289,25 @@ def read_recent_events(count: int = 50) -> List[SparkEvent]:
         return []
 
 
-def count_events() -> int:
+def count_events(use_cache: bool = True) -> int:
     """Count total events in queue."""
     if not EVENTS_FILE.exists():
         return 0
+    now = time.time()
+    global _last_count_value, _last_count_value_ts
+    if use_cache and _last_count_value is not None and (now - _last_count_value_ts) < _COUNT_CACHE_TTL_S:
+        return _last_count_value
     
     try:
-        with open(EVENTS_FILE, "r") as f:
-            return sum(1 for _ in f)
+        count = 0
+        head = _queue_head_bytes()
+        with open(EVENTS_FILE, "rb") as f:
+            f.seek(head)
+            for _ in f:
+                count += 1
+        _last_count_value = count
+        _last_count_value_ts = now
+        return count
     except Exception as e:
         log_debug("queue", "count_events failed", e)
         return 0
@@ -211,49 +321,70 @@ def clear_events() -> int:
         with _queue_lock():
             if EVENTS_FILE.exists():
                 EVENTS_FILE.unlink()
+            if OVERFLOW_FILE.exists():
+                OVERFLOW_FILE.unlink()
+            _set_queue_head_bytes(0)
+            _invalidate_count_cache()
     
     return count
+
+
+def _estimate_event_count(size_bytes: int) -> int:
+    """Estimate event count from file size without reading the file.
+
+    Average JSONL event line is ~500 bytes.  This is used in the hot
+    path (quick_capture) to avoid O(n) line counting on every write.
+    """
+    if size_bytes <= 0:
+        return 0
+    return max(1, size_bytes // 500)
 
 
 def rotate_if_needed() -> bool:
     """Rotate queue if it's too large."""
     global _last_count_check
 
-    size_bytes = 0
-    if EVENTS_FILE.exists():
-        try:
-            size_bytes = EVENTS_FILE.stat().st_size
-        except Exception:
-            size_bytes = 0
+    size_bytes = _active_file_bytes()
 
     over_size = MAX_QUEUE_BYTES > 0 and size_bytes > MAX_QUEUE_BYTES
 
-    # Throttle the O(n) count_events() call -- only check every 60s
-    # unless the byte-size check already shows we're over limit.
+    # Use file-size estimation for the hot path instead of O(n) line count.
+    # Only do the expensive count_events() call every 60s or when size-based
+    # estimate already shows we're over.
     now = time.time()
     count = 0
     over_count = False
-    if MAX_EVENTS > 0 and (over_size or now - _last_count_check >= _COUNT_CHECK_INTERVAL):
-        count = count_events()
-        _last_count_check = now
-        over_count = count > MAX_EVENTS
+    if MAX_EVENTS > 0:
+        estimated = _estimate_event_count(size_bytes)
+        if over_size or estimated > MAX_EVENTS:
+            # Likely over limit -- do the real count
+            count = count_events(use_cache=False)
+            _last_count_check = now
+            over_count = count > MAX_EVENTS
+        elif now - _last_count_check >= _COUNT_CHECK_INTERVAL:
+            count = count_events(use_cache=False)
+            _last_count_check = now
+            over_count = count > MAX_EVENTS
 
     if not over_size and not over_count:
         return False
     
     try:
         with _queue_lock():
+            _merge_overflow_locked()
+            active_head = _queue_head_bytes()
             # Keep only the last half to evict oldest events.
             if MAX_EVENTS > 0:
                 keep_count = max(1, MAX_EVENTS // 2)
             else:
                 keep_count = max(1, count // 2) if count else 5000
-            lines = _tail_lines(EVENTS_FILE, keep_count)
+            lines = _tail_lines(EVENTS_FILE, keep_count, start_offset_bytes=active_head)
             with open(EVENTS_FILE, "w") as f:
                 for line in lines:
                     if line:
                         f.write(line.rstrip("\r\n") + "\n")
-
+            _set_queue_head_bytes(0)
+            _invalidate_count_cache()
             print(f"[SPARK] Rotated queue: {count} -> {keep_count} events")
             return True
         
@@ -279,38 +410,48 @@ def consume_processed(up_to_offset: int) -> int:
 
     try:
         with _queue_lock():
-            # Merge any overflow events written during lock contention.
-            if OVERFLOW_FILE.exists():
-                try:
-                    overflow_data = OVERFLOW_FILE.read_text(encoding="utf-8")
-                    if overflow_data.strip():
-                        with open(EVENTS_FILE, "a", encoding="utf-8") as f:
-                            f.write(overflow_data)
-                    OVERFLOW_FILE.unlink()
-                except Exception as e:
-                    log_debug("queue", "overflow merge failed", e)
-
-            # Read all remaining lines after the offset.
-            remaining: List[str] = []
+            _merge_overflow_locked()
+            head = _queue_head_bytes()
             removed = 0
-            with open(EVENTS_FILE, "r", encoding="utf-8", errors="replace") as f:
-                for idx, line in enumerate(f):
-                    if idx < up_to_offset:
-                        removed += 1
-                    else:
-                        stripped = line.rstrip("\r\n")
-                        if stripped:
-                            remaining.append(stripped)
+            advance_bytes = 0
+            with open(EVENTS_FILE, "rb") as f:
+                f.seek(head)
+                while removed < up_to_offset:
+                    line = f.readline()
+                    if not line:
+                        break
+                    advance_bytes += len(line)
+                    removed += 1
             if removed == 0:
                 return 0
-            # Atomic write: temp file + rename prevents data loss if
-            # the process crashes mid-write or a concurrent writer appends.
-            tmp = EVENTS_FILE.with_suffix(".jsonl.tmp")
-            with open(tmp, "w", encoding="utf-8") as f:
-                for line in remaining:
-                    f.write(line + "\n")
-            tmp.replace(EVENTS_FILE)
-            log_debug("queue", f"consumed {removed} events, {len(remaining)} remain", None)
+            new_head = head + advance_bytes
+            _set_queue_head_bytes(new_head)
+
+            # Compact periodically to reclaim space while keeping consume O(1)
+            # in the steady state.
+            try:
+                size = EVENTS_FILE.stat().st_size
+            except Exception:
+                size = 0
+            active = max(0, size - new_head)
+            should_compact = (
+                new_head >= QUEUE_COMPACT_HEAD_BYTES
+                and (new_head >= (size // 2) or active <= QUEUE_COMPACT_HEAD_BYTES)
+            )
+            if should_compact:
+                tmp = EVENTS_FILE.with_suffix(".jsonl.tmp")
+                with open(EVENTS_FILE, "rb") as src, open(tmp, "wb") as dst:
+                    src.seek(new_head)
+                    while True:
+                        chunk = src.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                tmp.replace(EVENTS_FILE)
+                _set_queue_head_bytes(0)
+
+            _invalidate_count_cache()
+            log_debug("queue", f"consumed {removed} events", None)
             return removed
     except Exception as e:
         log_debug("queue", "consume_processed failed", e)
@@ -376,14 +517,18 @@ def read_events_prioritized(limit: int = 200, offset: int = 0) -> List["SparkEve
 def get_queue_stats() -> Dict:
     """Get queue statistics."""
     count = count_events()
-    size_bytes = 0
-
+    size_bytes = _active_file_bytes()
+    file_bytes = 0
     if EVENTS_FILE.exists():
-        size_bytes = EVENTS_FILE.stat().st_size
+        try:
+            file_bytes = EVENTS_FILE.stat().st_size
+        except Exception:
+            file_bytes = 0
 
     return {
         "event_count": count,
         "size_bytes": size_bytes,
+        "file_bytes": file_bytes,
         "size_mb": round(size_bytes / (1024 * 1024), 2),
         "queue_file": str(EVENTS_FILE),
         "max_events": MAX_EVENTS,
@@ -400,16 +545,15 @@ def get_events_by_type(event_type: EventType, limit: int = 100) -> List[SparkEve
         return events
     
     try:
-        with open(EVENTS_FILE, "r") as f:
-            for line in f:
-                try:
-                    data = json.loads(line.strip())
-                    if data.get("event_type") == event_type.value:
-                        events.append(SparkEvent.from_dict(data))
-                        if len(events) >= limit:
-                            break
-                except Exception:
-                    continue
+        for line in _iter_active_lines(EVENTS_FILE):
+            try:
+                data = json.loads(line.strip())
+                if data.get("event_type") == event_type.value:
+                    events.append(SparkEvent.from_dict(data))
+                    if len(events) >= limit:
+                        break
+            except Exception:
+                continue
     except Exception as e:
         log_debug("queue", "get_events_by_type failed", e)
         pass
@@ -430,36 +574,46 @@ def get_session_events(session_id: str) -> List[SparkEvent]:
         return events
     
     try:
-        with open(EVENTS_FILE, "r") as f:
-            for line in f:
-                try:
-                    data = json.loads(line.strip())
-                    if data.get("session_id") == session_id:
-                        events.append(SparkEvent.from_dict(data))
-                except Exception:
-                    continue
+        for line in _iter_active_lines(EVENTS_FILE):
+            try:
+                data = json.loads(line.strip())
+                if data.get("session_id") == session_id:
+                    events.append(SparkEvent.from_dict(data))
+            except Exception:
+                continue
     except Exception:
         pass
     
     return events
 
 
-def _tail_lines(path: Path, count: int) -> List[str]:
-    """Read the last N lines of a file without loading the whole file."""
+def _tail_lines(path: Path, count: int, start_offset_bytes: int = 0) -> List[str]:
+    """Read the last N lines of a file without loading the whole file.
+
+    Args:
+        path: File path.
+        count: Number of lines to return from the tail.
+        start_offset_bytes: Optional byte offset that defines the logical
+            start of the file (used by queue head compaction state).
+    """
     if count <= 0:
         return []
     if not path.exists():
         return []
+    if start_offset_bytes < 0:
+        start_offset_bytes = 0
 
     try:
         with open(path, "rb") as f:
             f.seek(0, os.SEEK_END)
             pos = f.tell()
+            if start_offset_bytes > pos:
+                start_offset_bytes = pos
             buffer = b""
             lines: List[bytes] = []
 
-            while pos > 0 and len(lines) <= count:
-                read_size = min(TAIL_CHUNK_BYTES, pos)
+            while pos > start_offset_bytes and len(lines) <= count:
+                read_size = min(TAIL_CHUNK_BYTES, pos - start_offset_bytes)
                 pos -= read_size
                 f.seek(pos)
                 data = f.read(read_size)

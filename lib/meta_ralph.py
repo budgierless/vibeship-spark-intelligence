@@ -250,6 +250,10 @@ class MetaRalph:
         self.duplicates_caught = 0
         self.refinements_made = 0
 
+        # Deferred save support - avoids writing 3 files on every roast
+        self._dirty = False
+        self._defer_saves = False
+
         self._ensure_data_dir()
         self._load_state()
 
@@ -356,8 +360,31 @@ class MetaRalph:
                     "outcomes": {"good": 0, "bad": 0, "neutral": 0},
                 }
 
+    def begin_batch(self):
+        """Start a batch operation - defer all saves until flush()."""
+        self._defer_saves = True
+
+    def end_batch(self):
+        """End batch operation and flush if dirty."""
+        self._defer_saves = False
+        if self._dirty:
+            self._save_state_now()
+
+    def flush(self):
+        """Flush any pending changes to disk."""
+        if self._dirty:
+            self._save_state_now()
+
     def _save_state(self):
-        """Persist state to disk."""
+        """Persist state to disk (deferred if in batch mode)."""
+        if self._defer_saves:
+            self._dirty = True
+            return
+        self._save_state_now()
+
+    def _save_state_now(self):
+        """Actually persist state to disk."""
+        self._dirty = False
         history = self.roast_history[-1000:]
         # Keep in-memory and on-disk retention aligned.
         self.roast_history = history

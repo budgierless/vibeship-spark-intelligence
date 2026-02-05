@@ -239,7 +239,7 @@ class CognitiveInsight:
 class CognitiveLearner:
     """
     Learns higher-level cognitive patterns, not just operational ones.
-    
+
     The goal: Make the LLM more intelligent over time by learning:
     - How to think, not just what to do
     - Why things work, not just that they work
@@ -251,6 +251,8 @@ class CognitiveLearner:
 
     def __init__(self):
         self.insights: Dict[str, CognitiveInsight] = {}
+        self._dirty = False  # Track unsaved changes
+        self._defer_saves = False  # When True, accumulate changes without I/O
         self._load_insights()
 
     def _load_insights(self):
@@ -297,8 +299,35 @@ class CognitiveLearner:
 
         return current
 
+    def begin_batch(self):
+        """Start a batch operation - defer all saves until flush()."""
+        self._defer_saves = True
+
+    def end_batch(self):
+        """End batch operation and flush if dirty."""
+        self._defer_saves = False
+        if self._dirty:
+            self._save_insights_now()
+
+    def flush(self):
+        """Flush any pending changes to disk."""
+        if self._dirty:
+            self._save_insights_now()
+
     def _save_insights(self, drop_keys: Optional[set] = None):
-        """Save cognitive insights to disk."""
+        """Save cognitive insights to disk (deferred if in batch mode)."""
+        if drop_keys:
+            # drop_keys forces an immediate save (used by purge/dedupe)
+            self._save_insights_now(drop_keys=drop_keys)
+            return
+        if self._defer_saves:
+            self._dirty = True
+            return
+        self._save_insights_now()
+
+    def _save_insights_now(self, drop_keys: Optional[set] = None):
+        """Actually write insights to disk."""
+        self._dirty = False
         self.INSIGHTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with _insights_lock(self.LOCK_FILE):
             disk_data: Dict[str, Dict[str, Any]] = {}

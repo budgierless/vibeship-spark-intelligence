@@ -451,11 +451,8 @@ def main() -> None:
                 pulse_pid_from_file = None
                 pid_file_alive = False
 
-            # Also search by keyword for both internal and external pulse
-            pulse_pids = (
-                _find_pids_by_keywords(["spark_pulse.py"], snapshot)
-                + _find_pids_by_keywords(["vibeship-spark-pulse"], snapshot)
-            )
+            # Search by keyword for external pulse only
+            pulse_pids = _find_pids_by_keywords(["vibeship-spark-pulse"], snapshot)
             pulse_running = pid_file_alive or bool(pulse_pids)
 
             if pulse_running and pulse_fail < args.fail_threshold:
@@ -468,9 +465,12 @@ def main() -> None:
                     _terminate_pids(list(all_pulse_pids))
                 try:
                     pulse_cmd = _get_pulse_command()
+                except FileNotFoundError as fnf:
+                    _log(f"pulse not available: {fnf}")
+                    pulse_cmd = None
                 except Exception:
-                    pulse_cmd = [sys.executable, str(SPARK_DIR / "spark_pulse.py")]
-                if _start_process("pulse", pulse_cmd):
+                    pulse_cmd = None
+                if pulse_cmd and _start_process("pulse", pulse_cmd):
                     _record_restart(state, "pulse")
                     failures["pulse"] = 0
 

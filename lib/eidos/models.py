@@ -124,7 +124,7 @@ class Budget:
             max_steps=data.get("max_steps", 25),
             max_time_seconds=data.get("max_time_seconds", 720),
             max_retries_per_error=data.get("max_retries_per_error", 2),
-            max_file_touches=data.get("max_file_touches", 2),
+            max_file_touches=data.get("max_file_touches", 3),
             no_evidence_limit=data.get("no_evidence_limit", 5),
         )
 

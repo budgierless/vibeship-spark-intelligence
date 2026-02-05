@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "spawner": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "spawner-mcp-server"],
+      "env": {}
+    }
+  }
+}

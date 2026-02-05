@@ -459,14 +459,47 @@ class ChipRuntime:
             return f"{tool} on {Path(file_path).name}"
         return tool
 
+    # Maximum chip insight file size before rotation (10 MB)
+    CHIP_MAX_BYTES = 10 * 1024 * 1024
+
     def _store_insight(self, insight: ChipInsight):
-        """Store an insight to disk."""
+        """Store an insight to disk with size-based rotation."""
         try:
             chip_file = CHIP_INSIGHTS_DIR / f"{insight.chip_id}.jsonl"
+            # Rotate if file exceeds size limit
+            if chip_file.exists():
+                try:
+                    size = chip_file.stat().st_size
+                    if size > self.CHIP_MAX_BYTES:
+                        self._rotate_chip_file(chip_file)
+                except Exception:
+                    pass
             with open(chip_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(asdict(insight)) + '\n')
         except Exception as e:
             log.error(f"Failed to store insight: {e}")
+
+    def _rotate_chip_file(self, chip_file: Path):
+        """Rotate a chip insights file - keep only the last 25% of lines."""
+        try:
+            keep_bytes = self.CHIP_MAX_BYTES // 4  # Keep ~2.5 MB
+            size = chip_file.stat().st_size
+            if size <= keep_bytes:
+                return
+            # Read from the tail
+            with open(chip_file, 'rb') as f:
+                f.seek(max(0, size - keep_bytes))
+                # Skip partial line
+                f.readline()
+                tail_data = f.read()
+            # Rewrite
+            tmp = chip_file.with_suffix('.jsonl.tmp')
+            with open(tmp, 'wb') as f:
+                f.write(tail_data)
+            tmp.replace(chip_file)
+            log.info(f"Rotated {chip_file.name}: {size:,} -> {len(tail_data):,} bytes")
+        except Exception as e:
+            log.warning(f"Chip file rotation failed for {chip_file}: {e}")
 
     def get_insights(self, chip_id: str = None, limit: int = 50) -> List[ChipInsight]:
         """Get recent insights, optionally filtered by chip."""

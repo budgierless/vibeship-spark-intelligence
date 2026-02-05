@@ -20,6 +20,7 @@ KISS Principle: Single file, simple API, maximum impact.
 import json
 import time
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Tuple
@@ -93,6 +94,39 @@ def _load_advisor_config() -> None:
 
 
 _load_advisor_config()
+
+
+def _tail_jsonl(path: Path, count: int) -> List[str]:
+    """Tail-read JSONL lines without loading entire file in memory."""
+    if count <= 0 or not path.exists():
+        return []
+    chunk_size = 64 * 1024
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            buffer = b""
+            lines: List[bytes] = []
+            while pos > 0 and len(lines) <= count:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                f.seek(pos)
+                data = f.read(read_size)
+                buffer = data + buffer
+                if b"\n" in buffer:
+                    parts = buffer.split(b"\n")
+                    buffer = parts[0]
+                    lines = parts[1:] + lines
+            if buffer:
+                lines = [buffer] + lines
+        out = [
+            ln.decode("utf-8", errors="replace").rstrip("\r")
+            for ln in lines
+            if ln != b""
+        ]
+        return out[-count:]
+    except Exception:
+        return []
 
 
 # ============= Data Classes =============
@@ -295,9 +329,30 @@ class SparkAdvisor:
         payload = f"{context}:{ts}"
         return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()[:12]
 
-    def _cache_key(self, tool: str, context: str) -> str:
-        """Generate cache key for advice."""
-        return f"{tool}:{context[:50]}"
+    def _cache_key(
+        self,
+        tool: str,
+        context: str,
+        tool_input: Optional[Dict[str, Any]] = None,
+        task_context: str = "",
+    ) -> str:
+        """Generate stable cache key with collision-resistant hashing."""
+        keys = ("command", "file_path", "path", "url", "pattern", "query")
+        hint = {}
+        if isinstance(tool_input, dict):
+            for k in keys:
+                v = tool_input.get(k)
+                if v is not None:
+                    hint[k] = str(v)[:200]
+        payload = {
+            "tool": (tool or "").strip().lower(),
+            "context": (context or "").strip().lower(),
+            "task_context": (task_context or "").strip().lower(),
+            "input_hint": hint,
+        }
+        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha1(encoded.encode("utf-8", errors="replace")).hexdigest()[:16]
+        return f"{payload['tool']}:{digest}"
 
     def _get_cached_advice(self, key: str) -> Optional[List[Advice]]:
         """Get cached advice if still valid."""
@@ -369,7 +424,12 @@ class SparkAdvisor:
         semantic_context = " ".join(semantic_parts).strip() if (task_context or _input_hint) else context_raw
 
         # Check cache
-        cache_key = self._cache_key(tool_name, context)
+        cache_key = self._cache_key(
+            tool_name,
+            context_raw,
+            tool_input=tool_input,
+            task_context=task_context,
+        )
         cached = self._get_cached_advice(cache_key)
         if cached:
             return cached
@@ -929,7 +989,7 @@ class SparkAdvisor:
         if not RECENT_ADVICE_LOG.exists():
             return None
         try:
-            lines = RECENT_ADVICE_LOG.read_text(encoding="utf-8").splitlines()
+            lines = _tail_jsonl(RECENT_ADVICE_LOG, RECENT_ADVICE_MAX_LINES)
         except Exception:
             return None
 
@@ -973,7 +1033,7 @@ class SparkAdvisor:
         if not RECENT_ADVICE_LOG.exists() or not advice_id:
             return None
         try:
-            lines = RECENT_ADVICE_LOG.read_text(encoding="utf-8").splitlines()
+            lines = _tail_jsonl(RECENT_ADVICE_LOG, RECENT_ADVICE_MAX_LINES)
         except Exception:
             return None
         for line in reversed(lines[-RECENT_ADVICE_MAX_LINES:]):

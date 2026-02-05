@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from lib.queue import read_recent_events, EventType
+from lib.queue import read_recent_events, EventType, _tail_lines
 
 
 BANK_DIR = Path.home() / ".spark" / "banks"
@@ -231,8 +231,8 @@ def _read_jsonl(path: Path, limit: int = 500) -> List[Dict[str, Any]]:
         return []
     out = []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for line in reversed(lines[-limit:]):
+        lines = _tail_lines(path, max(0, int(limit or 0)))
+        for line in reversed(lines):
             try:
                 out.append(json.loads(line))
             except Exception:

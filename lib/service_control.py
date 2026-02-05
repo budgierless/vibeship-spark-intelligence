@@ -27,7 +27,7 @@ from lib.ports import (
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # External Spark Pulse directory (full-featured FastAPI app with neural visualization)
-# Defaults to vibeship-spark-pulse on Desktop, falls back to internal spark_pulse.py
+# This is the ONLY pulse that should run. No fallback to the primitive internal spark_pulse.py.
 SPARK_PULSE_DIR = Path(os.environ.get(
     "SPARK_PULSE_DIR",
     str(Path.home() / "Desktop" / "vibeship-spark-pulse")
@@ -35,13 +35,15 @@ SPARK_PULSE_DIR = Path(os.environ.get(
 
 
 def _get_pulse_command() -> list[str]:
-    """Get the command to start Spark Pulse, preferring external if available."""
+    """Get the command to start Spark Pulse (external vibeship-spark-pulse only)."""
     import sys
     external_app = SPARK_PULSE_DIR / "app.py"
     if external_app.exists():
         return [sys.executable, str(external_app)]
-    # Fallback to internal spark_pulse.py
-    return [sys.executable, str(ROOT_DIR / "spark_pulse.py")]
+    raise FileNotFoundError(
+        f"Spark Pulse not found at {external_app}. "
+        f"Clone vibeship-spark-pulse to {SPARK_PULSE_DIR} or set SPARK_PULSE_DIR env var."
+    )
 
 
 def _pid_dir() -> Path:
@@ -348,7 +350,7 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
     snapshot = _process_snapshot()
     sparkd_keys = [["-m sparkd"], ["sparkd.py"]]
     dash_keys = [["-m dashboard"], ["dashboard.py"]]
-    pulse_keys = [["spark_pulse.py"], ["vibeship-spark-pulse", "app.py"]]
+    pulse_keys = [["vibeship-spark-pulse", "app.py"]]
     meta_keys = [["meta_ralph_dashboard.py"]]
     bridge_keys = [["-m bridge_worker"], ["bridge_worker.py"]]
     watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"]]
@@ -493,7 +495,7 @@ def stop_services() -> dict[str, str]:
             "sparkd": [["-m sparkd"], ["sparkd.py"]],
             "bridge_worker": [["-m bridge_worker"], ["bridge_worker.py"]],
             "dashboard": [["-m dashboard"], ["dashboard.py"]],
-            "pulse": [["spark_pulse.py"], ["vibeship-spark-pulse", "app.py"]],
+            "pulse": [["vibeship-spark-pulse", "app.py"]],
             "meta_ralph": [["meta_ralph_dashboard.py"]],
             "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"]],
         }.get(name, [])

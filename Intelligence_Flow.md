@@ -21,7 +21,9 @@ Sources:
 - scripts/emit_event.py (manual event injector)
 
 Central bus:
-- lib/queue.py writes events to ~/.spark/queue/events.jsonl (append-only)
+- lib/queue.py writes events to ~/.spark/queue/events.jsonl (append-only) with:
+  - lock-contention spillover to ~/.spark/queue/events.overflow.jsonl
+  - logical consume head in ~/.spark/queue/state.json (O(1) consume + periodic compaction)
 
 Processing loop:
 - bridge_worker.py -> lib/bridge_cycle.run_bridge_cycle
@@ -34,12 +36,13 @@ Mind integration:
 - mind_server.py (Mind Lite+ API, sqlite at ~/.mind/lite/memories.db)
 - lib/mind_bridge.py (retrieval used by advisor + lib.bridge for SPARK_CONTEXT)
 - Mind sync is manual (spark sync / lib.mind_bridge.sync_all_to_mind); offline queue used when Mind is down.
+- mind_bridge health checks are cached/backed-off to avoid repeated blocking calls while Mind is unavailable.
 - If Mind CLI is unstable, Spark can run the built-in Mind server (see start_mind.ps1; SPARK_FORCE_BUILTIN_MIND=1).
 
 Dashboards and ops:
 - dashboard.py (status + UI)
 - meta_ralph_dashboard.py (quality analyzer, port SPARK_META_RALPH_PORT, default 8586)
-- spark_pulse.py (chips + tuneables, port SPARK_PULSE_PORT, default 8765)
+- Spark Pulse runs via external vibeship-spark-pulse/app.py (internal spark_pulse.py is a compatibility wrapper).
 - spark_watchdog.py + lib/service_control.py (monitor/restart services)
 
 ## 2) Primary workflows (end-to-end)
@@ -53,7 +56,9 @@ Dashboards and ops:
 ### 2.2 Queue -> bridge cycle
 1) bridge_worker.py loops every interval (default 60s, min 10s sleep).
 2) lib.bridge_cycle.run_bridge_cycle reads recent events and orchestrates learning tasks.
-3) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
+3) bridge_cycle enables deferred/batch writes for cognitive learner and Meta-Ralph to avoid repeated large JSON rewrites per event.
+4) bridge_cycle classifies events in one pass and reuses those buckets for tastebank, content learning, cognitive signal extraction, and chips.
+5) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
 
 ### 2.2.1 Trace context propagation (v1)
 - trace_id is attached at ingest (hooks/observe.py, sparkd.py, lib.queue.quick_capture).
@@ -111,6 +116,7 @@ Dashboards and ops:
 6) Advisor metrics (local): ~/.spark/advisor/metrics.json
    - cognitive_surface_rate
    - cognitive_helpful_rate (when explicit feedback recorded)
+7) Advisor cache keys are context-hash based (tool + context + task context + input hints) to reduce accidental collisions.
 
 ### 2.6.2 Learning usage in real work (semantic first)
 1) Advisor is called before actions, so learnings can change the next decision (not just be stored).
@@ -121,6 +127,7 @@ Dashboards and ops:
 ### 2.7 Chips pipeline (domain intelligence)
 1) lib.chips.router detects triggers in events.
 2) lib.chips.runtime runs observers/learners; writes chip insights under ~/.spark/chip_insights.
+   - chip runtime/store apply size-based JSONL rotation to prevent unbounded chip insight growth.
 3) lib.chips.scoring scores value and promotion tiers.
 4) lib.chips.evolution updates trigger stats and can create provisional chips.
 5) lib.chip_merger merges chip insights into cognitive categories.
@@ -129,6 +136,7 @@ Dashboards and ops:
 1) lib.mind_bridge retrieves from mind_server.py (keyword + optional FTS, RRF + salience).
 2) lib.advisor and lib.bridge (SPARK_CONTEXT) read from Mind for advice/context.
 3) Mind sync is manual via spark sync (lib.mind_bridge.sync_all_to_mind); offline queue stores when Mind is down.
+4) mind_bridge uses per-endpoint timeouts plus health cache/backoff to keep hook paths responsive during Mind outages.
 
 ### 2.9 Self-evolution and meta-learning
 - lib/meta_ralph.py: quality gate for observe.py cognitive capture + advisor outcome loop.
@@ -142,6 +150,7 @@ Dashboards and ops:
 
 ### 2.11 Services / ops
 - lib/service_control.py starts/stops sparkd, bridge_worker, dashboard, watchdog, and pulse.
+- pulse process management targets external vibeship-spark-pulse/app.py.
 - spark_watchdog.py checks health, queue size, and heartbeat freshness.
 
 ## 3) Data stores and artifacts (local)
@@ -149,6 +158,8 @@ Dashboards and ops:
 Core queue + ingest:
 - ~/.spark/queue/events.jsonl
 - ~/.spark/queue/.queue.lock
+- ~/.spark/queue/events.overflow.jsonl
+- ~/.spark/queue/state.json
 - ~/.spark/invalid_events.jsonl
 
 Context + promotion:
@@ -237,11 +248,14 @@ Queue:
 - lib.queue.py MAX_EVENTS=10000 (rotation threshold).
 - lib.queue.py TAIL_CHUNK_BYTES=65536 (tail read size).
 - lib.queue._queue_lock timeout_s=0.5 (lock wait).
+- lib.queue.py MAX_QUEUE_BYTES=10485760 (10MB active queue budget).
+- lib.queue.py SPARK_QUEUE_COMPACT_HEAD_BYTES=5242880 (logical-head compaction threshold).
 
 Bridge cycle:
 - bridge_worker.py --interval default 60s, enforced min sleep 10s.
 - lib.bridge_cycle.run_bridge_cycle memory_limit=60, pattern_limit=200.
 - bridge_cycle reads 40 recent events and checks last 10 user prompts for tastebank.
+- bridge_cycle defers cognitive/meta writes until cycle end (batch flush).
 
 Memory capture:
 - lib.memory_capture.MAX_CAPTURE_CHARS=2000
@@ -273,13 +287,18 @@ Cognitive learning and promotion:
 Advisor / skills:
 - advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120
 - skills_router scoring weights (query/name/desc/owns/etc) and limit clamp to 1..10
+- advisor recent-advice lookup is tail-based (bounded by RECENT_ADVICE_MAX_LINES, no full-file scans)
 Semantic retrieval:
 - semantic.dedupe_similarity default 0.92 (embedding cosine)
 - semantic.log_retrievals default true (writes semantic_retrieval.jsonl)
 
 Mind bridge:
 - MIND_API_URL default from SPARK_MIND_PORT (default 8080)
-- request timeout 5s, health timeout 2s
+- MIND_HEALTH_TIMEOUT_S=0.6
+- MIND_POST_TIMEOUT_S=3.0
+- MIND_RETRIEVE_TIMEOUT_S=1.5
+- MIND_HEALTH_CACHE_TTL_S=5.0
+- MIND_HEALTH_BACKOFF_MAX_S=30.0
 - salience clamp 0.5..0.95, retrieve limit 5
 - offline queue and sync state kept under ~/.spark
 
@@ -287,6 +306,7 @@ Chips:
 - chip scoring weights: cognitive_value 0.30, outcome_linkage 0.20, uniqueness 0.15, actionability 0.15, transferability 0.10, domain_relevance 0.10
 - evolution thresholds: deprecate triggers when matches>=10 and value_ratio<0.2; provisional chip rules (see auto index)
 - runtime insight limit default 50
+- runtime/store rotate JSONL files at size thresholds (runtime 10MB cap, observations 5MB cap)
 - loader env SPARK_CHIP_SCHEMA_VALIDATION=warn|block
 
 Outcomes + prediction:
@@ -342,7 +362,7 @@ Moltbook adapter:
 
 ## 6) Known gaps / mismatches
 
-- spark_pulse.py is present and serves Spark Pulse on SPARK_PULSE_PORT (default 8765).
+- internal spark_pulse.py is deprecated wrapper; operational pulse is external vibeship-spark-pulse/app.py.
 - Mind host is fixed to localhost; port override supported via `SPARK_MIND_PORT` (see `lib/ports.py`).
 - build/ contains duplicated code artifacts; excluded from analysis.
 

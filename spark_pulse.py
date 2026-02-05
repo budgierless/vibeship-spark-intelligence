@@ -276,41 +276,29 @@ class PulseHandler(SimpleHTTPRequestHandler):
 
 
 def main():
-    setup_component_logging("spark_pulse")
+    # This primitive dashboard is DEPRECATED.
+    # The real Spark Pulse lives at vibeship-spark-pulse (external repo).
     print("\n" + "=" * 64)
-    print("  SPARK PULSE - CHIPS + TUNEABLES")
+    print("  SPARK PULSE - DEPRECATED")
     print("=" * 64)
-    print(f"  Open: http://localhost:{PORT}")
-    print("  Press Ctrl+C to stop")
-    print("=" * 64 + "\n")
+    print()
+    print("  This internal spark_pulse.py is deprecated.")
+    print("  Use the full Spark Pulse at vibeship-spark-pulse instead.")
+    print()
 
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), PulseHandler)
-    stop_event = threading.Event()
-
-    def _shutdown(signum=None, frame=None):
-        if stop_event.is_set():
-            return
-        stop_event.set()
-        print("\n  Shutting down...")
-        threading.Thread(target=server.shutdown, daemon=True).start()
-
-    try:
-        import signal
-        signal.signal(signal.SIGINT, _shutdown)
-        signal.signal(signal.SIGTERM, _shutdown)
-    except Exception:
-        pass
-
-    def _open_browser():
-        time.sleep(0.5)
-        webbrowser.open(f"http://localhost:{PORT}")
-
-    threading.Thread(target=_open_browser, daemon=True).start()
-
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()
+    from lib.service_control import SPARK_PULSE_DIR
+    external_app = SPARK_PULSE_DIR / "app.py"
+    if external_app.exists():
+        print(f"  Found external pulse at: {SPARK_PULSE_DIR}")
+        print(f"  Starting external pulse...")
+        print("=" * 64 + "\n")
+        import subprocess, sys
+        sys.exit(subprocess.call([sys.executable, str(external_app)]))
+    else:
+        print(f"  External pulse NOT found at: {SPARK_PULSE_DIR}")
+        print(f"  Set SPARK_PULSE_DIR env var or clone vibeship-spark-pulse there.")
+        print("=" * 64 + "\n")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

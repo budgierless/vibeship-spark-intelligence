@@ -14,6 +14,7 @@ Features:
 import json
 import hashlib
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -37,6 +38,11 @@ SYNC_STATE_FILE = Path.home() / ".spark" / "mind_sync_state.json"
 OFFLINE_QUEUE_FILE = Path.home() / ".spark" / "mind_offline_queue.jsonl"
 DEFAULT_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
 MAX_CONTENT_CHARS = int(os.environ.get("MIND_MAX_CONTENT_CHARS", "4000"))
+MIND_HEALTH_TIMEOUT_S = float(os.environ.get("MIND_HEALTH_TIMEOUT_S", "0.6"))
+MIND_POST_TIMEOUT_S = float(os.environ.get("MIND_POST_TIMEOUT_S", "3.0"))
+MIND_RETRIEVE_TIMEOUT_S = float(os.environ.get("MIND_RETRIEVE_TIMEOUT_S", "1.5"))
+MIND_HEALTH_CACHE_TTL_S = float(os.environ.get("MIND_HEALTH_CACHE_TTL_S", "5.0"))
+MIND_HEALTH_BACKOFF_MAX_S = float(os.environ.get("MIND_HEALTH_BACKOFF_MAX_S", "30.0"))
 
 
 class SyncStatus(Enum):
@@ -66,6 +72,25 @@ class MindBridge:
         self.mind_url = mind_url
         self.user_id = user_id
         self.sync_state = self._load_sync_state()
+        self._health_cached_ok: Optional[bool] = None
+        self._health_cached_at: float = 0.0
+        self._health_backoff_until: float = 0.0
+        self._health_failures: int = 0
+
+    def _record_health_result(self, ok: bool) -> None:
+        now = time.time()
+        self._health_cached_ok = bool(ok)
+        self._health_cached_at = now
+        if ok:
+            self._health_failures = 0
+            self._health_backoff_until = 0.0
+            return
+        self._health_failures += 1
+        backoff_s = min(
+            MIND_HEALTH_BACKOFF_MAX_S,
+            float(2 ** min(self._health_failures, 6)),
+        )
+        self._health_backoff_until = now + backoff_s
         
     def _load_sync_state(self) -> Dict[str, Any]:
         """Load sync state from disk."""
@@ -173,14 +198,26 @@ class MindBridge:
             "salience": salience
         }
     
-    def _check_mind_health(self) -> bool:
+    def _check_mind_health(self, *, force: bool = False, timeout_s: Optional[float] = None) -> bool:
         """Check if Mind API is available."""
         if not HAS_REQUESTS:
             return False
+        now = time.time()
+        if not force and self._health_cached_ok is not None:
+            if now - self._health_cached_at <= MIND_HEALTH_CACHE_TTL_S:
+                return bool(self._health_cached_ok)
+            if not self._health_cached_ok and now < self._health_backoff_until:
+                return False
         try:
-            response = requests.get(f"{self.mind_url}/health", timeout=2)
-            return response.status_code == 200
+            response = requests.get(
+                f"{self.mind_url}/health",
+                timeout=(timeout_s if timeout_s is not None else MIND_HEALTH_TIMEOUT_S),
+            )
+            ok = response.status_code == 200
+            self._record_health_result(ok)
+            return ok
         except Exception:
+            self._record_health_result(False)
             return False
     
     def _queue_for_later(self, insight: CognitiveInsight, memory_data: Dict):
@@ -216,22 +253,25 @@ class MindBridge:
             response = requests.post(
                 f"{self.mind_url}/v1/memories/",
                 json=memory_data,
-                timeout=5
+                timeout=MIND_POST_TIMEOUT_S
             )
             
             if response.status_code == 201:
                 result = response.json()
+                self._record_health_result(True)
                 self._mark_synced(insight)
                 print(f"[SPARK] Synced to Mind: {insight.category.value} - {insight.insight[:50]}...")
                 return SyncResult(
                     status=SyncStatus.SUCCESS,
                     memory_id=result.get("memory_id")
                 )
+            self._record_health_result(False)
             error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
             print(f"[SPARK] Mind sync error: {error_msg}")
             return SyncResult(status=SyncStatus.ERROR, error=error_msg)
                 
         except Exception as e:
+            self._record_health_result(False)
             self._queue_for_later(insight, memory_data)
             return SyncResult(status=SyncStatus.OFFLINE, queued=True, error=str(e))
     
@@ -265,17 +305,20 @@ class MindBridge:
                     response = requests.post(
                         f"{self.mind_url}/v1/memories/",
                         json=entry["memory_data"],
-                        timeout=5
+                        timeout=MIND_POST_TIMEOUT_S
                     )
                     
                     if response.status_code == 201:
+                        self._record_health_result(True)
                         synced += 1
                         if "synced_hashes" not in self.sync_state:
                             self.sync_state["synced_hashes"] = []
                         self.sync_state["synced_hashes"].append(entry["insight_hash"])
                     else:
+                        self._record_health_result(False)
                         remaining.append(entry)
                 except Exception:
+                    self._record_health_result(False)
                     remaining.append(entry)
         
         if remaining:
@@ -300,13 +343,16 @@ class MindBridge:
             response = requests.post(
                 f"{self.mind_url}/v1/memories/retrieve",
                 json={"user_id": self.user_id, "query": query, "limit": limit},
-                timeout=5
+                timeout=MIND_RETRIEVE_TIMEOUT_S
             )
             
             if response.status_code == 200:
+                self._record_health_result(True)
                 return response.json().get("memories", [])
+            self._record_health_result(False)
             return []
         except Exception:
+            self._record_health_result(False)
             return []
     
     def get_stats(self) -> Dict:

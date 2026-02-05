@@ -69,6 +69,9 @@ class ChipStore:
         with open(self.insights_file, "w") as f:
             json.dump(self._insights, f, indent=2)
 
+    # Max observation file size before rotation (5 MB per chip)
+    OBS_MAX_BYTES = 5 * 1024 * 1024
+
     def add_observation(self, observation) -> None:
         """
         Add an observation (captured data).
@@ -83,8 +86,34 @@ class ChipStore:
 
         data["stored_at"] = datetime.utcnow().isoformat()
 
+        # Rotate if observations file is too large
+        if self.observations_file.exists():
+            try:
+                if self.observations_file.stat().st_size > self.OBS_MAX_BYTES:
+                    self._rotate_jsonl(self.observations_file)
+            except Exception:
+                pass
+
         with open(self.observations_file, "a") as f:
             f.write(json.dumps(data) + "\n")
+
+    def _rotate_jsonl(self, path: Path) -> None:
+        """Rotate a JSONL file by keeping only the last ~25% of data."""
+        try:
+            size = path.stat().st_size
+            keep_bytes = self.OBS_MAX_BYTES // 4
+            if size <= keep_bytes:
+                return
+            with open(path, 'rb') as f:
+                f.seek(max(0, size - keep_bytes))
+                f.readline()  # skip partial line
+                tail = f.read()
+            tmp = path.with_suffix('.jsonl.tmp')
+            with open(tmp, 'wb') as f:
+                f.write(tail)
+            tmp.replace(path)
+        except Exception:
+            pass
 
     def get_observations(self, limit: int = 100, observer_name: Optional[str] = None) -> List[Dict]:
         """Get recent observations."""
