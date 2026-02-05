@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from lib.queue import read_events, count_events, EventType
+from lib.queue import read_events, count_events, EventType, _tail_lines
 from lib.cognitive_learner import get_cognitive_learner, _boost_confidence
 from lib.aha_tracker import get_aha_tracker, SurpriseType
 from lib.diagnostics import log_debug
@@ -83,14 +83,17 @@ def _prediction_type(category: str, insight_text: str) -> str:
 
 
 def _load_jsonl(path: Path, limit: int = 300) -> List[Dict]:
+    """Load last N lines from JSONL file using memory-efficient tail read."""
     if not path.exists():
         return []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except Exception:
+
+    # Use tail read to avoid loading entire file into memory
+    lines = _tail_lines(path, limit)
+    if not lines:
         return []
+
     out: List[Dict] = []
-    for line in reversed(lines[-limit:]):
+    for line in reversed(lines):
         try:
             out.append(json.loads(line))
         except Exception:

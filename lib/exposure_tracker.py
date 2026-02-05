@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
@@ -12,6 +13,46 @@ from .primitive_filter import is_primitive_text
 
 EXPOSURES_FILE = Path.home() / ".spark" / "exposures.jsonl"
 LAST_EXPOSURE_FILE = Path.home() / ".spark" / "last_exposure.json"
+
+# Chunk size for tail reads (64KB)
+_TAIL_CHUNK_BYTES = 65536
+
+
+def _tail_lines(path: Path, count: int) -> List[str]:
+    """Read the last N lines of a file without loading the whole file into memory."""
+    if count <= 0 or not path.exists():
+        return []
+
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            buffer = b""
+            lines: List[bytes] = []
+
+            while pos > 0 and len(lines) <= count:
+                read_size = min(_TAIL_CHUNK_BYTES, pos)
+                pos -= read_size
+                f.seek(pos)
+                data = f.read(read_size)
+                buffer = data + buffer
+
+                if b"\n" in buffer:
+                    parts = buffer.split(b"\n")
+                    buffer = parts[0]
+                    lines = parts[1:] + lines
+
+            if buffer:
+                lines = [buffer] + lines
+
+            # Normalize and decode
+            return [
+                ln.decode("utf-8", errors="replace").rstrip("\r")
+                for ln in lines[-count:]
+                if ln
+            ]
+    except Exception:
+        return []
 
 
 def record_exposures(
@@ -57,16 +98,18 @@ def record_exposures(
 
 
 def read_recent_exposures(limit: int = 200, max_age_s: float = 6 * 3600) -> List[Dict]:
+    """Read recent exposures using streaming tail read (memory efficient)."""
     if not EXPOSURES_FILE.exists():
         return []
-    try:
-        lines = EXPOSURES_FILE.read_text(encoding="utf-8").splitlines()
-    except Exception:
+
+    # Use tail read to avoid loading entire file into memory
+    lines = _tail_lines(EXPOSURES_FILE, limit)
+    if not lines:
         return []
 
     now = time.time()
     out: List[Dict] = []
-    for line in reversed(lines[-limit:]):
+    for line in reversed(lines):
         try:
             row = json.loads(line)
         except Exception:
@@ -79,16 +122,18 @@ def read_recent_exposures(limit: int = 200, max_age_s: float = 6 * 3600) -> List
 
 
 def read_exposures_within(*, max_age_s: float, now: Optional[float] = None, limit: int = 200) -> List[Dict]:
-    """Read exposures within max_age_s relative to now."""
+    """Read exposures within max_age_s relative to now (memory efficient)."""
     if not EXPOSURES_FILE.exists():
         return []
-    try:
-        lines = EXPOSURES_FILE.read_text(encoding="utf-8").splitlines()
-    except Exception:
+
+    # Use tail read to avoid loading entire file into memory
+    lines = _tail_lines(EXPOSURES_FILE, limit)
+    if not lines:
         return []
+
     now_ts = float(now or time.time())
     out: List[Dict] = []
-    for line in reversed(lines[-limit:]):
+    for line in reversed(lines):
         try:
             row = json.loads(line)
         except Exception:
