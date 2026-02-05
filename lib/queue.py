@@ -245,6 +245,9 @@ def consume_processed(up_to_offset: int) -> int:
     After the bridge worker processes events 0..N, it calls
     ``consume_processed(N)`` to strip those lines from the file.
 
+    Uses atomic temp-file + rename to avoid race conditions with
+    concurrent writers (the observe hook appends events while we consume).
+
     Returns the number of events removed.
     """
     if up_to_offset <= 0 or not EVENTS_FILE.exists():
@@ -260,14 +263,18 @@ def consume_processed(up_to_offset: int) -> int:
                     if idx < up_to_offset:
                         removed += 1
                     else:
-                        remaining.append(line.rstrip("\r\n"))
+                        stripped = line.rstrip("\r\n")
+                        if stripped:
+                            remaining.append(stripped)
             if removed == 0:
                 return 0
-            # Re-write only the un-consumed tail.
-            with open(EVENTS_FILE, "w", encoding="utf-8") as f:
+            # Atomic write: temp file + rename prevents data loss if
+            # the process crashes mid-write or a concurrent writer appends.
+            tmp = EVENTS_FILE.with_suffix(".jsonl.tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
                 for line in remaining:
-                    if line:
-                        f.write(line + "\n")
+                    f.write(line + "\n")
+            tmp.replace(EVENTS_FILE)
             log_debug("queue", f"consumed {removed} events, {len(remaining)} remain", None)
             return removed
     except Exception as e:

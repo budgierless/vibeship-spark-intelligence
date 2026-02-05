@@ -208,15 +208,23 @@ def compute_backpressure_level(queue_depth: int) -> str:
 def extract_tool_effectiveness(events: List[SparkEvent]) -> Dict[str, Any]:
     """Extract tool effectiveness metrics from a batch of events.
 
-    This is the missing piece - the current system has tool_effectiveness = 0
+    This is the missing piece -- the current system has tool_effectiveness = 0
     despite thousands of events because nothing aggregates success/failure
     rates into actual learnings.
 
+    Enhanced to:
+    - Collect common error messages per tool for root-cause insights
+    - Detect success-after-failure patterns (recovery signals)
+    - Track tool combinations that predict success/failure
+
     Returns a dict with tool-level statistics and generated insights.
     """
-    tool_stats: Dict[str, Dict[str, int]] = defaultdict(
-        lambda: {"success": 0, "failure": 0, "total": 0}
+    tool_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"success": 0, "failure": 0, "total": 0, "errors": []}
     )
+
+    # Track tool sequences per session for recovery detection
+    session_sequences: Dict[str, List[Tuple[str, bool]]] = defaultdict(list)
 
     for event in events:
         tool = (event.tool_name or "").strip()
@@ -226,9 +234,14 @@ def extract_tool_effectiveness(events: List[SparkEvent]) -> Dict[str, Any]:
         if event.event_type == EventType.POST_TOOL:
             tool_stats[tool]["success"] += 1
             tool_stats[tool]["total"] += 1
+            session_sequences[event.session_id].append((tool, True))
         elif event.event_type == EventType.POST_TOOL_FAILURE:
             tool_stats[tool]["failure"] += 1
             tool_stats[tool]["total"] += 1
+            err = (event.error or "")[:150].strip()
+            if err:
+                tool_stats[tool]["errors"].append(err)
+            session_sequences[event.session_id].append((tool, False))
 
     # Generate learnings from the stats
     insights: List[Dict[str, Any]] = []
@@ -238,25 +251,66 @@ def extract_tool_effectiveness(events: List[SparkEvent]) -> Dict[str, Any]:
 
         success_rate = stats["success"] / stats["total"] if stats["total"] > 0 else 0
 
-        # Interesting patterns worth learning from
+        # Low success rate with error details
         if success_rate < 0.5 and stats["total"] >= 5:
+            # Summarize top errors
+            error_counter = Counter(e[:80] for e in stats["errors"])
+            top_errors = error_counter.most_common(3)
+            error_summary = "; ".join(
+                f"{err} ({cnt}x)" for err, cnt in top_errors
+            ) if top_errors else "no error details"
             insights.append({
                 "type": "low_success_rate",
                 "tool": tool,
                 "success_rate": round(success_rate, 2),
                 "total": stats["total"],
-                "insight": f"{tool} has a {success_rate:.0%} success rate across {stats['total']} calls - investigate common failure patterns",
+                "insight": (
+                    f"{tool} has {success_rate:.0%} success rate "
+                    f"({stats['failure']}/{stats['total']} failures). "
+                    f"Common errors: {error_summary}"
+                ),
             })
         elif stats["failure"] >= 3:
+            error_counter = Counter(e[:80] for e in stats["errors"])
+            top_error = error_counter.most_common(1)
+            error_hint = f" Most common: {top_error[0][0]}" if top_error else ""
             insights.append({
                 "type": "recurring_failures",
                 "tool": tool,
                 "failures": stats["failure"],
-                "insight": f"{tool} failed {stats['failure']} times in this batch - check for systematic issues",
+                "success_rate": round(success_rate, 2),
+                "insight": (
+                    f"{tool} failed {stats['failure']}/{stats['total']} times "
+                    f"({success_rate:.0%} success rate).{error_hint}"
+                ),
             })
 
+    # Detect recovery patterns (fail then succeed with same tool)
+    recovery_count = 0
+    for session_id, seq in session_sequences.items():
+        for i in range(1, len(seq)):
+            tool, success = seq[i]
+            prev_tool, prev_success = seq[i - 1]
+            if tool == prev_tool and success and not prev_success:
+                recovery_count += 1
+
+    if recovery_count >= 3:
+        insights.append({
+            "type": "recovery_pattern",
+            "recovery_count": recovery_count,
+            "insight": (
+                f"Detected {recovery_count} recovery patterns "
+                f"(tool fail then retry succeed) -- retrying often works"
+            ),
+        })
+
     return {
-        "tool_stats": {k: dict(v) for k, v in tool_stats.items()},
+        "tool_stats": {
+            k: {"success": v["success"], "failure": v["failure"],
+                 "total": v["total"], "success_rate": round(
+                     v["success"] / v["total"], 2) if v["total"] > 0 else 0}
+            for k, v in tool_stats.items()
+        },
         "insights": insights,
         "tools_tracked": len(tool_stats),
     }
@@ -304,6 +358,9 @@ def extract_session_workflows(events: List[SparkEvent]) -> Dict[str, Any]:
     - Edit without preceding Read (risky)
     - Multiple consecutive failures (struggling)
     - Effective tool chains (Read -> Edit -> Read verify)
+
+    Deduplicates insights to avoid noise -- counts occurrences rather
+    than emitting one insight per occurrence.
     """
     sessions: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
 
@@ -314,7 +371,11 @@ def extract_session_workflows(events: List[SparkEvent]) -> Dict[str, Any]:
         status = "ok" if event.event_type == EventType.POST_TOOL else "fail"
         sessions[event.session_id].append((tool, status))
 
-    workflow_insights: List[Dict[str, Any]] = []
+    # Aggregate pattern counts instead of listing every occurrence
+    struggling_sessions: List[Dict[str, Any]] = []
+    risky_edit_by_predecessor: Counter = Counter()
+    total_edits = 0
+    safe_edits = 0
 
     for session_id, tools in sessions.items():
         if len(tools) < 3:
@@ -331,27 +392,63 @@ def extract_session_workflows(events: List[SparkEvent]) -> Dict[str, Any]:
                 current_fails = 0
 
         if max_consecutive_fails >= 3:
-            workflow_insights.append({
-                "type": "struggling",
+            struggling_sessions.append({
                 "session_id": session_id,
                 "consecutive_failures": max_consecutive_fails,
-                "insight": f"Session had {max_consecutive_fails} consecutive failures - may need different approach",
             })
 
-        # Detect Edit without Read (risky pattern)
+        # Count Edit-without-Read patterns (aggregated)
         for i, (tool, _) in enumerate(tools):
-            if tool == "Edit" and i > 0:
-                prev_tool = tools[i - 1][0]
-                if prev_tool != "Read":
-                    workflow_insights.append({
-                        "type": "risky_edit",
-                        "session_id": session_id,
-                        "insight": f"Edit without preceding Read (preceded by {prev_tool})",
-                    })
+            if tool == "Edit":
+                total_edits += 1
+                if i > 0:
+                    prev_tool = tools[i - 1][0]
+                    if prev_tool != "Read":
+                        risky_edit_by_predecessor[prev_tool] += 1
+                    else:
+                        safe_edits += 1
+                else:
+                    risky_edit_by_predecessor["(first_action)"] += 1
+
+    workflow_insights: List[Dict[str, Any]] = []
+
+    # Emit aggregated struggling insight
+    if struggling_sessions:
+        worst = max(s["consecutive_failures"] for s in struggling_sessions)
+        workflow_insights.append({
+            "type": "struggling",
+            "sessions_affected": len(struggling_sessions),
+            "worst_streak": worst,
+            "insight": (
+                f"{len(struggling_sessions)} session(s) had 3+ consecutive "
+                f"failures (worst streak: {worst}). Consider different "
+                f"approach when stuck."
+            ),
+        })
+
+    # Emit aggregated risky-edit insight
+    risky_total = sum(risky_edit_by_predecessor.values())
+    if risky_total >= 2 and total_edits > 0:
+        risky_pct = risky_total / total_edits
+        top_predecessors = risky_edit_by_predecessor.most_common(3)
+        pred_str = ", ".join(
+            f"{pred} ({cnt}x)" for pred, cnt in top_predecessors
+        )
+        workflow_insights.append({
+            "type": "risky_edit",
+            "risky_count": risky_total,
+            "total_edits": total_edits,
+            "safe_count": safe_edits,
+            "insight": (
+                f"{risky_total}/{total_edits} Edits ({risky_pct:.0%}) "
+                f"not preceded by Read. Preceded by: {pred_str}. "
+                f"Always Read before Edit to avoid mismatch errors."
+            ),
+        })
 
     return {
         "sessions_analyzed": len(sessions),
-        "workflow_insights": workflow_insights[:20],  # Cap to avoid noise
+        "workflow_insights": workflow_insights,
     }
 
 
@@ -471,7 +568,7 @@ def run_processing_cycle(
 
     state["consecutive_empty_cycles"] = 0
 
-    # 4. Classify by priority for stats
+    # 4. Classify by priority and sort HIGH first for pattern detection
     for event in events:
         priority = classify_event_priority(event)
         if priority == EventPriority.HIGH:
@@ -481,12 +578,21 @@ def run_processing_cycle(
         else:
             metrics.low_priority_processed += 1
 
-    # 5. Run pattern detection (existing system)
+    # Sort so HIGH-priority events are processed first by pattern detection.
+    # This ensures that user prompts and failures (the most valuable events)
+    # get full attention even if we can only partially process a huge batch.
+    processing_order = sorted(
+        events,
+        key=lambda e: classify_event_priority(e),
+        reverse=True,
+    )
+
+    # 5. Run pattern detection (existing system) with priority ordering
     try:
         from lib.pattern_detection.aggregator import get_aggregator
         aggregator = get_aggregator()
 
-        for event in events:
+        for event in processing_order:
             hook_event = (event.data or {}).get("hook_event") or ""
             payload = (event.data or {}).get("payload")
             pattern_event = {
@@ -546,6 +652,15 @@ def run_processing_cycle(
     try:
         consumed = consume_processed(len(events))
         metrics.events_consumed = consumed
+        # Reset the pattern detection offset since we've removed lines
+        # from the head of the file.  Without this, the worker's saved
+        # offset would point past the end of the (now shorter) file.
+        if consumed > 0:
+            try:
+                from lib.pattern_detection.worker import reset_offset
+                reset_offset()
+            except Exception:
+                pass
     except Exception as e:
         metrics.errors.append(f"consume: {str(e)[:100]}")
         log_debug("pipeline", "consume_processed failed", e)

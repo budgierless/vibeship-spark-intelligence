@@ -12,7 +12,14 @@ from pathlib import Path
 
 def run_cmd(cmd: str, label: str) -> None:
     print(f"\n== {label} ==")
-    proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    proc = subprocess.run(
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if proc.stdout:
         print(proc.stdout.rstrip())
     if proc.stderr:
@@ -83,6 +90,13 @@ def tail_jsonl(path: Path, label: str, max_lines: int = 1) -> None:
     if not path.exists():
         print(f"(missing) {path}")
         return
+    if path.suffix == ".json":
+        try:
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            print(json.dumps(data, indent=2))
+            return
+        except Exception:
+            pass
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     for line in lines[-max_lines:]:
         print(line)

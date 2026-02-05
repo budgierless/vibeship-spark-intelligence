@@ -523,6 +523,14 @@ class SemanticRetriever:
                 r.recency_score = self._compute_recency(insight)
                 r.outcome_score = self._get_outcome_effectiveness(r.insight_key, insight)
 
+        # Filter noise insights from results (semantic only, triggers are pre-curated)
+        noise_fn = self._get_noise_filter()
+        if noise_fn:
+            results = [
+                r for r in results
+                if r.source_type == "trigger" or not noise_fn(r.insight_text)
+            ]
+
         # Category exclusions (semantic results only)
         exclude = set(self.config.get("category_exclude") or [])
         if exclude:
@@ -532,7 +540,7 @@ class SemanticRetriever:
             ]
 
         # Gate: semantic similarity (triggers bypass)
-        min_sim = float(self.config.get("min_similarity", 0.6))
+        min_sim = float(self.config.get("min_similarity", 0.55))
         results = [
             r for r in results
             if r.source_type == "trigger" or r.semantic_sim >= min_sim

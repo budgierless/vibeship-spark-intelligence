@@ -78,21 +78,38 @@ def update_skill_effectiveness(query: str, success: bool, limit: int = 2) -> Non
 
 
 def update_self_awareness_reliability(tool_name: str, success: bool) -> None:
-    """Increment reliability counters for self-awareness insights about a tool."""
+    """Increment reliability counters for self-awareness insights about a tool.
+
+    Rate-limited: updates at most ONE insight per call to prevent
+    contradiction-bombing where every successful tool call contradicts
+    all self-awareness insights that mention the tool name.
+
+    Only matches insights where the tool name appears in the insight KEY
+    (not just anywhere in the text) for precision.
+    """
     t = (tool_name or "").lower().strip()
     if not t:
         return
 
     cog = get_cognitive_learner()
-    updated = False
-    for insight in cog.get_self_awareness_insights():
-        if t in (insight.insight or "").lower():
-            if success:
-                insight.times_contradicted += 1
-            else:
-                insight.times_validated += 1
-            insight.last_validated_at = datetime.now().isoformat()
-            updated = True
+    # Find the MOST relevant insight by matching tool name in the key
+    best_key = None
+    best_insight = None
+    for key, insight in cog.insights.items():
+        if insight.category.value != "self_awareness":
+            continue
+        # Match on key for precision (keys contain the tool name explicitly)
+        if t in key.lower():
+            if best_insight is None or insight.times_validated > best_insight.times_validated:
+                best_key = key
+                best_insight = insight
 
-    if updated:
-        cog._save_insights()
+    if best_insight is None:
+        return
+
+    if success:
+        best_insight.times_contradicted += 1
+    else:
+        best_insight.times_validated += 1
+    best_insight.last_validated_at = datetime.now().isoformat()
+    cog._save_insights()

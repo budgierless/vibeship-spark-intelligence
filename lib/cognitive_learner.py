@@ -783,6 +783,143 @@ class CognitiveLearner:
         if re.match(r"^testing\s+\w+\s+\w+\s+(works|passes|runs|completed|succeeded)\s*(correctly|successfully)?\.?$", tl):
             return True
 
+        # 25. Document-like content: markdown headers stored as insights
+        # e.g., "# Semantic Advisor Design", "### What's Now Working"
+        if re.match(r"^#{1,4}\s+", t):
+            return True
+
+        # 26. File paths stored as insights (raw paths without context)
+        # e.g., "c:\Users\USER\Desktop\xmcp ..."
+        if re.match(r"^[a-zA-Z]:\\", t):
+            return True
+
+        # 27. Conversational fragments stored as insights
+        # User messages captured verbatim: "Do you think we should...", "Can you..."
+        conversational_starts = [
+            "do you think", "can you ", "let's ", "let me ", "okay,",
+            "ok,", "alright,", "all right,", "by the way,", "oh,",
+            "so,", "well,", "hmm", "what about", "how about",
+            "continue to do", "i would say", "yeah,", "yeah ", "yep,",
+            "sure,", "right,", "no,", "nah,", "i mean,",
+            "it's probably", "it's not", "we already", "we need to",
+            "we should", "we have to", "we can ", "we were ",
+        ]
+        if any(tl.startswith(cs) for cs in conversational_starts):
+            return True
+
+        # 28. Very long insights (>250 chars) that are likely documents/transcripts, not insights
+        if len(t) > 250:
+            # Allow long insights only if they contain clear action verbs
+            action_verbs = ['use ', 'avoid ', 'check ', 'verify ', 'ensure ', 'always ',
+                            'never ', 'remember ', "don't ", 'prefer ', 'when ']
+            has_action = any(v in tl for v in action_verbs)
+            # Or if they start with established insight patterns
+            insight_starts = ['user prefers ', 'principle:', 'i struggle ', 'i tend to ',
+                              'blind spot:', 'assumption ', 'when i see ']
+            has_insight_start = any(tl.startswith(s) for s in insight_starts)
+            if not has_action and not has_insight_start:
+                return True
+
+        # 29. Garbled "When using X" fragments from truncated transcription
+        # e.g., "When using Bash, prefer 'ver hallucinating'" -- mid-word cutoff
+        if re.match(r"^when using \w+, (prefer|remember)", tl):
+            # Check for truncated single-quoted fragment (starts with lowercase mid-word)
+            m = re.search(r"'([a-z])", t)
+            if m:
+                return True
+            # Also reject conversational continuations
+            if re.search(r"(remember|prefer)[:\s]+'?(actually|lets|let's|just|maybe)", tl):
+                return True
+
+        # 30. Label + conversational fragment patterns
+        # "Principle: that the @META_RALPH", "Constraint: talk about it right now"
+        # Real principles are declarative; these are conversational references.
+        label_prefixes = [
+            "principle:", "constraint:", "reasoning:", "failure reason:",
+            "success factor:", "test:",
+        ]
+        for lp in label_prefixes:
+            if tl.startswith(lp):
+                rest = tl[len(lp):].strip()
+                # Reject if followed by conversational words
+                conv_words = ["that ", "this ", "those ", "these ", "it ",
+                              "right now", "all of", "we ", "they ", "follows ",
+                              "abides", "keep to", "talk about", "with the ",
+                              "with a ", "drop,", "what we", "make sure",
+                              "the way", "i would", "i think", "utilize ",
+                              "the primary", "the system", "the use of"]
+                if any(rest.startswith(cw) for cw in conv_words):
+                    return True
+                # Reject if rest is too short (<15 chars) to be actionable
+                if len(rest) < 15:
+                    return True
+                break
+
+        # 31. Market intelligence chip output with engagement metrics
+        # e.g., "[moltbook] (eng:45) Moltbook is great but..."
+        if re.match(r"^\[[\w-]+\]\s*\(eng:\d+\)", tl):
+            return True
+
+        # 32. Intelligence chip "Triggered by" with domain tags
+        # e.g., "[Market Intelligence] Triggered by 'vibe coding'"
+        if re.match(r"^\[[\w\s-]+ intelligence\]\s*triggered by", tl):
+            return True
+
+        # 33. Code snippets stored as insights
+        # e.g., "ADVICE_CACHE_TTL_SECONDS = 120", "DEFAULT_MIN_VALIDATIONS = 2"
+        # Also catches indented code blocks
+        if re.match(r"^[A-Z][A-Z_]+\s*=\s*\S+", t):
+            return True
+        if re.match(r"^\s{4,}(if |for |def |class |return |import |from |try:|except)", t):
+            return True
+
+        # 34. Docstring/comment fragments (triple-quoted strings, JSDoc, etc.)
+        if t.startswith('"""') or t.startswith("'''") or t.startswith("/**") or t.startswith("/*"):
+            return True
+
+        # 35. File reference lists stored as insights
+        # e.g., "- `lib/pattern_detection/aggregator.py` (added per..."
+        if re.match(r"^-\s*`(lib|src|hooks|scripts)/", t):
+            return True
+
+        # 36. User preference/wanted with markdown formatting or garbled text
+        # e.g., "User wanted: wrong?** 3. **What check would have p..."
+        if re.match(r"^user (wanted|prefers?)", tl):
+            # Contains markdown bold markers or numbered list fragments
+            if "**" in t or re.search(r"\d+\.\s*\*\*", t):
+                return True
+            # Single-quoted content that starts with a lowercase letter (truncated)
+            m = re.search(r"'([a-z])", t)
+            if m and "over '" not in t:
+                return True
+
+        # 37. Conversational "About these" / "About this" starters
+        if tl.startswith("about these ") or tl.startswith("about this "):
+            return True
+
+        # 38. Benchmark/pipeline test artifacts
+        if "[pipeline_test" in tl or "[benchmark" in tl:
+            return True
+
+        # 39. "User wanted:" followed by conversational text (let's, actually, etc.)
+        # These are user prompt transcriptions, not actual preference data.
+        if tl.startswith("user wanted:"):
+            rest = tl[len("user wanted:"):].strip()
+            conv_starters = ["let's", "lets", "actually", "i think", "we should",
+                             "can we", "i want", "please", "just ", "maybe"]
+            if any(rest.startswith(cs) for cs in conv_starters):
+                return True
+
+        # 40. "Prefer '" with truncated/garbled content (mid-word cutoff)
+        # e.g., "Prefer 'aking them a little awkward..."
+        if re.match(r"^prefer\s+'[a-z]", tl):
+            return True
+
+        # 41. Markdown section headers embedded in insights
+        # e.g., "## Session History", "## Current State: 2026-02-03"
+        if re.match(r"^##\s+", t):
+            return True
+
         return False
 
     def is_noise_insight(self, text: str) -> bool:

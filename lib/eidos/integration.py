@@ -286,27 +286,47 @@ def _run_distillation(episode: Episode, steps: List[Step]):
 def _is_primitive_distillation(statement: str) -> bool:
     """Check if a distillation is primitive/operational rather than genuine wisdom.
 
-    Filters out things like 'Tool X is effective' or 'sequence A -> B'.
-    Keeps domain decisions, user preferences, architecture insights, lessons.
+    The test: would a human find this useful to know next time?
+
+    Rejects:
+    - Tool effectiveness statements ("Tool X is effective")
+    - Generic approach restating ("use approach: git push")
+    - Sequence patterns ("A -> B -> C")
+    - Test-result echoes ("test passes")
+    - Tautological policy ("for X requests, do X")
+
+    Keeps:
+    - Domain decisions ("Use UTC for token timestamps")
+    - User preferences ("user prefers iterative fixes")
+    - Architecture insights ("why X over Y")
+    - Actionable cautions ("Always Read before Edit")
     """
-    s = statement.lower().strip()
-    # Primitive patterns to reject
-    primitive_patterns = [
-        "is effective for",
-        "success rate",
-        "over \\d+ uses",
-        "sequence.*->",
-        "tool '.*' is effective",
-        "took \\d+ steps",
-        "could optimize discovery",
-    ]
     import re
-    for pat in primitive_patterns:
-        if re.search(pat, s):
-            return True
+    s = statement.lower().strip()
+
     # Too short to be useful
     if len(s) < 20:
         return True
+
+    # Primitive patterns to reject
+    primitive_patterns = [
+        r"is effective for",
+        r"success rate",
+        r"over \d+ uses",
+        r"sequence.*->",
+        r"tool '.*' is effective",
+        r"took \d+ steps",
+        r"could optimize discovery",
+        r"^\w+ integration test",        # "EIDOS integration test passes"
+        r"use approach:",                  # "use approach: git push origin main"
+        r"for similar requests",           # tautological policy
+        r"\(\d+ successes?\)",             # "(3 successes)"
+        r"unexpected outcomes when handling",  # too vague
+    ]
+    for pat in primitive_patterns:
+        if re.search(pat, s):
+            return True
+
     return False
 
 
@@ -429,7 +449,7 @@ def create_step_before_action(
             required_action=required
         )
 
-    # Save step data for post-action completion
+    # Save step data for post-action completion (including retrieved distillation IDs)
     _save_active_step(session_id, {
         "step_id": step.step_id,
         "episode_id": episode.episode_id,
@@ -437,6 +457,7 @@ def create_step_before_action(
         "prediction": prediction,
         "trace_id": trace_id,
         "timestamp": time.time(),
+        "retrieved_distillation_ids": retrieved_memory_ids,
     })
 
     # Update episode step count
@@ -573,26 +594,19 @@ def complete_step_after_action(
 def _update_distillation_feedback(step_data: Dict, success: bool):
     """Close the feedback loop: mark retrieved distillations as helped/not-helped.
 
-    This is the critical missing piece -- without this, distillations
-    accumulate without ever knowing if they were useful.
+    Uses the distillation IDs that were stored during the pre-action step,
+    avoiding redundant re-queries. This is the critical missing piece --
+    without it, distillations accumulate without ever knowing if they help.
     """
+    distillation_ids = step_data.get("retrieved_distillation_ids", [])
+    if not distillation_ids:
+        return
+
     try:
         from .retriever import get_retriever
         retriever = get_retriever()
-
-        # Get the prediction data which contains the retrieved distillation ids
-        # from the pre-action step
-        prediction = step_data.get("prediction", {})
-        # The retrieved distillation ids were stored on the step before action
-        # We need to look them up from the active step's stored data
-        # For now we use a lightweight approach: query recent retrievals
-        # and mark them based on tool outcome
-        tool_name = step_data.get("tool_name", "")
-        if tool_name:
-            intent = f"{tool_name}"
-            distillations = retriever.retrieve_for_intent(intent)
-            for d in distillations[:3]:
-                retriever.record_usage(d.distillation_id, helped=success)
+        for did in distillation_ids:
+            retriever.record_usage(did, helped=success)
     except Exception:
         pass  # Never break the main flow
 
@@ -746,3 +760,78 @@ def generate_escalation(session_id: str, blocker: str) -> str:
 
     escalation = build_escalation(episode, steps, esc_type, blocker)
     return escalation.to_yaml()
+
+
+def get_eidos_health() -> Dict[str, Any]:
+    """Get EIDOS system health summary for observability.
+
+    Returns a dict with:
+    - episode stats (total, active, completed, success rate)
+    - distillation stats (total, used, helped, feedback ratio)
+    - step stats (total, pass rate)
+    - stale episode count
+    """
+    store = get_store()
+    stats = store.get_stats()
+
+    # Count stale episodes
+    now = time.time()
+    stale_count = 0
+    try:
+        recent = store.get_recent_episodes(limit=50)
+        for ep in recent:
+            if (ep.outcome == Outcome.IN_PROGRESS and
+                    now - ep.start_ts > STALE_EPISODE_THRESHOLD_S):
+                stale_count += 1
+    except Exception:
+        pass
+
+    # Distillation feedback ratio
+    dist_total = stats.get("distillations", 0)
+    dist_used = 0
+    dist_helped = 0
+    try:
+        all_dist = store.get_all_distillations(limit=100)
+        dist_used = sum(1 for d in all_dist if d.times_used > 0)
+        dist_helped = sum(1 for d in all_dist if d.times_helped > 0)
+    except Exception:
+        pass
+
+    return {
+        "episodes": {
+            "total": stats.get("episodes", 0),
+            "success_rate": stats.get("success_rate", 0),
+            "stale": stale_count,
+        },
+        "steps": {
+            "total": stats.get("steps", 0),
+        },
+        "distillations": {
+            "total": dist_total,
+            "used": dist_used,
+            "helped": dist_helped,
+            "feedback_ratio": dist_helped / max(dist_used, 1),
+            "high_confidence": stats.get("high_confidence_distillations", 0),
+        },
+        "policies": stats.get("policies", 0),
+    }
+
+
+def cleanup_stale_episodes() -> int:
+    """Clean up stale in_progress episodes. Returns count cleaned."""
+    store = get_store()
+    now = time.time()
+    cleaned = 0
+
+    try:
+        recent = store.get_recent_episodes(limit=100)
+        for ep in recent:
+            if (ep.outcome == Outcome.IN_PROGRESS and
+                    now - ep.start_ts > STALE_EPISODE_THRESHOLD_S and
+                    ep.step_count > 0):
+                _auto_close_episode(store, ep)
+                cleaned += 1
+    except Exception:
+        pass
+
+    return cleaned

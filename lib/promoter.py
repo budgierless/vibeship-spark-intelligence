@@ -32,8 +32,8 @@ from .project_profile import load_profile
 # ============= Configuration =============
 DEFAULT_PROMOTION_THRESHOLD = 0.65  # 65% reliability (lowered from 70% for faster promotion)
 DEFAULT_MIN_VALIDATIONS = 2  # 2 validations (lowered from 3 for faster learning)
-DEFAULT_CONFIDENCE_FLOOR = 0.80  # Fast-track: promote high-confidence insights without validation gate
-DEFAULT_MIN_AGE_HOURS = 1.0  # Fast-track: insights must be at least 1 hour old
+DEFAULT_CONFIDENCE_FLOOR = 0.90  # Fast-track: promote high-confidence insights without validation gate
+DEFAULT_MIN_AGE_HOURS = 2.0  # Fast-track: insights must be at least 2 hours old
 PROJECT_SECTION = "## Project Intelligence"
 PROJECT_START = "<!-- SPARK_PROJECT_START -->"
 PROJECT_END = "<!-- SPARK_PROJECT_END -->"
@@ -71,6 +71,41 @@ OPERATIONAL_PATTERNS = [
     # Raw tool telemetry
     r"^tool\s+\w+\s+(succeeded|failed)",
     r"tool effectiveness",
+
+    # Market intelligence chip output with engagement metrics
+    r"^\[[\w-]+\]\s*\(eng:\d+\)",
+
+    # Intelligence chip triggered-by tags
+    r"^\[[\w\s-]+ intelligence\]\s*triggered by",
+
+    # Benchmark/pipeline test artifacts
+    r"\[pipeline_test",
+    r"\[benchmark",
+
+    # Code constants stored as insights
+    r"^[A-Z][A-Z_]+\s*=\s*\S+",
+
+    # Docstring fragments
+    r'^"""',
+    r"^'''",
+
+    # File reference lists
+    r"^-\s*`(lib|src|hooks|scripts)/",
+
+    # Garbled truncated tool preferences (mid-word cutoff)
+    r"^when using \w+, (prefer|remember)\s+'[a-z]",
+
+    # Label + conversational fragment (not real principles)
+    r"^(principle|constraint|reasoning|failure reason|test):\s*(that |this |those |it |right now|all of|we |follows |abides|keep to|talk about|with the |with a |the primary|utilize)",
+
+    # Tool failure/success statistics
+    r"^\w+ failed \d+/\d+ times",
+    r"\d+% success rate",
+    r"\d+ session\(s\) had \d\+ consecutive",
+
+    # Code comments / JSDoc
+    r"^/\*\*",
+    r"^/\*",
 ]
 
 # Compile patterns for efficiency
@@ -619,6 +654,10 @@ class Promoter:
     def get_promotable_insights(self, include_operational: bool = False) -> List[Tuple[CognitiveInsight, str, PromotionTarget]]:
         """Get insights ready for promotion with their target files.
 
+        Uses two-track promotion:
+        1. Validated track: reliability >= threshold AND times_validated >= min_validations
+        2. Confidence track: confidence >= floor AND age >= min_age AND net-positive
+
         Args:
             include_operational: If False (default), filters out operational
                                  telemetry (tool sequences, usage counts).
@@ -626,22 +665,31 @@ class Promoter:
         """
         cognitive = get_cognitive_learner()
         candidates = []
+        fast_tracked = 0
 
         for key, insight in cognitive.insights.items():
             # Skip already promoted
             if insight.promoted:
                 continue
 
-            # Check criteria
-            if insight.reliability < self.reliability_threshold:
-                continue
-            if insight.times_validated < self.min_validations:
+            # Find target first (skip if no target for this category)
+            target = self._get_target_for_category(insight.category)
+            if not target:
                 continue
 
-            # Find target
-            target = self._get_target_for_category(insight.category)
-            if target:
+            # Track 1: Validated track (original logic)
+            if (insight.reliability >= self.reliability_threshold
+                    and insight.times_validated >= self.min_validations):
                 candidates.append((insight, key, target))
+                continue
+
+            # Track 2: Confidence fast-track (for insights without validation pathway)
+            if self._passes_confidence_track(insight):
+                candidates.append((insight, key, target))
+                fast_tracked += 1
+
+        if fast_tracked:
+            print(f"[SPARK] {fast_tracked} insights qualify via confidence fast-track")
 
         # Phase 1: Filter out operational telemetry
         if not include_operational:
@@ -679,40 +727,21 @@ class Promoter:
             return False
     
     def promote_all(self, dry_run: bool = False, include_project: bool = True) -> Dict[str, int]:
-        """Promote all eligible insights (filters operational telemetry)."""
-        # Get candidates before filtering for stats
-        cognitive = get_cognitive_learner()
-        all_candidates = []
-        for key, insight in cognitive.insights.items():
-            if insight.promoted:
-                continue
-            if insight.reliability < self.reliability_threshold:
-                continue
-            if insight.times_validated < self.min_validations:
-                continue
-            target = self._get_target_for_category(insight.category)
-            if target:
-                all_candidates.append((insight, key, target))
+        """Promote all eligible insights (filters operational telemetry).
 
-        # Apply operational filter
-        promotable, filtered_operational = filter_operational_insights(all_candidates)
-        # Apply safety filter
-        promotable, filtered_unsafe = filter_unsafe_insights(promotable)
+        Uses get_promotable_insights() which applies two-track promotion:
+        validated track + confidence fast-track.
+        """
+        promotable = self.get_promotable_insights(include_operational=False)
 
         stats = {
             "promoted": 0,
             "skipped": 0,
             "failed": 0,
-            "filtered_operational": len(filtered_operational),  # NEW: Track filtered
-            "filtered_unsafe": len(filtered_unsafe),
+            "fast_tracked": 0,
             "project_written": 0,
             "project_failed": 0,
         }
-
-        if filtered_operational:
-            print(f"[SPARK] Filtered {len(filtered_operational)} operational insights (tool sequences, telemetry)")
-        if filtered_unsafe:
-            print(f"[SPARK] Filtered {len(filtered_unsafe)} unsafe insights (safety guardrail)")
 
         if include_project:
             if dry_run:
@@ -727,42 +756,31 @@ class Promoter:
         if not promotable:
             print("[SPARK] No insights ready for promotion")
             return stats
-        
+
         print(f"[SPARK] Found {len(promotable)} insights ready for promotion")
-        
+
         for insight, key, target in promotable:
             if dry_run:
                 print(f"  [DRY RUN] Would promote to {target.filename}: {insight.insight[:50]}...")
+                self._log_promotion(key, target.filename, "skipped", "dry_run")
                 stats["skipped"] += 1
                 continue
-            
+
             if self.promote_insight(insight, key, target):
                 stats["promoted"] += 1
+                self._log_promotion(key, target.filename, "promoted")
             else:
                 stats["failed"] += 1
-        
+                self._log_promotion(key, target.filename, "failed")
+
         return stats
     
     def get_promotion_status(self) -> Dict:
-        """Get status of promotions (includes operational filter stats)."""
+        """Get status of promotions (includes two-track + filter stats)."""
         cognitive = get_cognitive_learner()
 
-        # Get all candidates before filtering
-        all_candidates = []
-        for key, insight in cognitive.insights.items():
-            if insight.promoted:
-                continue
-            if insight.reliability < self.reliability_threshold:
-                continue
-            if insight.times_validated < self.min_validations:
-                continue
-            target = self._get_target_for_category(insight.category)
-            if target:
-                all_candidates.append((insight, key, target))
-
-        # Apply filter
-        cognitive_only, operational = filter_operational_insights(all_candidates)
-        cognitive_only, unsafe = filter_unsafe_insights(cognitive_only)
+        # Use the unified two-track getter
+        promotable = self.get_promotable_insights(include_operational=False)
 
         promoted = [i for i in cognitive.insights.values() if i.promoted]
         by_target = {}
@@ -773,12 +791,11 @@ class Promoter:
         return {
             "total_insights": len(cognitive.insights),
             "promoted_count": len(promoted),
-            "ready_for_promotion": len(cognitive_only),
-            "filtered_operational": len(operational),  # NEW: Operational telemetry blocked
-            "filtered_unsafe": len(unsafe),
+            "ready_for_promotion": len(promotable),
             "by_target": by_target,
             "threshold": self.reliability_threshold,
-            "min_validations": self.min_validations
+            "min_validations": self.min_validations,
+            "confidence_floor": self.confidence_floor,
         }
 
 

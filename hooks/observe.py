@@ -928,13 +928,25 @@ def main():
             pass
 
     # EIDOS: Complete episode on session end (triggers distillation)
+    # Let complete_episode infer the outcome from step data rather than
+    # always claiming SUCCESS (which inflated success rates to 100%).
     if hook_event in ("Stop", "SessionEnd") and EIDOS_AVAILABLE:
         try:
-            episode = complete_episode(session_id, Outcome.SUCCESS)
+            episode = complete_episode(session_id)
             if episode:
-                log_debug("observe", f"EIDOS episode {episode.episode_id} completed", None)
+                log_debug("observe", f"EIDOS episode {episode.episode_id} completed as {episode.outcome.value}", None)
         except Exception as e:
             log_debug("observe", "EIDOS episode completion failed", e)
+
+    # Auto-promote insights at session end (rate-limited to once per hour)
+    if hook_event in ("Stop", "SessionEnd"):
+        try:
+            from lib.auto_promote import maybe_promote_on_session_end
+            cwd = input_data.get("cwd")
+            project_dir = Path(cwd) if cwd else None
+            maybe_promote_on_session_end(project_dir=project_dir)
+        except Exception as e:
+            log_debug("observe", "auto-promotion failed", e)
 
     sys.exit(0)
 
