@@ -54,6 +54,7 @@ MIN_RELIABILITY_FOR_ADVICE = 0.5  # Lowered from 0.6 for more advice coverage
 MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
 MAX_ADVICE_ITEMS = 8  # Raised from 5 for complex tasks
 ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
+MIN_RANK_SCORE = 0.35  # Drop advice below this after ranking — prefer fewer, higher-quality items
 
 
 # ============= Data Classes =============
@@ -361,6 +362,9 @@ class SparkAdvisor:
 
         # Sort by relevance (confidence * context_match * effectiveness_boost)
         advice_list = self._rank_advice(advice_list)
+
+        # Drop low-quality items — prefer fewer, higher-quality results
+        advice_list = [a for a in advice_list if self._rank_score(a) >= MIN_RANK_SCORE]
 
         # Limit to top N
         advice_list = advice_list[:MAX_ADVICE_ITEMS]
@@ -680,13 +684,16 @@ class SparkAdvisor:
                 if hasattr(d, 'usage_count') and d.usage_count:
                     reason += f", used {d.usage_count}x"
 
+                # Compute real context match instead of hardcoding 0.85
+                eidos_match = self._calculate_context_match(d.statement, context)
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(d.statement),
                     insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
                     text=f"[EIDOS {type_label}] {d.statement}",
                     confidence=d.confidence,
                     source="eidos",
-                    context_match=0.85,
+                    context_match=eidos_match,
                     reason=reason,
                 ))
                 # Record usage (will mark helped=True on positive outcome)
@@ -784,52 +791,49 @@ class SparkAdvisor:
 
         return max(0.1, min(1.0, score))
 
-    def _rank_advice(self, advice_list: List[Advice]) -> List[Advice]:
-        """Rank advice by relevance, actionability, and effectiveness."""
-        # Source quality tiers (Task #10: boost validated sources)
-        SOURCE_BOOST = {
-            "eidos": 1.4,           # EIDOS distillations are validated patterns
-            "self_awareness": 1.3,  # Tool-specific cautions from past failures
-            "cognitive": 1.0,       # Standard cognitive insights
-            "mind": 1.0,            # Mind memories
-            "bank": 0.9,            # Memory banks (less curated)
-            "semantic": 1.05,       # Semantic retrieval of cognitive insights
-            "trigger": 1.2,         # Explicit trigger rules
-        }
+    # Source quality tiers (Task #10: boost validated sources)
+    _SOURCE_BOOST = {
+        "eidos": 1.4,           # EIDOS distillations are validated patterns
+        "self_awareness": 1.3,  # Tool-specific cautions from past failures
+        "cognitive": 1.0,       # Standard cognitive insights
+        "mind": 1.0,            # Mind memories
+        "bank": 0.9,            # Memory banks (less curated)
+        "semantic": 1.05,       # Semantic retrieval of cognitive insights
+        "trigger": 1.2,         # Explicit trigger rules
+    }
 
-        # Get insight-level effectiveness from Meta-Ralph (Task #11)
+    def _rank_score(self, a: Advice) -> float:
+        """Compute a relevance score for a single advice item."""
+        base_score = a.confidence * a.context_match
+
+        # Source quality boost (Task #10)
+        base_score *= self._SOURCE_BOOST.get(a.source, 1.0)
+
+        # Actionability boost (Task #9)
+        actionability = self._score_actionability(a.text)
+        base_score *= (0.5 + actionability)  # 0.5x to 1.5x based on actionability
+
+        # Insight-level outcome boost (Task #11)
         try:
             from .meta_ralph import get_meta_ralph
             ralph = get_meta_ralph()
         except Exception:
             ralph = None
+        if ralph and a.insight_key:
+            insight_effectiveness = ralph.get_insight_effectiveness(a.insight_key)
+            base_score *= (0.5 + insight_effectiveness)
 
-        def score(a: Advice) -> float:
-            base_score = a.confidence * a.context_match
+        # Boost based on source-level past effectiveness (fallback)
+        source_stats = self.effectiveness.get("by_source", {}).get(a.source, {})
+        if source_stats.get("total", 0) > 0:
+            helpful_rate = source_stats.get("helpful", 0) / source_stats["total"]
+            base_score *= (0.8 + helpful_rate * 0.4)  # 0.8x to 1.2x
 
-            # Source quality boost (Task #10)
-            source_boost = SOURCE_BOOST.get(a.source, 1.0)
-            base_score *= source_boost
+        return base_score
 
-            # Actionability boost (Task #9)
-            actionability = self._score_actionability(a.text)
-            base_score *= (0.5 + actionability)  # 0.5x to 1.5x based on actionability
-
-            # Insight-level outcome boost (Task #11)
-            if ralph and a.insight_key:
-                insight_effectiveness = ralph.get_insight_effectiveness(a.insight_key)
-                # Scale: 0.5 (neutral) = no change, 1.0 = 1.5x boost, 0.0 = 0.5x penalty
-                base_score *= (0.5 + insight_effectiveness)
-
-            # Boost based on source-level past effectiveness (fallback)
-            source_stats = self.effectiveness.get("by_source", {}).get(a.source, {})
-            if source_stats.get("total", 0) > 0:
-                helpful_rate = source_stats.get("helpful", 0) / source_stats["total"]
-                base_score *= (0.8 + helpful_rate * 0.4)  # 0.8x to 1.2x (reduced weight, insight-level is primary)
-
-            return base_score
-
-        return sorted(advice_list, key=score, reverse=True)
+    def _rank_advice(self, advice_list: List[Advice]) -> List[Advice]:
+        """Rank advice by relevance, actionability, and effectiveness."""
+        return sorted(advice_list, key=self._rank_score, reverse=True)
 
     def _log_advice(self, advice_list: List[Advice], tool: str, context: str):
         """Log advice given for later analysis."""
@@ -1028,11 +1032,13 @@ class SparkAdvisor:
                 advice_ids = entry.get("advice_ids") or []
                 for aid in advice_ids:
                     ralph.track_outcome(aid, outcome_str, evidence, trace_id=trace_id)
-                    # Also update total_followed - this was missing!
+                    # Record that advice was seen, but do NOT auto-mark as
+                    # helpful just because the tool succeeded.  Only explicit
+                    # feedback (advice_was_relevant=True) should count.
                     self.report_outcome(
                         aid,
-                        was_followed=True,  # Tool was executed, so advice was "followed"
-                        was_helpful=success,  # Success = helpful
+                        was_followed=True,
+                        was_helpful=True if advice_was_relevant else None,
                         notes=f"Auto-linked from {tool_name}",
                         trace_id=trace_id,
                     )

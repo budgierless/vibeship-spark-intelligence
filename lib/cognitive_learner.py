@@ -715,6 +715,32 @@ class CognitiveLearner:
         if t.startswith("Success factor:") and len(t) < 100:
             return True
 
+        # 17. Task notification XML blobs
+        if "<task-notification>" in t or "<task-id>" in t or "<output-file>" in t:
+            return True
+
+        # 18. Code dumps (>5 lines, majority indented)
+        lines = t.split("\n")
+        if len(lines) > 5:
+            indented = sum(1 for ln in lines if ln.startswith("    ") or ln.startswith("\t"))
+            if indented > len(lines) * 0.5:
+                return True
+
+        # 19. Garbled user preferences with single-char fragments
+        # e.g. "User prefers 'eeding to pay for it' over 'n'"
+        if "User prefers '" in t and "' over '" in t:
+            m = re.search(r"over '(.{1,3})'", t)
+            if m and len(m.group(1)) <= 2:
+                return True
+
+        # 20. Benchmark/intelligence chip artifacts with tool_name field
+        if re.match(r"^\[[\w\s-]+ Intelligence\]", t) and "tool_name:" in t:
+            return True
+
+        # 21. Screenshot / image paths stored as insights
+        if re.search(r"\\Screenshots\\|\.png['\"\s]|\.jpg['\"\s]", t):
+            return True
+
         return False
 
     def is_noise_insight(self, text: str) -> bool:

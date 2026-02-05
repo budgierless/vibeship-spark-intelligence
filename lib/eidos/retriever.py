@@ -173,11 +173,12 @@ class StructuralRetriever:
         results: List[Distillation] = []
         seen_ids: Set[str] = set()
 
-        # Policies always apply
+        # Policies — only include if relevant to intent (keyword overlap)
         for p in self._get_policies():
             if p.distillation_id not in seen_ids:
-                results.append(p)
-                seen_ids.add(p.distillation_id)
+                if self._has_keyword_overlap(intent, p.statement, min_overlap=1):
+                    results.append(p)
+                    seen_ids.add(p.distillation_id)
 
         # Heuristics for this intent
         for h in self._get_heuristics(intent):
