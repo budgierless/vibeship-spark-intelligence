@@ -144,7 +144,7 @@ def get_outcome_links(
     insight_key: Optional[str] = None,
     outcome_id: Optional[str] = None,
     chip_id: Optional[str] = None,
-    limit: int = 100,
+    limit: Optional[int] = 100,
 ) -> List[Dict[str, Any]]:
     """Get outcome-insight links, optionally filtered."""
     if not OUTCOME_LINKS_FILE.exists():
@@ -165,11 +165,13 @@ def get_outcome_links(
             except Exception:
                 pass
 
+    if limit is None or limit <= 0:
+        return links
     return links[-limit:]
 
 
 def read_outcomes(
-    limit: int = 100,
+    limit: Optional[int] = 100,
     polarity: Optional[str] = None,
     chip_id: Optional[str] = None,
     since: Optional[float] = None,
@@ -193,13 +195,15 @@ def read_outcomes(
             except Exception:
                 pass
 
+    if limit is None or limit <= 0:
+        return outcomes
     return outcomes[-limit:]
 
 
 def get_unlinked_outcomes(limit: int = 50) -> List[Dict[str, Any]]:
     """Get outcomes that haven't been linked to any insight yet."""
     outcomes = read_outcomes(limit=limit * 2)
-    links = get_outcome_links(limit=1000)
+    links = get_outcome_links(limit=None)
 
     linked_ids = {link.get("outcome_id") for link in links}
     unlinked = [o for o in outcomes if o.get("outcome_id") not in linked_ids]
@@ -251,23 +255,52 @@ def build_chip_outcome(
 
 
 def get_outcome_stats(chip_id: Optional[str] = None) -> Dict[str, Any]:
-    """Get outcome statistics, optionally filtered by chip."""
-    outcomes = read_outcomes(limit=1000, chip_id=chip_id)
-    links = get_outcome_links(chip_id=chip_id, limit=1000)
-
+    """Get outcome statistics, optionally filtered by chip (full-file scan)."""
     by_polarity = {"pos": 0, "neg": 0, "neutral": 0}
-    for o in outcomes:
-        pol = o.get("polarity", "neutral")
-        by_polarity[pol] = by_polarity.get(pol, 0) + 1
+    total_outcomes = 0
+    total_links = 0
+    validated_links = 0
+    linked_ids = set()
 
-    validated_links = sum(1 for l in links if l.get("validated"))
+    if OUTCOME_LINKS_FILE.exists():
+        with OUTCOME_LINKS_FILE.open("r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    link = json.loads(line.strip())
+                except Exception:
+                    continue
+                if chip_id and link.get("chip_id") != chip_id:
+                    continue
+                total_links += 1
+                if link.get("validated"):
+                    validated_links += 1
+                oid = link.get("outcome_id")
+                if oid:
+                    linked_ids.add(oid)
+
+    unlinked_count = 0
+    if OUTCOMES_FILE.exists():
+        with OUTCOMES_FILE.open("r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    outcome = json.loads(line.strip())
+                except Exception:
+                    continue
+                if chip_id and outcome.get("chip_id") != chip_id:
+                    continue
+                total_outcomes += 1
+                pol = outcome.get("polarity", "neutral")
+                by_polarity[pol] = by_polarity.get(pol, 0) + 1
+                oid = outcome.get("outcome_id")
+                if not oid or oid not in linked_ids:
+                    unlinked_count += 1
 
     return {
-        "total_outcomes": len(outcomes),
+        "total_outcomes": total_outcomes,
         "by_polarity": by_polarity,
-        "total_links": len(links),
+        "total_links": total_links,
         "validated_links": validated_links,
-        "unlinked": len(outcomes) - len(links),
+        "unlinked": unlinked_count,
     }
 
 
