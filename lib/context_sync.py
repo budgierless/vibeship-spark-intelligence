@@ -134,6 +134,8 @@ def _select_insights(
         for ins in cognitive.insights.values():
             if ins.times_validated < high_validation_override:
                 continue
+            if cognitive.effective_reliability(ins) < min_reliability:
+                continue
             if _is_low_value(ins.insight):
                 continue
             picked.append(ins)

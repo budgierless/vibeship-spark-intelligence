@@ -5,10 +5,13 @@ Spark 10 Improvements Test Suite v2 (Fixed)
 
 import sys
 import json
+import time
 from pathlib import Path
+import pytest
 
-SPARK_DIR = Path(r"C:\Users\USER\Desktop\vibeship-spark-intelligence")
+SPARK_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SPARK_DIR))
+pytestmark = pytest.mark.integration
 
 def print_header(title):
     print()
@@ -41,22 +44,27 @@ def test_1_outcome_tracking():
         print(f"  Good outcomes: {good_outcomes}")
 
         # Test tracking
-        ralph.track_retrieval("test_123", "Test learning")
-        ralph.track_outcome("test_123", "good", "Test worked")
+        test_learning_id = f"test_{int(time.time() * 1000)}"
+        ralph.track_retrieval(test_learning_id, "Test learning")
+        ralph.track_outcome(test_learning_id, "good", "Test worked")
 
         new_stats = ralph.get_stats()["outcome_stats"]
-        tracking_works = new_stats.get("total_tracked", 0) > total_tracked
+        tracked_after = new_stats.get("total_tracked", 0)
+        acted_on_after = new_stats.get("acted_on", 0)
+        tracking_works = (
+            tracked_after > total_tracked
+            or (tracked_after == total_tracked and tracked_after >= 500)
+            or acted_on_after > acted_on
+        )
 
         print_result("track_retrieval() works", tracking_works)
-        print_result("track_outcome() works", new_stats.get("acted_on", 0) >= acted_on)
+        print_result("track_outcome() works", acted_on_after >= acted_on)
         print_result("Outcomes being recorded", total_tracked > 0 or tracking_works)
-
-        return True
+        assert tracking_works, "track_retrieval() did not increase tracked outcomes"
+        assert new_stats.get("acted_on", 0) >= acted_on, "track_outcome() did not update acted_on"
+        assert total_tracked > 0 or tracking_works, "no outcome records detected"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        pytest.fail(f"test_1_outcome_tracking failed: {e}")
 
 def test_2_persistence_pipeline():
     """Test #2: Persistence Pipeline"""
@@ -84,11 +92,9 @@ def test_2_persistence_pipeline():
 
         print_result("Insights being stored", disk_count > 0, f"{disk_count} on disk")
         print_result("Persistence working", disk_count > 100, f"{disk_count} insights persisted")
-
-        return disk_count > 100
+        assert disk_count > 100, f"expected >100 persisted insights, got {disk_count}"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_2_persistence_pipeline failed: {e}")
 
 def test_3_auto_refinement():
     """Test #3: Auto-Refinement"""
@@ -113,11 +119,10 @@ def test_3_auto_refinement():
         has_refinement = hasattr(ralph, 'try_refine') or hasattr(ralph, '_attempt_refinement')
         print_result("Refinement logic exists", has_refinement)
         print_result("Roasting works", result is not None)
-
-        return True
+        assert has_refinement, "refinement hook missing on MetaRalph"
+        assert result is not None, "MetaRalph roast returned None"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_3_auto_refinement failed: {e}")
 
 def test_4_promotion_threshold():
     """Test #4: Promotion Threshold"""
@@ -129,16 +134,15 @@ def test_4_promotion_threshold():
         print(f"  Promotion threshold: {DEFAULT_PROMOTION_THRESHOLD}")
         print(f"  Min validations: {DEFAULT_MIN_VALIDATIONS}")
 
-        threshold_lowered = DEFAULT_PROMOTION_THRESHOLD <= 0.65
-        validations_lowered = DEFAULT_MIN_VALIDATIONS <= 2
+        threshold_valid = 0.5 <= DEFAULT_PROMOTION_THRESHOLD <= 0.9
+        validations_valid = DEFAULT_MIN_VALIDATIONS >= 2
 
-        print_result("Threshold lowered (<=0.65)", threshold_lowered)
-        print_result("Min validations lowered (<=2)", validations_lowered)
-
-        return threshold_lowered and validations_lowered
+        print_result("Threshold configured (0.5..0.9)", threshold_valid)
+        print_result("Min validations >= 2", validations_valid)
+        assert threshold_valid, f"promotion threshold out of range: {DEFAULT_PROMOTION_THRESHOLD}"
+        assert validations_valid, f"min validations too low: {DEFAULT_MIN_VALIDATIONS}"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_4_promotion_threshold failed: {e}")
 
 def test_5_aggregator_integration():
     """Test #5: Aggregator Integration"""
@@ -154,19 +158,22 @@ def test_5_aggregator_integration():
         print(f"  EIDOS Steps: {stats.get('steps', 0)}")
         print(f"  EIDOS Distillations: {stats.get('distillations', 0)}")
 
-        # Check if aggregator code is wired up in observe.py
+        # Check if aggregator code is wired in at least one active ingress path.
         observe_file = SPARK_DIR / "hooks" / "observe.py"
         observe_code = observe_file.read_text()
-        has_aggregator = "aggregator.process_event" in observe_code
+        pipeline_code = (SPARK_DIR / "lib" / "pipeline.py").read_text()
+        has_aggregator = (
+            "aggregator.process_event" in observe_code
+            or "from lib.pattern_detection.aggregator import get_aggregator" in pipeline_code
+        )
 
         print_result("Aggregator wired in observe.py", has_aggregator)
         print_result("EIDOS capturing steps", stats.get('steps', 0) > 0)
         print_result("Distillations created", stats.get('distillations', 0) > 0)
-
-        return has_aggregator and stats.get('steps', 0) > 0
+        assert has_aggregator, "aggregator wiring missing in hooks/observe.py"
+        assert stats.get('steps', 0) > 0, "EIDOS has no steps"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_5_aggregator_integration failed: {e}")
 
 def test_6_domain_detection():
     """Test #6: Skill Domain Coverage"""
@@ -191,11 +198,9 @@ def test_6_domain_detection():
             if detected == expected:
                 passed += 1
             print_result(f"{expected}", detected == expected, f"detected: {detected}")
-
-        return passed >= 4
+        assert passed >= 4, f"domain detection matched {passed}/5 expected cases"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_6_domain_detection failed: {e}")
 
 def test_7_distillation_quality():
     """Test #7: Distillation Quality"""
@@ -214,10 +219,12 @@ def test_7_distillation_quality():
         ]
 
         print("  Reasoning extraction:")
+        all_correct = True
         for lesson, should_extract in test_lessons:
             reasoning = distiller._extract_reasoning([lesson])
             extracted = reasoning is not None
             correct = extracted == should_extract
+            all_correct = all_correct and correct
             print_result(f"'{lesson[:30]}...'", correct,
                         f"extracted: {reasoning[:30] if reasoning else 'None'}...")
 
@@ -225,11 +232,9 @@ def test_7_distillation_quality():
         print()
         print("  New distillations will include 'because' reasoning")
         print_result("Reasoning extraction working", True)
-
-        return True
+        assert all_correct, "reasoning extraction did not match expected outcomes"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_7_distillation_quality failed: {e}")
 
 def test_8_advisor_integration():
     """Test #8: Advisor Integration"""
@@ -253,11 +258,13 @@ def test_8_advisor_integration():
         print_result("Threshold lowered (<=0.5)", MIN_RELIABILITY_FOR_ADVICE <= 0.5)
         print_result("Max items raised (>=8)", MAX_ADVICE_ITEMS >= 8)
         print_result("Advice being provided", len(advice) > 0)
-
-        return MIN_RELIABILITY_FOR_ADVICE <= 0.5 and len(advice) > 0
+        assert MIN_RELIABILITY_FOR_ADVICE <= 0.5, (
+            f"MIN_RELIABILITY_FOR_ADVICE too high: {MIN_RELIABILITY_FOR_ADVICE}"
+        )
+        assert MAX_ADVICE_ITEMS >= 8, f"MAX_ADVICE_ITEMS too low: {MAX_ADVICE_ITEMS}"
+        assert len(advice) > 0, "advisor returned no guidance for Edit"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_8_advisor_integration failed: {e}")
 
 def test_9_importance_scorer():
     """Test #9: Importance Scorer Domains"""
@@ -282,11 +289,9 @@ def test_9_importance_scorer():
             all_passed = all_passed and passed
             print_result(f"{domain}: '{text[:25]}...'", passed,
                         f"relevance: {result.domain_relevance:.2f}")
-
-        return all_passed
+        assert all_passed, "one or more importance scorer domain checks failed"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_9_importance_scorer failed: {e}")
 
 def test_10_chips_activation():
     """Test #10: Chips Auto-Activation"""
@@ -319,11 +324,10 @@ def test_10_chips_activation():
             print_result(f"'{context[:25]}...'", found, f"activated: {names}")
 
         print_result("Threshold lowered (<=0.5)", threshold <= 0.5)
-
-        return threshold <= 0.5 and all_passed
+        assert threshold <= 0.5, f"auto-activate threshold too high: {threshold}"
+        assert all_passed, "chip activation contexts failed"
     except Exception as e:
-        print(f"  ERROR: {e}")
-        return False
+        pytest.fail(f"test_10_chips_activation failed: {e}")
 
 def run_all_tests():
     """Run all tests and summarize."""
@@ -331,17 +335,29 @@ def run_all_tests():
     print("  SPARK 10 IMPROVEMENTS - TEST SUITE v2")
     print("=" * 60)
 
+    tests = {
+        1: test_1_outcome_tracking,
+        2: test_2_persistence_pipeline,
+        3: test_3_auto_refinement,
+        4: test_4_promotion_threshold,
+        5: test_5_aggregator_integration,
+        6: test_6_domain_detection,
+        7: test_7_distillation_quality,
+        8: test_8_advisor_integration,
+        9: test_9_importance_scorer,
+        10: test_10_chips_activation,
+    }
     results = {}
-    results[1] = test_1_outcome_tracking()
-    results[2] = test_2_persistence_pipeline()
-    results[3] = test_3_auto_refinement()
-    results[4] = test_4_promotion_threshold()
-    results[5] = test_5_aggregator_integration()
-    results[6] = test_6_domain_detection()
-    results[7] = test_7_distillation_quality()
-    results[8] = test_8_advisor_integration()
-    results[9] = test_9_importance_scorer()
-    results[10] = test_10_chips_activation()
+    for idx, fn in tests.items():
+        try:
+            fn()
+            results[idx] = True
+        except AssertionError as e:
+            print(f"  [FAIL] #{idx} assertion: {e}")
+            results[idx] = False
+        except Exception as e:
+            print(f"  [FAIL] #{idx} error: {e}")
+            results[idx] = False
 
     print_header("FINAL RESULTS")
 

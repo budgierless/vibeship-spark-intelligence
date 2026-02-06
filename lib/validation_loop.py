@@ -10,10 +10,10 @@ Phase 3: Outcome-Driven Learning
 from __future__ import annotations
 
 import json
-import time
 import re
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from lib.queue import read_events, count_events, EventType
 from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory, _boost_confidence
@@ -302,13 +302,12 @@ def process_outcome_validation(limit: int = 100) -> Dict[str, int]:
     links = get_outcome_links(limit=limit)
 
     # Filter to unvalidated links
-    unvalidated = [l for l in links if not l.get("validated")]
+    unvalidated = [link for link in links if not link.get("validated")]
 
     if not unvalidated:
         return {"processed": 0, "validated": 0, "contradicted": 0, "surprises": 0}
 
     # Get outcomes for these links
-    outcome_ids = {l.get("outcome_id") for l in unvalidated}
     outcomes = read_outcomes(limit=limit * 2)
     outcome_map = {o.get("outcome_id"): o for o in outcomes}
 
@@ -401,15 +400,17 @@ def _update_outcome_links(updated_links: List[Dict]) -> None:
                 pass
 
     # Update the validated links
-    updated_map = {l.get("link_id"): l for l in updated_links}
+    updated_map = {link.get("link_id"): link for link in updated_links}
     for i, link in enumerate(all_links):
         if link.get("link_id") in updated_map:
             all_links[i] = updated_map[link.get("link_id")]
 
-    # Rewrite file
-    with OUTCOME_LINKS_FILE.open("w", encoding="utf-8") as f:
+    # Rewrite file atomically.
+    tmp = OUTCOME_LINKS_FILE.with_suffix(".jsonl.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
         for link in all_links:
             f.write(json.dumps(link, ensure_ascii=False) + "\n")
+    tmp.replace(OUTCOME_LINKS_FILE)
 
 
 def get_insight_outcome_coverage() -> Dict[str, Any]:

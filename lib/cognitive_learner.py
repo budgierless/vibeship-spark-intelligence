@@ -133,6 +133,7 @@ class _insights_lock:
         self.lock_file = lock_file
         self.timeout_s = timeout_s
         self.fd = None
+        self.acquired = False
 
     def __enter__(self):
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +141,7 @@ class _insights_lock:
         while True:
             try:
                 self.fd = os.open(str(self.lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                self.acquired = True
                 return self
             except FileExistsError:
                 if time.time() - start >= self.timeout_s:
@@ -152,10 +154,12 @@ class _insights_lock:
         try:
             if self.fd is not None:
                 os.close(self.fd)
-            if self.lock_file.exists():
+                self.fd = None
+            if self.acquired and self.lock_file.exists():
                 self.lock_file.unlink()
         except Exception:
             pass
+        self.acquired = False
 
 
 class CognitiveCategory(Enum):
@@ -329,7 +333,11 @@ class CognitiveLearner:
         """Actually write insights to disk."""
         self._dirty = False
         self.INSIGHTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with _insights_lock(self.LOCK_FILE):
+        with _insights_lock(self.LOCK_FILE) as lock:
+            if not lock.acquired:
+                # Another writer holds the lock; retry on next flush cycle.
+                self._dirty = True
+                return
             disk_data: Dict[str, Dict[str, Any]] = {}
             if self.INSIGHTS_FILE.exists():
                 try:
@@ -1156,6 +1164,13 @@ class CognitiveLearner:
         if insight_key in self.insights:
             self.insights[insight_key].promoted = True
             self.insights[insight_key].promoted_to = promoted_to
+            self._save_insights()
+
+    def mark_unpromoted(self, insight_key: str):
+        """Clear promoted state so the insight can be re-evaluated."""
+        if insight_key in self.insights:
+            self.insights[insight_key].promoted = False
+            self.insights[insight_key].promoted_to = None
             self._save_insights()
 
     def format_for_injection(self, insights: List[CognitiveInsight]) -> str:

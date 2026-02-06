@@ -379,10 +379,12 @@ def rotate_if_needed() -> bool:
             else:
                 keep_count = max(1, count // 2) if count else 5000
             lines = _tail_lines(EVENTS_FILE, keep_count, start_offset_bytes=active_head)
-            with open(EVENTS_FILE, "w") as f:
+            tmp = EVENTS_FILE.with_suffix(".jsonl.rotate.tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
                 for line in lines:
                     if line:
                         f.write(line.rstrip("\r\n") + "\n")
+            tmp.replace(EVENTS_FILE)
             _set_queue_head_bytes(0)
             _invalidate_count_cache()
             print(f"[SPARK] Rotated queue: {count} -> {keep_count} events")

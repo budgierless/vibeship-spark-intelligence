@@ -23,13 +23,13 @@ cd /path/to/Spark
 
 ```bash
 # Install dependencies
-pip install requests
-
-# Install Spark (from repo)
 pip install -e .
 
+# Install Spark (from repo)
+pip install -e .[services]
+
 # Optional: Enable embeddings (fastembed)
-pip install fastembed
+pip install -e .[embeddings]
 
 # Test it works
 python3 -m spark.cli health

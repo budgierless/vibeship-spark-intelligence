@@ -59,6 +59,7 @@ Dashboards and ops:
 2) lib.bridge_cycle.run_bridge_cycle reads recent events and orchestrates learning tasks.
 3) bridge_cycle enables deferred/batch writes for cognitive learner and Meta-Ralph to avoid repeated large JSON rewrites per event.
 4) bridge_cycle classifies events in one pass and reuses those buckets for tastebank, content learning, cognitive signal extraction, and chips.
+5) bridge_cycle now runs both prompt-based validation and outcome-linked validation each cycle.
 5) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
 
 ### 2.2.1 Trace context propagation (v1)
@@ -268,6 +269,8 @@ Bridge cycle:
 - lib.bridge_cycle.run_bridge_cycle memory_limit=60, pattern_limit=200.
 - bridge_cycle reads 40 recent events and checks last 10 user prompts for tastebank.
 - bridge_cycle defers cognitive/meta writes until cycle end (batch flush).
+  - bridge step timeout: SPARK_BRIDGE_STEP_TIMEOUT_S (default 45s)
+  - bridge timeout disable: SPARK_BRIDGE_DISABLE_TIMEOUTS (default off)
 
 Memory capture:
 - lib.memory_capture.MAX_CAPTURE_CHARS=2000
@@ -293,7 +296,7 @@ EIDOS control and budgets:
 
 Cognitive learning and promotion:
 - cognitive_learner half-lives by category (see auto index), max_age_days=365, min_effective=0.2
-- promoter DEFAULT_PROMOTION_THRESHOLD=0.65, DEFAULT_MIN_VALIDATIONS=2, DEFAULT_CONFIDENCE_FLOOR=0.90
+- promoter DEFAULT_PROMOTION_THRESHOLD=0.7, DEFAULT_MIN_VALIDATIONS=3, DEFAULT_CONFIDENCE_FLOOR=0.90
 - context_sync DEFAULT_MIN_RELIABILITY=0.7, DEFAULT_MIN_VALIDATIONS=3, DEFAULT_MAX_ITEMS=12, DEFAULT_MAX_PROMOTED=6
   - context_sync also injects recent high-quality chip highlights
 
@@ -368,6 +371,10 @@ Chips:
 - SPARK_CHIP_MIN_CONFIDENCE (default 0.7, balanced gate confidence floor)
 - SPARK_CHIP_GATE_MODE (balanced|off)
 - SPARK_CHIP_PREFERRED_FORMAT (single|multifile|hybrid, default multifile)
+- SPARK_BRIDGE_STEP_TIMEOUT_S (default 45)
+- SPARK_BRIDGE_DISABLE_TIMEOUTS (1=true to disable per-step bridge timeouts)
+- SPARK_STARTUP_READY_TIMEOUT_S (default 12)
+- SPARK_STARTUP_READY_POLL_S (default 0.4)
 
 Skills:
 - SPARK_SKILLS_DIR (path to skills repository)
@@ -1859,8 +1866,8 @@ Moltbook adapter:
 
 ### lib\promoter.py
 - constants:
-  - DEFAULT_PROMOTION_THRESHOLD = 0.65 line=32 ctx=DEFAULT_PROMOTION_THRESHOLD = 0.65  # 65% reliability
-  - DEFAULT_MIN_VALIDATIONS = 2 line=33 ctx=DEFAULT_MIN_VALIDATIONS = 2
+  - DEFAULT_PROMOTION_THRESHOLD = 0.7 line=32 ctx=DEFAULT_PROMOTION_THRESHOLD = 0.7  # 70% reliability
+  - DEFAULT_MIN_VALIDATIONS = 3 line=33 ctx=DEFAULT_MIN_VALIDATIONS = 3
   - PROJECT_SECTION = '## Project Intelligence' line=34 ctx=PROJECT_SECTION = "## Project Intelligence"
   - PROJECT_START = '<!-- SPARK_PROJECT_START -->' line=35 ctx=PROJECT_START = "<!-- SPARK_PROJECT_START -->"
   - PROJECT_END = '<!-- SPARK_PROJECT_END -->' line=36 ctx=PROJECT_END = "<!-- SPARK_PROJECT_END -->"

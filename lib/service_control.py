@@ -32,6 +32,8 @@ SPARK_PULSE_DIR = Path(os.environ.get(
     "SPARK_PULSE_DIR",
     str(Path.home() / "Desktop" / "vibeship-spark-pulse")
 ))
+STARTUP_READY_TIMEOUT_S = float(os.environ.get("SPARK_STARTUP_READY_TIMEOUT_S", "12"))
+STARTUP_READY_POLL_S = float(os.environ.get("SPARK_STARTUP_READY_POLL_S", "0.4"))
 
 
 def _get_pulse_command() -> list[str]:
@@ -263,6 +265,43 @@ def _start_process(name: str, args: list[str]) -> Optional[int]:
     return proc.pid
 
 
+def _is_service_ready(name: str, bridge_stale_s: int = 90) -> bool:
+    if name == "sparkd":
+        return _http_ok(SPARKD_HEALTH_URL)
+    if name == "dashboard":
+        return _http_ok(DASHBOARD_STATUS_URL)
+    if name == "pulse":
+        return _http_ok(PULSE_STATUS_URL)
+    if name == "meta_ralph":
+        return _http_ok(META_RALPH_HEALTH_URL)
+    if name == "bridge_worker":
+        hb_age = _bridge_heartbeat_age()
+        return hb_age is not None and hb_age <= bridge_stale_s
+    if name == "watchdog":
+        pid = _read_pid("watchdog")
+        return _pid_alive(pid)
+    return False
+
+
+def _wait_for_service_ready(name: str, pid: Optional[int], bridge_stale_s: int = 90) -> bool:
+    if not pid:
+        return False
+
+    # Services without HTTP endpoints should at least remain alive.
+    if name == "watchdog":
+        return _pid_alive(pid)
+
+    deadline = time.time() + max(0.5, STARTUP_READY_TIMEOUT_S)
+    while time.time() < deadline:
+        if not _pid_alive(pid):
+            return False
+        if _is_service_ready(name, bridge_stale_s=bridge_stale_s):
+            return True
+        time.sleep(max(0.1, STARTUP_READY_POLL_S))
+
+    return _is_service_ready(name, bridge_stale_s=bridge_stale_s)
+
+
 def _terminate_pid(pid: int, timeout_s: float = 5.0) -> bool:
     if os.name == "nt":
         try:
@@ -307,7 +346,8 @@ def _service_cmds(
     bridge_interval: int = 30,
     bridge_query: Optional[str] = None,
     watchdog_interval: int = 60,
-) -> dict[str, list[str]]:
+    include_pulse: bool = True,
+) -> dict[str, Optional[list[str]]]:
     cmds = {
         "sparkd": [sys.executable, "-m", "sparkd"],
         "bridge_worker": [
@@ -318,7 +358,6 @@ def _service_cmds(
             str(bridge_interval),
         ],
         "dashboard": [sys.executable, "-m", "dashboard"],
-        "pulse": _get_pulse_command(),
         "meta_ralph": [sys.executable, str(ROOT_DIR / "meta_ralph_dashboard.py")],
         "watchdog": [
             sys.executable,
@@ -328,6 +367,11 @@ def _service_cmds(
             str(watchdog_interval),
         ],
     }
+    if include_pulse:
+        try:
+            cmds["pulse"] = _get_pulse_command()
+        except FileNotFoundError:
+            cmds["pulse"] = None
     if bridge_query:
         cmds["bridge_worker"].extend(["--query", bridge_query])
     return cmds
@@ -438,6 +482,7 @@ def start_services(
         bridge_interval=bridge_interval,
         bridge_query=bridge_query,
         watchdog_interval=watchdog_interval,
+        include_pulse=include_pulse,
     )
     statuses = service_status(bridge_stale_s=bridge_stale_s)
     results: dict[str, str] = {}
@@ -457,8 +502,16 @@ def start_services(
         if current.get("running"):
             results[name] = "already_running"
             continue
-        pid = _start_process(name, cmds[name])
-        results[name] = f"started:{pid}" if pid else "failed"
+        cmd = cmds.get(name)
+        if not cmd:
+            results[name] = "unavailable"
+            continue
+        pid = _start_process(name, cmd)
+        if not pid:
+            results[name] = "failed"
+            continue
+        ready = _wait_for_service_ready(name, pid, bridge_stale_s=bridge_stale_s)
+        results[name] = f"started:{pid}" if ready else f"started_unhealthy:{pid}"
 
     return results
 

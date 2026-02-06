@@ -12,8 +12,8 @@ Promotion targets:
 - SOUL.md - Behavioral patterns, communication style (Clawdbot)
 
 Promotion criteria:
-- Reliability >= 65%
-- Times validated >= 2
+- Reliability >= 70%
+- Times validated >= 3
 - Not already promoted
 - Category matches target file
 """
@@ -31,8 +31,8 @@ from .chip_merger import merge_chip_insights
 
 
 # ============= Configuration =============
-DEFAULT_PROMOTION_THRESHOLD = 0.65  # 65% reliability (lowered from 70% for faster promotion)
-DEFAULT_MIN_VALIDATIONS = 2  # 2 validations (lowered from 3 for faster learning)
+DEFAULT_PROMOTION_THRESHOLD = 0.7  # 70% reliability default
+DEFAULT_MIN_VALIDATIONS = 3  # Require at least 3 validations by default
 DEFAULT_CONFIDENCE_FLOOR = 0.90  # Fast-track: promote high-confidence insights without validation gate
 DEFAULT_MIN_AGE_HOURS = 2.0  # Fast-track: insights must be at least 2 hours old
 PROJECT_SECTION = "## Project Intelligence"
@@ -345,7 +345,7 @@ class Promoter:
     5. Mark insights as promoted
 
     Two-track promotion:
-    - Validated track: reliability >= 65% AND times_validated >= 2 (original)
+    - Validated track: reliability >= threshold AND times_validated >= min_validations
     - Confidence track: confidence >= 80% AND age >= 1h AND net-positive
       (for insights that are high-quality at birth but lack a validation pathway)
     """
@@ -383,22 +383,38 @@ class Promoter:
         """Check if insight qualifies via the confidence fast-track.
 
         Criteria (all must be true):
-        - confidence >= confidence_floor (default 0.8)
-        - age >= min_age_hours (default 1h) -- settling period
-        - net-positive: times_validated >= times_contradicted
+        - confidence >= confidence_floor
+        - age >= min_age_hours -- settling period
+        - times_validated >= min_validations
+        - net-positive: times_validated > times_contradicted
+        - reliability >= reliability_threshold
         - not noise (double-check with cognitive learner noise filter)
         """
         if insight.confidence < self.confidence_floor:
             return False
         if self._insight_age_hours(insight) < self.min_age_hours:
             return False
-        if insight.times_contradicted > insight.times_validated:
+        if insight.times_validated < self.min_validations:
+            return False
+        if insight.times_contradicted >= insight.times_validated:
+            return False
+        if insight.reliability < self.reliability_threshold:
             return False
         # Final noise gate
         cognitive = get_cognitive_learner()
         if cognitive.is_noise_insight(insight.insight):
             return False
         return True
+
+    def _should_demote(self, insight: CognitiveInsight) -> bool:
+        """Return True if a previously promoted insight is no longer trustworthy."""
+        if insight.reliability < self.reliability_threshold:
+            return True
+        if insight.times_validated < self.min_validations:
+            return True
+        if insight.times_contradicted >= insight.times_validated and insight.times_contradicted > 0:
+            return True
+        return False
 
     @staticmethod
     def _log_promotion(insight_key: str, target: str, result: str, reason: str = ""):
@@ -553,6 +569,81 @@ class Promoter:
         new_block = "\n".join(new_block_lines)
         new_content = content[:block_start] + new_block + content[block_end:]
         file_path.write_text(_clean_text_for_write(new_content), encoding="utf-8")
+
+    def _remove_from_section(self, file_path: Path, section: str, insight_text: str) -> bool:
+        """Remove lines matching a promoted insight from a target section."""
+        if not file_path.exists():
+            return False
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except Exception:
+            return False
+
+        section_idx = content.find(section)
+        if section_idx == -1:
+            return False
+
+        block_start = section_idx + len(section)
+        next_section = re.search(r'\n## ', content[block_start:])
+        block_end = block_start + (next_section.start() if next_section else len(content) - block_start)
+        block = content[block_start:block_end]
+        block_lines = block.splitlines()
+
+        target_key = _normalize_text(insight_text)
+        if not target_key:
+            return False
+
+        new_block_lines: List[str] = []
+        removed = False
+        for raw in block_lines:
+            s = raw.strip()
+            if s.startswith("- "):
+                core = s[2:].strip()
+                core_text = _strip_reliability_suffix(core)
+                core_key = _normalize_text(core_text)
+                if core_key and (target_key in core_key or core_key in target_key):
+                    removed = True
+                    continue
+            new_block_lines.append(raw)
+
+        if not removed:
+            return False
+
+        new_block = "\n".join(new_block_lines)
+        new_content = content[:block_start] + new_block + content[block_end:]
+        file_path.write_text(_clean_text_for_write(new_content), encoding="utf-8")
+        return True
+
+    def demote_stale_promotions(self) -> Dict[str, int]:
+        """Unpromote stale insights whose reliability has degraded."""
+        cognitive = get_cognitive_learner()
+        stats = {"checked": 0, "demoted": 0, "doc_removed": 0}
+
+        for key, insight in list(cognitive.insights.items()):
+            if not insight.promoted:
+                continue
+            stats["checked"] += 1
+            if not self._should_demote(insight):
+                continue
+
+            target_file = insight.promoted_to
+            removed = False
+            if target_file:
+                file_path = self.project_dir / target_file
+                removed = self._remove_from_section(file_path, "## Spark Learnings", insight.insight)
+            else:
+                target = self._get_target_for_category(insight.category)
+                if target:
+                    file_path = self.project_dir / target.filename
+                    removed = self._remove_from_section(file_path, target.section, insight.insight)
+
+            cognitive.mark_unpromoted(key)
+            stats["demoted"] += 1
+            if removed:
+                stats["doc_removed"] += 1
+            self._log_promotion(key, target_file or "unknown", "demoted", "reliability_degraded")
+
+        return stats
 
     def _upsert_block(self, content: str, block: str, section: str) -> str:
         """Insert or replace a block wrapped by start/end markers in a section."""
@@ -734,6 +825,7 @@ class Promoter:
         validated track + confidence fast-track.
         """
         chip_merge_stats = {}
+        demotion_stats = {"checked": 0, "demoted": 0, "doc_removed": 0}
         if include_chip_merge and not dry_run:
             try:
                 chip_merge_stats = merge_chip_insights(
@@ -749,6 +841,17 @@ class Promoter:
             except Exception as e:
                 print(f"[SPARK] Chip merge pre-promotion failed: {e}")
 
+        if not dry_run:
+            try:
+                demotion_stats = self.demote_stale_promotions()
+                if demotion_stats.get("demoted", 0) > 0:
+                    print(
+                        f"[SPARK] Demoted {demotion_stats.get('demoted', 0)} stale promotions "
+                        f"({demotion_stats.get('doc_removed', 0)} removed from docs)"
+                    )
+            except Exception as e:
+                print(f"[SPARK] Demotion pass failed: {e}")
+
         promotable = self.get_promotable_insights(include_operational=False)
 
         stats = {
@@ -760,6 +863,8 @@ class Promoter:
             "project_failed": 0,
             "chip_merged": int(chip_merge_stats.get("merged", 0) or 0),
             "chip_processed": int(chip_merge_stats.get("processed", 0) or 0),
+            "demoted": int(demotion_stats.get("demoted", 0) or 0),
+            "demotion_doc_removed": int(demotion_stats.get("doc_removed", 0) or 0),
         }
 
         if include_project:

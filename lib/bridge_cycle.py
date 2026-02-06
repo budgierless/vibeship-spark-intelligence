@@ -7,16 +7,18 @@ priority processing, queue consumption, and deep learning extraction.
 from __future__ import annotations
 
 import json
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from lib.bridge import update_spark_context
 from lib.memory_capture import process_recent_memory_events
 from lib.tastebank import parse_like_message, add_item
 from lib.queue import read_recent_events, EventType
 from lib.pattern_detection import process_pattern_events
-from lib.validation_loop import process_validation_events
+from lib.validation_loop import process_validation_events, process_outcome_validation
 from lib.prediction_loop import process_prediction_cycle
 from lib.content_learner import learn_from_edit_event
 from lib.chips import process_chip_events
@@ -26,6 +28,37 @@ from lib.diagnostics import log_debug
 
 
 BRIDGE_HEARTBEAT_FILE = Path.home() / ".spark" / "bridge_worker_heartbeat.json"
+BRIDGE_STEP_TIMEOUT_S = float(os.environ.get("SPARK_BRIDGE_STEP_TIMEOUT_S", "45"))
+BRIDGE_DISABLE_TIMEOUTS = os.environ.get("SPARK_BRIDGE_DISABLE_TIMEOUTS", "0").strip().lower() in {
+    "1", "true", "yes", "on"
+}
+
+
+def _run_step(name: str, fn: Callable[..., Any], *args: Any, timeout_s: Optional[float] = None, **kwargs: Any) -> Tuple[bool, Any, str]:
+    """
+    Run a bridge sub-step with a soft timeout.
+
+    Returns:
+      (ok, result, error_message)
+    """
+    timeout = BRIDGE_STEP_TIMEOUT_S if timeout_s is None else float(timeout_s)
+    if BRIDGE_DISABLE_TIMEOUTS or timeout <= 0:
+        try:
+            return True, fn(*args, **kwargs), ""
+        except Exception as e:
+            return False, None, str(e)
+
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"spark_{name}")
+    future = pool.submit(fn, *args, **kwargs)
+    try:
+        return True, future.result(timeout=timeout), ""
+    except FuturesTimeoutError:
+        future.cancel()
+        return False, None, f"timeout after {timeout:.0f}s"
+    except Exception as e:
+        return False, None, str(e)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def run_bridge_cycle(
@@ -50,6 +83,7 @@ def run_bridge_cycle(
         "tastebank_saved": False,
         "pattern_processed": 0,
         "validation": {},
+        "outcome_validation": {},
         "prediction": {},
         "content_learned": 0,
         "chips": {},
@@ -75,36 +109,43 @@ def run_bridge_cycle(
 
     try:
         # --- Context update ---
-        try:
-            update_spark_context(query=query)
+        ok, _result, error = _run_step("context", update_spark_context, query=query)
+        if ok:
             stats["context_updated"] = True
-        except Exception as e:
+        else:
             stats["errors"].append("context")
-            log_debug("bridge_worker", "context update failed", e)
+            log_debug("bridge_worker", f"context update failed ({error})", None)
 
         # --- Memory capture ---
-        try:
-            stats["memory"] = process_recent_memory_events(limit=memory_limit)
-        except Exception as e:
+        ok, memory_stats, error = _run_step("memory", process_recent_memory_events, limit=memory_limit)
+        if ok:
+            stats["memory"] = memory_stats or {}
+        else:
             stats["errors"].append("memory")
-            log_debug("bridge_worker", "memory capture failed", e)
+            log_debug("bridge_worker", f"memory capture failed ({error})", None)
 
         # --- Run the processing pipeline ---
         pipeline_metrics = None
-        try:
+        try:  # keep import error handling separate
             from lib.pipeline import run_processing_cycle
-            pipeline_metrics = run_processing_cycle()
-            stats["pattern_processed"] = pipeline_metrics.events_processed
-            stats["pipeline"] = pipeline_metrics.to_dict()
+            ok, pipeline_metrics, error = _run_step("pipeline", run_processing_cycle)
+            if ok and pipeline_metrics is not None:
+                stats["pattern_processed"] = pipeline_metrics.events_processed
+                stats["pipeline"] = pipeline_metrics.to_dict()
+            else:
+                stats["errors"].append("pipeline")
+                log_debug("bridge_worker", f"pipeline processing failed ({error})", None)
         except Exception as e:
             stats["errors"].append("pipeline")
             log_debug("bridge_worker", "pipeline processing failed", e)
-            # Fallback to old pattern detection if pipeline fails
-            try:
-                stats["pattern_processed"] = process_pattern_events(limit=pattern_limit)
-            except Exception as e2:
+        # Fallback to old pattern detection if pipeline fails
+        if pipeline_metrics is None:
+            ok, fallback_count, error = _run_step("patterns_fallback", process_pattern_events, limit=pattern_limit)
+            if ok:
+                stats["pattern_processed"] = int(fallback_count or 0)
+            else:
                 stats["errors"].append("patterns_fallback")
-                log_debug("bridge_worker", "fallback pattern detection failed", e2)
+                log_debug("bridge_worker", f"fallback pattern detection failed ({error})", None)
 
         # --- Get events (single source, used by all downstream) ---
         if pipeline_metrics and getattr(pipeline_metrics, "processed_events", None):
@@ -164,17 +205,27 @@ def run_bridge_cycle(
             log_debug("bridge_worker", "tastebank capture failed", e)
 
         # --- Validation and prediction loops ---
-        try:
-            stats["validation"] = process_validation_events(limit=pattern_limit)
-        except Exception as e:
+        ok, validation_stats, error = _run_step("validation", process_validation_events, limit=pattern_limit)
+        if ok:
+            stats["validation"] = validation_stats or {}
+        else:
             stats["errors"].append("validation")
-            log_debug("bridge_worker", "validation loop failed", e)
+            log_debug("bridge_worker", f"validation loop failed ({error})", None)
 
-        try:
-            stats["prediction"] = process_prediction_cycle(limit=pattern_limit)
-        except Exception as e:
+        # Explicit outcome-linked validation loop (was previously CLI-only).
+        ok, outcome_stats, error = _run_step("outcome_validation", process_outcome_validation, limit=pattern_limit)
+        if ok:
+            stats["outcome_validation"] = outcome_stats or {}
+        else:
+            stats["errors"].append("outcome_validation")
+            log_debug("bridge_worker", f"outcome validation failed ({error})", None)
+
+        ok, prediction_stats, error = _run_step("prediction", process_prediction_cycle, limit=pattern_limit)
+        if ok:
+            stats["prediction"] = prediction_stats or {}
+        else:
             stats["errors"].append("prediction")
-            log_debug("bridge_worker", "prediction loop failed", e)
+            log_debug("bridge_worker", f"prediction loop failed ({error})", None)
 
         # --- Content learning (uses classified edit_write_events) ---
         try:
@@ -225,36 +276,43 @@ def run_bridge_cycle(
             log_debug("bridge_worker", "cognitive signal extraction failed", e)
 
         # --- Chip processing (uses pre-built chip_events list) ---
-        try:
-            stats["chips"] = process_chip_events(chip_events, project_path)
-        except Exception as e:
+        ok, chip_stats, error = _run_step("chips", process_chip_events, chip_events, project_path)
+        if ok:
+            stats["chips"] = chip_stats or {}
+        else:
             stats["errors"].append("chips")
-            log_debug("bridge_worker", "chip processing failed", e)
+            log_debug("bridge_worker", f"chip processing failed ({error})", None)
 
         # --- Chip merger ---
-        try:
-            merge_stats = merge_chip_insights(min_confidence=0.7, min_quality_score=0.7, limit=20)
+        ok, merge_stats, error = _run_step(
+            "chip_merge",
+            merge_chip_insights,
+            min_confidence=0.7,
+            min_quality_score=0.7,
+            limit=20,
+        )
+        if ok:
             stats["chip_merge"] = {
                 "processed": merge_stats.get("processed", 0),
                 "merged": merge_stats.get("merged", 0),
                 "skipped_low_quality": merge_stats.get("skipped_low_quality", 0),
                 "by_chip": merge_stats.get("by_chip", {}),
             }
-        except Exception as e:
+        else:
             stats["errors"].append("chip_merge")
-            log_debug("bridge_worker", "chip merge failed", e)
+            log_debug("bridge_worker", f"chip merge failed ({error})", None)
 
         # --- Context sync ---
-        try:
-            sync_result = sync_context()
+        ok, sync_result, error = _run_step("sync", sync_context)
+        if ok:
             stats["sync"] = {
                 "selected": getattr(sync_result, "selected", 0),
                 "promoted": getattr(sync_result, "promoted_selected", 0),
                 "targets": getattr(sync_result, "targets", {}),
             }
-        except Exception as e:
+        else:
             stats["errors"].append("sync")
-            log_debug("bridge_worker", "context sync failed", e)
+            log_debug("bridge_worker", f"context sync failed ({error})", None)
 
     finally:
         # --- Flush all deferred saves (single write per file) ---
@@ -284,6 +342,7 @@ def write_bridge_heartbeat(stats: Dict[str, Any]) -> bool:
                 "content_learned": int(stats.get("content_learned") or 0),
                 "memory": stats.get("memory") or {},
                 "validation": stats.get("validation") or {},
+                "outcome_validation": stats.get("outcome_validation") or {},
                 "chips": stats.get("chips") or {},
                 "chip_merge": stats.get("chip_merge") or {},
                 "sync": stats.get("sync") or {},

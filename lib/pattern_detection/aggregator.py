@@ -33,6 +33,7 @@ from .distiller import PatternDistiller, get_pattern_distiller
 from .memory_gate import MemoryGate, get_memory_gate
 from ..primitive_filter import is_primitive_text
 from ..importance_scorer import get_importance_scorer, ImportanceTier
+from ..eidos.store import get_store
 
 
 # Confidence threshold to trigger learning
@@ -105,6 +106,7 @@ class PatternAggregator:
         self._request_tracker = get_request_tracker()
         self._distiller = get_pattern_distiller()
         self._memory_gate = get_memory_gate()
+        self._store = get_store()
         self._events_since_distillation = 0
 
         # Importance scoring stats
@@ -120,6 +122,8 @@ class PatternAggregator:
         self._eidos_stats = {
             "steps_created": 0,
             "steps_completed": 0,
+            "steps_persisted": 0,
+            "step_persist_failures": 0,
             "distillations_created": 0,
             "gate_rejections": 0,
         }
@@ -162,6 +166,11 @@ class PatternAggregator:
             )
             event["step_id"] = step.step_id
             self._eidos_stats["steps_created"] += 1
+            try:
+                self._store.save_step(step)
+                self._eidos_stats["steps_persisted"] += 1
+            except Exception:
+                self._eidos_stats["step_persist_failures"] += 1
 
         # If action completed, update pending Step
         elif event_type == "action_complete" and step_id:
@@ -183,6 +192,11 @@ class PatternAggregator:
             )
             if completed:
                 self._eidos_stats["steps_completed"] += 1
+                try:
+                    self._store.save_step(completed)
+                    self._eidos_stats["steps_persisted"] += 1
+                except Exception:
+                    self._eidos_stats["step_persist_failures"] += 1
 
         # === Run all pattern detectors ===
         for detector in self.detectors:
