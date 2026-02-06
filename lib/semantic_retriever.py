@@ -24,7 +24,7 @@ from .diagnostics import log_debug
 
 
 DEFAULT_CONFIG = {
-    "enabled": False,
+    "enabled": True,  # Enabled by default — falls back gracefully if fastembed unavailable
     "embedding_provider": "local",
     "embedding_model": "BAAI/bge-small-en-v1.5",
     "min_similarity": 0.55,

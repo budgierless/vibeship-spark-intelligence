@@ -123,6 +123,15 @@ def check_effectiveness() -> Tuple[bool, str]:
         if total == 0:
             return False, "No advice tracked yet"
 
+        if followed > total:
+            return False, (
+                f"Invalid counters: followed ({followed}) > total advice ({total})"
+            )
+        if helpful > followed:
+            return False, (
+                f"Invalid counters: helpful ({helpful}) > followed ({followed})"
+            )
+
         if followed == 0 and total > 100:
             return False, f"0 followed out of {total} advice (outcome loop broken)"
 

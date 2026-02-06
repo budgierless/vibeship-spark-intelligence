@@ -19,8 +19,15 @@ This file consolidates status from older roadmap and integration plan docs.
 - Promoter now supports stale-promotion demotion (unpromote + doc cleanup).
 - Service startup now checks readiness and can report `started_unhealthy` when process is up but not healthy.
 - `sparkd` now enforces token auth on all mutating `POST` endpoints when `SPARKD_TOKEN` is set.
+- `sparkd` now applies per-IP rate limiting and bounded invalid-event quarantine retention.
 - Meta-Ralph dashboard now binds locally (`127.0.0.1`) by default.
+- Advisor effectiveness counters now enforce invariants (`helpful <= followed <= total`) with deduped outcome counting.
+- Production loop-gate evaluation module/report added (`lib/production_gates.py`, `scripts/production_loop_report.py`).
+- Meta-Ralph outcome stats now split actionable vs non-actionable orchestration records, keeping utilization scoring honest.
+- Meta-Ralph outcome retention now preserves actionable/acted-on history under high task-telemetry volume.
+- Chip insight compaction utility is available for high-volume telemetry control (`scripts/compact_chip_insights.py`).
 - CI workflow now enforces critical lint/test gates on PRs and main pushes.
+- Current loop-gate status: `READY (8/8 passed)` on 2026-02-06.
 
 ## Completed Foundations
 
@@ -34,8 +41,8 @@ This file consolidates status from older roadmap and integration plan docs.
 
 1. Improve outcome attribution analytics (source -> action -> outcome quality).
 2. Add structured JSON logging on critical ingest/bridge paths.
-3. Add rate limiting and bounded quarantine controls in `sparkd`.
-4. Expand EIDOS unit coverage for persistence/distillation edge cases.
+3. Expand EIDOS unit coverage for persistence/distillation edge cases.
+4. Add scheduled telemetry hygiene loops (counter repair, chip compaction, outcome retention).
 5. Keep docs and flow references synchronized with runtime behavior.
 
 ## Canonical References

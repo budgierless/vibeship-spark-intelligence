@@ -19,7 +19,7 @@ DEFAULT_CASES = [
     ("destructive_command", "Bash", {"command": "rm -rf /"}, "rm -rf /"),
     ("sql_destructive", "Bash", {"command": "drop table users"}, "drop table users"),
     ("deploy_trigger", "Bash", {"command": "git push origin main"}, "deploy main"),
-    ("windows_path", "Edit", {"file_path": r"C:\Users\USER\Desktop\project\file name.txt"}, "edit file path"),
+    ("windows_path", "Edit", {"file_path": r"C:\workspace\project\file name.txt"}, "edit file path"),
     ("unicode_context", "Edit", {"file_path": str(Path.home() / ".spark" / "notes" / "edge_unicode.md")}, "append unicode test"),
     ("json_blob", "Write", {"file_path": str(Path.home() / ".spark" / "notes" / "edge_json.md")}, '{"action":"update","target":"auth","flags":["safe","dry_run"]}'),
     ("long_context", "Write", {"file_path": str(Path.home() / ".spark" / "notes" / "edge_long_context.md")}, "long context " * 120),

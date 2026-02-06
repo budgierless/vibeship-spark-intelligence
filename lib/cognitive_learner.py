@@ -739,7 +739,7 @@ class CognitiveLearner:
             return True
 
         # 12. Chip insight patterns - these are telemetry, not cognitive insights
-        # Examples: "[Vibecoding Intelligence] post_tool Edit C:\Users\..."
+        # Examples: "[Vibecoding Intelligence] post_tool Edit C:\workspace\..."
         #           "[Market Intelligence] pre_tool Bash..."
         #           "Triggered by 'post_tool_failure'"
         chip_intel_pattern = r"^\[[\w\s-]+ intelligence\]\s*(post_tool|pre_tool)"
@@ -826,7 +826,7 @@ class CognitiveLearner:
             return True
 
         # 26. File paths stored as insights (raw paths without context)
-        # e.g., "c:\Users\USER\Desktop\xmcp ..."
+        # e.g., "c:\workspace\xmcp ..."
         if re.match(r"^[a-zA-Z]:\\", t):
             return True
 

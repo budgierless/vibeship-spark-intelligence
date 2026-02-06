@@ -419,30 +419,45 @@ def main():
     event_type = get_event_type(hook_event)
     trace_id = input_data.get("trace_id")
     
-    # ===== PreToolUse: Make prediction + Get advice + EIDOS step creation =====
+    # ===== PreToolUse: Make prediction + Advisory Engine + EIDOS step creation =====
     if event_type == EventType.PRE_TOOL and tool_name:
         trace_id = _make_trace_id(session_id, tool_name, hook_event, time.time())
         prediction = make_prediction(tool_name, tool_input)
 
-        # Get advice from Advisor (tracks retrieval in Meta-Ralph)
+        # Advisory Engine: retrieve → gate → synthesize → emit to stdout
+        # This replaces the old fire-and-forget advisor call.
+        # The engine handles retrieval, filtering, synthesis, and emission.
         try:
-            from lib.advisor import advise_on_tool
-            advice = advise_on_tool(tool_name, tool_input, trace_id=trace_id)
-            if advice:
-                log_debug("observe", f"Got {len(advice)} advice items for {tool_name}", None)
-                if ADVICE_FEEDBACK_ENABLED:
-                    try:
-                        from lib.advice_feedback import record_advice_request
-                        record_advice_request(
-                            session_id=session_id,
-                            tool=tool_name,
-                            advice_ids=[a.advice_id for a in advice],
-                            min_interval_s=ADVICE_FEEDBACK_MIN_S,
-                        )
-                    except Exception:
-                        pass
+            from lib.advisory_engine import on_pre_tool
+            emitted_text = on_pre_tool(
+                session_id=session_id,
+                tool_name=tool_name,
+                tool_input=tool_input,
+                trace_id=trace_id,
+            )
+            if emitted_text:
+                log_debug("observe", f"Advisory engine emitted for {tool_name}: {len(emitted_text)} chars", None)
         except Exception as e:
-            log_debug("observe", "advisor failed", e)
+            log_debug("observe", "advisory engine failed, falling back to legacy advisor", e)
+            # Fallback: legacy advisor (fire-and-forget, no emission)
+            try:
+                from lib.advisor import advise_on_tool
+                advice = advise_on_tool(tool_name, tool_input, trace_id=trace_id)
+                if advice:
+                    log_debug("observe", f"Legacy advisor: {len(advice)} items for {tool_name}", None)
+                    if ADVICE_FEEDBACK_ENABLED:
+                        try:
+                            from lib.advice_feedback import record_advice_request
+                            record_advice_request(
+                                session_id=session_id,
+                                tool=tool_name,
+                                advice_ids=[a.advice_id for a in advice],
+                                min_interval_s=ADVICE_FEEDBACK_MIN_S,
+                            )
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         save_prediction(session_id, tool_name, prediction)
 
         # EIDOS: Create step and check control plane
@@ -467,10 +482,23 @@ def main():
             except Exception as e:
                 log_debug("observe", "EIDOS pre-action failed", e)
     
-    # ===== PostToolUse: Check for surprise + Track outcome + EIDOS step completion =====
+    # ===== PostToolUse: Check for surprise + Track outcome + Advisory feedback + EIDOS =====
     if event_type == EventType.POST_TOOL and tool_name:
         check_for_surprise(session_id, tool_name, success=True)
         learn_from_success(tool_name, tool_input, {})
+
+        # Advisory Engine: record outcome for implicit feedback loop
+        try:
+            from lib.advisory_engine import on_post_tool
+            on_post_tool(
+                session_id=session_id,
+                tool_name=tool_name,
+                success=True,
+                tool_input=tool_input,
+                trace_id=trace_id,
+            )
+        except Exception as e:
+            log_debug("observe", "advisory engine post-tool failed", e)
 
         # EIDOS: Complete step with success
         if EIDOS_AVAILABLE:
@@ -525,8 +553,22 @@ def main():
         except Exception:
             pass
     
-    # ===== PostToolUseFailure: Check for surprise + Track outcome + learn + EIDOS step completion =====
+    # ===== PostToolUseFailure: Check for surprise + Track outcome + Advisory feedback + learn + EIDOS =====
     if event_type == EventType.POST_TOOL_FAILURE and tool_name:
+        # Advisory Engine: record failure outcome for implicit feedback
+        try:
+            from lib.advisory_engine import on_post_tool
+            on_post_tool(
+                session_id=session_id,
+                tool_name=tool_name,
+                success=False,
+                tool_input=tool_input,
+                trace_id=trace_id,
+                error=str(input_data.get("tool_error") or input_data.get("error") or "")[:300],
+            )
+        except Exception as e:
+            log_debug("observe", "advisory engine post-failure failed", e)
+
         error = (
             input_data.get("tool_error") or
             input_data.get("error") or
@@ -618,6 +660,13 @@ def main():
             data["payload"] = {"role": "user", "text": txt}
             data["source"] = "claude_code"
             data["kind"] = "message"
+
+            # Advisory Engine: capture user intent for contextual retrieval
+            try:
+                from lib.advisory_engine import on_user_prompt
+                on_user_prompt(session_id, txt)
+            except Exception as e:
+                log_debug("observe", "advisory engine intent capture failed", e)
 
             # EIDOS: Update episode goal from user prompt (first meaningful prompt)
             if EIDOS_AVAILABLE and len(txt) > 10:

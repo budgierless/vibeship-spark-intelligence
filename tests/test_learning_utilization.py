@@ -30,6 +30,8 @@ class UtilizationMetrics:
     """Metrics for learning utilization."""
     total_stored: int
     total_retrieved: int
+    actionable_retrieved: int
+    ignored_non_actionable: int
     retrieval_rate: float
     acted_on: int
     acted_on_rate: float
@@ -101,6 +103,8 @@ class LearningUtilizationChecker:
             return UtilizationMetrics(
                 total_stored=stored,
                 total_retrieved=0,
+                actionable_retrieved=0,
+                ignored_non_actionable=0,
                 retrieval_rate=0.0,
                 acted_on=0,
                 acted_on_rate=0.0,
@@ -111,13 +115,18 @@ class LearningUtilizationChecker:
             )
 
         retrieved = outcome_stats.get('total_tracked', 0)
+        actionable = outcome_stats.get('actionable_tracked', retrieved)
+        ignored_non_actionable = outcome_stats.get(
+            'ignored_non_actionable',
+            max(0, retrieved - actionable),
+        )
         acted_on = outcome_stats.get('acted_on', 0)
         good = outcome_stats.get('good_outcomes', 0)
         bad = outcome_stats.get('bad_outcomes', 0)
 
         # Calculate rates
         retrieval_rate = retrieved / max(stored, 1)
-        acted_on_rate = acted_on / max(retrieved, 1) if retrieved > 0 else 0.0
+        acted_on_rate = acted_on / max(actionable, 1) if actionable > 0 else 0.0
         effectiveness = outcome_stats.get('effectiveness_rate', 0.0)
 
         # Calculate grade
@@ -126,6 +135,8 @@ class LearningUtilizationChecker:
         return UtilizationMetrics(
             total_stored=stored,
             total_retrieved=retrieved,
+            actionable_retrieved=actionable,
+            ignored_non_actionable=ignored_non_actionable,
             retrieval_rate=retrieval_rate,
             acted_on=acted_on,
             acted_on_rate=acted_on_rate,
@@ -213,7 +224,11 @@ class LearningUtilizationChecker:
         print("\n[UTILIZATION METRICS]")
         print(f"  Total Stored:      {metrics.total_stored}")
         print(f"  Total Retrieved:   {metrics.total_retrieved} ({metrics.retrieval_rate:.1%} of stored)")
-        print(f"  Acted On:          {metrics.acted_on} ({metrics.acted_on_rate:.1%} of retrieved)")
+        print(
+            f"  Actionable Pool:   {metrics.actionable_retrieved} "
+            f"(ignored non-actionable: {metrics.ignored_non_actionable})"
+        )
+        print(f"  Acted On:          {metrics.acted_on} ({metrics.acted_on_rate:.1%} of actionable)")
         print(f"  Good Outcomes:     {metrics.good_outcomes}")
         print(f"  Bad Outcomes:      {metrics.bad_outcomes}")
         print(f"  Effectiveness:     {metrics.effectiveness_rate:.1%}")
@@ -275,6 +290,10 @@ class LearningUtilizationChecker:
 
         print(f"\nStored: {metrics.total_stored}")
         print(f"Retrieved: {metrics.total_retrieved} ({metrics.retrieval_rate:.1%})")
+        print(
+            f"Actionable: {metrics.actionable_retrieved} "
+            f"(ignored: {metrics.ignored_non_actionable})"
+        )
         print(f"Acted On: {metrics.acted_on} ({metrics.acted_on_rate:.1%})")
         print(f"Effectiveness: {metrics.effectiveness_rate:.1%}")
         print(f"\nGrade: {metrics.utilization_grade}")

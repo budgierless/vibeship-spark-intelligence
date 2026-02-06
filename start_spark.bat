@@ -6,6 +6,10 @@ setlocal
 chcp 65001 > nul
 set PYTHONIOENCODING=utf-8
 set PYTHONUNBUFFERED=1
+if "%SPARK_PULSE_DIR%"=="" (
+    set "SPARK_PULSE_DIR=%~dp0..\vibeship-spark-pulse"
+    if not exist "%SPARK_PULSE_DIR%\app.py" set "SPARK_PULSE_DIR=%USERPROFILE%\Desktop\vibeship-spark-pulse"
+)
 cd /d %~dp0
 
 if "%SPARK_NO_MIND%"=="1" goto start_spark

@@ -15,8 +15,10 @@ This is intentionally dependency-free.
 import json
 import os
 import time
+from collections import defaultdict, deque
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse
 
 import sys
@@ -35,6 +37,13 @@ PORT = SPARKD_PORT
 TOKEN = os.environ.get("SPARKD_TOKEN")
 MAX_BODY_BYTES = int(os.environ.get("SPARKD_MAX_BODY_BYTES", "262144"))
 INVALID_EVENTS_FILE = Path.home() / ".spark" / "invalid_events.jsonl"
+RATE_LIMIT_PER_MIN = int(os.environ.get("SPARKD_RATE_LIMIT_PER_MIN", "240"))
+RATE_LIMIT_WINDOW_S = int(os.environ.get("SPARKD_RATE_LIMIT_WINDOW_S", "60"))
+INVALID_EVENTS_MAX_LINES = int(os.environ.get("SPARKD_INVALID_EVENTS_MAX_LINES", "2000"))
+INVALID_EVENTS_MAX_PAYLOAD_CHARS = int(os.environ.get("SPARKD_INVALID_EVENTS_MAX_PAYLOAD_CHARS", "4000"))
+
+_RATE_LIMIT_BUCKETS = defaultdict(deque)
+_RATE_LIMIT_LOCK = Lock()
 
 
 def _json(handler: BaseHTTPRequestHandler, code: int, payload):
@@ -63,16 +72,67 @@ def _is_authorized(handler: BaseHTTPRequestHandler) -> bool:
     return auth == f"Bearer {TOKEN}"
 
 
+def _allow_rate_limited_request(client_ip: str, now: float | None = None) -> tuple[bool, int]:
+    """Simple sliding-window limiter per client IP."""
+    if RATE_LIMIT_PER_MIN <= 0 or RATE_LIMIT_WINDOW_S <= 0:
+        return True, 0
+
+    ts = float(now if now is not None else time.time())
+    cutoff = ts - RATE_LIMIT_WINDOW_S
+    key = str(client_ip or "unknown")
+
+    with _RATE_LIMIT_LOCK:
+        bucket = _RATE_LIMIT_BUCKETS[key]
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+
+        if len(bucket) >= RATE_LIMIT_PER_MIN:
+            retry_after = int(max(1, RATE_LIMIT_WINDOW_S - (ts - bucket[0])))
+            return False, retry_after
+
+        bucket.append(ts)
+        return True, 0
+
+
+def _trim_jsonl_tail(path: Path, max_lines: int) -> None:
+    if max_lines <= 0 or not path.exists():
+        return
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if len(lines) <= max_lines:
+            return
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text("\n".join(lines[-max_lines:]) + "\n", encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        return
+
+
+def _truncate_payload(payload):
+    """Limit payload size for invalid-event quarantine safety."""
+    if isinstance(payload, str):
+        if len(payload) <= INVALID_EVENTS_MAX_PAYLOAD_CHARS:
+            return payload
+        return payload[:INVALID_EVENTS_MAX_PAYLOAD_CHARS] + "...<truncated>"
+    if isinstance(payload, dict):
+        text = json.dumps(payload, ensure_ascii=False)
+        if len(text) <= INVALID_EVENTS_MAX_PAYLOAD_CHARS:
+            return payload
+        return text[:INVALID_EVENTS_MAX_PAYLOAD_CHARS] + "...<truncated>"
+    return str(payload)[:INVALID_EVENTS_MAX_PAYLOAD_CHARS]
+
+
 def _quarantine_invalid(payload, reason: str) -> None:
     try:
         INVALID_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         row = {
             "reason": reason,
             "received_at": time.time(),
-            "payload": payload,
+            "payload": _truncate_payload(payload),
         }
         with INVALID_EVENTS_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        _trim_jsonl_tail(INVALID_EVENTS_FILE, INVALID_EVENTS_MAX_LINES)
     except Exception:
         return
 
@@ -113,6 +173,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        allowed, retry_after = _allow_rate_limited_request(client_ip)
+        if not allowed:
+            return _json(self, 429, {
+                "ok": False,
+                "error": "rate_limited",
+                "retry_after_s": retry_after,
+            })
 
         # If SPARKD_TOKEN is set, all mutating POST endpoints require auth.
         if not _is_authorized(self):

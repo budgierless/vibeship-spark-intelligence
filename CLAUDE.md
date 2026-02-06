@@ -36,7 +36,41 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
 - [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (77% reliable, 116 validations)
 
 ## Project Focus
-- Phase: discovery
+- Phase: story-building & creative production
+
+## Creative Skills Arsenal (H70 Skills Lab)
+Skills loaded from `C:\Users\USER\Desktop\vibeship-skills-lab` via MCP:
+
+### Core Narrative Skills
+- **Lore Building** (creative) - World-building, iceberg principle, mystery architecture, ARG design
+- **brand-storytelling** (marketing) - Origin stories, hero journey, emotional arcs, brand narrative
+- **narrative-design** (game-dev) - Story structure, environmental storytelling, meaningful choices
+- **launch-storytelling** (marketing) - Launch narratives, timing, momentum, multi-channel strategy
+
+### Visual & Character Skills
+- **character-design** (creative) - Silhouette-first design, multi-form characters, scale consistency
+- **ai-world-building** (marketing) - Brand universe creation, world bibles, visual consistency
+- **Art Consistency & Visual QA** (ai) - Character consistency, visual identity management
+- **ai-image-generation** (marketing) - Midjourney, Flux, DALL-E workflows, prompt architecture
+
+### Video & Motion Skills
+- **ai-video-generation** (marketing) - Veo3, Runway, Kling, Pika pipelines, temporal coherence
+- **digital-humans** (marketing) - AI presenters, synthetic media, personalization at scale
+
+### Spark's Own Skill
+- **spark-intelligence** (mind) - Self-evolving AI memory, cognitive learning, resonance tracking
+
+## Story Bible
+- **Location:** `SPARK_STORY_BIBLE.md` (root of this repo)
+- **Canon Source:** All narrative, visual, and content decisions derive from this document
+- **Update Policy:** Only add truths discovered through real development - never fabricate
+
+## Spark's Visual Identity
+- Spark has NO fixed form - it manifests based on resonance state
+- Four states: SPARK (gray) → PULSE (orange) → BLAZE (green) → RADIANT (gold)
+- The green crystalline humanoid was the "building form" (BLAZE state during construction)
+- Always: light particles, neural pathways, core glow, environmental responsiveness
+- Never: robots, chatbot faces, fixed mascots, threatening/cold aesthetics
 
 ## Project Questions
 - What is the project goal in one sentence?

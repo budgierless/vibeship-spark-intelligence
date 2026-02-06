@@ -1,64 +1,99 @@
 # Spark Intelligence v1 - Production Readiness
-**Date:** 2026-02-06 (post-hardening update)  
-**Current Rating:** 3.3/5 - Improving, not fully ship-ready
+**Date:** 2026-02-06 (loop-gate update)  
+**Current Rating:** 4.5/5 - Loop gates green, ready for controlled production rollout
 Navigation hub: `docs/GLOSSARY.md`
 
-This file tracks what has been fixed and what still blocks a confident v1 launch.
+This file tracks what has been fixed, what remains open, and the required loop gates for release decisions.
 
 ## What Was Fixed
 
-- Outcome-linked validation is now executed in the bridge cycle (`process_outcome_validation`).
-- Bridge cycle now has per-step timeout guards.
-- Queue rotation now uses atomic temp-file + replace.
-- Queue consume path is gated by pattern-cycle success to avoid consuming on failed detection cycles.
+- Outcome-linked validation is executed in bridge cycles (`process_outcome_validation`).
+- Bridge cycle has per-step timeout guards.
+- Queue rotation uses atomic temp-file + replace.
+- Queue consume is gated by pattern-cycle success to avoid consuming on failed detection cycles.
 - Promotion defaults are aligned (`0.7` reliability, `3` validations).
-- Confidence fast-track is stricter (requires validations + positive validation balance).
-- Unpromote/demotion flow now exists for stale promoted insights.
-- `context_sync` high-validation override now still enforces minimum reliability.
-- Pattern aggregator now persists request-tracker steps to EIDOS store.
-- Service startup now performs readiness checks and reports `started_unhealthy` if not ready.
-- `sparkd` now applies token auth across all mutating `POST` endpoints when `SPARKD_TOKEN` is configured.
-- Meta-Ralph dashboard now binds locally (`127.0.0.1`) by default.
-- Optional service dependency group added in `pyproject.toml` (`.[services]`).
-- CI pipeline added (`.github/workflows/ci.yml`) for critical lint + pytest gates.
+- Confidence fast-track requires validations and positive validation balance.
+- Unpromote/demotion flow exists for stale promoted insights.
+- `context_sync` high-validation override now enforces minimum reliability.
+- Pattern aggregator persists request-tracker steps to EIDOS store.
+- Service startup performs readiness checks and reports `started_unhealthy` when needed.
+- `sparkd` enforces token auth on mutating `POST` endpoints when `SPARKD_TOKEN` is set.
+- `sparkd` now has per-IP rate limiting and bounded invalid-event quarantine retention.
+- Meta-Ralph dashboard binds locally (`127.0.0.1`) by default.
+- Advisor effectiveness counters now enforce logical invariants (`helpful <= followed <= total`) and dedupe repeated outcome counting.
+- Meta-Ralph outcome stats now separate actionable vs non-actionable orchestration records (`tool:task`) so acted-on rates reflect real advice utilization.
+- Meta-Ralph retention now prioritizes actionable/acted-on outcome records so task-noise bursts do not evict utilization history.
+- Integration status now fails on invalid effectiveness counters.
+- New production loop gate module/report added for iteration checklists:
+  - `lib/production_gates.py`
+  - `scripts/production_loop_report.py`
+- Chip insight compaction script (`scripts/compact_chip_insights.py`) is now part of gate remediation for chip-noise control.
+- Optional service dependency group exists in `pyproject.toml` (`.[services]`).
+- CI workflow exists in `.github/workflows/ci.yml` (critical lint/test gates).
 
 ## Still Open (High Impact)
 
-1. Build stronger outcome attribution analytics (coverage/quality dashboards by source).
-2. Expand EIDOS test depth (models/store/distillation engine edge cases).
-3. Add structured JSON logging pipeline for production observability.
-4. Reduce broad `except Exception` swallow patterns in core ingest/bridge paths.
-5. Add explicit rate limiting/quarantine caps for `sparkd` ingress under abuse.
+1. Add structured JSON logging on ingest/bridge critical paths.
+2. Expand EIDOS edge-case coverage (store/model/distillation behavior).
+3. Add source-level outcome attribution dashboards (advice source -> action -> outcome).
+4. Add periodic retention/compaction jobs for chip and outcome telemetry.
+5. Reduce broad `except Exception` usage in ingest/bridge/advisor hot paths.
 
 ## Status Matrix
 
 | Area | Status | Notes |
 |---|---|---|
-| Feedback Loop | Improved | Outcome validation is wired in cycle; attribution quality can improve |
-| Quality Gates | Improved | Fast-track + override leaks fixed; continue tuning |
-| Queue Safety | Improved | Rotation now atomic |
-| Startup Reliability | Improved | Ready checks added for core services |
-| Dependency Clarity | Improved | Optional `services` deps added |
+| Feedback Loop Wiring | Healthy | Retrieval, action linkage, and outcome scoring now aligned on actionable advice |
+| Quality Gates | Healthy | Meta-Ralph + chip gates active and passing live thresholds |
+| Queue Safety | Improved | Atomic rewrite + consume gating active |
+| Ingress Abuse Controls | Improved | Token auth + rate limit + quarantine bounds active |
+| Data Integrity | Improved | Advisor effectiveness invariants enforced |
+| Startup Reliability | Improved | Ready checks on core services |
 | EIDOS Persistence | Improved | Steps persisted in aggregator path |
-| Test Coverage | Partial | Core regressions added; broader EIDOS tests still needed |
-| Observability | Partial | Health/status present, structured logs still pending |
+| Test Coverage | Improved | Loop-gate/actionable-outcome tests added; full suite green |
+| Observability | Partial | Health/status present, structured JSON logs still pending |
+
+## Production Loop Gates (Required Each Iteration)
+
+Run these each loop before calling a release candidate "ready":
+
+1. `python tests/test_pipeline_health.py quick`
+2. `python tests/test_learning_utilization.py quick`
+3. `python tests/test_metaralph_integration.py`
+4. `python -m lib.integration_status`
+5. `python scripts/production_loop_report.py`
+6. `python -m pytest -q tests/test_production_loop_gates.py tests/test_advisor_effectiveness.py tests/test_sparkd_hardening.py`
+7. If counter integrity fails: `python scripts/repair_effectiveness_counters.py` then re-run steps 4-5.
+8. If chip ratio fails: `python scripts/compact_chip_insights.py --apply` then re-run step 5.
+
+Core gate targets enforced by `lib/production_gates.py`:
+- `helpful <= followed <= total advice`
+- retrieval rate `>= 10%`
+- acted-on rate `>= 30%` (computed on actionable retrievals; orchestration-only `tool:task` records excluded)
+- effectiveness rate `>= 50%`
+- distillations `>= 5`
+- Meta-Ralph quality band `30%..60%`
+- chip-to-cognitive ratio `<= 100`
+- queue depth `<= 2000`
 
 ## Recommended Next Sequence
 
-1. Add outcome attribution KPIs and dashboards (advice source -> outcome).
-2. Add structured JSON logs in `hooks/observe.py`, `sparkd.py`, `lib/bridge_cycle.py`.
-3. Add `sparkd` rate-limit + invalid event retention caps.
-4. Deep EIDOS unit tests for distillation and persistence edge cases.
+1. Add structured JSON logs in `hooks/observe.py`, `sparkd.py`, and `lib/bridge_cycle.py`.
+2. Increase distillation yield through pattern quality and episode completion tuning.
+3. Expand EIDOS edge-case tests for store/compaction/distillation paths.
+4. Add scheduled telemetry hygiene checks (counter repair + chip compaction + outcome retention).
 
 ## Verification Snapshot
 
-- Full test suite: `112 passed`
+- Full test suite: `133 passed`
+- Production loop gates: `READY (8/8 passed)` on 2026-02-06
 - Added hardening regressions:
-  - `tests/test_production_hardening.py`
-  - updated threshold assertions in `tests/test_10_improvements.py`
+  - `tests/test_sparkd_hardening.py`
+  - `tests/test_advisor_effectiveness.py`
+  - `tests/test_production_loop_gates.py`
 
 ## Canonical References
 
 - Runtime behavior: `Intelligence_Flow.md`
 - Program status: `docs/PROGRAM_STATUS.md`
-- Operations and startup: `docs/QUICKSTART.md`
+- Ops/startup: `docs/QUICKSTART.md`

@@ -50,3 +50,31 @@ Status: documentation only. Use before any implementation changes.
 - Actionable insight rate (insights used / insights emitted).
 - Time-to-signal (event -> insight latency).
 - False positive rate for regressions.
+
+## Production Loop Gates (new)
+Run these in every iteration loop before promotion:
+
+1. `python tests/test_pipeline_health.py quick`
+2. `python tests/test_learning_utilization.py quick`
+3. `python tests/test_metaralph_integration.py`
+4. `python -m lib.integration_status`
+5. `python scripts/production_loop_report.py`
+6. If counters are invalid: `python scripts/repair_effectiveness_counters.py`
+
+### Required gate targets
+- Effectiveness counter integrity: `helpful <= followed <= total`.
+- Retrieval rate: `>= 10%`.
+- Acted-on rate: `>= 30%` on actionable retrievals (exclude orchestration-only `tool:task` records).
+- Effectiveness rate: `>= 50%`.
+- Distillation floor: `>= 5`.
+- Meta-Ralph quality band: `30%..60%`.
+- Chip-to-cognitive ratio: `<= 100`.
+- Queue depth: `<= 2000`.
+
+### Future loop test coverage to expand
+- Structured JSON logging validation on `sparkd`/bridge/hooks paths.
+- EIDOS distillation edge cases (low-sample, contradictory evidence, stale episodes).
+- Source-attribution quality tests (advice source -> action -> outcome linkage).
+- High-volume chip suppression tests (noise containment under burst traffic).
+- Telemetry hygiene tests (counter repair, chip compaction, outcome retention windows).
+- Trace-linking continuity tests across `advise -> act -> report_outcome` with concurrent tool runs.

@@ -49,6 +49,37 @@ Outputs:
 Logs:
 - `benchmarks/logs/*.jsonl` (live runs)
 
+## Local Model Stress Suite (Ollama)
+
+Stress-test local models across multiple methodologies (advisory, retrieval conflict resolution,
+chip routing, control-plane budgeting, noisy context, structured JSON output).
+
+Default models include:
+- `llama3.2:3b`
+- `phi4-mini`
+- `qwen2.5-coder:3b`
+
+Run:
+
+```bash
+python scripts/local_ai_stress_suite.py --repeats 3 --budget-ms 3000 --soft-budget-ms 3500
+```
+
+Include live pipeline replay contexts from your local Spark queue:
+
+```bash
+python scripts/local_ai_stress_suite.py --repeats 5 --live-scenarios 12 --budget-ms 3000 --soft-budget-ms 3500
+```
+
+Custom models:
+
+```bash
+python scripts/local_ai_stress_suite.py --models "llama3.2:3b,phi4-mini,qwen2.5-coder:3b"
+```
+
+Output:
+- `benchmarks/out/local_model_stress_report.json`
+
 ## Notes
 
 - This replays a local event log (`~/.spark/queue/events.jsonl`) by default.

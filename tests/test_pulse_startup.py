@@ -76,3 +76,53 @@ def test_redirector_launches_external_pulse_with_repo_cwd(monkeypatch, tmp_path)
     assert called["args"][0] == spark_pulse.sys.executable
     assert called["args"][1] == str(pulse_app)
     assert called["cwd"] == str(pulse_dir)
+
+
+def test_pulse_health_requires_api_and_ui(monkeypatch):
+    calls = []
+
+    def _fake_http_ok(url, timeout=1.5):
+        calls.append(url)
+        # Simulate docs healthy but UI broken.
+        return "docs" in url
+
+    monkeypatch.setattr(service_control, "_http_ok", _fake_http_ok)
+
+    assert service_control._pulse_ok() is False
+    assert service_control.PULSE_DOCS_URL in calls
+    assert service_control.PULSE_UI_URL in calls
+
+
+def test_resolve_pulse_dir_prefers_sibling(monkeypatch, tmp_path):
+    root = tmp_path / "vibeship-spark-intelligence"
+    root.mkdir(parents=True, exist_ok=True)
+    sibling_pulse = tmp_path / "vibeship-spark-pulse"
+    sibling_pulse.mkdir(parents=True, exist_ok=True)
+    (sibling_pulse / "app.py").write_text("print('pulse')\n", encoding="utf-8")
+
+    monkeypatch.delenv("SPARK_PULSE_DIR", raising=False)
+    monkeypatch.setattr(service_control, "ROOT_DIR", root)
+
+    resolved = service_control._resolve_pulse_dir()
+    assert resolved == sibling_pulse
+
+
+def test_service_status_detects_pulse_using_absolute_app_path(monkeypatch, tmp_path):
+    pulse_dir = tmp_path / "custom-pulse-dir"
+    pulse_dir.mkdir(parents=True, exist_ok=True)
+    pulse_app = pulse_dir / "app.py"
+    pulse_app.write_text("print('pulse')\n", encoding="utf-8")
+
+    monkeypatch.setattr(service_control, "SPARK_PULSE_DIR", pulse_dir)
+    monkeypatch.setattr(service_control, "_pulse_ok", lambda: False)
+    monkeypatch.setattr(service_control, "_bridge_heartbeat_age", lambda: None)
+    monkeypatch.setattr(service_control, "_read_pid", lambda name: None)
+    monkeypatch.setattr(
+        service_control,
+        "_process_snapshot",
+        lambda: [(32123, f'python "{pulse_app}"')],
+    )
+
+    status = service_control.service_status()
+    assert status["pulse"]["running"] is True
+    assert status["pulse"]["healthy"] is False
