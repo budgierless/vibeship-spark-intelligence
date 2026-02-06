@@ -93,6 +93,10 @@ class ActionType(Enum):
     WAIT = "wait"
 
 
+# Runtime-tuneable threshold for confidence stagnation detection.
+CONFIDENCE_STAGNATION_THRESHOLD = 0.05
+
+
 @dataclass
 class Budget:
     """
@@ -264,12 +268,17 @@ class Episode:
         if len(self.confidence_history) > 10:
             self.confidence_history = self.confidence_history[-10:]
 
-    def is_confidence_stagnant(self, threshold: float = 0.05, steps: int = 3) -> bool:
+    def is_confidence_stagnant(self, threshold: Optional[float] = None, steps: int = 3) -> bool:
         """Check if confidence hasn't improved significantly."""
         if len(self.confidence_history) < steps:
             return False
         recent = self.confidence_history[-steps:]
-        return max(recent) - min(recent) < threshold
+        effective_threshold = (
+            float(threshold)
+            if threshold is not None
+            else float(CONFIDENCE_STAGNATION_THRESHOLD)
+        )
+        return max(recent) - min(recent) < effective_threshold
 
     def budget_percentage_used(self) -> float:
         """Get percentage of budget used."""

@@ -1043,25 +1043,28 @@ Components fall back to hard-coded defaults when a key is absent.
 
 | JSON Section | Component | Keys |
 |-------------|-----------|------|
-| `values` | Pattern distiller, memory gate, EIDOS (fallback) | `min_occurrences`, `confidence_threshold`, `gate_threshold`, `max_steps`, `max_retries_per_error`, `max_file_touches`, `no_evidence_steps`, `queue_batch_size`, `advice_cache_ttl` |
+| `values` | Pattern distiller, memory gate, EIDOS (fallback) | `min_occurrences`, `confidence_threshold`, `gate_threshold`, `min_confidence_delta`, `max_steps`, `max_retries_per_error`, `max_file_touches`, `no_evidence_steps`, `queue_batch_size`, `advice_cache_ttl` |
 | `semantic` | Semantic retriever | `enabled`, `min_similarity`, `min_fusion_score`, `weight_recency`, `weight_outcome`, `mmr_lambda`, `category_caps`, etc. |
 | `triggers` | Trigger rules | `enabled`, `rules_file` |
-| `promotion` | Promoter | `adapter_budgets`, `confidence_floor`, `min_age_hours` |
+| `promotion` | Promoter + auto-promotion interval | `adapter_budgets`, `confidence_floor`, `min_age_hours`, `auto_interval_s` |
+| `synthesizer` | Advisory synthesizer | `mode`, `preferred_provider`, `ai_timeout_s`, `cache_ttl_s`, `max_cache_entries` |
 | `advisor` | Advisor | `min_reliability`, `min_validations_strong`, `max_items`, `cache_ttl`, `min_rank_score` |
 | `meta_ralph` | Meta-Ralph quality gate | `quality_threshold`, `needs_work_threshold`, `needs_work_close_delta`, `min_outcome_samples`, `min_tuneable_samples` |
 | `eidos` | EIDOS Budget defaults | `max_steps`, `max_time_seconds`, `max_retries_per_error`, `max_file_touches`, `no_evidence_limit` |
+| `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `*_enabled` task flags |
 
 ### Backward Compatibility
 
 Some keys exist in both the legacy `values` section and the new dedicated sections.
 The dedicated section always takes precedence:
 
-- `values.max_steps` → `eidos.max_steps` (EIDOS reads both, prefers `eidos`)
-- `values.max_retries_per_error` → `eidos.max_retries_per_error`
-- `values.max_file_touches` → `eidos.max_file_touches`
-- `values.no_evidence_steps` → `eidos.no_evidence_limit` (key renamed)
-- `values.advice_cache_ttl` → `advisor.cache_ttl`
-- `values.queue_batch_size` → pipeline `DEFAULT_BATCH_SIZE`
+- `values.max_steps` -> `eidos.max_steps` (EIDOS reads both, prefers `eidos`)
+- `values.max_retries_per_error` -> `eidos.max_retries_per_error`
+- `values.max_file_touches` -> `eidos.max_file_touches`
+- `values.no_evidence_steps` -> `eidos.no_evidence_limit` (key renamed)
+- `values.min_confidence_delta` -> EIDOS confidence stagnation threshold
+- `values.advice_cache_ttl` -> `advisor.cache_ttl`
+- `values.queue_batch_size` -> pipeline `DEFAULT_BATCH_SIZE`
 
 ### Config Load Pattern
 
@@ -1075,4 +1078,5 @@ def _load_X_config():
     # Override module-level constants from cfg
 ```
 
-Config is loaded once at module import — no runtime file reads.
+Most components load config once at module import. The advisory synthesizer hot-reloads when `tuneables.json` changes.
+
