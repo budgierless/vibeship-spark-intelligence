@@ -108,19 +108,19 @@ Dashboards and ops:
 4) lib.aha_tracker captures surprises for learning.
 5) lib.exposure_tracker records exposure timing for prediction evaluation.
 
-### 2.6.1 Advisor retrieval + Meta-Ralph feedback loop
-1) PreToolUse: hooks/observe.py calls lib.advisor.advise_on_tool for retrieval (cognitive, banks, chips, mind, EIDOS, aha, skills).
-2) Advisor logs retrievals and notifies Meta-Ralph via track_retrieval.
-3) PostToolUse: hooks/observe.py and lib.bridge_cycle.report_outcome call back into advisor.
-4) Meta-Ralph records outcomes and applies them back to cognitive (apply_outcome).
-5) Semantic retrieval path (when semantic.enabled=true):
+### 2.6.1 Advisory engine + packetized feedback loop
+1) PreToolUse: hooks/observe.py calls lib.advisory_engine.on_pre_tool.
+2) Advisory engine resolves intent and task plane via lib.advisory_intent_taxonomy.
+3) Engine attempts packet lookup first (exact, then relaxed) via lib.advisory_packet_store.
+4) On packet miss, engine falls back to live advisor retrieval, then gate + synthesis + emit.
+5) Engine builds memory evidence bundle via lib.advisory_memory_fusion and records `memory_absent_declared` when needed.
+6) Engine persists baseline/live packets and enqueues background prefetch jobs from UserPromptSubmit.
+7) PostToolUse/PostToolUseFailure call advisory_engine.on_post_tool for implicit feedback and packet invalidation on Edit/Write.
+8) Advisor still logs retrievals/outcomes and Meta-Ralph updates quality via outcome-linked feedback.
+9) Semantic retrieval path (when semantic.enabled=true):
    - intent = semantic_retriever._extract_intent(context)
    - triggers (optional) + semantic search (embeddings) + fusion scoring + dedupe + MMR + category caps
    - retrieval log: ~/.spark/logs/semantic_retrieval.jsonl (intent, candidates, triggers, top-N scores)
-6) Advisor metrics (local): ~/.spark/advisor/metrics.json
-   - cognitive_surface_rate
-   - cognitive_helpful_rate (when explicit feedback recorded)
-7) Advisor cache keys are context-hash based (tool + context + task context + input hints) to reduce accidental collisions.
 
 ### 2.6.2 Learning usage in real work (semantic first)
 1) Advisor is called before actions, so learnings can change the next decision (not just be stored).
@@ -199,6 +199,13 @@ Semantic retrieval:
 - ~/.spark/logs/semantic_retrieval.jsonl
 Advisor metrics:
 - ~/.spark/advisor/metrics.json
+Advisory foundation:
+- ~/.spark/advisory_engine.jsonl
+- ~/.spark/advisory_emit.jsonl
+- ~/.spark/advisory_state/
+- ~/.spark/advice_packets/index.json
+- ~/.spark/advice_packets/*.json
+- ~/.spark/advice_packets/prefetch_queue.jsonl
 
 Outcomes + prediction:
 - ~/.spark/predictions.jsonl
@@ -304,17 +311,30 @@ Advisor / skills:
 - advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120
 - skills_router scoring weights (query/name/desc/owns/etc) and limit clamp to 1..10
 - advisor recent-advice lookup is tail-based (bounded by RECENT_ADVICE_MAX_LINES, no full-file scans)
+Advisory foundation:
+- advisory engine enabled by default (SPARK_ADVISORY_ENGINE=1) with direct-path budget SPARK_ADVISORY_MAX_MS=4000.
+- direct path: packet lookup -> live retrieval fallback -> deterministic/AI synthesis -> stdout emission.
+- packet store defaults:
+  - packet TTL DEFAULT_PACKET_TTL_S=900
+  - max indexed packets MAX_INDEX_PACKETS=2000
+- prefetch queue is enabled by default (SPARK_ADVISORY_PREFETCH_QUEUE=1) and fed from UserPromptSubmit.
+- memory fusion can optionally include Mind retrieval (SPARK_ADVISORY_INCLUDE_MIND=1 to enable).
+Advisory synthesis:
+- SPARK_SYNTH_MODE=auto|ai_only|programmatic (default auto)
+- SPARK_SYNTH_TIMEOUT=3.0s
+- SPARK_OLLAMA_MODEL default phi4-mini (override via SPARK_OLLAMA_MODEL)
+- cloud fallback available when API keys exist and provider chain allows.
 Semantic retrieval:
 - semantic.dedupe_similarity default 0.92 (embedding cosine)
 - semantic.log_retrievals default true (writes semantic_retrieval.jsonl)
 
 Mind bridge:
 - MIND_API_URL default from SPARK_MIND_PORT (default 8080)
-- MIND_HEALTH_TIMEOUT_S=0.6
-- MIND_POST_TIMEOUT_S=3.0
-- MIND_RETRIEVE_TIMEOUT_S=1.5
-- MIND_HEALTH_CACHE_TTL_S=5.0
-- MIND_HEALTH_BACKOFF_MAX_S=30.0
+- MIND_HEALTH_TIMEOUT_S=8.0
+- MIND_POST_TIMEOUT_S=5.0
+- MIND_RETRIEVE_TIMEOUT_S=3.0
+- MIND_HEALTH_CACHE_TTL_S=30.0
+- MIND_HEALTH_BACKOFF_MAX_S=15.0
 - salience clamp 0.5..0.95, retrieve limit 5
 - offline queue and sync state kept under ~/.spark
 
@@ -350,6 +370,19 @@ Hooks:
 - SPARK_OUTCOME_CHECKIN_MIN_S (default 1800, int)
 - SPARK_OUTCOME_CHECKIN (enable/disable)
 - SPARK_OUTCOME_CHECKIN_PROMPT (enable/disable)
+Advisory:
+- SPARK_ADVISORY_ENGINE (default "1")
+- SPARK_ADVISORY_MAX_MS (default "4000")
+- SPARK_ADVISORY_PREFETCH_QUEUE (default "1")
+- SPARK_ADVISORY_INCLUDE_MIND (default "0")
+- SPARK_ADVISORY_EMIT (default "1")
+- SPARK_ADVISORY_MAX_CHARS (default "500")
+- SPARK_ADVISORY_FORMAT (default "inline")
+- SPARK_SYNTH_MODE (auto|ai_only|programmatic)
+- SPARK_SYNTH_TIMEOUT (default "3.0")
+- SPARK_OLLAMA_API (default http://localhost:11434)
+- SPARK_OLLAMA_MODEL (default "phi4-mini")
+- SPARK_OPENAI_MODEL / SPARK_ANTHROPIC_MODEL / SPARK_GEMINI_MODEL (optional overrides)
 
 Embeddings:
 - SPARK_EMBEDDINGS (default "1", set 0/false/no to disable)

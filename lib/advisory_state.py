@@ -99,6 +99,10 @@ class SessionState:
     # User intent from last UserPromptSubmit
     user_intent: str = ""
     intent_updated_at: float = 0.0
+    intent_family: str = "emergent_other"
+    intent_confidence: float = 0.0
+    task_plane: str = "build_delivery"
+    intent_reason: str = ""
 
     # Inferred task phase
     task_phase: str = TaskPhase.EXPLORATION

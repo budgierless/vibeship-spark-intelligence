@@ -362,6 +362,13 @@ Add to `.claude/settings.json`:
 ```json
 {
   "hooks": {
+    "PreToolUse": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /path/to/Spark/hooks/observe.py"
+      }]
+    }],
     "PostToolUse": [{
       "matcher": "",
       "hooks": [{
@@ -388,7 +395,9 @@ Add to `.claude/settings.json`:
 ```
 
 Spark maps these hook names to runtime event types used by chips:
-`post_tool`, `post_tool_failure`, `user_prompt`.
+`pre_tool`, `post_tool`, `post_tool_failure`, `user_prompt`.
+
+For predictive advisory to work end-to-end, `PreToolUse` must be enabled.
 
 ## Directory Structure
 

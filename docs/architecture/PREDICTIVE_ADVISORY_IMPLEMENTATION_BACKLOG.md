@@ -3,6 +3,28 @@
 Date: 2026-02-06  
 Status: Execution backlog aligned to AGI-like structuring plan
 
+## 0) Pre-v1 Execution Decision (Ship Now vs Post-v1)
+
+Pre-v1 implementation scope (this cycle):
+
+1. Ticket A1: advisory packet store and index.
+2. Ticket A2: dual-path router in advisory engine (direct path + non-blocking prefetch queueing).
+3. Ticket C1: memory fusion bundle adapter with missing-source observability.
+4. Ticket B1: deterministic intent taxonomy mapper.
+
+Pre-v1 test scope (this cycle):
+
+1. `tests/test_advisory_packet_store.py`
+2. `tests/test_advisory_dual_path_router.py`
+3. `tests/test_advisory_memory_fusion.py`
+4. `tests/test_advisory_intent_taxonomy.py`
+
+Post-v1 deferred scope:
+
+1. A3/A4 and all later workstreams (B2+, C2+, D*, E*, F*).
+2. Async prefetch worker concurrency controls and plane benchmark expansion.
+3. Goal lifecycle, rails/gotchas/recovery, conflict resolver, provider policy/audit.
+
 ## 1) Objective
 
 Implement a foundational advisory layer that is:

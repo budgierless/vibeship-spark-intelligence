@@ -1034,6 +1034,78 @@ curl http://localhost:8788/api/stats
 
 ---
 
+## 10. Advisory Foundation (Predictive Layer)
+
+**Files:** `lib/advisory_engine.py`, `lib/advisory_packet_store.py`, `lib/advisory_memory_fusion.py`, `lib/advisory_intent_taxonomy.py`, `lib/advisory_synthesizer.py`
+
+This is the active hot-path advisory stack used by hooks:
+
+1. `PreToolUse` -> `advisory_engine.on_pre_tool`
+2. intent/plane mapping -> packet lookup (`exact`, then `relaxed`)
+3. fallback to live advisor retrieval when packet miss
+4. gate + synthesis + stdout emission
+5. packet writeback + post-tool outcome feedback + invalidation
+
+### Core Runtime Knobs (env)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `SPARK_ADVISORY_ENGINE` | `1` | Master on/off for advisory engine path. |
+| `SPARK_ADVISORY_MAX_MS` | `4000` | Total budget for one advisory hook execution. |
+| `SPARK_ADVISORY_PREFETCH_QUEUE` | `1` | Enables enqueueing background prefetch jobs from user prompts. |
+| `SPARK_ADVISORY_INCLUDE_MIND` | `0` | Includes Mind retrieval in memory fusion bundle when set to `1`. |
+| `SPARK_ADVISORY_EMIT` | `1` | Enables writing advisory text to stdout hook output. |
+| `SPARK_ADVISORY_MAX_CHARS` | `500` | Caps emitted advisory length. |
+| `SPARK_ADVISORY_FORMAT` | `inline` | Advisory formatting style (`inline` or `block`). |
+
+### Synthesis Route Knobs (env + tuneables)
+
+| Variable/Key | Default | Effect |
+|--------------|---------|--------|
+| `SPARK_SYNTH_MODE` / `synthesizer.mode` | `auto` | `auto`, `ai_only`, or `programmatic`. |
+| `SPARK_SYNTH_TIMEOUT` / `synthesizer.ai_timeout_s` | `3.0` | AI synthesis timeout ceiling. |
+| `SPARK_OLLAMA_MODEL` | `phi4-mini` | Default local model for synthesis. |
+| `SPARK_OLLAMA_API` | `http://localhost:11434` | Local Ollama endpoint. |
+| `synthesizer.preferred_provider` | `auto` | Provider preference (`ollama`, `gemini`, `openai`, `anthropic`). |
+| `synthesizer.cache_ttl_s` | `120` | Synthesis cache TTL. |
+| `synthesizer.max_cache_entries` | `50` | Synthesis cache size cap. |
+
+### Packet Store Defaults
+
+| Constant | Default | Effect |
+|----------|---------|--------|
+| `DEFAULT_PACKET_TTL_S` | `900` | Packet freshness TTL in seconds. |
+| `MAX_INDEX_PACKETS` | `2000` | Max packet metadata entries retained. |
+
+### Recommended `~/.spark/tuneables.json` block
+
+```json
+{
+  "advisor": {
+    "min_reliability": 0.5,
+    "min_validations_strong": 2,
+    "max_items": 8,
+    "cache_ttl": 120,
+    "min_rank_score": 0.35
+  },
+  "synthesizer": {
+    "mode": "auto",
+    "preferred_provider": "ollama",
+    "ai_timeout_s": 3.0,
+    "cache_ttl_s": 120,
+    "max_cache_entries": 50
+  }
+}
+```
+
+### Operational Notes
+
+- Predictive advisory requires `PreToolUse` hook wiring in Claude Code.
+- With `mode=auto`, advisory remains deterministic-safe when AI is slow or unavailable.
+- First-turn coverage is improved by baseline packets generated on `UserPromptSubmit`.
+
+---
+
 ## Tuneable Wiring Summary
 
 All tuneables are now loaded from `~/.spark/tuneables.json` at module import time.
