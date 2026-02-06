@@ -22,6 +22,7 @@ Use this file to find terms, systems, and the correct source-of-truth doc.
 - Semantic retrieval behavior: `SEMANTIC_ADVISOR_DESIGN.md`
 - Chips usage and authoring: `docs/CHIPS.md`
 - Program execution status: `docs/PROGRAM_STATUS.md`
+- Production readiness status: `PRODUCTION_READINESS.md`
 - Long-range architecture direction: `docs/VISION.md`
 
 ## Glossary

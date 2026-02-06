@@ -31,6 +31,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 ## Current Program Docs
 
 - `docs/PROGRAM_STATUS.md`: consolidated implementation status and priorities
+- `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log
 
