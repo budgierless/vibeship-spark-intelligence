@@ -153,3 +153,32 @@ def test_report_action_outcome_links_by_trace_id(monkeypatch, tmp_path):
     )
     assert advisor.effectiveness["total_followed"] == 2
     assert advisor.effectiveness["total_helpful"] == 2
+
+
+def test_recent_advice_lookup_does_not_cross_link_task_fallback(monkeypatch, tmp_path):
+    _patch_advisor_paths(monkeypatch, tmp_path)
+    advisor = advisor_mod.SparkAdvisor()
+
+    recent_entry = {
+        "ts": time.time(),
+        "tool": "Task",
+        "trace_id": "trace-task-1",
+        "advice_ids": ["task-a1"],
+        "insight_keys": ["tool:task"],
+        "sources": ["self_awareness"],
+    }
+    advisor_mod.RECENT_ADVICE_LOG.write_text(
+        json.dumps(recent_entry) + "\n",
+        encoding="utf-8",
+    )
+
+    # Do not link Task advice to other tool outcomes by default.
+    assert advisor._get_recent_advice_entry("Edit") is None
+
+    # Explicit fallback keeps legacy behavior available for Task workflows.
+    task_entry = advisor._get_recent_advice_entry(
+        "Edit",
+        allow_task_fallback=True,
+    )
+    assert task_entry is not None
+    assert task_entry.get("tool") == "Task"

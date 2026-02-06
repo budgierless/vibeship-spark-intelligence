@@ -163,6 +163,45 @@ def _read_queue_depth() -> int:
         return 0
 
 
+def _read_effectiveness_metrics() -> Dict[str, int]:
+    """Read advisor effectiveness counters with on-read normalization."""
+    data = _read_json(EFFECTIVENESS_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+
+    def _as_int(value: Any) -> int:
+        try:
+            return max(0, int(value))
+        except Exception:
+            return 0
+
+    total = _as_int(data.get("total_advice_given", 0))
+    followed = _as_int(data.get("total_followed", 0))
+    helpful = _as_int(data.get("total_helpful", 0))
+    invalid = followed > total or helpful > followed
+
+    if invalid:
+        try:
+            from lib.advisor import repair_effectiveness_counters
+
+            repaired = repair_effectiveness_counters() or {}
+            after = repaired.get("after") if isinstance(repaired, dict) else {}
+            if isinstance(after, dict):
+                total = _as_int(after.get("total_advice_given", total))
+                followed = _as_int(after.get("total_followed", followed))
+                helpful = _as_int(after.get("total_helpful", helpful))
+        except Exception:
+            # Fallback to bounded values for reporting if repair is unavailable.
+            followed = min(followed, total)
+            helpful = min(helpful, followed)
+
+    return {
+        "total_advice_given": total,
+        "total_followed": min(followed, total),
+        "total_helpful": min(helpful, min(followed, total)),
+    }
+
+
 def load_live_metrics() -> LoopMetrics:
     """Collect loop metrics from live local stores."""
     stored = _count_stored_learnings(COGNITIVE_FILE)
@@ -208,11 +247,10 @@ def load_live_metrics() -> LoopMetrics:
     distillations = _read_distillation_count()
     queue_depth = _read_queue_depth()
 
-    eff = _read_json(EFFECTIVENESS_FILE, {})
-    if isinstance(eff, dict):
-        advice_total = int(eff.get("total_advice_given", 0) or 0)
-        advice_followed = int(eff.get("total_followed", 0) or 0)
-        advice_helpful = int(eff.get("total_helpful", 0) or 0)
+    eff = _read_effectiveness_metrics()
+    advice_total = int(eff.get("total_advice_given", 0) or 0)
+    advice_followed = int(eff.get("total_followed", 0) or 0)
+    advice_helpful = int(eff.get("total_helpful", 0) or 0)
 
     retrieval_rate = (retrieved / max(stored, 1)) if stored > 0 else 0.0
     acted_on_rate = (

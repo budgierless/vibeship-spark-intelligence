@@ -394,6 +394,84 @@ class MetaRalph:
             return
         self._save_state_now()
 
+    def _record_recency_ts(self, record: OutcomeRecord) -> float:
+        """Best-effort monotonic timestamp for ordering/merge precedence."""
+        preferred = self._parse_iso_timestamp(record.outcome_at) or self._parse_iso_timestamp(
+            record.retrieved_at
+        )
+        if preferred is None:
+            return 0.0
+        try:
+            return float(preferred.timestamp())
+        except Exception:
+            return 0.0
+
+    def _merge_outcome_record(self, current: OutcomeRecord, incoming: OutcomeRecord) -> OutcomeRecord:
+        """Merge two records for the same learning_id without dropping stronger data."""
+        merged = OutcomeRecord(
+            learning_id=current.learning_id or incoming.learning_id,
+            learning_content=(
+                current.learning_content
+                if len(current.learning_content or "") >= len(incoming.learning_content or "")
+                else incoming.learning_content
+            ),
+            retrieved_at=current.retrieved_at or incoming.retrieved_at,
+            insight_key=current.insight_key or incoming.insight_key,
+            source=current.source or incoming.source,
+            trace_id=current.trace_id or incoming.trace_id,
+            acted_on=bool(current.acted_on or incoming.acted_on),
+            outcome=current.outcome or incoming.outcome,
+            outcome_evidence=current.outcome_evidence or incoming.outcome_evidence,
+            outcome_at=current.outcome_at or incoming.outcome_at,
+            outcome_trace_id=current.outcome_trace_id or incoming.outcome_trace_id,
+            outcome_latency_s=(
+                current.outcome_latency_s
+                if current.outcome_latency_s is not None
+                else incoming.outcome_latency_s
+            ),
+        )
+
+        # Preserve explicit outcome labels if either side has one.
+        explicit_current = self._normalize_outcome(current.outcome) in ("good", "bad")
+        explicit_incoming = self._normalize_outcome(incoming.outcome) in ("good", "bad")
+        if not explicit_current and explicit_incoming:
+            merged.outcome = incoming.outcome
+            merged.outcome_evidence = incoming.outcome_evidence or merged.outcome_evidence
+            merged.outcome_at = incoming.outcome_at or merged.outcome_at
+            merged.outcome_trace_id = incoming.outcome_trace_id or merged.outcome_trace_id
+            if incoming.outcome_latency_s is not None:
+                merged.outcome_latency_s = incoming.outcome_latency_s
+        elif explicit_current and not explicit_incoming:
+            merged.outcome = current.outcome
+            merged.outcome_evidence = current.outcome_evidence or merged.outcome_evidence
+            merged.outcome_at = current.outcome_at or merged.outcome_at
+            merged.outcome_trace_id = current.outcome_trace_id or merged.outcome_trace_id
+            if current.outcome_latency_s is not None:
+                merged.outcome_latency_s = current.outcome_latency_s
+
+        return merged
+
+    def _merge_outcome_records_from_disk(self) -> None:
+        """Merge current in-memory outcome records with latest on-disk snapshot."""
+        if not self.OUTCOME_TRACKING_FILE.exists():
+            return
+        data = self._read_json_safe(self.OUTCOME_TRACKING_FILE) or {}
+        records = data.get("records", [])
+        if not isinstance(records, list):
+            return
+        for rec_data in records:
+            try:
+                disk_record = OutcomeRecord(**rec_data)
+            except Exception:
+                continue
+            existing = self.outcome_records.get(disk_record.learning_id)
+            if existing is None:
+                self.outcome_records[disk_record.learning_id] = disk_record
+            else:
+                self.outcome_records[disk_record.learning_id] = self._merge_outcome_record(
+                    existing, disk_record
+                )
+
     def _save_state_now(self):
         """Actually persist state to disk."""
         self._dirty = False
@@ -444,6 +522,10 @@ class MetaRalph:
             "last_updated": datetime.now().isoformat()
         })
 
+        # Merge latest persisted records first so concurrent hook writers do not
+        # drop actionable attribution samples (last-writer-wins clobbering).
+        self._merge_outcome_records_from_disk()
+
         # Bound in-memory outcome records for long-running processes.
         if len(self.outcome_records) > 500:
             all_records = list(self.outcome_records.values())
@@ -476,7 +558,7 @@ class MetaRalph:
                 non_actionable_acted_on,
                 non_actionable_pending,
             ):
-                bucket.sort(key=lambda r: r.retrieved_at or "", reverse=True)
+                bucket.sort(key=self._record_recency_ts, reverse=True)
 
             keep: List[OutcomeRecord] = []
             for bucket in (

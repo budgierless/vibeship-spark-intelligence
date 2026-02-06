@@ -223,6 +223,25 @@ def test_outcome_retention_keeps_actionable_records():
     assert stats["actionable_tracked"] >= 1
 
 
+def test_outcome_save_merges_concurrent_writers():
+    """A stale writer should merge disk outcomes instead of clobbering them."""
+    stale_writer = MetaRalph()  # Loads initial empty state.
+
+    fresh_writer = MetaRalph()
+    fresh_writer.track_retrieval("a1", "first advice", insight_key="k1", source="semantic")
+    fresh_writer.track_outcome("a1", "good", "worked")
+
+    stale_writer.track_retrieval("a2", "second advice", insight_key="k2", source="cognitive")
+    stale_writer.track_outcome("a2", "good", "worked")
+
+    final_state = MetaRalph()
+    assert "a1" in final_state.outcome_records
+    assert "a2" in final_state.outcome_records
+    stats = final_state.get_outcome_stats()
+    assert stats["actionable_tracked"] >= 2
+    assert stats["acted_on"] >= 2
+
+
 def test_source_attribution_rollup():
     """Source attribution should roll up source -> action -> outcome correctly."""
     ralph = MetaRalph()

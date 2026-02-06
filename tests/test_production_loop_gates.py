@@ -186,7 +186,14 @@ def test_load_live_metrics_uses_actionable_denominator(monkeypatch):
     )
     monkeypatch.setattr("lib.production_gates._read_distillation_count", lambda: 0)
     monkeypatch.setattr("lib.production_gates._read_queue_depth", lambda: 0)
-    monkeypatch.setattr("lib.production_gates._read_json", lambda _p, _d: {})
+    monkeypatch.setattr(
+        "lib.production_gates._read_effectiveness_metrics",
+        lambda: {
+            "total_advice_given": 0,
+            "total_followed": 0,
+            "total_helpful": 0,
+        },
+    )
 
     metrics = load_live_metrics()
     assert metrics.total_retrieved == 80
@@ -223,7 +230,14 @@ def test_load_live_metrics_honors_zero_actionable(monkeypatch):
     )
     monkeypatch.setattr("lib.production_gates._read_distillation_count", lambda: 0)
     monkeypatch.setattr("lib.production_gates._read_queue_depth", lambda: 0)
-    monkeypatch.setattr("lib.production_gates._read_json", lambda _p, _d: {})
+    monkeypatch.setattr(
+        "lib.production_gates._read_effectiveness_metrics",
+        lambda: {
+            "total_advice_given": 0,
+            "total_followed": 0,
+            "total_helpful": 0,
+        },
+    )
 
     metrics = load_live_metrics()
     assert metrics.total_retrieved == 40

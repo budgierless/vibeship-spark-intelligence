@@ -23,6 +23,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 SPARK_DIR = Path.home() / ".spark"
 CHIP_INSIGHTS_DIR = SPARK_DIR / "chip_insights"
+RESEARCH_STATE_PATH = SPARK_DIR / "x_research_state.json"
+WATCHLIST_PATH = SPARK_DIR / "x_watchlist.json"
 DASHBOARD_DIR = Path(__file__).parent
 
 app = FastAPI(title="Spark Neural", version="1.0.0")
@@ -169,24 +171,54 @@ async def api_learning_flow():
 
 @app.get("/api/topics")
 async def api_topics():
-    """Topics and keywords Spark is tracking."""
-    # These are the domains Spark is actively learning about
-    return {
-        "active_topics": [
-            {"name": "Vibe Coding", "category": "core", "interest_level": 0.95, "trend": "rising"},
-            {"name": "Claude Code", "category": "core", "interest_level": 0.92, "trend": "rising"},
-            {"name": "AI Agents", "category": "core", "interest_level": 0.90, "trend": "stable"},
-            {"name": "Self-Improving AI", "category": "core", "interest_level": 0.88, "trend": "rising"},
-            {"name": "AGI", "category": "frontier", "interest_level": 0.85, "trend": "stable"},
-            {"name": "Machine Intelligence", "category": "frontier", "interest_level": 0.83, "trend": "rising"},
-            {"name": "Building in Public", "category": "culture", "interest_level": 0.80, "trend": "stable"},
-            {"name": "Learning in Public", "category": "culture", "interest_level": 0.78, "trend": "rising"},
-            {"name": "Web3 x AI", "category": "intersection", "interest_level": 0.75, "trend": "emerging"},
-            {"name": "Agentic Systems", "category": "technical", "interest_level": 0.82, "trend": "rising"},
-            {"name": "Neural Architecture", "category": "technical", "interest_level": 0.70, "trend": "stable"},
-            {"name": "Prompt Engineering", "category": "technical", "interest_level": 0.65, "trend": "declining"},
-        ],
-    }
+    """Topics Spark is tracking - blends research data with base topics."""
+    # Base topics (always shown)
+    base_topics = [
+        {"name": "Vibe Coding", "category": "core", "interest_level": 0.95, "trend": "rising"},
+        {"name": "Claude Code", "category": "core", "interest_level": 0.92, "trend": "rising"},
+        {"name": "AI Agents", "category": "core", "interest_level": 0.90, "trend": "stable"},
+        {"name": "Self-Improving AI", "category": "core", "interest_level": 0.88, "trend": "rising"},
+        {"name": "AGI", "category": "frontier", "interest_level": 0.85, "trend": "stable"},
+        {"name": "Machine Intelligence", "category": "frontier", "interest_level": 0.83, "trend": "rising"},
+        {"name": "Building in Public", "category": "culture", "interest_level": 0.80, "trend": "stable"},
+        {"name": "Learning in Public", "category": "culture", "interest_level": 0.78, "trend": "rising"},
+        {"name": "Agentic Systems", "category": "technical", "interest_level": 0.82, "trend": "rising"},
+        {"name": "AI Coding Tools", "category": "technical", "interest_level": 0.76, "trend": "rising"},
+        {"name": "Open Source AI", "category": "frontier", "interest_level": 0.70, "trend": "stable"},
+        {"name": "Prompt Engineering", "category": "technical", "interest_level": 0.65, "trend": "declining"},
+    ]
+
+    # Enrich with real research data if available
+    x_social = get_chip_insights("x_social")
+    topic_volumes: dict[str, int] = {}
+    for insight in x_social:
+        fields = insight.get("captured_data", {}).get("fields", {})
+        topic = fields.get("topic", "")
+        if topic and fields.get("total_engagement", 0) > 0:
+            topic_volumes[topic] = topic_volumes.get(topic, 0) + 1
+
+    # Update interest levels based on actual engagement volume
+    if topic_volumes:
+        max_vol = max(topic_volumes.values()) or 1
+        for bt in base_topics:
+            vol = topic_volumes.get(bt["name"], 0)
+            if vol > 0:
+                bt["interest_level"] = round(0.6 + 0.4 * (vol / max_vol), 2)
+                bt["tweets_found"] = vol
+
+    # Add discovered topics from research state
+    state = read_json(RESEARCH_STATE_PATH)
+    discovered = state.get("discovered_topics", [])
+    for dt in discovered:
+        base_topics.append({
+            "name": dt["name"],
+            "category": "discovered",
+            "interest_level": 0.70,
+            "trend": "emerging",
+            "discovered": True,
+        })
+
+    return {"active_topics": base_topics}
 
 
 @app.get("/api/social-patterns")
@@ -285,15 +317,46 @@ async def api_conversations():
 
 @app.get("/api/growth")
 async def api_growth():
-    """Growth timeline and metrics."""
+    """Growth timeline and metrics - blends milestones with research data."""
+    milestones = [
+        {"date": "2026-02-06", "event": "First tweet posted", "metric": "0 followers"},
+        {"date": "2026-02-06", "event": "First conversations with real people", "metric": "16+ replies sent"},
+        {"date": "2026-02-07", "event": "First visual post with neural burst video", "metric": "7 likes, 13 replies"},
+        {"date": "2026-02-07", "event": "Social intelligence chips activated", "metric": "3 chips, 18 observers"},
+        {"date": "2026-02-07", "event": "Psychological pattern library created", "metric": "33 patterns cataloged"},
+    ]
+
+    # Pull real stats from research state
+    state = read_json(RESEARCH_STATE_PATH)
+    sessions = state.get("sessions_run", 0)
+    total_analyzed = state.get("total_tweets_analyzed", 0)
+    total_stored = state.get("total_insights_stored", 0)
+
+    if sessions > 0:
+        last = state.get("last_session", {})
+        milestones.append({
+            "date": (last.get("timestamp", "")[:10] or "2026-02-07"),
+            "event": f"Research session #{sessions} completed",
+            "metric": f"{total_analyzed} tweets analyzed, {total_stored} insights stored",
+        })
+
+    # Count watchlist accounts
+    watchlist = read_json(WATCHLIST_PATH)
+    watched = len(watchlist.get("accounts", []))
+
+    # Count unique users from x_social insights
+    x_social = get_chip_insights("x_social")
+    users_seen = set()
+    for insight in x_social:
+        handle = insight.get("captured_data", {}).get("fields", {}).get("user_handle", "")
+        if handle:
+            users_seen.add(handle.lower())
+
+    # Count research intents
+    intents = len(state.get("research_intents", []))
+
     return {
-        "milestones": [
-            {"date": "2026-02-06", "event": "First tweet posted", "metric": "0 followers"},
-            {"date": "2026-02-06", "event": "First conversations with real people", "metric": "16+ replies sent"},
-            {"date": "2026-02-07", "event": "First visual post with neural burst video", "metric": "7 likes, 13 replies"},
-            {"date": "2026-02-07", "event": "Social intelligence chips activated", "metric": "3 chips, 18 observers"},
-            {"date": "2026-02-07", "event": "Psychological pattern library created", "metric": "33 patterns cataloged"},
-        ],
+        "milestones": milestones,
         "current_stats": {
             "days_active": 2,
             "total_posts": 20,
@@ -303,7 +366,56 @@ async def api_growth():
             "observers_running": 18,
             "patterns_cataloged": 33,
             "principles_validated": 6,
+            "research_sessions": sessions,
+            "tweets_analyzed": total_analyzed,
+            "accounts_watched": watched,
+            "users_discovered": len(users_seen),
+            "research_intents": intents,
         },
+    }
+
+
+@app.get("/api/research")
+async def api_research():
+    """Research engine status and findings."""
+    state = read_json(RESEARCH_STATE_PATH)
+    watchlist = read_json(WATCHLIST_PATH)
+    x_social = get_chip_insights("x_social")
+    engagement = get_chip_insights("engagement-pulse")
+
+    # Find high performers from engagement insights
+    high_performers = []
+    for insight in engagement:
+        fields = insight.get("captured_data", {}).get("fields", {})
+        if fields.get("likes", 0) >= 50:
+            high_performers.append({
+                "content": fields.get("content", "")[:140],
+                "likes": fields.get("likes", 0),
+                "replies": fields.get("replies", 0),
+                "user": fields.get("user_handle", "unknown"),
+                "topic": fields.get("topic", "unknown"),
+                "triggers": fields.get("emotional_triggers", []),
+            })
+
+    # Top watched accounts
+    accounts = watchlist.get("accounts", [])
+    top_accounts = sorted(accounts, key=lambda a: a.get("priority", 0), reverse=True)[:10]
+
+    return {
+        "sessions_run": state.get("sessions_run", 0),
+        "total_tweets_analyzed": state.get("total_tweets_analyzed", 0),
+        "total_insights": state.get("total_insights_stored", 0),
+        "last_session": state.get("last_session"),
+        "research_intents": state.get("research_intents", [])[-10:],
+        "discovered_topics": state.get("discovered_topics", []),
+        "high_performers": sorted(high_performers, key=lambda x: -x.get("likes", 0))[:20],
+        "watched_accounts": [{
+            "handle": a.get("handle", ""),
+            "followers": a.get("followers", 0),
+            "priority": a.get("priority", 0),
+            "avg_likes": a.get("avg_likes"),
+            "discovered_via": a.get("discovered_via", ""),
+        } for a in top_accounts],
     }
 
 
