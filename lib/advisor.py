@@ -1387,6 +1387,7 @@ class SparkAdvisor:
         self,
         tool_name: str,
         trace_id: Optional[str] = None,
+        allow_task_fallback: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Return the most recent advice entry for a tool within TTL.
 
@@ -1394,9 +1395,6 @@ class SparkAdvisor:
         - "Bash" matches "Bash command"
         - "Edit" matches "Edit file"
         - "Read" matches "Read code"
-
-        Falls back to 'task' advice if no specific tool advice found,
-        since Task tool spawns sub-agents that use other tools.
         """
         if not RECENT_ADVICE_LOG.exists():
             return None
@@ -1406,7 +1404,9 @@ class SparkAdvisor:
             return None
 
         now = time.time()
-        tool_lower = tool_name.lower()  # Case-insensitive matching
+        tool_lower = (tool_name or "").strip().lower()  # Case-insensitive matching
+        if not tool_lower:
+            return None
         task_fallback = None  # Track most recent task advice as fallback
         prefix_match = None  # Track prefix matches (e.g., "Bash" in "Bash command")
         trace_match = None
@@ -1439,12 +1439,18 @@ class SparkAdvisor:
                 elif tool_lower.startswith(entry_tool + " ") or tool_lower.startswith(entry_tool + "_"):
                     prefix_match = entry
 
-            # Track task advice as fallback (sub-agents use tools spawned by Task)
+            # Optional fallback for explicit Task-tool flows.
             if entry_tool == "task" and task_fallback is None:
                 task_fallback = entry
 
-        # Prefer exact trace match; otherwise use tool/prefix/task fallback.
-        return trace_match or prefix_match or task_fallback
+        # Prefer exact trace match; otherwise use tool/prefix fallback.
+        if trace_match:
+            return trace_match
+        if prefix_match:
+            return prefix_match
+        if allow_task_fallback or tool_lower == "task":
+            return task_fallback
+        return None
 
     def _find_recent_advice_by_id(self, advice_id: str) -> Optional[Dict[str, Any]]:
         """Find recent advice entry containing a specific advice_id."""

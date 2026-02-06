@@ -447,23 +447,47 @@ class MetaRalph:
         # Bound in-memory outcome records for long-running processes.
         if len(self.outcome_records) > 500:
             all_records = list(self.outcome_records.values())
-            # Keep actionable and acted-on records first so task-noise bursts
-            # do not evict high-value utilization history.
-            priority = [
-                r for r in all_records
-                if r.acted_on or not self._is_non_actionable_record(r)
+            # Keep actionable records first so task-only advisory noise does
+            # not evict real attribution history.
+            actionable_acted_on = [
+                r
+                for r in all_records
+                if r.acted_on and not self._is_non_actionable_record(r)
             ]
-            secondary = [
-                r for r in all_records
-                if not (r.acted_on or not self._is_non_actionable_record(r))
+            actionable_pending = [
+                r
+                for r in all_records
+                if (not r.acted_on) and not self._is_non_actionable_record(r)
+            ]
+            non_actionable_acted_on = [
+                r
+                for r in all_records
+                if r.acted_on and self._is_non_actionable_record(r)
+            ]
+            non_actionable_pending = [
+                r
+                for r in all_records
+                if (not r.acted_on) and self._is_non_actionable_record(r)
             ]
 
-            priority.sort(key=lambda r: r.retrieved_at or "", reverse=True)
-            secondary.sort(key=lambda r: r.retrieved_at or "", reverse=True)
+            for bucket in (
+                actionable_acted_on,
+                actionable_pending,
+                non_actionable_acted_on,
+                non_actionable_pending,
+            ):
+                bucket.sort(key=lambda r: r.retrieved_at or "", reverse=True)
 
-            keep = priority[:500]
-            if len(keep) < 500:
-                keep.extend(secondary[: 500 - len(keep)])
+            keep: List[OutcomeRecord] = []
+            for bucket in (
+                actionable_acted_on,
+                actionable_pending,
+                non_actionable_acted_on,
+                non_actionable_pending,
+            ):
+                if len(keep) >= 500:
+                    break
+                keep.extend(bucket[: 500 - len(keep)])
             self.outcome_records = {r.learning_id: r for r in keep}
 
         self._atomic_write_json(self.OUTCOME_TRACKING_FILE, {

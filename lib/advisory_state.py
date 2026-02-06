@@ -319,6 +319,51 @@ def get_recent_tool_sequence(state: SessionState, n: int = 5) -> List[str]:
     return [t["tool_name"] for t in state.recent_tools[-n:]]
 
 
+def resolve_recent_trace_id(
+    state: SessionState,
+    tool_name: str,
+    *,
+    max_age_s: float = 300.0,
+) -> Optional[str]:
+    """Resolve the most likely trace_id for a post-tool outcome event.
+
+    Prefer unresolved PreTool entries (success is None) for the same tool,
+    then fall back to the latest trace-bearing row for that tool.
+    """
+    tool_lower = (tool_name or "").strip().lower()
+    if not tool_lower:
+        return None
+
+    now = time.time()
+    fallback: Optional[str] = None
+
+    for row in reversed(state.recent_tools):
+        if not isinstance(row, dict):
+            continue
+        row_tool = str(row.get("tool_name") or "").strip().lower()
+        if row_tool != tool_lower:
+            continue
+
+        try:
+            ts = float(row.get("timestamp") or 0.0)
+        except Exception:
+            ts = 0.0
+        if max_age_s > 0 and ts > 0 and (now - ts) > max_age_s:
+            break
+
+        trace_id = str(row.get("trace_id") or "").strip()
+        if not trace_id:
+            continue
+
+        success = row.get("success")
+        if success is None:
+            return trace_id
+        if fallback is None:
+            fallback = trace_id
+
+    return fallback
+
+
 def had_recent_read(state: SessionState, file_path: str, within_s: float = 60) -> bool:
     """Check if a file was recently Read (useful for suppressing 'Read before Edit' advice)."""
     now = time.time()

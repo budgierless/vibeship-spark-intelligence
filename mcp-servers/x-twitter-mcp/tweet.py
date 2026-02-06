@@ -9,6 +9,9 @@ Usage:
     # Post a tweet
     python tweet.py "Hello world"
 
+    # Post with an image
+    python tweet.py "Check this out" --media path/to/image.png
+
     # Reply to a tweet
     python tweet.py "Great point!" --reply-to 2019864160490909823
 
@@ -56,15 +59,40 @@ def get_client(creds: dict) -> tweepy.Client:
     )
 
 
+def get_api(creds: dict) -> tweepy.API:
+    """Create a tweepy v1.1 API for media uploads."""
+    auth = tweepy.OAuth1UserHandler(
+        creds["TWITTER_API_KEY"],
+        creds["TWITTER_API_SECRET"],
+        creds["TWITTER_ACCESS_TOKEN"],
+        creds["TWITTER_ACCESS_TOKEN_SECRET"],
+    )
+    return tweepy.API(auth)
+
+
+def upload_media(api: tweepy.API, file_path: str) -> int:
+    """Upload media via v1.1 API. Returns media_id."""
+    p = Path(file_path)
+    if not p.exists():
+        print(f"ERROR: File not found: {file_path}", file=sys.stderr)
+        sys.exit(1)
+    media = api.media_upload(filename=str(p))
+    print(f"  Media uploaded: id={media.media_id} ({p.name})")
+    return media.media_id
+
+
 def post_tweet(client: tweepy.Client, text: str,
-               reply_to: str = None, tags: list = None) -> dict:
-    """Post a tweet, optionally as a reply or with hashtags."""
+               reply_to: str = None, tags: list = None,
+               media_ids: list = None) -> dict:
+    """Post a tweet, optionally as a reply, with hashtags, or with media."""
     if tags:
         text += " " + " ".join(f"#{t}" for t in tags)
 
     kwargs = {"text": text}
     if reply_to:
         kwargs["in_reply_to_tweet_id"] = reply_to
+    if media_ids:
+        kwargs["media_ids"] = media_ids
 
     result = client.create_tweet(**kwargs)
     return result.data
@@ -97,6 +125,7 @@ def main():
     parser = argparse.ArgumentParser(description="@Spark_coded tweet utility")
     parser.add_argument("text", nargs="?", help="Tweet text")
     parser.add_argument("--reply-to", help="Tweet ID to reply to")
+    parser.add_argument("--media", nargs="+", help="Media file(s) to attach (max 4 images)")
     parser.add_argument("--tags", nargs="+", help="Hashtags (without #)")
     parser.add_argument("--delete", metavar="ID", help="Delete a tweet by ID")
     parser.add_argument("--test", action="store_true", help="Test credentials")
@@ -124,7 +153,12 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    data = post_tweet(client, args.text, args.reply_to, args.tags)
+    media_ids = None
+    if args.media:
+        api = get_api(creds)
+        media_ids = [upload_media(api, f) for f in args.media]
+
+    data = post_tweet(client, args.text, args.reply_to, args.tags, media_ids)
     print(f"Posted: https://x.com/Spark_coded/status/{data['id']}")
     print(f"Text:   {data['text']}")
 

@@ -338,13 +338,25 @@ def on_post_tool(
         return
 
     try:
-        from .advisory_state import load_state, record_tool_call, save_state
+        from .advisory_state import (
+            load_state,
+            record_tool_call,
+            resolve_recent_trace_id,
+            save_state,
+        )
 
         state = load_state(session_id)
-        record_tool_call(state, tool_name, tool_input, success=success, trace_id=trace_id)
+        resolved_trace_id = trace_id or resolve_recent_trace_id(state, tool_name)
+        record_tool_call(
+            state,
+            tool_name,
+            tool_input,
+            success=success,
+            trace_id=resolved_trace_id,
+        )
 
         if state.shown_advice_ids:
-            _record_implicit_feedback(state, tool_name, success, trace_id)
+            _record_implicit_feedback(state, tool_name, success, resolved_trace_id)
 
         if tool_name in {"Edit", "Write"}:
             try:
@@ -428,7 +440,11 @@ def _record_implicit_feedback(
         from .advisor import get_advisor
 
         advisor = get_advisor()
-        recent = advisor._get_recent_advice_entry(tool_name)
+        recent = advisor._get_recent_advice_entry(
+            tool_name,
+            trace_id=trace_id,
+            allow_task_fallback=False,
+        )
         if not recent or not recent.get("advice_ids"):
             return
 

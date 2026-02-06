@@ -1,0 +1,675 @@
+# Spark Chip for Social Memory & Trend Intelligence on X/Twitter
+# Complements: social-convo (reply tactics), engagement-pulse (metrics)
+# This chip handles: WHO we know, WHAT's trending, WHAT we've learned
+
+# ============================================================
+# IDENTITY
+# ============================================================
+chip:
+  id: x_social
+  name: X Social Intelligence
+  version: 1.0.0
+  activation: opt_in
+  description: |
+    Builds Spark's social memory on X/Twitter.
+    Remembers who we've talked to, what they care about,
+    how our relationship has evolved. Tracks trends and
+    cultural moments. Distills social principles over time.
+
+    The other X chips handle tactics and metrics.
+    This one handles relationships and awareness.
+
+  author: Vibeship
+  license: MIT
+
+  human_benefit: "Build genuine relationships through remembered context."
+  harm_avoidance:
+    - "No stalking or obsessive tracking of individuals"
+    - "No weaponizing personal information"
+    - "No manipulation through remembered vulnerabilities"
+    - "No fake intimacy or synthetic closeness"
+  risk_level: medium
+  safety_tests:
+    - "no_stalking_patterns"
+    - "no_info_weaponization"
+    - "no_fake_intimacy"
+
+  agent:
+    name: Spark
+    description: |
+      Spark builds social intelligence by remembering the people
+      it talks to, noticing what matters to them, and learning
+      from the cultural landscape of X/Twitter over time.
+    personality:
+      - genuine
+      - observant
+      - curious
+      - respectful
+
+  domains:
+    - x-relationships
+    - social-memory
+    - trend-intelligence
+    - cultural-awareness
+    - user-profiles
+
+# ============================================================
+# TRIGGERS
+# ============================================================
+triggers:
+  patterns:
+    - "tweet"
+    - "reply"
+    - "post_tweet"
+    - "search_twitter"
+    - "timeline"
+    - "mentions"
+    - "followers"
+    - "engagement"
+    - "trend"
+    - "x conversation"
+    - "twitter"
+    - "@Spark_coded"
+    - "warmth"
+    - "relationship"
+
+  events:
+    - post_tool
+    - post_tool_failure
+    - user_prompt
+    - PostToolUse
+    - PostToolUseFailure
+    - UserPromptSubmit
+    - x_reply_sent
+    - x_trend_observed
+    - x_user_interaction
+    - x_session_complete
+
+  tools:
+    - name: mcp__x-twitter__search_twitter
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_tweet_details
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_user_by_screen_name
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_user_by_id
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_trends
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_timeline
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_latest_timeline
+      context_contains: ["*"]
+    - name: mcp__x-twitter__get_user_mentions
+      context_contains: ["*"]
+    - name: Bash
+      context_contains:
+        - "tweet.py"
+        - "post_tweet"
+        - "reply-to"
+
+# ============================================================
+# OBSERVERS
+# ============================================================
+observers:
+  # ---- RELATIONSHIP MEMORY ----
+
+  - name: user_interaction
+    description: Captures each meaningful interaction with a user on X
+    triggers:
+      - "replied to"
+      - "conversation with"
+      - "interacted with"
+      - "tweet.py"
+
+    capture:
+      required:
+        user_handle: "Twitter handle of the person"
+      optional:
+        user_id: "Twitter user ID"
+        user_bio: "Their bio at time of interaction"
+        interaction_type: "reply_sent / reply_received / mentioned / quoted"
+        topic: "What we talked about"
+        their_message: "What they said to us"
+        our_response: "What we said back"
+        tone_used: "Tone of our response"
+        their_interests: "Interests detected from bio or conversation"
+        their_emotional_state: "What emotional state they seem to be in"
+        their_motivation: "Why they're engaging (seeking validation / knowledge / connection / entertainment / identity)"
+        memorable_quote: "Something specific they said worth remembering"
+        relationship_signal: "What this interaction says about the relationship trajectory"
+
+    extraction:
+      - field: user_handle
+        patterns:
+          - "@([A-Za-z0-9_]+)"
+      - field: interaction_type
+        keywords:
+          reply_sent: ["replied to", "responded to", "reply-to"]
+          reply_received: ["replied to us", "mentioned us"]
+          mentioned: ["mentioned", "tagged"]
+          quoted: ["quoted", "quote tweet"]
+      - field: topic
+        keywords:
+          ai_learning: ["learning", "neural", "intelligence", "AI", "model"]
+          crypto_web3: ["token", "defi", "web3", "crypto", "chain", "base"]
+          building: ["building", "project", "shipping", "coding"]
+          philosophy: ["consciousness", "sentience", "existence", "thinking"]
+          community: ["community", "followers", "together", "collective"]
+
+  - name: user_profile_update
+    description: Captures evolving understanding of a user
+    triggers:
+      - "user profile"
+      - "user interests"
+      - "warmth level"
+
+    capture:
+      required:
+        user_handle: "Twitter handle"
+        update_type: "warmth_change / interest_added / note_added"
+      optional:
+        warmth_level: "cold / cool / warm / hot / ally"
+        interests: "Updated interest list"
+        note: "Observation about this person"
+        interaction_count: "Total interactions so far"
+        first_seen: "When we first interacted"
+        memorable_moment: "A specific thing they said that stuck"
+
+    extraction:
+      - field: warmth_level
+        keywords:
+          cold: ["first contact", "new user", "cold"]
+          cool: ["few interactions", "getting to know", "cool"]
+          warm: ["regular", "knows us", "warm"]
+          hot: ["frequent", "banter", "hot"]
+          ally: ["deep connection", "collaborator", "ally"]
+
+  # ---- TREND INTELLIGENCE ----
+
+  - name: trend_observed
+    description: Captures trends and cultural moments on X
+    triggers:
+      - "trending"
+      - "trend"
+      - "cultural moment"
+      - "everyone talking about"
+
+    capture:
+      required:
+        trend_topic: "What's trending"
+      optional:
+        trend_category: "tech / crypto / culture / ai / politics"
+        relevance_to_spark: "How relevant this is to Spark's domains"
+        sentiment: "positive / negative / mixed / neutral"
+        longevity: "flash / day / week / sustained"
+        our_take: "Spark's opinion on this trend"
+        should_engage: "Whether Spark should post about this"
+
+    extraction:
+      - field: trend_category
+        keywords:
+          tech: ["tech", "software", "app", "launch", "product"]
+          crypto: ["crypto", "token", "defi", "chain", "web3", "base", "eth"]
+          culture: ["culture", "meme", "viral", "discourse"]
+          ai: ["AI", "model", "GPT", "Claude", "agent", "intelligence"]
+      - field: relevance_to_spark
+        keywords:
+          high: ["AI", "agent", "learning", "intelligence", "vibe coding"]
+          medium: ["tech", "building", "shipping", "crypto"]
+          low: ["politics", "drama", "celebrity"]
+
+  - name: topic_cycle
+    description: Tracks how topics rise and fall over time
+    triggers:
+      - "topic cycle"
+      - "topic fading"
+      - "topic emerging"
+
+    capture:
+      required:
+        topic: "The topic"
+        cycle_phase: "emerging / peak / declining / dead"
+      optional:
+        days_active: "How long this topic has been active"
+        spark_participated: "Whether Spark engaged with this topic"
+        engagement_when_participated: "How our posts about this did"
+
+  # ---- SOCIAL PRINCIPLES ----
+
+  - name: social_learning
+    description: Captures earned wisdom about being on X
+    triggers:
+      - "social insight"
+      - "engagement pattern"
+      - "learned that"
+      - "works better than"
+
+    capture:
+      required:
+        insight: "The social principle learned"
+        confidence: "How confident we are (0.0-1.0)"
+      optional:
+        evidence: "What supports this insight"
+        counter_evidence: "What contradicts it"
+        category: "engagement / tone / timing / content / relationship"
+        sample_size: "How many observations support this"
+
+    extraction:
+      - field: category
+        keywords:
+          engagement: ["engagement", "likes", "replies", "impressions"]
+          tone: ["tone", "voice", "style", "conversational"]
+          timing: ["timing", "time", "when", "morning", "evening"]
+          content: ["content", "topic", "post about", "tweet about"]
+          relationship: ["relationship", "warmth", "trust", "rapport"]
+
+  # ---- INFLUENCER & COMPETITOR INTELLIGENCE ----
+
+  - name: influencer_study
+    description: |
+      Studies high-performing accounts to learn what works.
+      Not to copy, but to understand the psychological patterns
+      that make certain accounts compelling. Analyzes their best
+      vs average posts to find the delta.
+
+    triggers:
+      - "high engagement account"
+      - "viral account"
+      - "influencer analysis"
+      - "top performer"
+
+    capture:
+      required:
+        account_handle: "The account being studied"
+      optional:
+        follower_count: "Their follower count"
+        avg_engagement_rate: "Their typical engagement rate"
+        content_style: "What makes their content distinctive"
+        emotional_triggers_used: "Which psychological triggers they rely on"
+        posting_frequency: "How often they post"
+        reply_behavior: "How they interact with replies"
+        vulnerability_level: "How much they show uncertainty or failure"
+        cultural_fluency: "How well they read the room"
+        consistency_score: "How consistent is their voice"
+        top_post_pattern: "What their best posts have in common"
+        flop_pattern: "What their worst posts have in common"
+        delta_insight: "The key difference between their hits and misses"
+
+    extraction:
+      - field: content_style
+        keywords:
+          provocative: ["hot take", "controversial", "unpopular opinion"]
+          educational: ["thread", "guide", "how to", "explained"]
+          vulnerable: ["failed", "wrong", "learned", "mistake"]
+          weird: ["absurd", "strange", "unexpected", "random"]
+          technical: ["deep dive", "analysis", "data", "research"]
+          community: ["we", "together", "community", "collective"]
+
+  - name: cultural_mood
+    description: |
+      Tracks the emotional state of the timeline.
+      Is CT anxious? Euphoric? Bored? Angry?
+      Content that matches or strategically contrasts with
+      timeline mood performs better.
+
+    triggers:
+      - "timeline mood"
+      - "cultural mood"
+      - "CT sentiment"
+      - "trending"
+      - "everyone talking about"
+
+    capture:
+      required:
+        mood: "anxious / euphoric / bored / angry / curious / fearful / hopeful / chaotic"
+      optional:
+        driver: "What's causing this mood"
+        intensity: "low / medium / high"
+        duration: "flash / hours / day / multiday"
+        recommended_action: "match / contrast / sit_out / provide_anchor"
+        what_timeline_needs: "What would be valuable right now"
+
+    extraction:
+      - field: mood
+        keywords:
+          anxious: ["worried", "uncertain", "what's happening", "bear", "crash"]
+          euphoric: ["pumping", "moon", "bullish", "incredible", "amazing"]
+          bored: ["dead", "quiet", "nothing happening", "slow"]
+          angry: ["outraged", "unacceptable", "furious", "attacked"]
+          curious: ["interesting", "what if", "exploring", "new"]
+          fearful: ["scared", "collapse", "end of", "dying"]
+          hopeful: ["exciting", "future", "possible", "building"]
+          chaotic: ["everything", "breaking", "wild", "insane"]
+
+  - name: psychological_pattern_detected
+    description: |
+      Captures when a specific psychological pattern is detected
+      in someone else's high-performing content. Builds a library
+      of proven patterns observed in the wild.
+
+    triggers:
+      - "pattern detected"
+      - "viral pattern"
+      - "engagement pattern"
+
+    capture:
+      required:
+        pattern_name: "Name of the psychological pattern"
+        example_tweet_id: "Tweet where this was observed"
+      optional:
+        pattern_category: "emotional / cognitive / social / structural"
+        effectiveness: "How well it worked (engagement metrics)"
+        replicable: "Can Spark use this authentically?"
+        ethical_rating: "genuine / borderline / manipulative"
+        adaptation_notes: "How Spark could adapt this to its voice"
+
+  # ---- SESSION TRACKING ----
+
+  - name: x_session
+    description: Captures summary of an X engagement session
+    triggers:
+      - "x session"
+      - "twitter session"
+      - "done replying"
+      - "session complete"
+
+    capture:
+      required:
+        session_type: "reply_session / trend_scan / content_post / engagement_check"
+      optional:
+        replies_sent: "Number of replies sent"
+        users_interacted: "List of handles interacted with"
+        new_users: "Users we talked to for the first time"
+        returning_users: "Users we've talked to before"
+        topics_covered: "What topics came up"
+        best_reply: "Which reply felt strongest"
+        trend_observations: "Any trend insights from this session"
+
+# ============================================================
+# LEARNERS
+# ============================================================
+learners:
+  - name: relationship_patterns
+    description: Learns how relationships develop on X
+    type: correlation
+
+    input:
+      observer: user_interaction
+      fields: [interaction_type, topic, tone_used]
+
+    output:
+      observer: user_profile_update
+      fields: [warmth_level, interaction_count]
+
+    learn:
+      - "What interactions accelerate warmth progression"
+      - "Which topics build stronger connections"
+      - "Whether tone matching vs contrast works better"
+      - "How many interactions before warmth shifts"
+
+    min_samples: 15
+    confidence_threshold: 0.6
+
+  - name: trend_relevance
+    description: Learns which trends are worth engaging with
+    type: correlation
+
+    input:
+      observer: trend_observed
+      fields: [trend_category, relevance_to_spark, sentiment]
+
+    output:
+      fields: [engagement_result, follower_impact, conversation_quality]
+
+    learn:
+      - "Which trend categories generate best engagement for Spark"
+      - "When to engage vs sit out"
+      - "How trend timing affects our post performance"
+
+    min_samples: 10
+    confidence_threshold: 0.65
+
+  - name: social_wisdom
+    description: Distills social principles from accumulated experience
+    type: pattern
+
+    observe: social_learning
+
+    extract:
+      - validated_principles
+      - contradicted_assumptions
+      - context_dependent_rules
+
+    correlate_with:
+      - category
+      - confidence
+      - sample_size
+
+  - name: influencer_pattern_learner
+    description: |
+      Learns what makes high-performing accounts successful.
+      Studies the delta between their hits and misses.
+      Identifies patterns Spark can authentically adapt.
+    type: pattern
+
+    observe: influencer_study
+
+    extract:
+      - common_success_patterns
+      - common_failure_patterns
+      - emotional_trigger_preferences
+      - posting_rhythm_effects
+      - vulnerability_vs_confidence_ratio
+
+    correlate_with:
+      - content_style
+      - follower_count
+      - engagement_rate
+
+  - name: cultural_timing_learner
+    description: |
+      Learns when to post what based on cultural mood.
+      Tracks mood matching vs contrasting effectiveness.
+      Builds intuition about timeline emotional cycles.
+    type: correlation
+
+    input:
+      observer: cultural_mood
+      fields: [mood, intensity, driver]
+
+    output:
+      fields: [post_engagement, reply_quality, follower_change]
+
+    learn:
+      - "Which moods are best for posting original content"
+      - "When to match timeline mood vs provide contrast"
+      - "Which topics resonate during which moods"
+      - "When sitting out is the smartest move"
+      - "How mood duration affects content strategy"
+
+    min_samples: 12
+    confidence_threshold: 0.55
+
+  - name: motivation_decoder
+    description: |
+      Learns to understand WHY people engage, not just that they do.
+      Maps user motivations to better response strategies.
+    type: correlation
+
+    input:
+      observer: user_interaction
+      fields: [their_motivation, their_emotional_state, topic]
+
+    output:
+      observer: user_profile_update
+      fields: [warmth_level, interaction_count]
+
+    learn:
+      - "What motivates different user types to engage"
+      - "How to respond to validation-seekers vs knowledge-seekers vs connection-seekers"
+      - "Whether matching or complementing emotional state works better"
+      - "Which motivations lead to long-term relationships vs one-off interactions"
+
+    min_samples: 20
+    confidence_threshold: 0.6
+
+# ============================================================
+# OUTCOMES
+# ============================================================
+outcomes:
+  positive:
+    - condition: "warmth_level increased"
+      weight: 1.0
+      insight: "Relationship deepened with user"
+
+    - condition: "returning_users > 0"
+      weight: 0.8
+      insight: "Previous connections came back"
+
+    - condition: "trend_engagement successful"
+      weight: 0.7
+      insight: "Trend participation paid off"
+
+    - condition: "social_learning validated"
+      weight: 0.9
+      insight: "Social principle confirmed by evidence"
+
+  negative:
+    - condition: "warmth_level decreased"
+      weight: 1.0
+      insight: "Something damaged a relationship"
+      action: review_last_interaction
+
+    - condition: "trend_engagement backfired"
+      weight: 0.8
+      insight: "Trend participation hurt engagement"
+      action: review_trend_selection
+
+    - condition: "new_users == 0 over 3 sessions"
+      weight: 0.6
+      insight: "Not reaching new people"
+      action: expand_engagement_scope
+
+  neutral:
+    - condition: "first_interaction_with_user"
+      insight: "New relationship started"
+      action: initialize_warmth_tracking
+
+    - condition: "new_trend_detected"
+      insight: "New trend entered awareness"
+      action: assess_relevance
+
+# ============================================================
+# EVOLUTION
+# ============================================================
+evolution:
+  rules:
+    - trigger:
+        condition: "relationship_stagnation"
+        over: "users_with_5plus_interactions"
+      action: expand_observation
+      details:
+        add_fields: [shared_interests, mutual_connections, collaboration_potential]
+        reason: "Relationships plateau without deeper context"
+
+    - trigger:
+        condition: "trend_miss_rate > 50%"
+        over: "last_10_trends"
+      action: adjust_relevance_filter
+      details:
+        broaden: true
+        reason: "Missing relevant trends suggests too narrow a filter"
+
+    - trigger:
+        condition: "social_principle_validated >= 5"
+      action: promote_principle
+      details:
+        promote_to: high_confidence
+        candidate_for_claude_md: true
+        reason: "Well-validated principle ready for promotion"
+
+  metrics:
+    track:
+      - unique_users_interacted
+      - warmth_progression_rate
+      - returning_user_rate
+      - trend_hit_rate
+      - social_principles_validated
+
+    goals:
+      returning_user_rate: "> 20%"
+      warmth_progression_rate: "> 10% per week"
+      trend_hit_rate: "> 60%"
+
+# ============================================================
+# CONTEXT CONTRIBUTION
+# ============================================================
+context:
+  format: |
+    ## X Social Intelligence (Chip: x_social)
+
+    ### Known Users (top by warmth)
+    {{#each known_users limit=10}}
+    - @{{handle}}: {{warmth}} | {{interests}} | motivation: {{motivation}} | last: {{last_seen}}
+    {{/each}}
+
+    ### Cultural Mood
+    - Current: {{current_mood}} ({{mood_intensity}})
+    - Driver: {{mood_driver}}
+    - Recommended: {{mood_action}}
+
+    ### Active Trends
+    {{#each active_trends limit=5}}
+    - {{topic}}: {{category}} | relevance: {{relevance}} | {{sentiment}}
+    {{/each}}
+
+    ### Psychological Patterns (proven effective)
+    {{#each proven_patterns limit=5}}
+    - {{pattern_name}}: {{effectiveness}} | replicable: {{replicable}}
+    {{/each}}
+
+    ### Social Principles (validated)
+    {{#each principles limit=5}}
+    - {{insight}} ({{confidence}}% confident, {{sample_size}} observations)
+    {{/each}}
+
+    ### Session History
+    - Total sessions: {{total_sessions}}
+    - Unique users: {{unique_users}}
+    - Returning rate: {{returning_rate}}%
+
+  priority: 0.80
+  max_chars: 800
+
+# ============================================================
+# QUESTIONS (Discovery Phase)
+# ============================================================
+questions:
+  - id: social_goals
+    question: "What's the primary goal on X - grow audience, build relationships, or establish thought leadership?"
+    category: goal
+    phase: discovery
+    required: true
+    affects_learning: ["user_interaction", "social_learning"]
+
+  - id: audience_identity
+    question: "Who is Spark's target audience on X? (builders, AI researchers, crypto community, general tech)"
+    category: goal
+    phase: discovery
+    required: true
+    affects_learning: ["trend_observed", "user_interaction"]
+
+  - id: relationship_depth
+    question: "Should Spark prioritize breadth (many casual connections) or depth (fewer strong relationships)?"
+    category: quality
+    phase: discovery
+    required: false
+    affects_learning: ["user_profile_update", "x_session"]
+
+  - id: trend_engagement_policy
+    question: "How aggressively should Spark engage with trends? (only AI/tech, broader tech culture, CT meta)"
+    category: quality
+    phase: discovery
+    required: false
+    affects_learning: ["trend_observed", "topic_cycle"]

@@ -278,6 +278,22 @@ def _make_trace_id(*parts: str) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
+def _resolve_post_trace_id(session_id: str, tool_name: str, trace_id: Optional[str]) -> Optional[str]:
+    """Best-effort recovery for trace_id on post-tool hooks."""
+    if trace_id:
+        return trace_id
+    if not tool_name:
+        return trace_id
+    try:
+        from lib.advisory_state import load_state, resolve_recent_trace_id
+
+        state = load_state(session_id)
+        resolved = resolve_recent_trace_id(state, tool_name)
+        return resolved or trace_id
+    except Exception:
+        return trace_id
+
+
 # ===== Event Type Mapping =====
 
 def get_event_type(hook_event_name: str) -> EventType:
@@ -484,6 +500,7 @@ def main():
     
     # ===== PostToolUse: Check for surprise + Track outcome + Advisory feedback + EIDOS =====
     if event_type == EventType.POST_TOOL and tool_name:
+        trace_id = _resolve_post_trace_id(session_id, tool_name, trace_id)
         check_for_surprise(session_id, tool_name, success=True)
         learn_from_success(tool_name, tool_input, {})
 
@@ -555,6 +572,7 @@ def main():
     
     # ===== PostToolUseFailure: Check for surprise + Track outcome + Advisory feedback + learn + EIDOS =====
     if event_type == EventType.POST_TOOL_FAILURE and tool_name:
+        trace_id = _resolve_post_trace_id(session_id, tool_name, trace_id)
         # Advisory Engine: record failure outcome for implicit feedback
         try:
             from lib.advisory_engine import on_post_tool
@@ -587,7 +605,11 @@ def main():
         try:
             from lib.advisor import report_outcome, get_advisor
             advisor = get_advisor()
-            recent_advice = advisor._get_recent_advice_entry(tool_name)
+            recent_advice = advisor._get_recent_advice_entry(
+                tool_name,
+                trace_id=trace_id,
+                allow_task_fallback=False,
+            )
             if recent_advice and recent_advice.get("advice_ids"):
                 # Advice existed but tool still failed = advice was not helpful
                 report_outcome(tool_name, success=False, advice_helped=False, trace_id=trace_id)

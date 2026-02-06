@@ -171,6 +171,83 @@ observers:
         parent_tweet_topic: "What the parent tweet was about"
         why_it_worked: "Analysis of why this reply resonated"
 
+  # Emotional Trigger Analysis Observer
+  - name: emotional_trigger
+    description: |
+      Detects which psychological triggers are present in content.
+      Goes beyond tone (witty/technical) to the emotional mechanism
+      underneath. Based on behavioral psychology research.
+
+    triggers:
+      - "tweet"
+      - "reply"
+      - "posted"
+      - "engagement"
+
+    capture:
+      required:
+        content: "The tweet or reply text"
+
+      optional:
+        primary_trigger: "curiosity_gap / surprise / validation / vulnerability / aspiration / contrast / identity_signal"
+        secondary_trigger: "Additional emotional trigger if layered"
+        psychological_mechanism: "Why this works on people"
+        trigger_strength: "subtle / moderate / strong"
+        ethical_check: "Is this trigger manipulative or genuine?"
+
+    extraction:
+      - field: primary_trigger
+        keywords:
+          curiosity_gap: ["nobody tells you", "here's what", "the thing about", "turns out", "actually"]
+          surprise: ["unexpected", "counter-intuitive", "wrong about", "changed my mind", "plot twist"]
+          validation: ["you're right", "exactly this", "finally someone", "not just me", "we all know"]
+          vulnerability: ["I was wrong", "I don't know", "failed", "mistake", "struggling", "honestly"]
+          aspiration: ["imagine", "what if", "possible", "could be", "path to", "how I went from"]
+          contrast: ["vs", "instead", "but actually", "common advice", "everyone thinks", "real difference"]
+          identity_signal: ["real builders", "if you know", "we don't", "our kind", "unlike most"]
+
+      - field: trigger_strength
+        keywords:
+          strong: ["never", "always", "everything", "nobody", "completely", "the only"]
+          moderate: ["usually", "often", "most", "many", "the key"]
+          subtle: ["maybe", "sometimes", "slight", "small", "interesting"]
+
+  # Conversation Psychology Observer
+  - name: conversation_psychology
+    description: |
+      Tracks the psychological dynamics of conversations.
+      Reciprocity, social proof, open loops, barrier reduction.
+
+    triggers:
+      - "conversation"
+      - "reply thread"
+      - "back and forth"
+
+    capture:
+      required:
+        conversation_id: "Root tweet ID"
+
+      optional:
+        reciprocity_signal: "Did we give value before asking for engagement?"
+        open_loop: "Did we leave an unanswered question?"
+        barrier_level: "How easy is it to reply? (low / medium / high)"
+        contribution_invite: "Did we invite others to add their take?"
+        controversy_level: "none / mild / strong"
+        emotional_arc: "flat / building / peak_and_resolve / cascade"
+        turn_taking: "balanced / one_sided / multi_party"
+
+    extraction:
+      - field: barrier_level
+        keywords:
+          low: ["?", "what do you think", "agree or disagree", "drop your"]
+          medium: ["explain", "how would you", "what's your take"]
+          high: ["prove", "write a", "build", "create", "long form"]
+      - field: emotional_arc
+        keywords:
+          building: ["and then", "but wait", "it gets better", "here's where"]
+          peak_and_resolve: ["the turning point", "finally", "the answer", "so here's what"]
+          cascade: ["first", "second", "and also", "plus", "on top of that"]
+
   # Conversation DNA Observer
   - name: conversation_dna
     description: Extracts the DNA pattern from successful conversations
@@ -191,6 +268,9 @@ observers:
         topic_evolution: "How the topic shifted"
         engagement_curve: "How engagement changed over turns"
         participants: "How many people joined"
+        emotional_triggers_used: "Which emotional triggers appeared in the conversation"
+        vulnerability_moments: "Moments of genuine uncertainty or admission"
+        social_proof_point: "When engagement crossed a threshold and accelerated"
 
 # ============================================================
 # LEARNERS: What patterns to detect and learn?
@@ -255,6 +335,55 @@ learners:
 
     min_samples: 8
     confidence_threshold: 0.6
+
+  # Emotional Trigger Effectiveness Learner
+  - name: emotional_effectiveness
+    description: |
+      Learns which emotional triggers drive real engagement.
+      Correlates psychological mechanisms with outcomes.
+      Goes deeper than tone - understands WHY content resonates.
+    type: correlation
+
+    input:
+      observer: emotional_trigger
+      fields: [primary_trigger, secondary_trigger, trigger_strength]
+
+    output:
+      observer: reply_effectiveness
+      fields: [likes, replies_received, author_responded, warmth_change]
+
+    learn:
+      - "Which emotional triggers generate replies vs likes vs saves"
+      - "Whether vulnerability outperforms confidence for engagement"
+      - "Optimal trigger combinations (curiosity + validation, surprise + aspiration)"
+      - "When strong triggers backfire vs land"
+      - "Whether layered triggers outperform single triggers"
+      - "Which triggers build relationships vs which build audience"
+
+    min_samples: 15
+    confidence_threshold: 0.55
+
+  # Conversation Psychology Learner
+  - name: conversation_psychology_learner
+    description: |
+      Learns the psychological dynamics that make conversations grow.
+      Tracks reciprocity, barrier effects, open loops, emotional arcs.
+    type: pattern
+
+    observe: conversation_psychology
+
+    extract:
+      - optimal_barrier_levels
+      - reciprocity_return_rates
+      - open_loop_completion_rates
+      - emotional_arc_effectiveness
+      - controversy_sweet_spot
+
+    correlate_with:
+      - topic
+      - audience_size
+      - time_of_day
+      - cultural_mood
 
 # ============================================================
 # OUTCOMES: What does success/failure look like?

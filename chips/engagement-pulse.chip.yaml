@@ -95,6 +95,11 @@ observers:
         is_thread: "Whether this starts a thread"
         predicted_likes: "Predicted like count"
         predicted_replies: "Predicted reply count"
+        emotional_triggers: "Which psychological triggers are in this content"
+        vulnerability_present: "Does this show uncertainty, failure, or growth?"
+        has_open_loop: "Does this leave a question unanswered?"
+        barrier_to_reply: "How easy is it to reply? (low / medium / high)"
+        cultural_mood_match: "Does tone match current timeline mood?"
 
   - name: engagement_snapshot
     description: Captures engagement metrics at a point in time
@@ -156,6 +161,11 @@ learners:
       - "Reply vs original post engagement patterns"
       - "Thread vs single tweet performance"
       - "Tone impact on engagement"
+      - "Which emotional triggers correlate with high engagement"
+      - "Whether vulnerability outperforms confidence for different content types"
+      - "How reply barrier level affects reply count"
+      - "Whether cultural mood matching improves or hurts performance"
+      - "Open loop effect on reply and bookmark rates"
 
     min_samples: 10
     confidence_threshold: 0.6

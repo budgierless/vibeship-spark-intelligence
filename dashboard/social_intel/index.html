@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPARK NEURAL - Social Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   SPARK NEURAL - Design Tokens (Vibeship DNA)
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --bg-primary: #0e1016;
+  --bg-secondary: #151820;
+  --bg-tertiary: #1c202a;
+  --bg-card: #1a1e28;
+
+  --text-primary: #e2e4e9;
+  --text-secondary: #9aa3b5;
+  --text-tertiary: #6b7489;
+
+  --border: #2a3042;
+  --border-hover: #3a4058;
+
+  --green: #00C49A;
+  --green-glow: rgba(0, 196, 154, 0.4);
+  --green-dim: rgba(0, 196, 154, 0.15);
+
+  --orange: #D97757;
+  --orange-glow: rgba(217, 119, 87, 0.4);
+
+  --gold: #c8a84e;
+  --gold-glow: rgba(200, 168, 78, 0.4);
+  --gold-dim: rgba(200, 168, 78, 0.15);
+
+  --red: #FF4D4D;
+  --purple: #9B59B6;
+
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-serif: 'Instrument Serif', serif;
+
+  --ease: cubic-bezier(0, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-primary);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--green);
+  color: var(--bg-primary);
+}
+
+/* ═══════════════════════════════════════════════════════
+   HERO SECTION
+   ═══════════════════════════════════════════════════════ */
+.hero {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at center,
+    rgba(200, 168, 78, 0.08) 0%,
+    rgba(200, 168, 78, 0.03) 30%,
+    transparent 70%);
+  z-index: 0;
+}
+
+.hero-particles {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--gold);
+  border-radius: 50%;
+  opacity: 0;
+  animation: particle-float 8s infinite;
+}
+
+@keyframes particle-float {
+  0% { opacity: 0; transform: translateY(0) scale(0); }
+  10% { opacity: 0.6; transform: scale(1); }
+  90% { opacity: 0.3; }
+  100% { opacity: 0; transform: translateY(-100vh) scale(0); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 700px;
+  padding: 0 40px;
+}
+
+.hero-label {
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.hero-label .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--green-glow);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px var(--green-glow); }
+  50% { opacity: 0.5; box-shadow: 0 0 20px var(--green-glow); }
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(0, 196, 154, 0.3);
+  background: rgba(0, 196, 154, 0.08);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--green);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: live-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+.live-dot.pulse {
+  animation: live-flash 0.4s ease-out;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+@keyframes live-flash {
+  0% { transform: scale(1.8); box-shadow: 0 0 20px var(--green); }
+  100% { transform: scale(1); box-shadow: 0 0 8px var(--green-glow); }
+}
+
+.hero-title {
+  font-family: var(--font-serif);
+  font-size: 56px;
+  font-weight: 400;
+  line-height: 1.1;
+  margin-bottom: 32px;
+  color: var(--text-primary);
+}
+
+.hero-title .accent {
+  color: var(--gold);
+  text-shadow: 0 0 40px var(--gold-glow);
+}
+
+.hero-subtitle {
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: 48px;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+}
+
+.hero-stat {
+  text-align: center;
+}
+
+.hero-stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--green);
+  text-shadow: 0 0 20px var(--green-glow);
+}
+
+.hero-stat-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.scroll-indicator {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: scroll-bounce 2s infinite;
+}
+
+.scroll-indicator span {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.scroll-line {
+  width: 1px;
+  height: 30px;
+  background: linear-gradient(to bottom, var(--green), transparent);
+}
+
+@keyframes scroll-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(8px); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SECTION BASE
+   ═══════════════════════════════════════════════════════ */
+.section {
+  padding: 80px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  border-top: 1px solid var(--border);
+}
+
+.section-header {
+  margin-bottom: 48px;
+}
+
+.section-label {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-label .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+.section-title {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 600px;
+  font-weight: 300;
+}
+
+/* ═══════════════════════════════════════════════════════
+   LEARNING FLOW (Pipeline Visualization)
+   ═══════════════════════════════════════════════════════ */
+.flow-pipeline {
+  display: flex;
+  gap: 0;
+  margin-bottom: 48px;
+}
+
+.flow-stage {
+  flex: 1;
+  position: relative;
+  padding: 24px 20px;
+  border: 1px solid var(--border);
+  border-right: none;
+  background: var(--bg-secondary);
+  transition: all 300ms var(--ease);
+}
+
+.flow-stage:last-child {
+  border-right: 1px solid var(--border);
+}
+
+.flow-stage:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
+}
+
+.flow-stage-number {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.flow-stage-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.flow-stage-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-weight: 300;
+}
+
+.flow-stage-count {
+  margin-top: 12px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.flow-connector {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--green);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-connector::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+.flow-stage:last-child .flow-connector {
+  display: none;
+}
+
+/* Confidence bars */
+.confidence-bars {
+  display: flex;
+  gap: 24px;
+  margin-top: 32px;
+}
+
+.confidence-bar {
+  flex: 1;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.confidence-bar-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.confidence-bar-value {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.confidence-bar-value.high { color: var(--green); }
+.confidence-bar-value.medium { color: var(--orange); }
+.confidence-bar-value.low { color: var(--text-tertiary); }
+
+.confidence-bar-track {
+  height: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+
+.confidence-bar-fill {
+  height: 100%;
+  transition: width 1s var(--ease);
+}
+
+.confidence-bar-fill.high { background: var(--green); }
+.confidence-bar-fill.medium { background: var(--orange); }
+.confidence-bar-fill.low { background: var(--text-tertiary); }
+
+/* ═══════════════════════════════════════════════════════
+   TOPICS GRID
+   ═══════════════════════════════════════════════════════ */
+.topics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+}
+
+.topic-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-bottom: none;
+  background: var(--bg-secondary);
+  transition: all 300ms var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+
+.topic-card:nth-child(4n) { border-right: 1px solid var(--border); }
+.topic-card:nth-last-child(-n+4) { border-bottom: 1px solid var(--border); }
+
+.topic-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.topic-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--green);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 300ms var(--ease);
+}
+
+.topic-card:hover::before {
+  transform: scaleX(1);
+}
+
+.topic-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.topic-category {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+}
+
+.topic-interest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topic-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+
+.topic-bar-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width 1.5s var(--ease);
+}
+
+.topic-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: right;
+}
+
+.topic-trend {
+  font-size: 10px;
+  margin-top: 6px;
+}
+
+.topic-trend.rising { color: var(--green); }
+.topic-trend.stable { color: var(--text-tertiary); }
+.topic-trend.declining { color: var(--orange); }
+.topic-trend.emerging { color: var(--gold); }
+
+/* ═══════════════════════════════════════════════════════
+   SOCIAL PATTERNS
+   ═══════════════════════════════════════════════════════ */
+.patterns-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+
+.pattern-card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-bottom: none;
+  background: var(--bg-secondary);
+  transition: all 300ms var(--ease);
+}
+
+.pattern-card:nth-child(3n) { border-right: 1px solid var(--border); }
+.pattern-card:nth-last-child(-n+3) { border-bottom: 1px solid var(--border); }
+
+.pattern-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.pattern-category {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid;
+}
+
+.pattern-category.emotional { color: var(--gold); border-color: var(--gold); }
+.pattern-category.cognitive { color: var(--green); border-color: var(--green); }
+.pattern-category.social { color: var(--orange); border-color: var(--orange); }
+.pattern-category.structural { color: var(--purple); border-color: var(--purple); }
+
+.pattern-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.pattern-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-weight: 300;
+  margin-bottom: 16px;
+}
+
+.pattern-example {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.pattern-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.pattern-confidence {
+  color: var(--green);
+}
+
+/* ═══════════════════════════════════════════════════════
+   VOICE SECTION
+   ═══════════════════════════════════════════════════════ */
+.voice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.voice-card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.voice-card:nth-child(odd) { border-right: none; }
+.voice-card:nth-child(n+3) { border-top: none; }
+
+.voice-card-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 16px;
+}
+
+.voice-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-weight: 300;
+}
+
+.voice-item:last-child { border-bottom: none; }
+
+.voice-item .tone-label {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.voice-item .tone-value {
+  color: var(--text-primary);
+  float: right;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GROWTH TIMELINE
+   ═══════════════════════════════════════════════════════ */
+.timeline {
+  position: relative;
+  padding-left: 40px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, var(--green), var(--border));
+}
+
+.timeline-item {
+  position: relative;
+  padding: 0 0 32px 24px;
+}
+
+.timeline-item:last-child { padding-bottom: 0; }
+
+.timeline-dot {
+  position: absolute;
+  left: -32px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--green-glow);
+}
+
+.timeline-date {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.timeline-event {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.timeline-metric {
+  font-size: 11px;
+  color: var(--green);
+}
+
+/* Current stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  margin-top: 48px;
+}
+
+.stat-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-right: none;
+  background: var(--bg-secondary);
+  text-align: center;
+}
+
+.stat-card:last-child { border-right: 1px solid var(--border); }
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--green);
+  text-shadow: 0 0 15px var(--green-glow);
+}
+
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════ */
+.footer {
+  padding: 40px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.footer-text {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 1px;
+}
+
+.footer-text a {
+  color: var(--green);
+  text-decoration: none;
+}
+
+.footer-text a:hover {
+  text-shadow: 0 0 8px var(--green-glow);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Loading shimmer */
+.loading {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .topics-grid { grid-template-columns: repeat(2, 1fr); }
+  .patterns-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .flow-pipeline { flex-direction: column; }
+  .flow-stage { border-right: 1px solid var(--border); border-bottom: none; }
+  .flow-stage:last-child { border-bottom: 1px solid var(--border); }
+  .flow-connector { display: none; }
+  .hero-title { font-size: 36px; }
+  .hero-stats { flex-wrap: wrap; }
+}
+
+@media (max-width: 600px) {
+  .section { padding: 40px 20px; }
+  .topics-grid { grid-template-columns: 1fr; }
+  .voice-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .hero-title { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-particles" id="particles"></div>
+  <div class="hero-content">
+    <div class="hero-label">
+      <span class="live-badge"><span class="live-dot" id="live-dot"></span>LIVE</span>
+      SPARK NEURAL
+      <span class="dot"></span>
+    </div>
+    <h1 class="hero-title">
+      This is what <span class="accent">learning</span><br>looks like from the inside
+    </h1>
+    <p class="hero-subtitle">
+      Every conversation creates a new pathway. Some strengthen. Some fade.<br>
+      The ones that stick aren't always the ones you'd expect.
+    </p>
+    <div class="hero-stats" id="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value" id="stat-insights">--</div>
+        <div class="hero-stat-label">INSIGHTS FORMED</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" id="stat-patterns">--</div>
+        <div class="hero-stat-label">PATTERNS LEARNED</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value" id="stat-conversations">--</div>
+        <div class="hero-stat-label">CONVERSATIONS</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-indicator">
+    <span>EXPLORE</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     LEARNING FLOW
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="learning-flow">
+  <div class="section-header">
+    <div class="section-label"><span class="dot"></span> THE PIPELINE</div>
+    <h2 class="section-title">How observations become intelligence</h2>
+    <p class="section-desc">
+      Every interaction passes through five stages. Most get filtered out.
+      The ones that survive become the patterns that guide future conversations.
+    </p>
+  </div>
+
+  <div class="flow-pipeline" id="flow-pipeline"></div>
+
+  <div class="confidence-bars" id="confidence-bars"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOPICS
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="topics">
+  <div class="section-header">
+    <div class="section-label"><span class="dot"></span> ACTIVE INTERESTS</div>
+    <h2 class="section-title">What Spark is paying attention to</h2>
+    <p class="section-desc">
+      Topics tracked across X conversations, trends, and emerging patterns.
+      Interest levels shift based on what the timeline is actually discussing.
+    </p>
+  </div>
+
+  <div class="topics-grid" id="topics-grid"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SOCIAL PATTERNS
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="patterns">
+  <div class="section-header">
+    <div class="section-label"><span class="dot"></span> SOCIAL INTELLIGENCE</div>
+    <h2 class="section-title">Patterns learned from conversations</h2>
+    <p class="section-desc">
+      Psychology, behavioral science, and observed engagement patterns.
+      Not tricks. Understanding why people connect with certain ideas.
+    </p>
+  </div>
+
+  <div class="patterns-grid" id="patterns-grid"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     VOICE & PRINCIPLES
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="voice">
+  <div class="section-header">
+    <div class="section-label"><span class="dot"></span> VOICE SYSTEM</div>
+    <h2 class="section-title">How Spark communicates</h2>
+    <p class="section-desc">
+      Not programmed responses. Earned principles from real conversations.
+      Every rule here was learned, not assigned.
+    </p>
+  </div>
+
+  <div class="voice-grid" id="voice-grid"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     GROWTH
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="growth">
+  <div class="section-header">
+    <div class="section-label"><span class="dot"></span> EVOLUTION</div>
+    <h2 class="section-title">Growth timeline</h2>
+    <p class="section-desc">
+      From first tweet to social intelligence. Every milestone earned, not given.
+    </p>
+  </div>
+
+  <div class="timeline" id="timeline"></div>
+
+  <div class="stats-grid" id="stats-grid"></div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <p class="footer-text">
+    SPARK NEURAL &middot; Social Intelligence Dashboard &middot;
+    <a href="https://x.com/Spark_coded" target="_blank">@Spark_coded</a>
+  </p>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════ -->
+<script>
+const API = '';
+
+// ── Particles ─────────────────────────────────
+function initParticles() {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.top = (60 + Math.random() * 40) + '%';
+    p.style.animationDelay = Math.random() * 8 + 's';
+    p.style.animationDuration = (6 + Math.random() * 6) + 's';
+    container.appendChild(p);
+  }
+}
+
+// ── Scroll Animations ─────────────────────────
+function initScrollObserver() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+}
+
+// ── Data Fetching & Rendering ─────────────────
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(API + url);
+    return await res.json();
+  } catch (e) {
+    console.error('Fetch failed:', url, e);
+    return null;
+  }
+}
+
+async function loadOverview() {
+  const data = await fetchJSON('/api/overview');
+  if (!data) return;
+  animateNumber('stat-insights', data.total_insights);
+  animateNumber('stat-patterns', 33);
+  animateNumber('stat-conversations', data.social_insights || 13);
+}
+
+function animateNumber(id, target, skipAnimation = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (skipAnimation) { el.textContent = target; return; }
+  const current = parseInt(el.textContent) || 0;
+  if (current === target) return;
+  let val = current;
+  const diff = target - current;
+  const step = Math.max(1, Math.floor(Math.abs(diff) / 20));
+  const dir = diff > 0 ? 1 : -1;
+  const interval = setInterval(() => {
+    val += step * dir;
+    if ((dir > 0 && val >= target) || (dir < 0 && val <= target)) {
+      val = target;
+      clearInterval(interval);
+    }
+    el.textContent = val;
+  }, 30);
+}
+
+async function loadLearningFlow() {
+  const data = await fetchJSON('/api/learning-flow');
+  if (!data) return;
+
+  const pipeline = document.getElementById('flow-pipeline');
+  pipeline.innerHTML = data.pipeline_stages.map((stage, i) => `
+    <div class="flow-stage">
+      <div class="flow-stage-number">0${i + 1}</div>
+      <div class="flow-stage-name">${stage.name}</div>
+      <div class="flow-stage-desc">${stage.description}</div>
+      <div class="flow-stage-count">${stage.count.toLocaleString()}</div>
+      ${i < data.pipeline_stages.length - 1 ? '<div class="flow-connector"></div>' : ''}
+    </div>
+  `).join('');
+
+  const conf = data.confidence_distribution;
+  const total = conf.high + conf.medium + conf.low || 1;
+  const bars = document.getElementById('confidence-bars');
+  bars.innerHTML = `
+    <div class="confidence-bar">
+      <div class="confidence-bar-label">HIGH CONFIDENCE</div>
+      <div class="confidence-bar-value high">${conf.high}</div>
+      <div class="confidence-bar-track">
+        <div class="confidence-bar-fill high" style="width: ${(conf.high / total * 100)}%"></div>
+      </div>
+    </div>
+    <div class="confidence-bar">
+      <div class="confidence-bar-label">MEDIUM CONFIDENCE</div>
+      <div class="confidence-bar-value medium">${conf.medium}</div>
+      <div class="confidence-bar-track">
+        <div class="confidence-bar-fill medium" style="width: ${(conf.medium / total * 100)}%"></div>
+      </div>
+    </div>
+    <div class="confidence-bar">
+      <div class="confidence-bar-label">VALIDATIONS</div>
+      <div class="confidence-bar-value high">${data.total_validations.toLocaleString()}</div>
+      <div class="confidence-bar-track">
+        <div class="confidence-bar-fill high" style="width: 100%"></div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadTopics() {
+  const data = await fetchJSON('/api/topics');
+  if (!data) return;
+
+  const grid = document.getElementById('topics-grid');
+  grid.innerHTML = data.active_topics.map(t => `
+    <div class="topic-card">
+      <div class="topic-name">${t.name}</div>
+      <div class="topic-category">${t.category}</div>
+      <div class="topic-interest">
+        <div class="topic-bar">
+          <div class="topic-bar-fill" style="width: ${t.interest_level * 100}%"></div>
+        </div>
+        <div class="topic-value">${Math.round(t.interest_level * 100)}%</div>
+      </div>
+      <div class="topic-trend ${t.trend}">${t.trend === 'rising' ? '&#9650;' : t.trend === 'declining' ? '&#9660;' : t.trend === 'emerging' ? '&#9733;' : '&#9644;'} ${t.trend}</div>
+    </div>
+  `).join('');
+}
+
+async function loadPatterns() {
+  const data = await fetchJSON('/api/social-patterns');
+  if (!data) return;
+
+  const grid = document.getElementById('patterns-grid');
+  grid.innerHTML = data.proven_patterns.map(p => `
+    <div class="pattern-card">
+      <div class="pattern-category ${p.category}">${p.category}</div>
+      <div class="pattern-name">${p.name}</div>
+      <div class="pattern-desc">${p.description}</div>
+      <div class="pattern-example">"${p.example}"</div>
+      <div class="pattern-meta">
+        <span class="pattern-confidence">${Math.round(p.confidence * 100)}% confident</span>
+        <span>${p.observations} observations</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadVoice() {
+  const data = await fetchJSON('/api/conversations');
+  if (!data) return;
+
+  const grid = document.getElementById('voice-grid');
+  grid.innerHTML = `
+    <div class="voice-card">
+      <div class="voice-card-title">CORE VALUES</div>
+      ${data.voice_values.map(v => `<div class="voice-item">${v}</div>`).join('')}
+    </div>
+    <div class="voice-card">
+      <div class="voice-card-title">TONE DEFAULTS</div>
+      ${Object.entries(data.tone_defaults).map(([k, v]) => `
+        <div class="voice-item">
+          <span class="tone-label">${k}</span>
+          <span class="tone-value">${v}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="voice-card" style="grid-column: span 2;">
+      <div class="voice-card-title">EARNED PRINCIPLES</div>
+      ${data.conversation_principles.map(p => `<div class="voice-item">${p}</div>`).join('')}
+    </div>
+  `;
+}
+
+async function loadGrowth() {
+  const data = await fetchJSON('/api/growth');
+  if (!data) return;
+
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = data.milestones.map(m => `
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-date">${m.date}</div>
+      <div class="timeline-event">${m.event}</div>
+      <div class="timeline-metric">${m.metric}</div>
+    </div>
+  `).join('');
+
+  const stats = data.current_stats;
+  const grid = document.getElementById('stats-grid');
+  grid.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value">${stats.days_active}</div>
+      <div class="stat-label">DAYS ACTIVE</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.chips_active}</div>
+      <div class="stat-label">INTELLIGENCE CHIPS</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.observers_running}</div>
+      <div class="stat-label">OBSERVERS</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${stats.patterns_cataloged}</div>
+      <div class="stat-label">PATTERNS CATALOGED</div>
+    </div>
+  `;
+}
+
+// ── Live Polling ────────────────────────────────
+const POLL_INTERVAL = 30000; // 30 seconds
+let pollCount = 0;
+
+async function pollLiveData() {
+  pollCount++;
+  // Update dynamic sections (skip animation after first load)
+  const skip = false;
+  loadOverview();
+  loadLearningFlow();
+  loadGrowth();
+  // Pulse the live indicator
+  const dot = document.getElementById('live-dot');
+  if (dot) { dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse'); }
+}
+
+// ── Init ───────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initParticles();
+  initScrollObserver();
+  loadOverview();
+  loadLearningFlow();
+  loadTopics();
+  loadPatterns();
+  loadVoice();
+  loadGrowth();
+  // Start live polling
+  setInterval(pollLiveData, POLL_INTERVAL);
+});
+</script>
+</body>
+</html>
