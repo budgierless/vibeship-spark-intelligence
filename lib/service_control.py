@@ -14,24 +14,38 @@ from typing import Optional
 from urllib import request
 
 from lib.ports import (
-    SPARKD_HEALTH_URL,
     DASHBOARD_STATUS_URL,
-    PULSE_STATUS_URL,
-    META_RALPH_HEALTH_URL,
     DASHBOARD_URL,
-    PULSE_URL,
+    META_RALPH_HEALTH_URL,
     META_RALPH_URL,
+    PULSE_DOCS_URL,
+    PULSE_UI_URL,
+    PULSE_URL,
+    SPARKD_HEALTH_URL,
 )
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
+
+def _resolve_pulse_dir() -> Path:
+    env_value = os.environ.get("SPARK_PULSE_DIR")
+    if env_value:
+        return Path(env_value).expanduser()
+
+    candidates = [
+        ROOT_DIR.parent / "vibeship-spark-pulse",
+        Path.home() / "Desktop" / "vibeship-spark-pulse",
+    ]
+    for candidate in candidates:
+        if (candidate / "app.py").exists():
+            return candidate
+    return candidates[0]
+
+
 # External Spark Pulse directory (full-featured FastAPI app with neural visualization)
 # This is the ONLY pulse that should run. No fallback to the primitive internal spark_pulse.py.
-SPARK_PULSE_DIR = Path(os.environ.get(
-    "SPARK_PULSE_DIR",
-    str(Path.home() / "Desktop" / "vibeship-spark-pulse")
-))
+SPARK_PULSE_DIR = _resolve_pulse_dir()
 STARTUP_READY_TIMEOUT_S = float(os.environ.get("SPARK_STARTUP_READY_TIMEOUT_S", "12"))
 STARTUP_READY_POLL_S = float(os.environ.get("SPARK_STARTUP_READY_POLL_S", "0.4"))
 
@@ -161,6 +175,25 @@ def _cmd_matches(cmd: str, patterns: list[list[str]]) -> bool:
     return False
 
 
+def _pulse_process_patterns() -> list[list[str]]:
+    app_path = SPARK_PULSE_DIR / "app.py"
+    app_str = str(app_path)
+    patterns: list[list[str]] = [
+        [SPARK_PULSE_DIR.name, "app.py"],
+        ["vibeship-spark-pulse", "app.py"],
+        [app_str],
+    ]
+    app_posix = app_str.replace("\\", "/")
+    if app_posix != app_str:
+        patterns.append([app_posix])
+
+    deduped: list[list[str]] = []
+    for pattern in patterns:
+        if pattern and pattern not in deduped:
+            deduped.append(pattern)
+    return deduped
+
+
 def _pid_matches(pid: Optional[int], patterns: list[list[str]], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
     if not pid:
         return False
@@ -223,10 +256,21 @@ def _http_ok(url: str, timeout: float = 1.5) -> bool:
         return False
 
 
+def _pulse_ok() -> bool:
+    """Pulse is healthy only when both app docs and UI respond."""
+    return _http_ok(PULSE_DOCS_URL, timeout=2.0) and _http_ok(PULSE_UI_URL, timeout=2.0)
+
+
 def _bridge_heartbeat_age() -> Optional[float]:
     from lib.bridge_cycle import bridge_heartbeat_age_s
 
     return bridge_heartbeat_age_s()
+
+
+def _scheduler_heartbeat_age() -> Optional[float]:
+    from spark_scheduler import scheduler_heartbeat_age_s
+
+    return scheduler_heartbeat_age_s()
 
 
 def _env_for_child(log_dir: Path) -> dict:
@@ -272,12 +316,15 @@ def _is_service_ready(name: str, bridge_stale_s: int = 90) -> bool:
     if name == "dashboard":
         return _http_ok(DASHBOARD_STATUS_URL)
     if name == "pulse":
-        return _http_ok(PULSE_STATUS_URL)
+        return _pulse_ok()
     if name == "meta_ralph":
         return _http_ok(META_RALPH_HEALTH_URL)
     if name == "bridge_worker":
         hb_age = _bridge_heartbeat_age()
         return hb_age is not None and hb_age <= bridge_stale_s
+    if name == "scheduler":
+        hb_age = _scheduler_heartbeat_age()
+        return hb_age is not None and hb_age <= bridge_stale_s * 2
     if name == "watchdog":
         pid = _read_pid("watchdog")
         return _pid_alive(pid)
@@ -289,7 +336,7 @@ def _wait_for_service_ready(name: str, pid: Optional[int], bridge_stale_s: int =
         return False
 
     # Services without HTTP endpoints should at least remain alive.
-    if name == "watchdog":
+    if name in ("watchdog", "scheduler"):
         return _pid_alive(pid)
 
     deadline = time.time() + max(0.5, STARTUP_READY_TIMEOUT_S)
@@ -360,6 +407,7 @@ def _service_cmds(
         ],
         "dashboard": [sys.executable, "-m", "dashboard"],
         "meta_ralph": [sys.executable, str(ROOT_DIR / "meta_ralph_dashboard.py")],
+        "scheduler": [sys.executable, str(ROOT_DIR / "spark_scheduler.py")],
         "watchdog": [
             sys.executable,
             "-m",
@@ -381,23 +429,27 @@ def _service_cmds(
 def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
     sparkd_ok = _http_ok(SPARKD_HEALTH_URL)
     dash_ok = _http_ok(DASHBOARD_STATUS_URL)
-    pulse_ok = _http_ok(PULSE_STATUS_URL)
+    pulse_ok = _pulse_ok()
     meta_ok = _http_ok(META_RALPH_HEALTH_URL)
     hb_age = _bridge_heartbeat_age()
+
+    sched_hb_age = _scheduler_heartbeat_age()
 
     sparkd_pid = _read_pid("sparkd")
     dash_pid = _read_pid("dashboard")
     pulse_pid = _read_pid("pulse")
     meta_pid = _read_pid("meta_ralph")
     bridge_pid = _read_pid("bridge_worker")
+    scheduler_pid = _read_pid("scheduler")
     watchdog_pid = _read_pid("watchdog")
 
     snapshot = _process_snapshot()
     sparkd_keys = [["-m sparkd"], ["sparkd.py"]]
     dash_keys = [["-m dashboard"], ["dashboard.py"]]
-    pulse_keys = [["vibeship-spark-pulse", "app.py"]]
+    pulse_keys = _pulse_process_patterns()
     meta_keys = [["meta_ralph_dashboard.py"]]
     bridge_keys = [["-m bridge_worker"], ["bridge_worker.py"]]
+    scheduler_keys = [["spark_scheduler.py"]]
     watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"]]
 
     sparkd_running = (
@@ -428,6 +480,12 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
         or _pid_matches(bridge_pid, bridge_keys, snapshot)
         or _any_process_matches(bridge_keys, snapshot)
         or _pid_alive_fallback(bridge_pid, snapshot)
+    )
+    scheduler_running = (
+        (sched_hb_age is not None and sched_hb_age <= bridge_stale_s * 2)
+        or _pid_matches(scheduler_pid, scheduler_keys, snapshot)
+        or _any_process_matches(scheduler_keys, snapshot)
+        or _pid_alive_fallback(scheduler_pid, snapshot)
     )
     watchdog_running = (
         _pid_matches(watchdog_pid, watchdog_keys, snapshot)
@@ -461,6 +519,11 @@ def service_status(bridge_stale_s: int = 90) -> dict[str, dict]:
             "heartbeat_age_s": hb_age,
             "pid": bridge_pid,
         },
+        "scheduler": {
+            "running": scheduler_running,
+            "heartbeat_age_s": sched_hb_age,
+            "pid": scheduler_pid,
+        },
         "watchdog": {
             "running": watchdog_running,
             "pid": watchdog_pid,
@@ -488,7 +551,7 @@ def start_services(
     statuses = service_status(bridge_stale_s=bridge_stale_s)
     results: dict[str, str] = {}
 
-    order = ["sparkd", "bridge_worker", "dashboard", "pulse", "meta_ralph", "watchdog"]
+    order = ["sparkd", "bridge_worker", "scheduler", "dashboard", "pulse", "meta_ralph", "watchdog"]
     if not include_dashboard:
         order.remove("dashboard")
     if not include_pulse:
@@ -543,13 +606,14 @@ def ensure_services(
 def stop_services() -> dict[str, str]:
     results: dict[str, str] = {}
     snapshot = _process_snapshot()
-    for name in ["watchdog", "meta_ralph", "pulse", "dashboard", "bridge_worker", "sparkd"]:
+    for name in ["watchdog", "meta_ralph", "pulse", "dashboard", "scheduler", "bridge_worker", "sparkd"]:
         pid = _read_pid(name)
         patterns = {
             "sparkd": [["-m sparkd"], ["sparkd.py"]],
             "bridge_worker": [["-m bridge_worker"], ["bridge_worker.py"]],
+            "scheduler": [["spark_scheduler.py"]],
             "dashboard": [["-m dashboard"], ["dashboard.py"]],
-            "pulse": [["vibeship-spark-pulse", "app.py"]],
+            "pulse": _pulse_process_patterns(),
             "meta_ralph": [["meta_ralph_dashboard.py"]],
             "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"]],
         }.get(name, [])
@@ -586,6 +650,7 @@ def format_status_lines(status: dict[str, dict], bridge_stale_s: int = 90) -> li
     pulse = status.get("pulse", {})
     meta = status.get("meta_ralph", {})
     bridge = status.get("bridge_worker", {})
+    scheduler = status.get("scheduler", {})
     watchdog = status.get("watchdog", {})
 
     lines.append(
@@ -613,12 +678,25 @@ def format_status_lines(status: dict[str, dict], bridge_stale_s: int = 90) -> li
     else:
         status_label = "RUNNING" if hb_age <= bridge_stale_s else "STALE"
         lines.append(f"[spark] bridge_worker: {status_label} (last {int(hb_age)}s ago)")
+    sched_hb = scheduler.get("heartbeat_age_s")
+    if sched_hb is None:
+        if scheduler.get("running"):
+            lines.append("[spark] scheduler: RUNNING (no heartbeat)")
+        else:
+            lines.append("[spark] scheduler: STOPPED")
+    else:
+        sched_label = "RUNNING" if sched_hb <= bridge_stale_s * 2 else "STALE"
+        lines.append(f"[spark] scheduler: {sched_label} (last {int(sched_hb)}s ago)")
     lines.append(
         f"[spark] watchdog: {'RUNNING' if watchdog.get('running') else 'STOPPED'}"
     )
     log_dir = status.get("log_dir")
     if log_dir:
         lines.append(f"[spark] logs: {log_dir}")
+    lines.append(
+        f"[spark] pulse_dir: {SPARK_PULSE_DIR}"
+        + ("" if (SPARK_PULSE_DIR / "app.py").exists() else " (app.py missing)")
+    )
     lines.append(f"Dashboard: {DASHBOARD_URL}")
     lines.append(f"Spark Pulse: {PULSE_URL}")
     lines.append(f"Meta-Ralph: {META_RALPH_URL}")

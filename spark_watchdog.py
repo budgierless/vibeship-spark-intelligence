@@ -15,10 +15,11 @@ from typing import Optional
 from urllib import request
 
 from lib.ports import (
-    SPARKD_HEALTH_URL,
     DASHBOARD_STATUS_URL,
-    PULSE_STATUS_URL,
     META_RALPH_HEALTH_URL,
+    PULSE_DOCS_URL,
+    PULSE_UI_URL,
+    SPARKD_HEALTH_URL,
 )
 
 
@@ -213,6 +214,28 @@ def _find_pids_by_any_keywords(
     return sorted(matches)
 
 
+def _pulse_keyword_sets() -> list[list[str]]:
+    sets: list[list[str]] = [["vibeship-spark-pulse", "app.py"]]
+    try:
+        from lib.service_control import SPARK_PULSE_DIR
+    except Exception:
+        return sets
+
+    app_path = SPARK_PULSE_DIR / "app.py"
+    app_str = str(app_path)
+    sets.append([SPARK_PULSE_DIR.name, "app.py"])
+    sets.append([app_str])
+    app_posix = app_str.replace("\\", "/")
+    if app_posix != app_str:
+        sets.append([app_posix])
+
+    deduped: list[list[str]] = []
+    for item in sets:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
 def _process_exists(keywords: list[str], snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
     return bool(_find_pids_by_keywords(keywords, snapshot))
 
@@ -342,6 +365,13 @@ def _bridge_heartbeat_age() -> Optional[float]:
     return bridge_heartbeat_age_s()
 
 
+def _scheduler_heartbeat_age() -> Optional[float]:
+    sys.path.insert(0, str(SPARK_DIR))
+    from spark_scheduler import scheduler_heartbeat_age_s
+
+    return scheduler_heartbeat_age_s()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--interval", type=int, default=60, help="seconds between checks")
@@ -439,7 +469,7 @@ def main() -> None:
                     failures["dashboard"] = 0
 
         # spark pulse -- unified startup via service_control
-        pulse_ok = _http_ok(PULSE_STATUS_URL)
+        pulse_ok = _http_ok(PULSE_DOCS_URL, timeout=2.0) and _http_ok(PULSE_UI_URL, timeout=2.0)
         pulse_fail = _bump_fail("pulse", pulse_ok)
         if not pulse_ok:
             # Check PID file first (covers external pulse started by service_control)
@@ -451,8 +481,8 @@ def main() -> None:
                 pulse_pid_from_file = None
                 pid_file_alive = False
 
-            # Search by keyword for external pulse only
-            pulse_pids = _find_pids_by_keywords(["vibeship-spark-pulse"], snapshot)
+            # Search by command patterns for external pulse only.
+            pulse_pids = _find_pids_by_any_keywords(_pulse_keyword_sets(), snapshot)
             pulse_running = pid_file_alive or bool(pulse_pids)
 
             if pulse_running and pulse_fail < args.fail_threshold:
@@ -509,6 +539,25 @@ def main() -> None:
                 ):
                     _record_restart(state, "bridge_worker")
                     failures["bridge_worker"] = 0
+
+        # scheduler (heartbeat-based, longer stale threshold)
+        sched_stale_s = args.bridge_stale_s * 2
+        sched_hb = _scheduler_heartbeat_age()
+        sched_ok = sched_hb is not None and sched_hb <= sched_stale_s
+        sched_fail = _bump_fail("scheduler", sched_ok)
+        if not sched_ok:
+            sched_pids = _find_pids_by_keywords(["spark_scheduler.py"], snapshot)
+            if sched_pids and sched_fail < args.fail_threshold:
+                _log(f"scheduler heartbeat stale (fail {sched_fail}/{args.fail_threshold}) but process exists")
+            elif not args.no_restart and _can_restart(state, "scheduler"):
+                if sched_pids:
+                    _terminate_pids(sched_pids)
+                if _start_process(
+                    "scheduler",
+                    [sys.executable, str(SPARK_DIR / "spark_scheduler.py")],
+                ):
+                    _record_restart(state, "scheduler")
+                    failures["scheduler"] = 0
 
         # queue pressure warning
         try:
