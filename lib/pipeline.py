@@ -621,6 +621,7 @@ def run_processing_cycle(
         "PostToolUseFailure": "failure",
     }
 
+    pattern_cycle_ok = False
     try:
         from lib.pattern_detection.aggregator import get_aggregator
         aggregator = get_aggregator()
@@ -658,58 +659,62 @@ def run_processing_cycle(
                 aggregator.trigger_learning(patterns)
                 metrics.patterns_detected += len(patterns)
 
+        pattern_cycle_ok = True
         metrics.events_processed = len(events)
         metrics.processed_events = list(events)
     except Exception as e:
         metrics.errors.append(f"pattern_detection: {str(e)[:100]}")
         log_debug("pipeline", "pattern detection failed", e)
 
-    # 6. Extract deep learnings (THE NEW PART)
-    try:
-        tool_eff = extract_tool_effectiveness(events)
-        metrics.tool_effectiveness_updates = tool_eff.get("tools_tracked", 0)
-    except Exception as e:
-        tool_eff = {"insights": [], "tool_stats": {}, "tools_tracked": 0}
-        metrics.errors.append(f"tool_effectiveness: {str(e)[:100]}")
+    if pattern_cycle_ok:
+        # 6. Extract deep learnings (THE NEW PART)
+        try:
+            tool_eff = extract_tool_effectiveness(events)
+            metrics.tool_effectiveness_updates = tool_eff.get("tools_tracked", 0)
+        except Exception as e:
+            tool_eff = {"insights": [], "tool_stats": {}, "tools_tracked": 0}
+            metrics.errors.append(f"tool_effectiveness: {str(e)[:100]}")
 
-    try:
-        error_pats = extract_error_patterns(events)
-        metrics.error_patterns_found = len(error_pats.get("error_patterns", []))
-    except Exception as e:
-        error_pats = {"error_patterns": [], "total_errors": 0}
-        metrics.errors.append(f"error_patterns: {str(e)[:100]}")
+        try:
+            error_pats = extract_error_patterns(events)
+            metrics.error_patterns_found = len(error_pats.get("error_patterns", []))
+        except Exception as e:
+            error_pats = {"error_patterns": [], "total_errors": 0}
+            metrics.errors.append(f"error_patterns: {str(e)[:100]}")
 
-    try:
-        workflows = extract_session_workflows(events)
-        metrics.session_workflows_analyzed = workflows.get("sessions_analyzed", 0)
-    except Exception as e:
-        workflows = {"sessions_analyzed": 0, "workflow_insights": []}
-        metrics.errors.append(f"session_workflows: {str(e)[:100]}")
+        try:
+            workflows = extract_session_workflows(events)
+            metrics.session_workflows_analyzed = workflows.get("sessions_analyzed", 0)
+        except Exception as e:
+            workflows = {"sessions_analyzed": 0, "workflow_insights": []}
+            metrics.errors.append(f"session_workflows: {str(e)[:100]}")
 
-    # 7. Store deep learnings
-    try:
-        stored = store_deep_learnings(tool_eff, error_pats, workflows)
-        metrics.insights_created = stored
-    except Exception as e:
-        metrics.errors.append(f"store_learnings: {str(e)[:100]}")
-        log_debug("pipeline", "store deep learnings failed", e)
+        # 7. Store deep learnings
+        try:
+            stored = store_deep_learnings(tool_eff, error_pats, workflows)
+            metrics.insights_created = stored
+        except Exception as e:
+            metrics.errors.append(f"store_learnings: {str(e)[:100]}")
+            log_debug("pipeline", "store deep learnings failed", e)
 
-    # 8. Consume processed events from queue
-    try:
-        consumed = consume_processed(len(events))
-        metrics.events_consumed = consumed
-        # Reset the pattern detection offset since we've removed lines
-        # from the head of the file.  Without this, the worker's saved
-        # offset would point past the end of the (now shorter) file.
-        if consumed > 0:
-            try:
-                from lib.pattern_detection.worker import reset_offset
-                reset_offset()
-            except Exception:
-                pass
-    except Exception as e:
-        metrics.errors.append(f"consume: {str(e)[:100]}")
-        log_debug("pipeline", "consume_processed failed", e)
+        # 8. Consume processed events from queue
+        try:
+            consumed = consume_processed(len(events))
+            metrics.events_consumed = consumed
+            # Reset the pattern detection offset since we've removed lines
+            # from the head of the file.  Without this, the worker's saved
+            # offset would point past the end of the (now shorter) file.
+            if consumed > 0:
+                try:
+                    from lib.pattern_detection.worker import reset_offset
+                    reset_offset()
+                except Exception:
+                    pass
+        except Exception as e:
+            metrics.errors.append(f"consume: {str(e)[:100]}")
+            log_debug("pipeline", "consume_processed failed", e)
+    else:
+        metrics.errors.append("consume_skipped:pattern_detection_failed")
 
     # 9. Final stats
     metrics.events_remaining = count_events()

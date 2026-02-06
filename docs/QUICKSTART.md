@@ -107,6 +107,20 @@ Port overrides:
 Tip: `spark up` starts Spark Lab + Spark Pulse + Meta-Ralph by default. Use `--no-pulse` or `--no-meta-ralph` to skip.
 Tip: `spark up --lite` skips all dashboards/pulse/watchdog to reduce background load.
 
+### Production Hardening Defaults
+
+- `sparkd` auth: when `SPARKD_TOKEN` is set, all mutating `POST` endpoints require `Authorization: Bearer <token>`.
+- Queue safety: queue rotation and processed-event consumption both use temp-file + atomic replace.
+- Validation loop: bridge cycle runs both prompt validation and outcome-linked validation each cycle.
+- Dashboard exposure: Meta-Ralph dashboard binds to `127.0.0.1` by default.
+- Service startup: if Spark Pulse app is unavailable, core services still start and pulse is reported unavailable.
+
+Test gates before push:
+```bash
+python -m ruff check . --select E9,F63,F7,F82
+python -m pytest -q
+```
+
 ### Automated Always-On (Quick Start)
 
 Keep Spark running at login so hooks never miss events.

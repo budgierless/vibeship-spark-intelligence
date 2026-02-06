@@ -13,11 +13,12 @@ Learning Markers Tested:
 
 import json
 from pathlib import Path
-from datetime import datetime
+import pytest
 
 # Baseline before test
 BASELINE_FILE = Path.home() / '.spark' / 'iteration_baseline.json'
 COGNITIVE_FILE = Path.home() / '.spark' / 'cognitive_insights.json'
+pytestmark = pytest.mark.integration
 
 
 def get_insight_count():
@@ -100,8 +101,7 @@ def test_explicit_signals():
     print(f"  Delta:           {delta}")
     print(f"  Signals found:   {found}/4")
     print(f"\n  Status: {'PASS' if found >= 2 else 'NEEDS IMPROVEMENT'}")
-
-    return found >= 2
+    assert found >= 2, f"expected at least 2 captured signals, found {found}"
 
 
 if __name__ == "__main__":

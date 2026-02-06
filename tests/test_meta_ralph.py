@@ -16,7 +16,7 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from lib.meta_ralph import MetaRalph, RoastVerdict, QualityScore
+from lib.meta_ralph import MetaRalph, RoastVerdict
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +53,9 @@ def test_primitive_detection():
             print(f"  Got: {result.verdict.value} (score {result.score.total})")
 
     print(f"Primitive detection: {passed}/{len(primitives)} correct")
-    return passed == len(primitives)
+    assert passed == len(primitives), (
+        f"expected {len(primitives)} primitive detections, got {passed}"
+    )
 
 
 def test_quality_detection():
@@ -78,7 +80,9 @@ def test_quality_detection():
             print(f"  Got: {result.verdict.value} (score {result.score.total})")
 
     print(f"Quality detection: {passed}/{len(quality)} correct")
-    return passed == len(quality)
+    assert passed == len(quality), (
+        f"expected {len(quality)} quality detections, got {passed}"
+    )
 
 
 def test_scoring_dimensions():
@@ -99,7 +103,6 @@ def test_scoring_dimensions():
     assert result.verdict == RoastVerdict.QUALITY, f"Expected QUALITY for remember signal, got {result.verdict.value}"
 
     print("Scoring dimensions: PASSED")
-    return True
 
 
 def test_duplicate_detection():
@@ -107,12 +110,11 @@ def test_duplicate_detection():
     ralph = MetaRalph()
 
     text = "User prefers dark theme for better focus"
-    result1 = ralph.roast(text, source="test")
+    ralph.roast(text, source="test")
     result2 = ralph.roast(text, source="test")
 
     assert result2.verdict == RoastVerdict.DUPLICATE, f"Expected DUPLICATE, got {result2.verdict.value}"
     print("Duplicate detection: PASSED")
-    return True
 
 
 def test_context_boost():
@@ -134,7 +136,6 @@ def test_context_boost():
     assert result1.verdict == RoastVerdict.QUALITY, "Base text should be quality"
     assert result2.verdict == RoastVerdict.QUALITY, "Priority text should be quality"
     print("Context boost: PASSED")
-    return True
 
 
 def test_stats():
@@ -150,7 +151,6 @@ def test_stats():
     assert "pass_rate" in stats, "Missing pass_rate in stats"
 
     print("Stats tracking: PASSED")
-    return True
 
 
 def run_all_tests():
@@ -175,10 +175,11 @@ def run_all_tests():
     for name, test_fn in tests:
         print(f"\n--- {name} ---")
         try:
-            if test_fn():
-                passed += 1
-            else:
-                failed += 1
+            test_fn()
+            passed += 1
+        except AssertionError as e:
+            print(f"ASSERTION FAILED: {e}")
+            failed += 1
         except Exception as e:
             print(f"ERROR: {e}")
             failed += 1

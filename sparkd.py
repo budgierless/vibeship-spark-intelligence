@@ -55,6 +55,14 @@ def _text(handler: BaseHTTPRequestHandler, code: int, body: str):
     handler.wfile.write(raw)
 
 
+def _is_authorized(handler: BaseHTTPRequestHandler) -> bool:
+    """Authorize request when SPARKD_TOKEN is configured."""
+    if not TOKEN:
+        return True
+    auth = (handler.headers.get("Authorization") or "").strip()
+    return auth == f"Bearer {TOKEN}"
+
+
 def _quarantine_invalid(payload, reason: str) -> None:
     try:
         INVALID_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -105,6 +113,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+
+        # If SPARKD_TOKEN is set, all mutating POST endpoints require auth.
+        if not _is_authorized(self):
+            return _json(self, 401, {"ok": False, "error": "unauthorized"})
 
         if path == "/process":
             # Run a bridge cycle to process pending events
@@ -190,13 +202,6 @@ class Handler(BaseHTTPRequestHandler):
 
         if path != "/ingest":
             return _text(self, 404, "not found")
-
-        # Optional auth: if SPARKD_TOKEN is set, require Authorization: Bearer <token>
-        if TOKEN:
-            auth = self.headers.get("Authorization") or ""
-            expected = f"Bearer {TOKEN}"
-            if auth.strip() != expected:
-                return _json(self, 401, {"ok": False, "error": "unauthorized"})
 
         length = int(self.headers.get("Content-Length", "0") or 0)
         if length > MAX_BODY_BYTES:

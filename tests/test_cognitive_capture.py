@@ -17,10 +17,12 @@ import json
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional
+from typing import Dict, Optional
+import pytest
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+pytestmark = pytest.mark.integration
 
 from lib.meta_ralph import MetaRalph, get_meta_ralph
 
@@ -311,8 +313,8 @@ def test_filter_accuracy():
     print(f"FILTER ACCURACY: {accuracy:.1%}")
     print(f"  Correctly passed cognitive: {cognitive_passed}/{len(cognitive_samples)}")
     print(f"  Correctly blocked operational: {len(operational_samples) - operational_passed}/{len(operational_samples)}")
-
-    return accuracy
+    assert 0.0 <= accuracy <= 1.0, f"accuracy out of bounds: {accuracy}"
+    assert accuracy >= 0.6, f"filter accuracy too low: {accuracy:.1%}"
 
 
 def run_deep_analysis():

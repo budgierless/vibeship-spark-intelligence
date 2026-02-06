@@ -32,9 +32,11 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+import pytest
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+pytestmark = pytest.mark.integration
 
 SPARK_DIR = Path.home() / '.spark'
 
@@ -741,7 +743,7 @@ def test_event_flow():
 
     if not found_in_queue:
         print("   FAIL: Event not found in queue!")
-        return False
+        pytest.fail("event not found in queue after capture")
 
     # Check bridge worker
     checker = PipelineHealthChecker()
@@ -751,20 +753,18 @@ def test_event_flow():
         print("\n3. Bridge worker: NOT RUNNING!")
         print("   Cannot trace event through pipeline.")
         print("   Start bridge_worker and try again.")
-        return False
+        pytest.fail("bridge worker heartbeat missing/stale during event flow test")
 
     print(f"3. Bridge worker: Running (heartbeat {age}s ago)")
-    print(f"   Next cycle will process this event")
+    print("   Next cycle will process this event")
 
     # Note: We can't wait for bridge cycle in a test, but we can verify the setup
-    print(f"\n4. To verify end-to-end:")
-    print(f"   - Wait 60s for bridge cycle")
-    print(f"   - Then run: python -c \"")
-    print(f"     from lib.meta_ralph import get_meta_ralph")
-    print(f"     for r in get_meta_ralph().get_recent_roasts(10):")
+    print("\n4. To verify end-to-end:")
+    print("   - Wait 60s for bridge cycle")
+    print("   - Then run: python -c \"")
+    print("     from lib.meta_ralph import get_meta_ralph")
+    print("     for r in get_meta_ralph().get_recent_roasts(10):")
     print(f"         if '{test_id}' in str(r): print('FOUND in Meta-Ralph!')\"")
-
-    return True
 
 
 def main():

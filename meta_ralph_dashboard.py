@@ -973,7 +973,7 @@ def main():
 ================================================================
 """)
 
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), DashboardHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), DashboardHandler)
     stop_event = threading.Event()
 
     def _shutdown(signum=None, frame=None):

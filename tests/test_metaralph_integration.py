@@ -18,11 +18,15 @@ import os
 import sys
 import json
 import time
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from contextlib import contextmanager
+import pytest
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+pytestmark = pytest.mark.integration
 
 
 def check_file_exists(path: str, name: str) -> dict:
@@ -47,6 +51,37 @@ def count_jsonl_lines(path: str) -> int:
         return sum(1 for _ in f)
 
 
+@contextmanager
+def _isolated_meta_ralph():
+    """Use a temporary Meta-Ralph data directory for deterministic mutation tests."""
+    from lib.meta_ralph import MetaRalph
+
+    with tempfile.TemporaryDirectory(prefix="meta_ralph_integration_") as tmp:
+        data_dir = Path(tmp)
+        original = (
+            MetaRalph.DATA_DIR,
+            MetaRalph.ROAST_HISTORY_FILE,
+            MetaRalph.OUTCOME_TRACKING_FILE,
+            MetaRalph.LEARNINGS_STORE_FILE,
+            MetaRalph.SELF_ROAST_FILE,
+        )
+        MetaRalph.DATA_DIR = data_dir
+        MetaRalph.ROAST_HISTORY_FILE = data_dir / "roast_history.json"
+        MetaRalph.OUTCOME_TRACKING_FILE = data_dir / "outcome_tracking.json"
+        MetaRalph.LEARNINGS_STORE_FILE = data_dir / "learnings_store.json"
+        MetaRalph.SELF_ROAST_FILE = data_dir / "self_roast.json"
+        try:
+            yield MetaRalph()
+        finally:
+            (
+                MetaRalph.DATA_DIR,
+                MetaRalph.ROAST_HISTORY_FILE,
+                MetaRalph.OUTCOME_TRACKING_FILE,
+                MetaRalph.LEARNINGS_STORE_FILE,
+                MetaRalph.SELF_ROAST_FILE,
+            ) = original
+
+
 def test_storage_layer():
     """TEST 1: Verify all storage files exist and have data."""
     print("\n" + "="*60)
@@ -68,7 +103,8 @@ def test_storage_layer():
     all_pass = True
     for path, name in storage_files:
         result = check_file_exists(path, name)
-        status = "PASS" if result["exists"] and result["size"] > 0 else "FAIL"
+        must_be_nonempty = name != "Event Queue"
+        status = "PASS" if result["exists"] and (result["size"] > 0 or not must_be_nonempty) else "FAIL"
         if status == "FAIL":
             all_pass = False
         print(f"  [{status}] {name}: {result['size_human']}")
@@ -85,7 +121,7 @@ def test_storage_layer():
                 total_chip_insights += count
         print(f"  [{'PASS' if total_chip_insights > 0 else 'FAIL'}] Chip Insights: {total_chip_insights:,} entries")
 
-    return all_pass
+    assert all_pass, "one or more required storage files are missing or empty"
 
 
 def test_meta_ralph_state():
@@ -125,10 +161,9 @@ def test_meta_ralph_state():
         print("\n  ISSUES DETECTED:")
         for issue in issues:
             print(f"    - {issue}")
-        return False
+        pytest.fail("meta-ralph state sanity checks failed: " + "; ".join(issues))
 
     print("\n  [PASS] Meta-Ralph state is healthy")
-    return True
 
 
 def test_eidos_integration():
@@ -156,10 +191,9 @@ def test_eidos_integration():
 
     if stats['distillations'] == 0:
         print("\n  [WARN] No distillations yet - need more episodes")
-        return True  # Not a failure, just needs more data
+        return  # Not a failure, just needs more data
 
     print("\n  [PASS] EIDOS has distillations")
-    return True
 
 
 def test_mind_integration():
@@ -185,10 +219,8 @@ def test_mind_integration():
             print(f"    {level}: {count:,}")
 
         print("\n  [PASS] Mind API is healthy")
-        return True
     except Exception as e:
-        print(f"  [FAIL] Mind API not accessible: {e}")
-        return False
+        pytest.skip(f"Mind API not accessible: {e}")
 
 
 def test_bridge_worker():
@@ -200,8 +232,7 @@ def test_bridge_worker():
     hb_path = os.path.expanduser("~/.spark/bridge_worker_heartbeat.json")
 
     if not os.path.exists(hb_path):
-        print("  [FAIL] No heartbeat file - bridge worker not running")
-        return False
+        pytest.fail("No heartbeat file - bridge worker not running")
 
     with open(hb_path) as f:
         hb = json.load(f)
@@ -220,11 +251,9 @@ def test_bridge_worker():
     print(f"  Chip insights captured: {chips.get('insights_captured', 0)}")
 
     if age_seconds > 120:
-        print(f"\n  [WARN] Heartbeat is stale ({age_seconds:.0f}s > 120s)")
-        return False
+        pytest.fail(f"Heartbeat is stale ({age_seconds:.0f}s > 120s)")
 
     print("\n  [PASS] Bridge worker is active")
-    return True
 
 
 def test_live_roast():
@@ -233,39 +262,39 @@ def test_live_roast():
     print("TEST 6: LIVE ROAST TEST")
     print("="*60)
 
-    from lib.meta_ralph import MetaRalph
+    with _isolated_meta_ralph() as ralph:
 
-    # Fresh instance for testing
-    ralph = MetaRalph()
+        nonce = int(time.time() * 1000)
+        test_cases = [
+            # (input, expected_verdict, description)
+            (f"User prefers dark theme because it reduces eye strain [{nonce}]", "quality", "Has reasoning"),
+            ("Read task succeeded with Read tool", "primitive", "Tautology"),
+            (f"CRITICAL: Player health 300 allows 3-4 hits, feels fair [{nonce}]", "quality", "Domain insight"),
+            ("Success rate: 95% over 1000 uses", "primitive", "Pure metrics"),
+            (f"Bridge worker must run for queue processing [{nonce}]", "quality", "Architecture insight"),
+        ]
 
-    test_cases = [
-        # (input, expected_verdict, description)
-        ("User prefers dark theme because it reduces eye strain", "quality", "Has reasoning"),
-        ("Read task succeeded with Read tool", "primitive", "Tautology"),
-        ("CRITICAL: Player health 300 allows 3-4 hits, feels fair", "quality", "Domain insight"),
-        ("Success rate: 95% over 1000 uses", "primitive", "Pure metrics"),
-        ("Bridge worker must run for queue processing", "quality", "Architecture insight"),
-    ]
+        all_pass = True
+        for text, expected, desc in test_cases:
+            result = ralph.roast(text)
+            actual = result.verdict.value
+            score = result.score.total
 
-    all_pass = True
-    for text, expected, desc in test_cases:
-        result = ralph.roast(text)
-        actual = result.verdict.value
-        score = result.score.total
+            # Duplicate verdict is acceptable for quality inputs when the same
+            # core insight has already been learned and deduped.
+            passed = actual == expected or (expected == "quality" and actual == "duplicate")
+            if not passed:
+                all_pass = False
 
-        passed = actual == expected
-        if not passed:
-            all_pass = False
+            status = "PASS" if passed else "FAIL"
+            print(f"  [{status}] {desc}")
+            print(f"         Input: \"{text[:40]}...\"")
+            print(f"         Expected: {expected}, Got: {actual} (score: {score}/10)")
+            if not passed:
+                print(f"         Issues: {result.issues_found[:2]}")
+            print()
 
-        status = "PASS" if passed else "FAIL"
-        print(f"  [{status}] {desc}")
-        print(f"         Input: \"{text[:40]}...\"")
-        print(f"         Expected: {expected}, Got: {actual} (score: {score}/10)")
-        if not passed:
-            print(f"         Issues: {result.issues_found[:2]}")
-        print()
-
-    return all_pass
+        assert all_pass, "one or more live roast verdict checks failed"
 
 
 def test_outcome_tracking():
@@ -274,16 +303,15 @@ def test_outcome_tracking():
     print("TEST 7: OUTCOME TRACKING")
     print("="*60)
 
-    from lib.meta_ralph import MetaRalph
+    with _isolated_meta_ralph() as ralph:
+        before = ralph.get_stats()['outcome_stats']['acted_on']
+        nonce = int(time.time() * 1000)
 
-    ralph = MetaRalph()
-    before = ralph.get_stats()['outcome_stats']['acted_on']
+        # Track some outcomes
+        ralph.track_outcome(f'test:integration:{nonce}:1', 'good', 'test evidence')
+        ralph.track_outcome(f'test:integration:{nonce}:2', 'bad', 'test evidence')
 
-    # Track some outcomes
-    ralph.track_outcome('test:integration:1', 'good', 'test evidence')
-    ralph.track_outcome('test:integration:2', 'bad', 'test evidence')
-
-    after = ralph.get_stats()['outcome_stats']['acted_on']
+        after = ralph.get_stats()['outcome_stats']['acted_on']
 
     print(f"  Before: {before} acted_on")
     print(f"  After: {after} acted_on")
@@ -291,10 +319,8 @@ def test_outcome_tracking():
 
     if after > before:
         print("\n  [PASS] Outcome tracking increments correctly")
-        return True
     else:
-        print("\n  [FAIL] Outcome tracking not incrementing")
-        return False
+        pytest.fail("Outcome tracking not incrementing")
 
 
 def test_refinement():
@@ -303,13 +329,10 @@ def test_refinement():
     print("TEST 8: REFINEMENT PIPELINE")
     print("="*60)
 
-    from lib.meta_ralph import MetaRalph
-
-    ralph = MetaRalph()
-
-    # This should trigger refinement (vague but has keywords)
-    test_input = "Player health should be around 300"
-    result = ralph.roast(test_input)
+    with _isolated_meta_ralph() as ralph:
+        # This should trigger refinement (vague but has keywords)
+        test_input = "Player health should be around 300"
+        result = ralph.roast(test_input)
 
     print(f"  Input: \"{test_input}\"")
     print(f"  Original score: would be ~3 (needs_work)")
@@ -320,15 +343,14 @@ def test_refinement():
         print(f"  Refined to: \"{result.refined_version[:60]}...\"")
         print(f"  Refinements made: {ralph.refinements_made}")
         print("\n  [PASS] Refinement is working")
-        return True
     else:
-        print(f"  No refinement applied")
+        print("  No refinement applied")
         # This might still be OK if it scored high enough without refinement
         if result.verdict.value == "quality":
             print("\n  [PASS] Scored quality without needing refinement")
-            return True
+            return
         print("\n  [WARN] Refinement didn't trigger")
-        return True  # Not a hard failure
+        pytest.fail("Refinement did not trigger and verdict was not quality")
 
 
 def run_all_tests():
@@ -341,16 +363,30 @@ def run_all_tests():
     print(f"  Timestamp: {datetime.now().isoformat()}")
 
     results = {}
+    tests = {
+        "storage": test_storage_layer,
+        "meta_ralph": test_meta_ralph_state,
+        "eidos": test_eidos_integration,
+        "mind": test_mind_integration,
+        "bridge": test_bridge_worker,
+        "roast": test_live_roast,
+        "outcomes": test_outcome_tracking,
+        "refinement": test_refinement,
+    }
 
-    # Run all tests
-    results['storage'] = test_storage_layer()
-    results['meta_ralph'] = test_meta_ralph_state()
-    results['eidos'] = test_eidos_integration()
-    results['mind'] = test_mind_integration()
-    results['bridge'] = test_bridge_worker()
-    results['roast'] = test_live_roast()
-    results['outcomes'] = test_outcome_tracking()
-    results['refinement'] = test_refinement()
+    for name, fn in tests.items():
+        try:
+            fn()
+            results[name] = True
+        except pytest.skip.Exception:
+            print(f"  [SKIP] {name}")
+            results[name] = True
+        except AssertionError as e:
+            print(f"  [FAIL] {name}: {e}")
+            results[name] = False
+        except Exception as e:
+            print(f"  [FAIL] {name}: {e}")
+            results[name] = False
 
     # Summary
     print("\n" + "="*60)

@@ -5,6 +5,7 @@ Lightweight, local-only storage for project-level goals, decisions, and domain i
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -111,6 +112,11 @@ DOMAIN_PHASE_QUESTIONS: Dict[str, List[Dict[str, str]]] = {
 
 def _now() -> float:
     return time.time()
+
+
+def _hash_id(*parts: str) -> str:
+    raw = "|".join(str(p or "") for p in parts).encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()[:12]
 
 
 def _default_profile(project_key: str, domain: str) -> Dict[str, Any]:
