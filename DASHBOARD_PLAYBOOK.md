@@ -17,16 +17,17 @@ Repo shortcuts:
 1. `./scripts/run_local.sh`
 2. Windows: `start_spark.bat`
 
-Dashboard only (no background workers):
-1. `python dashboard.py`
+Dashboard only:
+1. Primary (Pulse): from `vibeship-spark-pulse`, run `python app.py`
+2. Legacy Spark Lab only: `python dashboard.py`
 
 Stop services:
 1. `python -m spark.cli down`
 2. Or `spark down`
 
 Ports (defaults; override via env, see `lib/ports.py`):
-1. Spark Lab dashboard: `http://localhost:${SPARK_DASHBOARD_PORT:-8585}`
-2. Spark Pulse (chips/tuneables): `http://localhost:${SPARK_PULSE_PORT:-8765}`
+1. Spark Pulse (primary unified dashboard): `http://localhost:${SPARK_PULSE_PORT:-8765}`
+2. Spark Lab dashboard (auxiliary/legacy views): `http://localhost:${SPARK_DASHBOARD_PORT:-8585}`
 3. Meta-Ralph Quality Analyzer: `http://localhost:${SPARK_META_RALPH_PORT:-8586}`
 4. sparkd health: `http://127.0.0.1:${SPARKD_PORT:-8787}/health`
 5. Mind server health (if running): `http://127.0.0.1:${SPARK_MIND_PORT:-8080}/health`
@@ -39,34 +40,17 @@ Port overrides (env):
 5. `SPARK_MIND_PORT`
 6. Adapters can also set `SPARKD_URL` directly.
 
-**Dashboards (Spark Lab)**
-Mission Control (default):
-1. `/` or `/mission`
-2. Health, queues, watchers, run KPIs, trace/run drilldowns.
+**Dashboards (Primary: Spark Pulse)**
+1. Open: `http://localhost:${SPARK_PULSE_PORT:-8765}`
+2. Mission/System: health, queues, watchers, run KPIs.
+3. Learn/Rabbit: funnel metrics, distillation lifecycle, repeat failures, thrash, recovery signals.
+4. Validate: outcomes, acceptance plans, deferrals, validation gaps, evidence stats.
+5. Ops + Trace/Run drilldowns: orchestration stats and direct debugging views.
+6. Chips/Tune/Tools: operational controls and integrations.
 
-Learning Factory:
-1. `/learning`
-2. Funnel metrics and distillation lifecycle.
-
-Rabbit Hole Recovery:
-1. `/rabbit`
-2. Repeat failures, thrash, and recovery signals.
-
-Acceptance & Validation Board:
-1. `/acceptance`
-2. Acceptance plans, deferrals, validation gaps, evidence stats.
-
-Ops Console:
-1. `/ops`
-2. Skills, orchestration, and operational stats.
-
-Dashboards Index:
-1. `/dashboards`
-2. Links + start commands + data sources.
-
-**Dashboards (Separate Apps)**
-1. Meta-Ralph Quality Analyzer: `http://localhost:${SPARK_META_RALPH_PORT:-8586}`
-2. Spark Pulse (chips/tuneables): `http://localhost:${SPARK_PULSE_PORT:-8765}`
+**Dashboards (Auxiliary)**
+1. Spark Lab legacy pages (optional): `http://localhost:${SPARK_DASHBOARD_PORT:-8585}`
+2. Meta-Ralph Quality Analyzer: `http://localhost:${SPARK_META_RALPH_PORT:-8586}`
 
 **CLI Dashboards (No Server)**
 1. EIDOS quick health: `python scripts/eidos_dashboard.py`
@@ -89,7 +73,7 @@ Dashboards Index:
 6. Apply a small fix, then re-check Mission Control + Meta-Ralph for movement.
 
 **Data Sources (No Hallucinations)**
-1. Spark Lab: `~/.spark/queue/events.jsonl`, `~/.spark/bridge_worker_heartbeat.json`, `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/acceptance_plans.json`, `~/.spark/evidence.db`, `~/.spark/cognitive_insights.json`, `~/.spark/logs/semantic_retrieval.jsonl`, `~/.spark/advisor/metrics.json`.
+1. Spark/Pulse mission data: `~/.spark/queue/events.jsonl`, `~/.spark/bridge_worker_heartbeat.json`, `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/acceptance_plans.json`, `~/.spark/evidence.db`, `~/.spark/cognitive_insights.json`, `~/.spark/logs/semantic_retrieval.jsonl`, `~/.spark/advisor/metrics.json`.
 2. Meta-Ralph Quality Analyzer: `~/.spark/meta_ralph/roast_history.json`, `~/.spark/meta_ralph/outcome_tracking.json`, `~/.spark/meta_ralph/learnings_store.json`, `~/.spark/advisor/effectiveness.json`, `~/.spark/advisor/recent_advice.jsonl`.
 3. EIDOS CLI: `~/.spark/eidos.db`, `~/.spark/truth_ledger.json`, `~/.spark/policy_patches.json`, `~/.spark/minimal_mode_state.json`, `~/.spark/minimal_mode_history.jsonl`.
 4. Spark Intelligence CLI: `~/.spark/cognitive_insights.json`, `~/.spark/research_reports/`, `~/.spark/sparknet/collective/`.
@@ -127,7 +111,7 @@ Key flags:
 3. Review steps in order and confirm evidence exists for each step.
 4. If evidence is missing, log a validation gap and block promotion.
 
-URL shortcuts:
+Legacy Spark Lab URL shortcuts (`8585` only):
 1. `/mission?trace_id=<trace_id>`
 2. `/mission?episode_id=<episode_id>`
 

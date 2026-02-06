@@ -68,6 +68,12 @@ start_spark.bat
 This also starts Mind on `SPARK_MIND_PORT` (default `8080`) if `mind.exe` is available.  
 Set `SPARK_NO_MIND=1` to skip Mind startup.
 Set `SPARK_LITE=1` to skip dashboards/pulse/watchdog (core services only).
+Spark auto-detects sibling `../vibeship-spark-pulse` first, then falls back to `~/Desktop/vibeship-spark-pulse`.
+Set `SPARK_PULSE_DIR` to override both.
+For this setup, use:
+```bat
+set SPARK_PULSE_DIR=C:\Users\USER\Desktop\vibeship-spark-pulse
+```
 If Mind CLI is installed but unstable, force Spark's built-in Mind server:
 ```bat
 set SPARK_FORCE_BUILTIN_MIND=1
@@ -92,9 +98,10 @@ python3 -m spark.cli down
 ### Dashboards
 
 Defaults (override via env; see `lib/ports.py`):
-- Spark Lab (overview + orchestration): http://localhost:${SPARK_DASHBOARD_PORT:-8585}
-- Dashboards Index: http://localhost:${SPARK_DASHBOARD_PORT:-8585}/dashboards
-- Spark Pulse (chips + tuneables rail): http://localhost:${SPARK_PULSE_PORT:-8765}
+- Spark Pulse (primary unified dashboard): http://localhost:${SPARK_PULSE_PORT:-8765}
+  - Tabs/surfaces include Mission, Learning, Rabbit, Acceptance, Ops, Chips, Tuneables, Tools, and Trace/Run drilldowns.
+- Spark Lab (auxiliary/legacy web views): http://localhost:${SPARK_DASHBOARD_PORT:-8585}
+- Dashboards Index (Spark Lab): http://localhost:${SPARK_DASHBOARD_PORT:-8585}/dashboards
 - Meta-Ralph Quality Analyzer: http://localhost:${SPARK_META_RALPH_PORT:-8586}
 
 Port overrides:
@@ -104,8 +111,10 @@ Port overrides:
 - `SPARK_META_RALPH_PORT`
 - `SPARK_MIND_PORT`
 
-Tip: `spark up` starts Spark Lab + Spark Pulse + Meta-Ralph by default. Use `--no-pulse` or `--no-meta-ralph` to skip.
+Tip: `spark up` starts Spark Lab + Spark Pulse + Meta-Ralph by default. Pulse (`8765`) is the primary operator surface; Spark Lab (`8585`) is legacy/auxiliary.
+Tip: Use `--no-pulse` or `--no-meta-ralph` only for debugging or reduced startup modes.
 Tip: `spark up --lite` skips all dashboards/pulse/watchdog to reduce background load.
+Tip: Pulse does not require Spark Lab (`8585`) by default; set `SPARK_DASHBOARD_FALLBACK=1` only if you want HTTP fallback behavior.
 
 ### Production Hardening Defaults
 

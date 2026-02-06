@@ -144,21 +144,20 @@ Use `DASHBOARD_PLAYBOOK.md` for full setup and usage (start commands, pages, dri
 
 Quick start:
 1. `python -m spark.cli up`
-2. Or `python dashboard.py` (Spark Lab only)
-3. Pulse: runs from external `vibeship-spark-pulse/app.py` (port `SPARK_PULSE_PORT`, default 8765)
-4. **Meta-Ralph Quality Analyzer:** `python meta_ralph_dashboard.py` (port `SPARK_META_RALPH_PORT`, default 8586)
+2. Primary dashboard: **`http://localhost:${SPARK_PULSE_PORT:-8765}`** (Spark Pulse)
+3. Legacy/aux dashboard (optional): `http://localhost:${SPARK_DASHBOARD_PORT:-8585}`
+4. **Meta-Ralph Quality Analyzer:** `http://localhost:${SPARK_META_RALPH_PORT:-8586}`
 
-`spark up` starts Spark Lab + Pulse + Meta-Ralph by default (use `--no-pulse` / `--no-meta-ralph` to skip).
+`spark up` starts Spark Lab + Pulse + Meta-Ralph by default. Operate from Pulse first; use Spark Lab for legacy pages only.
 
-Key pages:
-1. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/mission` - Mission Control
-2. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/learning` - Learning Factory
-3. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/rabbit` - Rabbit Hole Recovery
-4. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/acceptance` - Acceptance Board
-5. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/ops` - Ops Overview
-6. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}/dashboards` - Dashboards Index
-7. **`http://localhost:${SPARK_PULSE_PORT:-8765}`** - Spark Pulse (chips + tuneables)
-8. **`http://localhost:${SPARK_META_RALPH_PORT:-8586}`** - Meta-Ralph Quality Analyzer (dedicated dashboard)
+Key surfaces:
+1. **`http://localhost:${SPARK_PULSE_PORT:-8765}`** - Spark Pulse unified operator dashboard (Mission, Learning, Rabbit, Acceptance, Ops, Trace/Run, Chips/Tune/Tools)
+2. `http://localhost:${SPARK_PULSE_PORT:-8765}/api/status` - status heartbeat
+3. `http://localhost:${SPARK_PULSE_PORT:-8765}/api/mission` - mission KPIs
+4. `http://localhost:${SPARK_PULSE_PORT:-8765}/api/acceptance` - acceptance/validation board data
+5. `http://localhost:${SPARK_PULSE_PORT:-8765}/api/ops` - ops aggregates
+6. `http://localhost:${SPARK_DASHBOARD_PORT:-8585}` - Spark Lab legacy pages (optional)
+7. **`http://localhost:${SPARK_META_RALPH_PORT:-8586}`** - Meta-Ralph Quality Analyzer (dedicated dashboard)
 
 **Meta-Ralph Dashboard Features:**
 - Real-time advice quality metrics (from roast_history.json)
