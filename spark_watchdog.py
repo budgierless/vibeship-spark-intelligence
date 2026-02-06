@@ -233,7 +233,7 @@ def _terminate_pids(pids: list[int]) -> None:
             continue
 
 
-def _start_process(name: str, args: list[str]) -> bool:
+def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> bool:
     try:
         _ensure_log_dir()
         log_path = LOG_DIR / f"{name}.log"
@@ -251,7 +251,7 @@ def _start_process(name: str, args: list[str]) -> bool:
         with open(log_path, "a", encoding="utf-8", errors="replace") as log_f:
             subprocess.Popen(
                 args,
-                cwd=str(SPARK_DIR),
+                cwd=str(cwd or SPARK_DIR),
                 stdout=log_f,
                 stderr=log_f,
                 env=env,
@@ -464,13 +464,14 @@ def main() -> None:
                 if all_pulse_pids:
                     _terminate_pids(list(all_pulse_pids))
                 try:
+                    from lib.service_control import SPARK_PULSE_DIR
                     pulse_cmd = _get_pulse_command()
                 except FileNotFoundError as fnf:
                     _log(f"pulse not available: {fnf}")
                     pulse_cmd = None
                 except Exception:
                     pulse_cmd = None
-                if pulse_cmd and _start_process("pulse", pulse_cmd):
+                if pulse_cmd and _start_process("pulse", pulse_cmd, cwd=SPARK_PULSE_DIR):
                     _record_restart(state, "pulse")
                     failures["pulse"] = 0
 

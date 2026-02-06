@@ -27,7 +27,7 @@ def main():
     if external_app.exists():
         print(f"  Launching external pulse: {SPARK_PULSE_DIR}")
         print("=" * 64 + "\n")
-        sys.exit(subprocess.call([sys.executable, str(external_app)]))
+        sys.exit(subprocess.call([sys.executable, str(external_app)], cwd=str(SPARK_PULSE_DIR)))
     else:
         print()
         print("  ERROR: External Spark Pulse not found.")

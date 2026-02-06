@@ -237,7 +237,7 @@ def _env_for_child(log_dir: Path) -> dict:
     return env
 
 
-def _start_process(name: str, args: list[str]) -> Optional[int]:
+def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> Optional[int]:
     _, log_dir = _ensure_dirs()
     log_path = log_dir / f"{name}.log"
     env = _env_for_child(log_dir)
@@ -258,6 +258,7 @@ def _start_process(name: str, args: list[str]) -> Optional[int]:
             stdout=log_f,
             stderr=log_f,
             env=env,
+            cwd=str(cwd) if cwd else None,
             creationflags=creationflags,
             start_new_session=(os.name != "nt"),
         )
@@ -506,7 +507,8 @@ def start_services(
         if not cmd:
             results[name] = "unavailable"
             continue
-        pid = _start_process(name, cmd)
+        process_cwd = SPARK_PULSE_DIR if name == "pulse" else ROOT_DIR
+        pid = _start_process(name, cmd, cwd=process_cwd)
         if not pid:
             results[name] = "failed"
             continue
