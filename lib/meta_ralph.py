@@ -37,13 +37,15 @@ MIN_OUTCOME_SAMPLES = 5
 MIN_TUNEABLE_SAMPLES = 50
 MIN_NEEDS_WORK_SAMPLES = 5
 MIN_SOURCE_SAMPLES = 15
+ATTRIBUTION_WINDOW_S = 1200
+STRICT_ATTRIBUTION_REQUIRE_TRACE = True
 
 
 def _load_meta_ralph_config() -> None:
     """Load meta_ralph tuneables from ~/.spark/tuneables.json → "meta_ralph" section."""
     global QUALITY_THRESHOLD, NEEDS_WORK_THRESHOLD, NEEDS_WORK_CLOSE_DELTA
     global MIN_OUTCOME_SAMPLES, MIN_TUNEABLE_SAMPLES, MIN_NEEDS_WORK_SAMPLES
-    global MIN_SOURCE_SAMPLES
+    global MIN_SOURCE_SAMPLES, ATTRIBUTION_WINDOW_S, STRICT_ATTRIBUTION_REQUIRE_TRACE
     try:
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if not tuneables.exists():
@@ -66,6 +68,10 @@ def _load_meta_ralph_config() -> None:
             MIN_NEEDS_WORK_SAMPLES = int(cfg["min_needs_work_samples"])
         if "min_source_samples" in cfg:
             MIN_SOURCE_SAMPLES = int(cfg["min_source_samples"])
+        if "attribution_window_s" in cfg:
+            ATTRIBUTION_WINDOW_S = int(cfg["attribution_window_s"])
+        if "strict_attribution_require_trace" in cfg:
+            STRICT_ATTRIBUTION_REQUIRE_TRACE = bool(cfg["strict_attribution_require_trace"])
     except Exception:
         pass
 
@@ -166,6 +172,9 @@ class OutcomeRecord:
     acted_on: bool = False
     outcome: Optional[str] = None  # "good", "bad", "neutral"
     outcome_evidence: Optional[str] = None
+    outcome_at: Optional[str] = None
+    outcome_trace_id: Optional[str] = None
+    outcome_latency_s: Optional[float] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -177,7 +186,10 @@ class OutcomeRecord:
             "trace_id": self.trace_id,
             "acted_on": self.acted_on,
             "outcome": self.outcome,
-            "outcome_evidence": self.outcome_evidence
+            "outcome_evidence": self.outcome_evidence,
+            "outcome_at": self.outcome_at,
+            "outcome_trace_id": self.outcome_trace_id,
+            "outcome_latency_s": self.outcome_latency_s,
         }
 
 
@@ -434,12 +446,25 @@ class MetaRalph:
 
         # Bound in-memory outcome records for long-running processes.
         if len(self.outcome_records) > 500:
-            recent_records = sorted(
-                self.outcome_records.values(),
-                key=lambda r: r.retrieved_at or "",
-                reverse=True,
-            )[:500]
-            self.outcome_records = {r.learning_id: r for r in recent_records}
+            all_records = list(self.outcome_records.values())
+            # Keep actionable and acted-on records first so task-noise bursts
+            # do not evict high-value utilization history.
+            priority = [
+                r for r in all_records
+                if r.acted_on or not self._is_non_actionable_record(r)
+            ]
+            secondary = [
+                r for r in all_records
+                if not (r.acted_on or not self._is_non_actionable_record(r))
+            ]
+
+            priority.sort(key=lambda r: r.retrieved_at or "", reverse=True)
+            secondary.sort(key=lambda r: r.retrieved_at or "", reverse=True)
+
+            keep = priority[:500]
+            if len(keep) < 500:
+                keep.extend(secondary[: 500 - len(keep)])
+            self.outcome_records = {r.learning_id: r for r in keep}
 
         self._atomic_write_json(self.OUTCOME_TRACKING_FILE, {
             "records": [r.to_dict() for r in list(self.outcome_records.values())[-500:]],
@@ -897,9 +922,18 @@ class MetaRalph:
             rec.insight_key = insight_key
         if source and rec.source == "auto_created":
             rec.source = source
+        outcome_now = datetime.now().isoformat()
         rec.acted_on = True
         rec.outcome = outcome
         rec.outcome_evidence = evidence
+        rec.outcome_at = outcome_now
+        if trace_id:
+            rec.outcome_trace_id = trace_id
+        elif not rec.outcome_trace_id and rec.trace_id:
+            rec.outcome_trace_id = rec.trace_id
+        latency_s = self._compute_outcome_latency_s(rec)
+        if latency_s is not None:
+            rec.outcome_latency_s = latency_s
         self._update_learning_outcomes(rec)
         self._apply_outcome_to_cognitive(rec)
         self._save_state()
@@ -911,6 +945,88 @@ class MetaRalph:
         if o in ("good", "bad", "neutral"):
             return o
         return "neutral"
+
+    @staticmethod
+    def _parse_iso_timestamp(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    def _compute_outcome_latency_s(self, record: OutcomeRecord) -> Optional[float]:
+        if record.outcome_latency_s is not None:
+            try:
+                cached = float(record.outcome_latency_s)
+                if cached >= 0:
+                    return cached
+            except Exception:
+                pass
+        started = self._parse_iso_timestamp(record.retrieved_at)
+        ended = self._parse_iso_timestamp(record.outcome_at)
+        if not started or not ended:
+            return None
+        try:
+            delta = ended.timestamp() - started.timestamp()
+        except Exception:
+            return None
+        if delta < 0:
+            return None
+        return float(delta)
+
+    def _is_trace_bound(self, record: OutcomeRecord, require_trace: bool = True) -> bool:
+        retrieve_trace = (record.trace_id or "").strip()
+        outcome_trace = (record.outcome_trace_id or "").strip()
+        if not outcome_trace and retrieve_trace:
+            outcome_trace = retrieve_trace
+
+        if require_trace:
+            return bool(retrieve_trace and outcome_trace and retrieve_trace == outcome_trace)
+        if retrieve_trace and outcome_trace:
+            return retrieve_trace == outcome_trace
+        return bool(retrieve_trace or outcome_trace)
+
+    def _is_strictly_attributable(
+        self,
+        record: OutcomeRecord,
+        *,
+        window_s: int,
+        require_trace: bool,
+    ) -> bool:
+        if not record.acted_on:
+            return False
+        if require_trace and not self._is_trace_bound(record, require_trace=True):
+            return False
+        latency_s = self._compute_outcome_latency_s(record)
+        if latency_s is None:
+            return False
+        return latency_s <= max(0, int(window_s))
+
+    def _is_non_actionable_record(self, record: OutcomeRecord) -> bool:
+        """Return True for retrieval records that should not count in acted-on rate.
+
+        Task-orchestration cautions (`tool:task`) are surfaced as context but are
+        not direct actionable advice items, so they should not dilute utilization.
+        """
+        insight_key = (record.insight_key or "").strip().lower()
+        learning_id = (record.learning_id or "").strip().lower()
+        if insight_key == "tool:task" or learning_id == "tool:task":
+            return True
+
+        # Legacy task caution pattern from self-awareness telemetry.
+        content = (record.learning_content or "").strip().lower()
+        if (
+            (record.source or "").strip().lower() == "self_awareness"
+            and content.startswith("[caution] i struggle with tool_")
+            and content.endswith(" tasks")
+        ):
+            return True
+
+        return False
 
     def _update_learning_outcomes(self, record: OutcomeRecord) -> None:
         """Update stored learning outcome stats for dedupe and tuning."""
@@ -961,21 +1077,261 @@ class MetaRalph:
         if len(matches) == 1:
             cog.apply_outcome(matches[0], outcome, record.outcome_evidence or "")
 
+    def _extract_tool_name(self, record: OutcomeRecord) -> str:
+        """Best-effort tool name extraction for attribution analytics."""
+        learning_id = (record.learning_id or "").strip()
+        if learning_id.startswith("tool:"):
+            return learning_id[5:]
+
+        evidence = (record.outcome_evidence or "").strip()
+        if evidence:
+            for token in evidence.split():
+                if token.startswith("tool="):
+                    return token.split("=", 1)[1]
+        return ""
+
+    def get_source_attribution(
+        self,
+        limit: int = 8,
+        *,
+        window_s: Optional[int] = None,
+        require_trace: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Return source -> action -> outcome attribution rollups.
+
+        Includes:
+        - weak attribution: any actionable acted-on outcome,
+        - strict attribution: acted-on outcomes that are trace-bound and within
+          a bounded retrieval->outcome time window.
+        """
+        resolved_window_s = int(window_s if window_s is not None else ATTRIBUTION_WINDOW_S)
+        resolved_require_trace = (
+            STRICT_ATTRIBUTION_REQUIRE_TRACE if require_trace is None else bool(require_trace)
+        )
+
+        records = [r for r in self.outcome_records.values() if not self._is_non_actionable_record(r)]
+        by_source: Dict[str, Dict[str, Any]] = {}
+        totals = {
+            "retrieved": 0,
+            "acted_on": 0,
+            "good": 0,
+            "bad": 0,
+            "unknown": 0,
+            "strict_acted_on": 0,
+            "strict_good": 0,
+            "strict_bad": 0,
+            "strict_unknown": 0,
+        }
+
+        for rec in records:
+            source = (rec.source or "unknown").strip() or "unknown"
+            row = by_source.setdefault(
+                source,
+                {
+                    "source": source,
+                    "retrieved": 0,
+                    "acted_on": 0,
+                    "good": 0,
+                    "bad": 0,
+                    "unknown": 0,
+                    "strict_acted_on": 0,
+                    "strict_good": 0,
+                    "strict_bad": 0,
+                    "strict_unknown": 0,
+                    "_tools": {},
+                    "_strict_tools": {},
+                },
+            )
+
+            row["retrieved"] += 1
+            totals["retrieved"] += 1
+
+            if not rec.acted_on:
+                continue
+
+            row["acted_on"] += 1
+            totals["acted_on"] += 1
+            outcome = self._normalize_outcome(rec.outcome)
+            if outcome == "good":
+                row["good"] += 1
+                totals["good"] += 1
+            elif outcome == "bad":
+                row["bad"] += 1
+                totals["bad"] += 1
+            else:
+                row["unknown"] += 1
+                totals["unknown"] += 1
+
+            tool_name = self._extract_tool_name(rec)
+            if tool_name:
+                tool_bucket = row["_tools"].setdefault(
+                    tool_name,
+                    {"name": tool_name, "acted_on": 0, "good": 0, "bad": 0},
+                )
+                tool_bucket["acted_on"] += 1
+                if outcome == "good":
+                    tool_bucket["good"] += 1
+                elif outcome == "bad":
+                    tool_bucket["bad"] += 1
+
+            strict_ok = self._is_strictly_attributable(
+                rec,
+                window_s=resolved_window_s,
+                require_trace=resolved_require_trace,
+            )
+            if not strict_ok:
+                continue
+
+            row["strict_acted_on"] += 1
+            totals["strict_acted_on"] += 1
+            if outcome == "good":
+                row["strict_good"] += 1
+                totals["strict_good"] += 1
+            elif outcome == "bad":
+                row["strict_bad"] += 1
+                totals["strict_bad"] += 1
+            else:
+                row["strict_unknown"] += 1
+                totals["strict_unknown"] += 1
+
+            if tool_name:
+                strict_tool_bucket = row["_strict_tools"].setdefault(
+                    tool_name,
+                    {"name": tool_name, "acted_on": 0, "good": 0, "bad": 0},
+                )
+                strict_tool_bucket["acted_on"] += 1
+                if outcome == "good":
+                    strict_tool_bucket["good"] += 1
+                elif outcome == "bad":
+                    strict_tool_bucket["bad"] += 1
+
+        rows: List[Dict[str, Any]] = []
+        for row in by_source.values():
+            explicit = int(row["good"]) + int(row["bad"])
+            strict_explicit = int(row["strict_good"]) + int(row["strict_bad"])
+
+            tool_values = list(row["_tools"].values())
+            top_tool: Optional[Dict[str, Any]] = None
+            if tool_values:
+                tool_values.sort(key=lambda x: (x["acted_on"], x["good"]), reverse=True)
+                top_tool = tool_values[0]
+                top_explicit = int(top_tool["good"]) + int(top_tool["bad"])
+                top_tool = {
+                    **top_tool,
+                    "effectiveness_rate": (
+                        int(top_tool["good"]) / max(top_explicit, 1)
+                        if top_explicit > 0
+                        else None
+                    ),
+                }
+
+            strict_tool_values = list(row["_strict_tools"].values())
+            strict_top_tool: Optional[Dict[str, Any]] = None
+            if strict_tool_values:
+                strict_tool_values.sort(key=lambda x: (x["acted_on"], x["good"]), reverse=True)
+                strict_top_tool = strict_tool_values[0]
+                strict_top_explicit = int(strict_top_tool["good"]) + int(strict_top_tool["bad"])
+                strict_top_tool = {
+                    **strict_top_tool,
+                    "effectiveness_rate": (
+                        int(strict_top_tool["good"]) / max(strict_top_explicit, 1)
+                        if strict_top_explicit > 0
+                        else None
+                    ),
+                }
+
+            rows.append(
+                {
+                    "source": row["source"],
+                    "retrieved": int(row["retrieved"]),
+                    "acted_on": int(row["acted_on"]),
+                    "good": int(row["good"]),
+                    "bad": int(row["bad"]),
+                    "unknown": int(row["unknown"]),
+                    "with_explicit_outcome": explicit,
+                    "action_rate": int(row["acted_on"]) / max(int(row["retrieved"]), 1),
+                    "effectiveness_rate": (
+                        int(row["good"]) / max(explicit, 1) if explicit > 0 else None
+                    ),
+                    "strict_acted_on": int(row["strict_acted_on"]),
+                    "strict_good": int(row["strict_good"]),
+                    "strict_bad": int(row["strict_bad"]),
+                    "strict_unknown": int(row["strict_unknown"]),
+                    "strict_with_explicit_outcome": strict_explicit,
+                    "strict_action_rate": int(row["strict_acted_on"]) / max(int(row["retrieved"]), 1),
+                    "strict_effectiveness_rate": (
+                        int(row["strict_good"]) / max(strict_explicit, 1)
+                        if strict_explicit > 0
+                        else None
+                    ),
+                    "top_tool": top_tool,
+                    "strict_top_tool": strict_top_tool,
+                }
+            )
+
+        rows.sort(key=lambda x: (x["strict_acted_on"], x["acted_on"], x["good"]), reverse=True)
+        limited = rows[: max(int(limit), 0)]
+
+        totals_explicit = totals["good"] + totals["bad"]
+        strict_totals_explicit = totals["strict_good"] + totals["strict_bad"]
+        return {
+            "attribution_mode": {
+                "window_s": resolved_window_s,
+                "require_trace": resolved_require_trace,
+            },
+            "total_sources": len(rows),
+            "rows": limited,
+            "totals": {
+                **totals,
+                "with_explicit_outcome": totals_explicit,
+                "action_rate": totals["acted_on"] / max(totals["retrieved"], 1),
+                "effectiveness_rate": (
+                    totals["good"] / max(totals_explicit, 1)
+                    if totals_explicit > 0
+                    else None
+                ),
+                "strict_with_explicit_outcome": strict_totals_explicit,
+                "strict_action_rate": totals["strict_acted_on"] / max(totals["retrieved"], 1),
+                "strict_effectiveness_rate": (
+                    totals["strict_good"] / max(strict_totals_explicit, 1)
+                    if strict_totals_explicit > 0
+                    else None
+                ),
+            },
+        }
+
     def get_outcome_stats(self) -> Dict:
         """Get aggregate outcome statistics."""
-        acted_on = [r for r in self.outcome_records.values() if r.acted_on]
-        with_outcome = [r for r in acted_on if r.outcome]
+        records = list(self.outcome_records.values())
+        actionable = [r for r in records if not self._is_non_actionable_record(r)]
+        acted_on = [r for r in actionable if r.acted_on]
+        acted_on_all = [r for r in records if r.acted_on]
+        with_explicit = [
+            r for r in acted_on if self._normalize_outcome(r.outcome) in ("good", "bad")
+        ]
+        unknown_outcomes = len(
+            [r for r in acted_on if self._normalize_outcome(r.outcome) == "neutral"]
+        )
 
-        good_outcomes = len([r for r in with_outcome if r.outcome == "good"])
-        bad_outcomes = len([r for r in with_outcome if r.outcome == "bad"])
+        good_outcomes = len(
+            [r for r in with_explicit if self._normalize_outcome(r.outcome) == "good"]
+        )
+        bad_outcomes = len(
+            [r for r in with_explicit if self._normalize_outcome(r.outcome) == "bad"]
+        )
 
         return {
-            "total_tracked": len(self.outcome_records),
+            "total_tracked": len(records),
+            "actionable_tracked": len(actionable),
+            "ignored_non_actionable": max(0, len(records) - len(actionable)),
             "acted_on": len(acted_on),
-            "with_outcome": len(with_outcome),
+            "acted_on_all": len(acted_on_all),
+            "actionable_acted_on": len(acted_on),
+            "with_outcome": len(with_explicit),
+            "unknown_outcomes": unknown_outcomes,
             "good_outcomes": good_outcomes,
             "bad_outcomes": bad_outcomes,
-            "effectiveness_rate": good_outcomes / max(len(with_outcome), 1)
+            "effectiveness_rate": good_outcomes / max(len(with_explicit), 1)
         }
 
     def get_insight_effectiveness(self, insight_key: str) -> float:

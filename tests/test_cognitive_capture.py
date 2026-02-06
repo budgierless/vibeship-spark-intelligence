@@ -27,6 +27,19 @@ pytestmark = pytest.mark.integration
 from lib.meta_ralph import MetaRalph, get_meta_ralph
 
 
+@pytest.fixture(autouse=True)
+def _isolate_meta_ralph(tmp_path, monkeypatch):
+    """Keep tests hermetic and avoid writing to shared ~/.spark state."""
+    data_dir = tmp_path / "meta_ralph"
+    monkeypatch.setattr(MetaRalph, "DATA_DIR", data_dir)
+    monkeypatch.setattr(MetaRalph, "ROAST_HISTORY_FILE", data_dir / "roast_history.json")
+    monkeypatch.setattr(MetaRalph, "OUTCOME_TRACKING_FILE", data_dir / "outcome_tracking.json")
+    monkeypatch.setattr(MetaRalph, "LEARNINGS_STORE_FILE", data_dir / "learnings_store.json")
+    monkeypatch.setattr(MetaRalph, "SELF_ROAST_FILE", data_dir / "self_roast.json")
+    import lib.meta_ralph as meta_ralph_module
+    monkeypatch.setattr(meta_ralph_module, "_meta_ralph", None)
+
+
 @dataclass
 class CaptureQualityMetrics:
     """Metrics for measuring capture quality."""

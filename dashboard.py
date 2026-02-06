@@ -1100,6 +1100,18 @@ def get_learning_factory_data() -> Dict[str, Any]:
     promoted_items.sort(key=lambda x: -x["reliability"])
 
     revalidation = store.get_distillations_for_revalidation()
+    source_attribution: Dict[str, Any] = {
+        "total_sources": 0,
+        "rows": [],
+        "totals": {},
+        "attribution_mode": {},
+    }
+    try:
+        from lib.meta_ralph import get_meta_ralph
+
+        source_attribution = get_meta_ralph().get_source_attribution(limit=8)
+    except Exception:
+        pass
 
     return {
         "funnel": funnel,
@@ -1135,6 +1147,7 @@ def get_learning_factory_data() -> Dict[str, Any]:
                 for d in top_ignored
             ],
         },
+        "source_attribution": source_attribution,
         "promotion": {
             **promo_stats,
             "recent_promoted": promoted_items[:6],

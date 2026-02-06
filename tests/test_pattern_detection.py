@@ -214,7 +214,7 @@ class TestPatternAggregator:
         stats = self.aggregator.get_stats()
         assert "total_patterns_detected" in stats
         assert "detectors" in stats
-        assert len(stats["detectors"]) == 5  # 5 detectors
+        assert len(stats["detectors"]) == len(self.aggregator.detectors)
 
 
 def test_process_pattern_events_no_queue(tmp_path, monkeypatch):

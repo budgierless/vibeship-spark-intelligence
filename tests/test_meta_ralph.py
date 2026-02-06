@@ -12,6 +12,7 @@ Usage:
 import sys
 import pytest
 from pathlib import Path
+from datetime import datetime, timedelta
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -153,6 +154,164 @@ def test_stats():
     print("Stats tracking: PASSED")
 
 
+def test_outcome_stats_ignore_unknown_for_effectiveness():
+    """Unknown outcomes should not dilute explicit good/bad effectiveness."""
+    ralph = MetaRalph()
+
+    # Retrievals create records.
+    ralph.track_retrieval("a1", "advice one")
+    ralph.track_retrieval("a2", "advice two")
+    ralph.track_retrieval("a3", "advice three")
+
+    ralph.track_outcome("a1", "good", "worked")
+    ralph.track_outcome("a2", "bad", "failed")
+    ralph.track_outcome("a3", "unknown", "unclear")
+
+    stats = ralph.get_outcome_stats()
+    assert stats["acted_on"] == 3
+    assert stats["good_outcomes"] == 1
+    assert stats["bad_outcomes"] == 1
+    assert stats["unknown_outcomes"] == 1
+    assert stats["with_outcome"] == 2
+    assert stats["effectiveness_rate"] == 0.5
+
+
+def test_outcome_stats_exclude_task_orchestration_records():
+    """task-level orchestration cautions should not dilute acted-on rate."""
+    ralph = MetaRalph()
+
+    ralph.track_retrieval(
+        "task_rec",
+        "[Caution] I struggle with tool_0_error tasks",
+        insight_key="tool:task",
+        source="self_awareness",
+    )
+    ralph.track_retrieval("a1", "real advice", insight_key="reasoning:k1", source="semantic")
+    ralph.track_outcome("task_rec", "bad", "task-level not actionable")
+    ralph.track_outcome("a1", "good", "worked")
+
+    stats = ralph.get_outcome_stats()
+    assert stats["total_tracked"] == 2
+    assert stats["actionable_tracked"] == 1
+    assert stats["ignored_non_actionable"] == 1
+    assert stats["acted_on_all"] == 2
+    assert stats["acted_on"] == 1
+    assert stats["with_outcome"] == 1
+    assert stats["effectiveness_rate"] == 1.0
+
+
+def test_outcome_retention_keeps_actionable_records():
+    """Retention trimming should preserve actionable/acted-on records."""
+    ralph = MetaRalph()
+    ralph.begin_batch()
+    for i in range(520):
+        ralph.track_retrieval(
+            f"task_{i}",
+            "[Caution] I struggle with tool_0_error tasks",
+            insight_key="tool:task",
+            source="self_awareness",
+        )
+
+    ralph.track_retrieval("a1", "real actionable advice", insight_key="reasoning:key", source="semantic")
+    ralph.track_outcome("a1", "good", "worked")
+    ralph.end_batch()
+
+    assert "a1" in ralph.outcome_records
+    assert len(ralph.outcome_records) <= 500
+    stats = ralph.get_outcome_stats()
+    assert stats["acted_on"] >= 1
+    assert stats["actionable_tracked"] >= 1
+
+
+def test_source_attribution_rollup():
+    """Source attribution should roll up source -> action -> outcome correctly."""
+    ralph = MetaRalph()
+
+    ralph.track_retrieval("a1", "semantic guidance", source="semantic", insight_key="k1")
+    ralph.track_retrieval("a2", "semantic guidance 2", source="semantic", insight_key="k2")
+    ralph.track_retrieval("a3", "cognitive guidance", source="cognitive", insight_key="k3")
+    ralph.track_retrieval(
+        "task_skip",
+        "[Caution] I struggle with tool_0_error tasks",
+        source="self_awareness",
+        insight_key="tool:task",
+    )
+
+    ralph.track_outcome("a1", "good", "tool=Bash success=True")
+    ralph.track_outcome("a2", "bad", "tool=Edit success=False")
+    ralph.track_outcome("a3", "neutral", "tool=Read success=True")
+    ralph.track_outcome("task_skip", "good", "tool=Task success=True")
+
+    attr = ralph.get_source_attribution(limit=10)
+    assert attr["total_sources"] == 2
+    assert attr["totals"]["retrieved"] == 3
+    assert attr["totals"]["acted_on"] == 3
+    assert attr["totals"]["good"] == 1
+    assert attr["totals"]["bad"] == 1
+    assert attr["totals"]["unknown"] == 1
+    assert attr["totals"]["strict_acted_on"] == 0
+    assert attr["totals"]["strict_with_explicit_outcome"] == 0
+    assert attr["totals"]["strict_effectiveness_rate"] is None
+
+    rows = {r["source"]: r for r in attr["rows"]}
+    assert rows["semantic"]["retrieved"] == 2
+    assert rows["semantic"]["acted_on"] == 2
+    assert rows["semantic"]["good"] == 1
+    assert rows["semantic"]["bad"] == 1
+    assert rows["semantic"]["with_explicit_outcome"] == 2
+    assert rows["semantic"]["effectiveness_rate"] == 0.5
+    assert rows["semantic"]["top_tool"]["name"] in {"Bash", "Edit"}
+    assert rows["semantic"]["strict_acted_on"] == 0
+    assert rows["semantic"]["strict_effectiveness_rate"] is None
+
+    assert rows["cognitive"]["retrieved"] == 1
+    assert rows["cognitive"]["acted_on"] == 1
+    assert rows["cognitive"]["with_explicit_outcome"] == 0
+    assert rows["cognitive"]["effectiveness_rate"] is None
+
+
+def test_source_attribution_strict_trace_window():
+    """Strict attribution requires trace match within the configured window."""
+    ralph = MetaRalph()
+
+    # Strict match: same trace, within window.
+    ralph.track_retrieval("s1", "semantic guidance", source="semantic", insight_key="k1", trace_id="t1")
+    ralph.track_outcome("s1", "good", "tool=Bash success=True", trace_id="t1")
+
+    # Trace mismatch: should be excluded from strict attribution.
+    ralph.track_retrieval("s2", "semantic guidance", source="semantic", insight_key="k2", trace_id="t2")
+    ralph.track_outcome("s2", "good", "tool=Bash success=True", trace_id="t2_mismatch")
+
+    # Window miss: same trace but retrieval too old.
+    ralph.track_retrieval("s3", "semantic guidance", source="semantic", insight_key="k3", trace_id="t3")
+    ralph.outcome_records["s3"].retrieved_at = (datetime.now() - timedelta(hours=1)).isoformat()
+    # Persist the synthetic retrieval time because track_outcome may reload state.
+    ralph._save_state()
+    ralph.track_outcome("s3", "good", "tool=Bash success=True", trace_id="t3")
+
+    attr = ralph.get_source_attribution(limit=10, window_s=1200, require_trace=True)
+    rows = {r["source"]: r for r in attr["rows"]}
+    sem = rows["semantic"]
+
+    assert attr["attribution_mode"]["window_s"] == 1200
+    assert attr["attribution_mode"]["require_trace"] is True
+
+    assert sem["retrieved"] == 3
+    assert sem["acted_on"] == 3
+    assert sem["good"] == 3
+
+    assert sem["strict_acted_on"] == 1
+    assert sem["strict_good"] == 1
+    assert sem["strict_bad"] == 0
+    assert sem["strict_with_explicit_outcome"] == 1
+    assert sem["strict_effectiveness_rate"] == 1.0
+    assert sem["strict_top_tool"]["name"] == "Bash"
+
+    assert attr["totals"]["strict_acted_on"] == 1
+    assert attr["totals"]["strict_with_explicit_outcome"] == 1
+    assert attr["totals"]["strict_effectiveness_rate"] == 1.0
+
+
 def run_all_tests():
     """Run all tests and report results."""
     print("=" * 60)
@@ -167,6 +326,11 @@ def run_all_tests():
         ("Duplicate Detection", test_duplicate_detection),
         ("Context Boost", test_context_boost),
         ("Stats Tracking", test_stats),
+        ("Outcome Stats", test_outcome_stats_ignore_unknown_for_effectiveness),
+        ("Actionable Outcome Stats", test_outcome_stats_exclude_task_orchestration_records),
+        ("Outcome Retention", test_outcome_retention_keeps_actionable_records),
+        ("Source Attribution", test_source_attribution_rollup),
+        ("Strict Attribution", test_source_attribution_strict_trace_window),
     ]
 
     passed = 0
