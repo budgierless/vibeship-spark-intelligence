@@ -1114,6 +1114,20 @@ This is the active hot-path advisory stack used by hooks:
     "max_tools_per_job": 3,
     "min_probability": 0.25
   },
+  "request_tracker": {
+    "max_pending": 50,
+    "max_completed": 200,
+    "max_age_seconds": 3600
+  },
+  "memory_capture": {
+    "auto_save_threshold": 0.82,
+    "suggest_threshold": 0.55,
+    "max_capture_chars": 2000
+  },
+  "queue": {
+    "max_events": 10000,
+    "tail_chunk_bytes": 65536
+  },
   "synthesizer": {
     "mode": "auto",
     "preferred_provider": "ollama",
@@ -1151,6 +1165,9 @@ Components fall back to hard-coded defaults when a key is absent.
 | `advisory_gate` | Advisory emission policy | `max_emit_per_call`, `tool_cooldown_s`, `warning_threshold`, `note_threshold`, `whisper_threshold` |
 | `advisory_packet_store` | Packet lifecycle + relaxed lookup weighting | `packet_ttl_s`, `max_index_packets`, `relaxed_effectiveness_weight`, `relaxed_low_effectiveness_threshold`, `relaxed_low_effectiveness_penalty` |
 | `advisory_prefetch` | Prefetch worker planning limits | `worker_enabled`, `max_jobs_per_run`, `max_tools_per_job`, `min_probability` |
+| `request_tracker` | EIDOS request envelope retention + timeout policy | `max_pending`, `max_completed`, `max_age_seconds` |
+| `memory_capture` | Conversational memory auto-save/suggestion policy | `auto_save_threshold`, `suggest_threshold`, `max_capture_chars` |
+| `queue` | Queue growth + read safety limits | `max_events`, `tail_chunk_bytes` |
 | `meta_ralph` | Meta-Ralph quality gate | `quality_threshold`, `needs_work_threshold`, `needs_work_close_delta`, `min_outcome_samples`, `min_tuneable_samples` |
 | `eidos` | EIDOS Budget defaults | `max_steps`, `max_time_seconds`, `max_retries_per_error`, `max_file_touches`, `no_evidence_limit` |
 | `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `*_enabled` task flags |

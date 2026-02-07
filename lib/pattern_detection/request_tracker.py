@@ -14,12 +14,93 @@ they are decisions to track through the full lifecycle.
 """
 
 import hashlib
+import json
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..eidos.models import Step, Evaluation, ActionType
+
+
+TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
+REQUEST_TRACKER_MAX_PENDING = 50
+REQUEST_TRACKER_MAX_COMPLETED = 200
+REQUEST_TRACKER_MAX_AGE_SECONDS = 3600.0
+
+
+def _load_request_tracker_config() -> Dict[str, Any]:
+    try:
+        if TUNEABLES_FILE.exists():
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                cfg = data.get("request_tracker") or {}
+                if isinstance(cfg, dict):
+                    return cfg
+    except Exception:
+        pass
+    return {}
+
+
+def _apply_request_tracker_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    global REQUEST_TRACKER_MAX_PENDING
+    global REQUEST_TRACKER_MAX_COMPLETED
+    global REQUEST_TRACKER_MAX_AGE_SECONDS
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "max_pending" in cfg:
+        try:
+            REQUEST_TRACKER_MAX_PENDING = max(10, min(500, int(cfg.get("max_pending") or 10)))
+            applied.append("max_pending")
+        except Exception:
+            warnings.append("invalid_max_pending")
+
+    if "max_completed" in cfg:
+        try:
+            REQUEST_TRACKER_MAX_COMPLETED = max(50, min(5000, int(cfg.get("max_completed") or 50)))
+            applied.append("max_completed")
+        except Exception:
+            warnings.append("invalid_max_completed")
+
+    if "max_age_seconds" in cfg:
+        try:
+            REQUEST_TRACKER_MAX_AGE_SECONDS = max(
+                60.0,
+                min(604800.0, float(cfg.get("max_age_seconds") or 60.0)),
+            )
+            applied.append("max_age_seconds")
+        except Exception:
+            warnings.append("invalid_max_age_seconds")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def apply_request_tracker_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Apply request tracker tuneables and update singleton if initialized."""
+    result = _apply_request_tracker_config(cfg)
+    tracker = _tracker
+    if tracker is not None:
+        tracker.max_pending = int(REQUEST_TRACKER_MAX_PENDING)
+        tracker.max_completed = int(REQUEST_TRACKER_MAX_COMPLETED)
+        tracker._prune_pending()
+        tracker._prune_completed()
+    return result
+
+
+def get_request_tracker_config() -> Dict[str, Any]:
+    return {
+        "max_pending": int(REQUEST_TRACKER_MAX_PENDING),
+        "max_completed": int(REQUEST_TRACKER_MAX_COMPLETED),
+        "max_age_seconds": float(REQUEST_TRACKER_MAX_AGE_SECONDS),
+    }
+
+
+_apply_request_tracker_config(_load_request_tracker_config())
 
 
 @dataclass
@@ -278,17 +359,22 @@ class RequestTracker:
 
         return step
 
-    def timeout_pending(self, max_age_seconds: float = 3600) -> List[Step]:
+    def timeout_pending(self, max_age_seconds: Optional[float] = None) -> List[Step]:
         """
         Time out old pending requests.
 
         Returns list of timed-out steps (marked as UNKNOWN evaluation).
         """
+        timeout_s = (
+            float(max_age_seconds)
+            if max_age_seconds is not None
+            else float(REQUEST_TRACKER_MAX_AGE_SECONDS)
+        )
         now = time.time()
         timed_out = []
 
         for step_id, pending in list(self.pending.items()):
-            if now - pending.created_at > max_age_seconds:
+            if now - pending.created_at > timeout_s:
                 step = pending.step
                 step.result = "Request timed out - no outcome recorded"
                 step.evaluation = Evaluation.UNKNOWN
@@ -477,5 +563,8 @@ def get_request_tracker() -> RequestTracker:
     """Get the global request tracker instance."""
     global _tracker
     if _tracker is None:
-        _tracker = RequestTracker()
+        _tracker = RequestTracker(
+            max_pending=REQUEST_TRACKER_MAX_PENDING,
+            max_completed=REQUEST_TRACKER_MAX_COMPLETED,
+        )
     return _tracker

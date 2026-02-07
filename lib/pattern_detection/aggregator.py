@@ -200,6 +200,17 @@ class PatternAggregator:
                 except Exception:
                     self._eidos_stats["step_persist_failures"] += 1
 
+        # Time out stale pending requests using configured max age.
+        timed_out_steps = self._request_tracker.timeout_pending()
+        if timed_out_steps:
+            self._eidos_stats["steps_completed"] += len(timed_out_steps)
+            for step in timed_out_steps:
+                try:
+                    self._store.save_step(step)
+                    self._eidos_stats["steps_persisted"] += 1
+                except Exception:
+                    self._eidos_stats["step_persist_failures"] += 1
+
         # === Run all pattern detectors ===
         for detector in self.detectors:
             try:

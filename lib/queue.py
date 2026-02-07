@@ -31,6 +31,7 @@ LOCK_FILE = QUEUE_DIR / ".queue.lock"
 OVERFLOW_FILE = QUEUE_DIR / "events.overflow.jsonl"
 QUEUE_STATE_FILE = QUEUE_DIR / "state.json"
 QUEUE_COMPACT_HEAD_BYTES = int(os.environ.get("SPARK_QUEUE_COMPACT_HEAD_BYTES", str(5 * 1024 * 1024)))
+TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
 
 # Read the tail in chunks to avoid loading large files into memory.
 TAIL_CHUNK_BYTES = 64 * 1024
@@ -41,6 +42,59 @@ _COUNT_CHECK_INTERVAL: float = 60.0
 _last_count_value: Optional[int] = None
 _last_count_value_ts: float = 0.0
 _COUNT_CACHE_TTL_S: float = 1.0
+
+
+def _load_queue_config() -> Dict[str, Any]:
+    try:
+        if TUNEABLES_FILE.exists():
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                cfg = data.get("queue") or {}
+                if isinstance(cfg, dict):
+                    return cfg
+    except Exception:
+        pass
+    return {}
+
+
+def _apply_queue_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    global MAX_EVENTS
+    global TAIL_CHUNK_BYTES
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "max_events" in cfg:
+        try:
+            MAX_EVENTS = max(100, min(1_000_000, int(cfg.get("max_events") or 100)))
+            applied.append("max_events")
+        except Exception:
+            warnings.append("invalid_max_events")
+
+    if "tail_chunk_bytes" in cfg:
+        try:
+            TAIL_CHUNK_BYTES = max(4096, min(4 * 1024 * 1024, int(cfg.get("tail_chunk_bytes") or 4096)))
+            applied.append("tail_chunk_bytes")
+        except Exception:
+            warnings.append("invalid_tail_chunk_bytes")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def apply_queue_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    return _apply_queue_config(cfg)
+
+
+def get_queue_config() -> Dict[str, Any]:
+    return {
+        "max_events": int(MAX_EVENTS),
+        "tail_chunk_bytes": int(TAIL_CHUNK_BYTES),
+    }
+
+
+_apply_queue_config(_load_queue_config())
 
 
 def _load_queue_state() -> Dict[str, Any]:
@@ -534,6 +588,7 @@ def get_queue_stats() -> Dict:
         "size_mb": round(size_bytes / (1024 * 1024), 2),
         "queue_file": str(EVENTS_FILE),
         "max_events": MAX_EVENTS,
+        "tail_chunk_bytes": TAIL_CHUNK_BYTES,
         "max_bytes": MAX_QUEUE_BYTES,
         "needs_rotation": (MAX_EVENTS > 0 and count > MAX_EVENTS) or (MAX_QUEUE_BYTES > 0 and size_bytes > MAX_QUEUE_BYTES)
     }

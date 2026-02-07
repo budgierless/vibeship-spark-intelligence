@@ -39,6 +39,7 @@ from lib.outcome_checkin import record_checkin_request
 PENDING_DIR = Path.home() / ".spark"
 PENDING_FILE = PENDING_DIR / "pending_memory.json"
 STATE_FILE = PENDING_DIR / "memory_capture_state.json"
+TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
 MAX_CAPTURE_CHARS = 2000
 
 
@@ -232,6 +233,72 @@ _REMEMBER_PREFIX_RE = re.compile(r"^\s*(remember this|note this|save this)\s*:\s
 _MESSAGE_ID_LINE_RE = re.compile(r"\n?\[message_id:.*?\]\s*$", re.IGNORECASE | re.DOTALL)
 # Clawdbot transcript prefix, e.g. "[Telegram Meta ...] "
 _CHANNEL_PREFIX_RE = re.compile(r"^\s*\[[^\]]+\]\s*", re.IGNORECASE)
+
+
+def _load_memory_capture_config() -> Dict[str, Any]:
+    try:
+        if TUNEABLES_FILE.exists():
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                cfg = data.get("memory_capture") or {}
+                if isinstance(cfg, dict):
+                    return cfg
+    except Exception:
+        pass
+    return {}
+
+
+def _apply_memory_capture_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    global AUTO_SAVE_THRESHOLD
+    global SUGGEST_THRESHOLD
+    global MAX_CAPTURE_CHARS
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "auto_save_threshold" in cfg:
+        try:
+            AUTO_SAVE_THRESHOLD = max(0.1, min(1.0, float(cfg.get("auto_save_threshold") or 0.1)))
+            applied.append("auto_save_threshold")
+        except Exception:
+            warnings.append("invalid_auto_save_threshold")
+
+    if "suggest_threshold" in cfg:
+        try:
+            SUGGEST_THRESHOLD = max(0.05, min(0.99, float(cfg.get("suggest_threshold") or 0.05)))
+            applied.append("suggest_threshold")
+        except Exception:
+            warnings.append("invalid_suggest_threshold")
+
+    if "max_capture_chars" in cfg:
+        try:
+            MAX_CAPTURE_CHARS = max(200, min(20000, int(cfg.get("max_capture_chars") or 200)))
+            applied.append("max_capture_chars")
+        except Exception:
+            warnings.append("invalid_max_capture_chars")
+
+    if SUGGEST_THRESHOLD > AUTO_SAVE_THRESHOLD:
+        SUGGEST_THRESHOLD = max(0.05, AUTO_SAVE_THRESHOLD - 0.05)
+        warnings.append("suggest_threshold_auto_adjusted")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def apply_memory_capture_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    return _apply_memory_capture_config(cfg)
+
+
+def get_memory_capture_config() -> Dict[str, Any]:
+    return {
+        "auto_save_threshold": float(AUTO_SAVE_THRESHOLD),
+        "suggest_threshold": float(SUGGEST_THRESHOLD),
+        "max_capture_chars": int(MAX_CAPTURE_CHARS),
+    }
+
+
+_apply_memory_capture_config(_load_memory_capture_config())
 
 
 def normalize_memory_text(text: str) -> str:

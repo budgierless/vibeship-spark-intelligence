@@ -296,13 +296,13 @@ Completed on 2026-02-07:
 2. `advisory_gate` section wired in Pulse + runtime apply (emit budget, cooldown, authority thresholds).
 3. `advisory_packet_store` section wired in Pulse + runtime apply (packet TTL, index cap, relaxed scoring weights).
 4. `advisory_prefetch` section wired in Pulse + runtime apply (worker enable, job/tool limits, min probability).
+5. `request_tracker` section wired in Pulse + runtime apply (`max_pending`, `max_completed`, `max_age_seconds`).
+6. `memory_capture` section wired in Pulse + runtime apply (`auto_save_threshold`, `suggest_threshold`, `max_capture_chars`).
+7. `queue` section wired in Pulse + runtime apply (`max_events`, `tail_chunk_bytes`).
 
 Still open:
 
 1. complete memory gate weights (`recurrence`, `evidence`).
-2. `request_tracker` section (`max_pending`, `max_completed`, `max_age_seconds`).
-3. `memory_capture` section (`auto_save_threshold`, `suggest_threshold`, `max_capture_chars`).
-4. `queue` section (`max_events`, `tail_chunk_bytes`).
 
 ### D) Updated practical status framing
 
