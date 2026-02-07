@@ -717,15 +717,34 @@ def _get_eidos_stats() -> dict:
         if not eidos_path.exists():
             return {"episodes": 0, "distillations": 0, "rate": 0}
         conn = sqlite3.connect(str(eidos_path))
+        conn.row_factory = sqlite3.Row
         episodes = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
         distillations = conn.execute("SELECT COUNT(*) FROM distillations").fetchone()[0]
         success = conn.execute("SELECT COUNT(*) FROM episodes WHERE outcome='success'").fetchone()[0]
+        steps = conn.execute("SELECT COUNT(*) FROM steps").fetchone()[0]
+        # Count episodes with real goals (not generic)
+        real_goals = conn.execute(
+            "SELECT COUNT(*) FROM episodes WHERE goal NOT LIKE 'Session in%' AND goal NOT LIKE 'Claude Code session%'"
+        ).fetchone()[0]
+        # Count steps with descriptive decisions (not templates)
+        descriptive = conn.execute(
+            "SELECT COUNT(*) FROM steps WHERE decision NOT LIKE 'Use % tool' AND decision NOT LIKE 'Execute %'"
+        ).fetchone()[0]
+        # Feedback stats
+        helped = conn.execute("SELECT SUM(times_helped) FROM distillations").fetchone()[0] or 0
+        contradicted = conn.execute("SELECT SUM(contradiction_count) FROM distillations").fetchone()[0] or 0
         conn.close()
         return {
             "episodes": episodes,
             "distillations": distillations,
             "rate": round(distillations / max(episodes, 1) * 100, 1),
             "success_episodes": success,
+            "steps": steps,
+            "real_goals": real_goals,
+            "descriptive_decisions": descriptive,
+            "helped": helped,
+            "contradicted": contradicted,
+            "status": "rehabilitated" if episodes == 0 else ("healthy" if real_goals > episodes * 0.5 else "learning"),
         }
     except Exception:
         return {"episodes": 0, "distillations": 0, "rate": 0, "success_episodes": 0}

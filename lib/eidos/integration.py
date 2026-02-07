@@ -47,6 +47,7 @@ from .minimal_mode import get_minimal_mode_controller
 
 ACTIVE_EPISODES_FILE = Path.home() / ".spark" / "eidos_active_episodes.json"
 ACTIVE_STEPS_FILE = Path.home() / ".spark" / "eidos_active_steps.json"
+PENDING_GOALS_FILE = Path.home() / ".spark" / "eidos_pending_goals.json"
 
 # Stale episode threshold: episodes older than 30 min with no end_ts are abandoned
 STALE_EPISODE_THRESHOLD_S = 1800
@@ -75,7 +76,10 @@ def _load_active_step(session_id: str) -> Optional[Dict]:
     """Load the active step for a session (used between pre and post tool)."""
     try:
         if ACTIVE_STEPS_FILE.exists():
-            steps = json.loads(ACTIVE_STEPS_FILE.read_text())
+            try:
+                steps = json.loads(ACTIVE_STEPS_FILE.read_text())
+            except (json.JSONDecodeError, ValueError):
+                return None  # Corrupted file, skip gracefully
             return steps.get(session_id)
     except Exception:
         pass
@@ -88,7 +92,10 @@ def _save_active_step(session_id: str, step_data: Optional[Dict]):
         ACTIVE_STEPS_FILE.parent.mkdir(parents=True, exist_ok=True)
         steps = {}
         if ACTIVE_STEPS_FILE.exists():
-            steps = json.loads(ACTIVE_STEPS_FILE.read_text())
+            try:
+                steps = json.loads(ACTIVE_STEPS_FILE.read_text())
+            except (json.JSONDecodeError, ValueError):
+                steps = {}  # Reset on corruption
 
         if step_data:
             steps[session_id] = step_data
@@ -97,11 +104,54 @@ def _save_active_step(session_id: str, step_data: Optional[Dict]):
 
         # Clean old entries (> 10 min)
         cutoff = time.time() - 600
-        steps = {k: v for k, v in steps.items() if v.get("timestamp", 0) > cutoff}
+        steps = {k: v for k, v in steps.items()
+                 if isinstance(v, dict) and v.get("timestamp", 0) > cutoff}
 
-        ACTIVE_STEPS_FILE.write_text(json.dumps(steps))
+        # Atomic write to prevent corruption
+        tmp = ACTIVE_STEPS_FILE.with_suffix('.tmp')
+        tmp.write_text(json.dumps(steps))
+        tmp.replace(ACTIVE_STEPS_FILE)
     except Exception:
         pass
+
+
+def _load_pending_goals() -> Dict[str, str]:
+    """Load session_id -> goal mapping for goals that arrived before episode creation."""
+    try:
+        if PENDING_GOALS_FILE.exists():
+            data = json.loads(PENDING_GOALS_FILE.read_text())
+            # Clean entries older than 10 min
+            cutoff = time.time() - 600
+            return {k: v for k, v in data.items()
+                    if isinstance(v, dict) and v.get("ts", 0) > cutoff}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_pending_goal(session_id: str, goal: str):
+    """Store a goal for a session that doesn't have an episode yet."""
+    try:
+        PENDING_GOALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        pending = _load_pending_goals()
+        pending[session_id] = {"goal": goal, "ts": time.time()}
+        PENDING_GOALS_FILE.write_text(json.dumps(pending))
+    except Exception:
+        pass
+
+
+def _consume_pending_goal(session_id: str) -> str:
+    """Get and remove pending goal for a session. Returns '' if none."""
+    try:
+        pending = _load_pending_goals()
+        if session_id in pending:
+            goal = pending[session_id].get("goal", "")
+            del pending[session_id]
+            PENDING_GOALS_FILE.write_text(json.dumps(pending))
+            return goal
+    except Exception:
+        pass
+    return ""
 
 
 # ===== Episode Management =====
@@ -133,8 +183,11 @@ def get_or_create_episode(
             else:
                 return episode
 
-    # Derive a meaningful goal from cwd if none provided
-    effective_goal = goal or _derive_goal_from_cwd(cwd)
+    # Check for pending goal from UserPromptSubmit (arrives before first tool use)
+    pending_goal = _consume_pending_goal(session_id)
+
+    # Priority: explicit goal > pending goal from user prompt > cwd-derived
+    effective_goal = goal or pending_goal or _derive_goal_from_cwd(cwd)
 
     # Create new episode
     episode = Episode(
@@ -158,22 +211,42 @@ def get_or_create_episode(
     return episode
 
 
+def _is_generic_goal(goal: str) -> bool:
+    """Check if an episode goal is generic/placeholder."""
+    if not goal:
+        return True
+    return (goal.startswith("Session in")
+            or goal.startswith("Claude Code session")
+            or goal == "unknown")
+
+
 def update_episode_goal(session_id: str, goal: str):
     """Update the goal of an active episode with a more specific description.
 
     Called when we get richer context (e.g., from a UserPromptSubmit event).
+    If no episode exists yet (UserPromptSubmit arrives before first tool use),
+    store the goal as pending for when the episode is created.
     """
+    if not goal or len(goal.strip()) < 5:
+        return
+
+    clean_goal = goal[:200].replace("\n", " ").strip()
+
     store = get_store()
     mapping = _load_active_episodes()
+
     if session_id not in mapping:
+        # Episode doesn't exist yet — store goal for later
+        _save_pending_goal(session_id, clean_goal)
         return
+
     episode = store.get_episode(mapping[session_id])
     if not episode or episode.outcome != Outcome.IN_PROGRESS:
         return
     # Only update if current goal is generic
-    if episode.goal and not episode.goal.startswith("Session in"):
+    if not _is_generic_goal(episode.goal):
         return
-    episode.goal = goal[:200]
+    episode.goal = clean_goal
     store.save_episode(episode)
 
 
@@ -349,6 +422,47 @@ def _is_primitive_distillation(statement: str) -> bool:
         if re.search(pat, s):
             return True
 
+    # === Semantic checks (catches tautologies and tool-name echoes) ===
+
+    # Tool-name tautology: "When X tool, try: Use X tool"
+    tool_names = {"read", "write", "edit", "bash", "grep", "glob",
+                  "task", "webfetch", "websearch", "notebookedit"}
+    for tn in tool_names:
+        # "When Execute Read, try: Use Read tool" = tautology
+        if f"use {tn}" in s and (f"execute {tn}" in s or f"when {tn}" in s):
+            return True
+        # "try: Use X tool" where the only advice is to use the tool
+        if re.search(rf"try:?\s*use {tn}\s*tool\b", s):
+            return True
+
+    # Mechanical playbook: just tool names chained with arrows
+    # e.g. "1. Use Glob tool -> 2. Use Read tool -> 3. Use Grep tool"
+    if "playbook" in s:
+        # Count unique non-tool words (excluding numbers, arrows, "use", "tool")
+        words = re.findall(r'[a-z_]+', s)
+        filler = {"use", "tool", "playbook", "for", "session", "in",
+                  "unknown", "project", "claude", "code"} | tool_names
+        meaningful_words = [w for w in words if w not in filler and len(w) > 2]
+        if len(meaningful_words) < 3:
+            return True
+
+    # Generic session reference without substance
+    if "session in unknown" in s or "session in unknown project" in s:
+        return True
+
+    # Condition and action are identical (tautology)
+    # Pattern: "When <X>, <action that restates X>"
+    m = re.match(r"when\s+(.{5,40}?),?\s+(?:try|do|use):?\s*(.{5,40})", s)
+    if m:
+        condition = re.sub(r'[^a-z]', '', m.group(1))
+        action = re.sub(r'[^a-z]', '', m.group(2))
+        # If condition and action share >70% of characters, it's a tautology
+        if condition and action:
+            overlap = len(set(condition) & set(action))
+            total = max(len(set(condition) | set(action)), 1)
+            if overlap / total > 0.7 and len(condition) < 30:
+                return True
+
     return False
 
 
@@ -430,52 +544,13 @@ def create_step_before_action(
         memory_absent_declared=memory_absent,
     )
 
-    # Minimal mode gate
-    allowed_mm, mm_reason = minimal.check_action_allowed(tool_name, tool_input)
-    if not allowed_mm:
-        return step, ControlDecision(
-            allowed=False,
-            message=mm_reason,
-            required_action="diagnostics only until minimal mode exits"
-        )
+    # Save preliminary step to DB FIRST (before control checks)
+    # This ensures steps are tracked even if guardrails advise blocking,
+    # since Claude Code runs the tool regardless. Uses INSERT OR REPLACE
+    # so post-action save will update this row.
+    store.save_step(step)
 
-    # Get recent steps for context
-    recent_steps = store.get_episode_steps(episode.episode_id)[-10:]
-
-    # Check legacy guardrails first
-    guard_result = guardrails.is_blocked(episode, step, recent_steps)
-    if guard_result:
-        return step, ControlDecision(
-            allowed=False,
-            message=guard_result.message,
-            required_action="; ".join(guard_result.required_actions)
-        )
-
-    # Check elevated control plane (includes watchers and escape protocol)
-    allowed, alerts, escape_result = elevated.check_before_action(
-        episode, step, recent_steps, memories_exist=bool(retrieved_memory_ids)
-    )
-
-    if not allowed:
-        # Build message from alerts or escape result
-        if escape_result:
-            message = f"ESCAPE PROTOCOL: {escape_result.reason}\n{escape_result.summary}"
-            required = escape_result.discriminating_test
-        elif alerts:
-            message = "; ".join([a.message for a in alerts])
-            required = alerts[0].required_output if alerts else ""
-        else:
-            message = "Action blocked by control plane"
-            required = ""
-
-        return step, ControlDecision(
-            allowed=False,
-            message=message,
-            required_action=required
-        )
-
-    # Save step data for post-action completion (including retrieved distillation IDs)
-    # Preserve descriptive intent/decision from pre-action for distillation quality
+    # Save to JSON for fast pre/post handoff (includes prediction data)
     _save_active_step(session_id, {
         "step_id": step.step_id,
         "episode_id": episode.episode_id,
@@ -492,6 +567,50 @@ def create_step_before_action(
     # Update episode step count
     episode.step_count += 1
     store.save_episode(episode)
+
+    # Now run control checks (advisory — Claude Code proceeds regardless)
+    # Minimal mode gate
+    allowed_mm, mm_reason = minimal.check_action_allowed(tool_name, tool_input)
+    if not allowed_mm:
+        return step, ControlDecision(
+            allowed=False,
+            message=mm_reason,
+            required_action="diagnostics only until minimal mode exits"
+        )
+
+    # Get recent steps for context
+    recent_steps = store.get_episode_steps(episode.episode_id)[-10:]
+
+    # Check legacy guardrails
+    guard_result = guardrails.is_blocked(episode, step, recent_steps)
+    if guard_result:
+        return step, ControlDecision(
+            allowed=False,
+            message=guard_result.message,
+            required_action="; ".join(guard_result.required_actions)
+        )
+
+    # Check elevated control plane (includes watchers and escape protocol)
+    allowed, alerts, escape_result = elevated.check_before_action(
+        episode, step, recent_steps, memories_exist=bool(retrieved_memory_ids)
+    )
+
+    if not allowed:
+        if escape_result:
+            message = f"ESCAPE PROTOCOL: {escape_result.reason}\n{escape_result.summary}"
+            required = escape_result.discriminating_test
+        elif alerts:
+            message = "; ".join([a.message for a in alerts])
+            required = alerts[0].required_output if alerts else ""
+        else:
+            message = "Action blocked by control plane"
+            required = ""
+
+        return step, ControlDecision(
+            allowed=False,
+            message=message,
+            required_action=required
+        )
 
     return step, ControlDecision(allowed=True, message="")
 
@@ -627,12 +746,26 @@ def complete_step_after_action(
 def _update_distillation_feedback(step_data: Dict, success: bool):
     """Close the feedback loop: mark retrieved distillations as helped/not-helped.
 
-    Uses the distillation IDs that were stored during the pre-action step,
-    avoiding redundant re-queries. This is the critical missing piece --
-    without it, distillations accumulate without ever knowing if they help.
+    Only records feedback when there's a meaningful signal:
+    - Failures always recorded (something went wrong, distillation didn't prevent it)
+    - Successes only recorded if the step had high surprise (unexpected success
+      where distillation may have genuinely helped)
+    - Routine successes (most tool calls) are skipped to avoid noise
+
+    This prevents the "blame everyone for everything" anti-pattern where
+    irrelevant distillations get contradicted just because a Read failed.
     """
     distillation_ids = step_data.get("retrieved_distillation_ids", [])
     if not distillation_ids:
+        return
+
+    # Only record feedback for meaningful signals
+    prediction = step_data.get("prediction", {})
+    predicted_success = prediction.get("outcome", "success") == "success"
+
+    if success and predicted_success:
+        # Routine success (predicted and happened) — no learning signal
+        # Recording this would just inflate "helped" counts on every Read/Grep
         return
 
     try:
