@@ -348,6 +348,8 @@ class CognitiveLearner:
         current.counter_examples = _merge_unique(disk.counter_examples, current.counter_examples, limit=10)
 
         current.confidence = max(current.confidence, disk.confidence)
+        # Use max instead of sum to avoid double-counting from the same process,
+        # but if disk has more, take disk's value (concurrent processes accumulate)
         current.times_validated = max(current.times_validated, disk.times_validated)
         current.times_contradicted = max(current.times_contradicted, disk.times_contradicted)
 
@@ -511,13 +513,20 @@ class CognitiveLearner:
     def learn_blind_spot(self, what_i_missed: str, how_i_discovered: str):
         """Learn about my blind spots - things I consistently miss."""
         key = self._generate_key(CognitiveCategory.SELF_AWARENESS, f"blindspot:{what_i_missed}")
-        self.insights[key] = CognitiveInsight(
-            category=CognitiveCategory.SELF_AWARENESS,
-            insight=f"Blind spot: I tend to miss {what_i_missed}",
-            evidence=[how_i_discovered],
-            confidence=0.7,
-            context="During analysis and planning"
-        )
+        if key in self.insights:
+            # Merge: accumulate evidence and validate instead of overwriting
+            existing = self.insights[key]
+            existing.evidence.append(how_i_discovered)
+            existing.times_validated += 1
+            existing.confidence = min(1.0, existing.confidence + 0.05)
+        else:
+            self.insights[key] = CognitiveInsight(
+                category=CognitiveCategory.SELF_AWARENESS,
+                insight=f"Blind spot: I tend to miss {what_i_missed}",
+                evidence=[how_i_discovered],
+                confidence=0.7,
+                context="During analysis and planning"
+            )
         self._save_insights()
         return self.insights[key]
 
@@ -547,13 +556,21 @@ class CognitiveLearner:
     def learn_user_expertise(self, domain: str, level: str, evidence: str):
         """Learn about user's expertise level in a domain."""
         key = self._generate_key(CognitiveCategory.USER_UNDERSTANDING, f"expertise:{domain}")
-        self.insights[key] = CognitiveInsight(
-            category=CognitiveCategory.USER_UNDERSTANDING,
-            insight=f"User has {level} expertise in {domain}",
-            evidence=[evidence[:200]],
-            confidence=0.6,
-            context=f"When discussing {domain}"
-        )
+        if key in self.insights:
+            # Merge: update level, accumulate evidence, validate
+            existing = self.insights[key]
+            existing.insight = f"User has {level} expertise in {domain}"
+            existing.evidence.append(evidence[:200])
+            existing.times_validated += 1
+            existing.confidence = min(1.0, existing.confidence + 0.05)
+        else:
+            self.insights[key] = CognitiveInsight(
+                category=CognitiveCategory.USER_UNDERSTANDING,
+                insight=f"User has {level} expertise in {domain}",
+                evidence=[evidence[:200]],
+                confidence=0.6,
+                context=f"When discussing {domain}"
+            )
         self._save_insights()
         return self.insights[key]
 
@@ -898,27 +915,32 @@ class CognitiveLearner:
 
         # 27. Conversational fragments stored as insights
         # User messages captured verbatim: "Do you think we should...", "Can you..."
+        # NOTE: "we should", "we need to", "we have to" are VALID imperatives
+        # and were removed from this list to avoid filtering actionable insights.
         conversational_starts = [
             "do you think", "can you ", "let's ", "let me ", "okay,",
             "ok,", "alright,", "all right,", "by the way,", "oh,",
             "so,", "well,", "hmm", "what about", "how about",
             "continue to do", "i would say", "yeah,", "yeah ", "yep,",
             "sure,", "right,", "no,", "nah,", "i mean,",
-            "it's probably", "it's not", "we already", "we need to",
-            "we should", "we have to", "we can ", "we were ",
+            "it's probably", "it's not", "we already", "we were ",
         ]
         if any(tl.startswith(cs) for cs in conversational_starts):
             return True
 
         # 28. Very long insights (>250 chars) that are likely documents/transcripts, not insights
         if len(t) > 250:
-            # Allow long insights only if they contain clear action verbs
+            # Allow long insights if they contain clear action verbs
             action_verbs = ['use ', 'avoid ', 'check ', 'verify ', 'ensure ', 'always ',
-                            'never ', 'remember ', "don't ", 'prefer ', 'when ']
+                            'never ', 'remember ', "don't ", 'prefer ', 'when ',
+                            'must ', 'should ', 'fix ', 'run ', 'stop ', 'try ',
+                            'update ', 'critical', 'important', 'correction:']
             has_action = any(v in tl for v in action_verbs)
             # Or if they start with established insight patterns
             insight_starts = ['user prefers ', 'principle:', 'i struggle ', 'i tend to ',
-                              'blind spot:', 'assumption ', 'when i see ']
+                              'blind spot:', 'assumption ', 'when i see ',
+                              'remember:', 'critical:', 'correction:',
+                              'rule ', 'we should ', 'we need to ']
             has_insight_start = any(tl.startswith(s) for s in insight_starts)
             if not has_action and not has_insight_start:
                 return True

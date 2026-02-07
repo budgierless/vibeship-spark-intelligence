@@ -354,7 +354,9 @@ def _evaluate_single(
     authority = _assign_authority(adjusted_score, confidence, text, source)
 
     # ---- Final emit decision ----
-    emit = authority in (AuthorityLevel.NOTE, AuthorityLevel.WARNING)
+    # WHISPER (0.35-0.49) was previously dead code — classified but never emitted.
+    # Now included so low-confidence advice still reaches the user as a gentle hint.
+    emit = authority in (AuthorityLevel.WHISPER, AuthorityLevel.NOTE, AuthorityLevel.WARNING)
 
     return GateDecision(
         advice_id=advice_id,

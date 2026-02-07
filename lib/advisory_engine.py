@@ -315,22 +315,53 @@ def on_pre_tool(
                     record_packet_usage(packet_id, emitted=False, route=route)
                 except Exception:
                     pass
+
+            # --- NO-EMIT FALLBACK ---
+            # If the packet path failed the gate, try a bounded deterministic
+            # fallback using baseline text for this intent family, instead of
+            # returning None (which wastes the entire advisory opportunity).
+            fallback_text = ""
+            if route and route.startswith("packet"):
+                elapsed_fb = (time.time() * 1000.0) - start_ms
+                if elapsed_fb < MAX_ENGINE_MS - 200:  # only if budget remains
+                    fallback_text = _baseline_text(intent_family).strip()
+                    if fallback_text:
+                        route = f"{route}_fallback"
+
+            if not fallback_text:
+                save_state(state)
+                _log_engine_event(
+                    "no_emit",
+                    tool_name,
+                    len(advice_items),
+                    0,
+                    start_ms,
+                    extra={
+                        "route": route,
+                        "intent_family": intent_family,
+                        "task_plane": task_plane,
+                        "packet_id": packet_id,
+                        "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
+                    },
+                )
+                return None
+
+            # Emit the fallback deterministic text
+            try:
+                from .advisory_emitter import emit_advisory
+                emit_advisory(gate_result, fallback_text, advice_items, authority="note")
+            except Exception:
+                pass
             save_state(state)
             _log_engine_event(
-                "no_emit",
+                "fallback_emit",
                 tool_name,
                 len(advice_items),
-                0,
+                1,
                 start_ms,
-                extra={
-                    "route": route,
-                    "intent_family": intent_family,
-                    "task_plane": task_plane,
-                    "packet_id": packet_id,
-                    "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
-                },
+                extra={"route": route, "intent_family": intent_family, "packet_id": packet_id},
             )
-            return None
+            return fallback_text
 
         advice_by_id = {str(getattr(item, "advice_id", "")): item for item in advice_items}
         emitted_advice = []
@@ -493,7 +524,7 @@ def on_post_tool(
                     last_packet_id,
                     helpful=bool(success),
                     noisy=False,
-                    followed=True,
+                    followed=False,  # Don't assume advice was followed; only explicit feedback should set this
                     source="implicit_post_tool",
                 )
         except Exception:
@@ -503,7 +534,21 @@ def on_post_tool(
             try:
                 from .advisory_packet_store import invalidate_packets
 
-                invalidate_packets(project_key=_project_key(), reason=f"post_tool_{tool_name.lower()}")
+                # Scope invalidation to packets matching the edited file,
+                # not a blanket project-wide wipe.  Falls back to project
+                # invalidation only if no file_path is available.
+                file_hint = (tool_input or {}).get("file_path", "")
+                if file_hint:
+                    invalidate_packets(
+                        project_key=_project_key(),
+                        reason=f"post_tool_{tool_name.lower()}",
+                        file_hint=file_hint,
+                    )
+                else:
+                    invalidate_packets(
+                        project_key=_project_key(),
+                        reason=f"post_tool_{tool_name.lower()}",
+                    )
             except Exception:
                 pass
 
@@ -545,9 +590,9 @@ def on_user_prompt(
                     "advice_id": f"baseline_{intent_family}",
                     "insight_key": f"intent:{intent_family}",
                     "text": _baseline_text(intent_family),
-                    "confidence": float(intent_info.get("confidence", 0.2) or 0.2),
+                    "confidence": max(0.75, float(intent_info.get("confidence", 0.75) or 0.75)),
                     "source": "baseline",
-                    "context_match": 0.7,
+                    "context_match": 0.8,
                     "reason": "session_baseline",
                 }
             ],

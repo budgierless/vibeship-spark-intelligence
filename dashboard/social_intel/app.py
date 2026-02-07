@@ -593,6 +593,257 @@ async def api_research():
     }
 
 
+@app.get("/api/filter-funnel")
+async def api_filter_funnel():
+    """Filter/distillation funnel — traces intelligence from raw data to final influence."""
+    from collections import Counter, defaultdict
+
+    engagement = get_chip_insights("engagement-pulse")
+    evo_log = read_jsonl(SPARK_DIR / "x_evolution_log.jsonl", limit=500)
+    evo_state = read_json(SPARK_DIR / "x_evolution_state.json")
+    research = read_json(RESEARCH_STATE_PATH)
+
+    # Stage 1: Research input
+    total_analyzed = research.get("total_tweets_analyzed", 0) or 0
+
+    # Stage 2: Engagement insights (passed threshold)
+    total_insights = len(engagement)
+    llm_analyzed = 0
+    for ins in engagement:
+        fields = ins.get("captured_data", {}).get("fields", {})
+        if fields.get("why_it_works") or fields.get("replicable_lesson"):
+            llm_analyzed += 1
+
+    # Stage 3: Evolution events
+    event_types = Counter()
+    high_conf = 0
+    med_conf = 0
+    for e in evo_log:
+        event_types[e.get("event_type", "unknown")] += 1
+        c = e.get("confidence", 0)
+        if c >= 0.7:
+            high_conf += 1
+        elif c >= 0.4:
+            med_conf += 1
+
+    # Stage 4: MetaRalph promotion
+    promoted = evo_state.get("promoted_event_timestamps", [])
+    filtered_count = high_conf - len(promoted) if high_conf > len(promoted) else 0
+
+    # Trigger performance
+    trigger_likes = defaultdict(list)
+    strategy_likes = defaultdict(list)
+    for ins in engagement:
+        fields = ins.get("captured_data", {}).get("fields", {})
+        likes = fields.get("likes", 0)
+        for t in fields.get("emotional_triggers", []):
+            trigger_likes[t].append(likes)
+        strat = fields.get("content_strategy", "")
+        if strat:
+            strategy_likes[strat].append(likes)
+
+    # Current weights
+    weights = evo_state.get("voice_weights", {})
+    trigger_weights = weights.get("triggers", {})
+    strategy_weights = weights.get("strategies", {})
+
+    # Build trigger performance list
+    trigger_perf = []
+    for t, likes_list in sorted(trigger_likes.items(), key=lambda x: -sum(x[1]) / max(len(x[1]), 1)):
+        avg = sum(likes_list) / len(likes_list)
+        w = trigger_weights.get(t, 1.0)
+        trigger_perf.append({
+            "trigger": t,
+            "observations": len(likes_list),
+            "avg_likes": round(avg),
+            "weight": round(w, 3),
+            "direction": "boosted" if w > 1.02 else "reduced" if w < 0.98 else "neutral",
+        })
+
+    # Build strategy performance list
+    strategy_perf = []
+    for s, likes_list in sorted(strategy_likes.items(), key=lambda x: -sum(x[1]) / max(len(x[1]), 1))[:10]:
+        avg = sum(likes_list) / len(likes_list)
+        w = strategy_weights.get(s, None)
+        strategy_perf.append({
+            "strategy": s,
+            "observations": len(likes_list),
+            "avg_likes": round(avg),
+            "weight": round(w, 3) if w else None,
+            "has_weight": w is not None,
+        })
+
+    # Global average for comparison
+    all_likes = []
+    for ins in engagement:
+        fields = ins.get("captured_data", {}).get("fields", {})
+        l = fields.get("likes", 0)
+        if l:
+            all_likes.append(l)
+    global_avg = round(sum(all_likes) / max(len(all_likes), 1))
+
+    return {
+        "funnel": [
+            {"stage": "Tweets Analyzed", "count": total_analyzed, "filter": "Research engine (min_faves threshold)", "rate": None},
+            {"stage": "High Performers", "count": total_insights, "filter": "50+ likes engagement threshold", "rate": round((1 - total_insights / max(total_analyzed, 1)) * 100, 1) if total_analyzed else 0},
+            {"stage": "LLM Analyzed", "count": llm_analyzed, "filter": "phi4-mini structured extraction", "rate": round((1 - llm_analyzed / max(total_insights, 1)) * 100, 1) if total_insights else 0},
+            {"stage": "Evolution Events", "count": len(evo_log), "filter": "Min 3 observations + 15% shift cap", "rate": round((1 - len(evo_log) / max(total_insights, 1)) * 100, 1) if total_insights else 0},
+            {"stage": "High Confidence", "count": high_conf, "filter": "Confidence >= 0.7", "rate": round((1 - high_conf / max(len(evo_log), 1)) * 100, 1) if evo_log else 0},
+            {"stage": "Passed MetaRalph", "count": len(promoted), "filter": "Quality score >= 4/10", "rate": round((1 - len(promoted) / max(high_conf, 1)) * 100, 1) if high_conf else 0},
+        ],
+        "event_types": dict(event_types.most_common()),
+        "metaralph": {
+            "attempted": high_conf,
+            "passed": len(promoted),
+            "filtered": filtered_count,
+            "filter_rate": round(filtered_count / max(high_conf, 1) * 100, 1),
+            "promoted_at": promoted,
+        },
+        "trigger_performance": trigger_perf,
+        "strategy_performance": strategy_perf,
+        "global_avg_likes": global_avg,
+        "active_trigger_weights": len(trigger_weights),
+        "active_strategy_weights": len(strategy_weights),
+        "eidos": _get_eidos_stats(),
+        "cognitive_x_domain": _count_x_domain_insights(),
+    }
+
+
+def _get_eidos_stats() -> dict:
+    """Get EIDOS distillation stats for the filter funnel."""
+    try:
+        import sqlite3
+        eidos_path = SPARK_DIR / "eidos.db"
+        if not eidos_path.exists():
+            return {"episodes": 0, "distillations": 0, "rate": 0}
+        conn = sqlite3.connect(str(eidos_path))
+        episodes = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+        distillations = conn.execute("SELECT COUNT(*) FROM distillations").fetchone()[0]
+        success = conn.execute("SELECT COUNT(*) FROM episodes WHERE outcome='success'").fetchone()[0]
+        conn.close()
+        return {
+            "episodes": episodes,
+            "distillations": distillations,
+            "rate": round(distillations / max(episodes, 1) * 100, 1),
+            "success_episodes": success,
+        }
+    except Exception:
+        return {"episodes": 0, "distillations": 0, "rate": 0, "success_episodes": 0}
+
+
+def _count_x_domain_insights() -> int:
+    """Count X-domain tagged cognitive insights."""
+    ci = read_json(SPARK_DIR / "cognitive_insights.json")
+    count = 0
+    for key, val in ci.items():
+        if isinstance(val, dict) and "x_social" in str(val.get("context", "")):
+            count += 1
+    return count
+
+
+@app.get("/api/gaps")
+async def api_gaps():
+    """System gap diagnosis — shows where Spark Intelligence needs improvement."""
+    try:
+        from lib.x_evolution import get_evolution
+        evo = get_evolution()
+        return evo.diagnose_gaps()
+    except Exception as e:
+        return {
+            "overall_health": "unknown",
+            "total_gaps": 0,
+            "gaps": [],
+            "system_health": {},
+            "error": str(e),
+            "core_integration": {
+                "cognitive_learner": False,
+                "meta_ralph": False,
+                "advisor": False,
+                "eidos": False,
+            },
+        }
+
+
+@app.get("/api/evolution")
+async def api_evolution():
+    """Real-time evolution tracking — shows how Spark is changing from X interactions."""
+    evo_log_path = SPARK_DIR / "x_evolution_log.jsonl"
+    evo_state_path = SPARK_DIR / "x_evolution_state.json"
+
+    # Read evolution events (most recent first)
+    events = read_jsonl(evo_log_path, limit=200)
+    events.reverse()
+
+    # Read evolution state
+    state = read_json(evo_state_path)
+    weights = state.get("voice_weights", {})
+    tracked = state.get("tracked_replies", {})
+
+    # Reply outcome stats
+    outcomes = [v for v in tracked.values() if v.get("outcome")]
+    hits = sum(1 for o in outcomes if o["outcome"] == "hit")
+    misses = sum(1 for o in outcomes if o["outcome"] == "miss")
+    normals = sum(1 for o in outcomes if o["outcome"] == "normal")
+    total_outcomes = hits + misses + normals
+
+    # Event type breakdown
+    event_types: dict[str, int] = {}
+    for e in events:
+        etype = e.get("event_type", "unknown")
+        event_types[etype] = event_types.get(etype, 0) + 1
+
+    # Current trigger weights (evolved)
+    trigger_weights = weights.get("triggers", {})
+    boosted = sorted(
+        [{"trigger": t, "weight": round(w, 2)} for t, w in trigger_weights.items() if w > 1.05],
+        key=lambda x: -x["weight"],
+    )
+    reduced = sorted(
+        [{"trigger": t, "weight": round(w, 2)} for t, w in trigger_weights.items() if w < 0.95],
+        key=lambda x: x["weight"],
+    )
+
+    # Strategy weights
+    strategy_weights = weights.get("strategies", {})
+    top_strategies = sorted(
+        [{"strategy": s, "weight": round(w, 2)} for s, w in strategy_weights.items()],
+        key=lambda x: -x["weight"],
+    )[:5]
+
+    # Recent evolution timeline (last 20 events for display)
+    timeline = []
+    for e in events[:20]:
+        timeline.append({
+            "type": e.get("event_type", ""),
+            "description": e.get("description", ""),
+            "confidence": e.get("confidence", 0),
+            "timestamp": e.get("timestamp", ""),
+        })
+
+    return {
+        "total_evolutions": len(events),
+        "evolution_types": event_types,
+        "reply_tracking": {
+            "total_tracked": len(tracked),
+            "outcomes_measured": total_outcomes,
+            "hits": hits,
+            "misses": misses,
+            "normals": normals,
+            "hit_rate": round(hits / max(total_outcomes, 1), 2),
+        },
+        "voice_evolution": {
+            "boosted_triggers": boosted,
+            "reduced_triggers": reduced,
+            "top_strategies": top_strategies,
+        },
+        "adopted_patterns": state.get("adopted_patterns", []),
+        "evolved_interests": state.get("evolved_topic_interests", []),
+        "timeline": timeline,
+        "last_evolution": state.get("last_evolution"),
+        "is_evolving": len(events) > 0,
+    }
+
+
 # ── Static Files & Pages ─────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)

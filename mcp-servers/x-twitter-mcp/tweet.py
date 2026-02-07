@@ -104,6 +104,12 @@ def delete_tweet(client: tweepy.Client, tweet_id: str) -> bool:
     return result.data.get("deleted", False)
 
 
+def like_tweet(client: tweepy.Client, tweet_id: str) -> bool:
+    """Like a tweet by ID."""
+    result = client.like(tweet_id)
+    return result.data.get("liked", False)
+
+
 def test_credentials(client: tweepy.Client) -> bool:
     """Test read + write access, then clean up."""
     # Test read
@@ -127,12 +133,18 @@ def main():
     parser.add_argument("--reply-to", help="Tweet ID to reply to")
     parser.add_argument("--media", nargs="+", help="Media file(s) to attach (max 4 images)")
     parser.add_argument("--tags", nargs="+", help="Hashtags (without #)")
+    parser.add_argument("--like", metavar="ID", help="Like a tweet by ID")
     parser.add_argument("--delete", metavar="ID", help="Delete a tweet by ID")
     parser.add_argument("--test", action="store_true", help="Test credentials")
     args = parser.parse_args()
 
     creds = load_creds()
     client = get_client(creds)
+
+    if args.like:
+        ok = like_tweet(client, args.like)
+        print(f"Liked: {ok}")
+        return
 
     if args.test:
         print("Testing @Spark_coded credentials...")

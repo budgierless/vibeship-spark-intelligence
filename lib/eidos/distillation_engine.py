@@ -111,19 +111,25 @@ class DistillationEngine:
 
         if breakthrough:
             result.key_insight = f"Success came from: {breakthrough.decision}"
+            # Build an actionable rule using descriptive intent/decision
             result.new_rule = f"When {breakthrough.intent}, try: {breakthrough.decision}"
 
-        # Check for initial wrong assumptions
+        # Check for initial wrong assumptions that were overcome
         wrong_assumptions = [s for s in steps if s.evaluation == Evaluation.FAIL and s.assumptions]
         if wrong_assumptions:
             first_wrong = wrong_assumptions[0]
-            result.wrong_assumption = f"Initially assumed: {first_wrong.assumptions[0] if first_wrong.assumptions else 'N/A'}"
-            result.preventive_check = f"Check assumption: {first_wrong.assumptions[0] if first_wrong.assumptions else 'N/A'}"
+            assumption = first_wrong.assumptions[0] if first_wrong.assumptions else "N/A"
+            result.wrong_assumption = f"Initially assumed: {assumption}"
+            result.preventive_check = f"Validate before proceeding: {assumption}"
 
-        # Identify what could be faster
-        total_steps = len(steps)
-        if total_steps > 5:
-            result.bottleneck = f"Took {total_steps} steps - could optimize discovery phase"
+        # Identify recovery pattern (failure then success)
+        fail_then_success = []
+        for i, step in enumerate(steps[:-1]):
+            if step.evaluation == Evaluation.FAIL and steps[i + 1].evaluation == Evaluation.PASS:
+                fail_then_success.append((step, steps[i + 1]))
+        if fail_then_success:
+            fail_s, succ_s = fail_then_success[0]
+            result.bottleneck = f"Recovery: after '{fail_s.decision[:50]}' failed, '{succ_s.decision[:50]}' succeeded"
 
         result.confidence = 0.8
 
@@ -157,16 +163,19 @@ class DistillationEngine:
 
         result.bottleneck = "Escalated - exceeded capability or budget"
 
-        # What was tried
-        approaches = set()
+        # Collect unique approaches that were tried
+        approaches = []
+        seen = set()
         for step in steps:
-            if step.decision:
-                approaches.add(step.decision[:50])
+            if step.decision and step.decision not in seen:
+                seen.add(step.decision)
+                approaches.append(step.decision[:60])
 
         if approaches:
-            result.key_insight = f"Tried {len(approaches)} approaches without success"
+            result.key_insight = f"Tried {len(approaches)} approaches: {', '.join(approaches[:3])}"
+            # Build a specific escalation rule based on what was tried
+            result.new_rule = f"When '{episode.goal[:40]}' stalls after trying {approaches[0]}, escalate rather than repeat"
 
-        result.new_rule = "Escalate earlier when similar patterns appear"
         result.confidence = 0.5
 
         return result
@@ -175,12 +184,33 @@ class DistillationEngine:
         """Reflect on partial success episode."""
         result = ReflectionResult()
 
-        # What worked
         success_steps = [s for s in steps if s.evaluation == Evaluation.PASS]
         fail_steps = [s for s in steps if s.evaluation == Evaluation.FAIL]
 
-        if success_steps:
-            result.key_insight = f"{len(success_steps)} steps succeeded, {len(fail_steps)} failed"
+        if success_steps and fail_steps:
+            # Describe what worked and what didn't
+            worked = success_steps[-1].decision[:50]
+            failed = fail_steps[-1].decision[:50]
+            result.key_insight = f"Partial: '{worked}' succeeded but '{failed}' failed"
+            # Generate a rule about what to try first
+            result.new_rule = f"When similar to '{episode.goal[:30]}', start with approach like '{worked}'"
+        elif success_steps and not fail_steps:
+            # All-pass episode: extract the successful pattern
+            # These are sessions where everything worked - valuable signal
+            unique_decisions = []
+            seen = set()
+            for s in success_steps:
+                d = s.decision[:60]
+                if d not in seen and "Use " not in d[:4]:  # Skip template decisions
+                    unique_decisions.append(d)
+                    seen.add(d)
+
+            if unique_decisions:
+                approach = unique_decisions[-1]  # Most recent meaningful decision
+                result.key_insight = f"Successful approach: {approach} ({len(success_steps)} steps, all passed)"
+                result.new_rule = f"When similar to '{episode.goal[:40]}', the approach '{approach}' worked reliably"
+                result.confidence = 0.7  # Higher confidence for all-pass
+                return result
 
         result.confidence = 0.6
 
@@ -289,35 +319,75 @@ class DistillationEngine:
         )
 
     def _extract_domains(self, episode: Episode, steps: List[Step]) -> List[str]:
-        """Extract domains from episode and steps."""
+        """Extract domains from episode and steps.
+
+        Uses broader keyword matching across goal, intents, decisions,
+        and action_details to avoid defaulting to 'general'.
+        """
         domains = set()
 
-        # From episode goal
-        goal_words = episode.goal.lower().split()
-        domain_keywords = ["api", "auth", "database", "ui", "test", "deploy", "config"]
-        for word in goal_words:
-            if word in domain_keywords:
-                domains.add(word)
+        domain_keywords = {
+            "api": "api", "rest": "api", "endpoint": "api", "route": "api",
+            "auth": "auth", "login": "auth", "token": "auth", "oauth": "auth",
+            "database": "database", "db": "database", "sql": "database", "query": "database",
+            "ui": "ui", "component": "ui", "render": "ui", "css": "ui", "html": "ui",
+            "test": "test", "pytest": "test", "unittest": "test", "assert": "test",
+            "deploy": "deploy", "ci": "deploy", "docker": "deploy", "build": "deploy",
+            "config": "config", "env": "config", "settings": "config", "tuneables": "config",
+            "git": "git", "commit": "git", "branch": "git", "merge": "git",
+            "debug": "debug", "error": "debug", "fix": "debug", "bug": "debug",
+            "refactor": "refactor", "rename": "refactor", "cleanup": "refactor",
+            "security": "security", "permission": "security", "encrypt": "security",
+            "performance": "performance", "optimize": "performance", "cache": "performance",
+        }
 
-        # From step intents
-        for step in steps[:5]:
-            for word in step.intent.lower().split()[:3]:
-                if word in domain_keywords:
-                    domains.add(word)
+        # Collect all text from episode and steps
+        all_text = episode.goal.lower()
+        for step in steps[:10]:
+            all_text += " " + step.intent.lower()
+            all_text += " " + step.decision.lower()
+            details = step.action_details or {}
+            all_text += " " + str(details.get("tool", "")).lower()
+            all_text += " " + str(details.get("file_path", "")).lower()
+            all_text += " " + str(details.get("command", "")).lower()[:100]
 
-        return list(domains) if domains else ["general"]
+        words = set(all_text.split())
+        for word in words:
+            # Strip punctuation for matching
+            clean = word.strip(".,;:()[]{}'\"-/\\")
+            if clean in domain_keywords:
+                domains.add(domain_keywords[clean])
+
+        return list(domains)[:5] if domains else ["general"]
 
     def _extract_triggers(self, steps: List[Step]) -> List[str]:
-        """Extract triggers from steps."""
+        """Extract meaningful triggers from steps.
+
+        Uses tool names, file types, and action verbs instead of
+        generic 'execute' from the old template intents.
+        """
         triggers = set()
+        stop_words = {"the", "a", "an", "to", "for", "in", "on", "of", "is", "and", "or"}
 
         for step in steps:
-            # Extract first significant word from intent
-            words = step.intent.lower().split()
-            if words:
-                triggers.add(words[0])
+            # Extract tool name from action_details
+            details = step.action_details or {}
+            tool = details.get("tool", "")
+            if tool:
+                triggers.add(tool.lower())
 
-        return list(triggers)[:5]
+            # Extract meaningful words from intent (skip stop words)
+            words = step.intent.lower().split()
+            for w in words[:4]:
+                clean = w.strip(".,;:()[]{}'\"-/\\")
+                if clean and len(clean) > 2 and clean not in stop_words:
+                    triggers.add(clean)
+                    if len(triggers) >= 8:
+                        break
+            if len(triggers) >= 8:
+                break
+
+        return list(triggers)[:8]
 
     def finalize_distillation(
         self,

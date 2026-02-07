@@ -43,6 +43,419 @@
   --ease: cubic-bezier(0, 0, 0.2, 1);
 }
 
+/* ═══════════════════════════════════════════════════════
+   FILTER FUNNEL SECTION
+   ═══════════════════════════════════════════════════════ */
+.funnel-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 32px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.funnel-stage {
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.funnel-stage:first-child { border-radius: 12px 12px 0 0; }
+.funnel-stage:last-child { border-radius: 0 0 12px 12px; }
+.funnel-stage:not(:last-child) { border-bottom: none; }
+.funnel-stage:hover { border-color: var(--green); background: var(--bg-tertiary); }
+.funnel-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  opacity: 0.08;
+  transition: width 0.8s var(--ease);
+}
+.funnel-stage-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 140px;
+  z-index: 1;
+}
+.funnel-count {
+  font-size: 20px;
+  font-weight: 700;
+  min-width: 80px;
+  text-align: right;
+  z-index: 1;
+}
+.funnel-filter {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex: 1;
+  text-align: right;
+  z-index: 1;
+}
+.funnel-arrow {
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  padding: 2px 0;
+  letter-spacing: 1px;
+}
+.funnel-rate {
+  font-size: 10px;
+  color: var(--orange);
+  font-weight: 600;
+  margin-left: 8px;
+  z-index: 1;
+}
+.funnel-meta-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.funnel-meta-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.funnel-meta-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+.funnel-meta-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.trigger-perf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 700px) { .trigger-perf-grid { grid-template-columns: 1fr; } }
+.trigger-perf-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.trigger-perf-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--green);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.trigger-perf-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(42, 48, 66, 0.5);
+}
+.trigger-perf-item:last-child { border-bottom: none; }
+.trigger-perf-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  flex: 1;
+}
+.trigger-perf-bar-wrap {
+  width: 100px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  margin: 0 10px;
+  overflow: hidden;
+}
+.trigger-perf-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s var(--ease);
+}
+.trigger-perf-stat {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: right;
+}
+.ralph-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ralph-verdict.passed { background: var(--green-dim); color: var(--green); }
+.ralph-verdict.filtered { background: rgba(217,119,87,0.15); color: var(--orange); }
+
+/* ═══════════════════════════════════════════════════════
+   EVOLUTION SECTION
+   ═══════════════════════════════════════════════════════ */
+.evo-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.evo-stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: border-color 0.3s var(--ease);
+}
+.evo-stat:hover { border-color: var(--gold); }
+.evo-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.evo-stat-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.evo-weights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 700px) { .evo-weights-grid { grid-template-columns: 1fr; } }
+.evo-weight-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.evo-weight-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.evo-weight-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.evo-weight-item:last-child { border-bottom: none; }
+.evo-weight-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.evo-weight-bar {
+  width: 80px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+.evo-weight-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s var(--ease);
+}
+.evo-weight-fill.boost { background: var(--green); }
+.evo-weight-fill.reduce { background: var(--orange); }
+.evo-weight-fill.neutral { background: var(--text-tertiary); }
+.evo-weight-value {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+}
+.evo-weight-value.up { color: var(--green); }
+.evo-weight-value.down { color: var(--orange); }
+.evo-weight-value.neutral { color: var(--text-tertiary); }
+.evo-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.evo-event {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.3s var(--ease);
+}
+.evo-event:hover { border-color: var(--gold); }
+.evo-event-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.evo-event-icon.voice_shift { background: var(--green-dim); }
+.evo-event-icon.pattern_adopted { background: var(--gold-dim); }
+.evo-event-icon.topic_evolved { background: rgba(155, 89, 182, 0.15); }
+.evo-event-icon.reply_learned { background: rgba(52, 152, 219, 0.15); }
+.evo-event-icon.strategy_discovered { background: var(--green-dim); }
+.evo-event-icon.gap_identified { background: rgba(231, 76, 60, 0.15); }
+.evo-event-body { flex: 1; min-width: 0; }
+.evo-event-desc {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.evo-event-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.evo-event-confidence {
+  color: var(--green);
+}
+.evo-no-data {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+/* ═══════════════════════════════════════════════════════
+   GAP DIAGNOSIS SECTION
+   ═══════════════════════════════════════════════════════ */
+.gap-health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.gap-health-badge.healthy { background: var(--green-dim); color: var(--green); }
+.gap-health-badge.good { background: var(--green-dim); color: var(--green); }
+.gap-health-badge.improving { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+.gap-health-badge.needs_attention { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+.gap-health-badge.critical { background: rgba(231, 76, 60, 0.25); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4); }
+.gap-health-badge.unknown { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.gap-integration-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.gap-chip {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.gap-chip.active { background: var(--green-dim); color: var(--green); }
+.gap-chip.inactive { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.gap-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--border);
+  transition: border-color 0.3s var(--ease);
+}
+.gap-card:hover { border-left-color: var(--gold); }
+.gap-card.high { border-left-color: #e74c3c; }
+.gap-card.medium { border-left-color: #f39c12; }
+.gap-card.low { border-left-color: var(--green); }
+.gap-system {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+.gap-desc {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.gap-rec {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.gap-metric-bar {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.gap-metric-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s var(--ease);
+}
+.gap-metric-fill.low { background: #e74c3c; }
+.gap-metric-fill.mid { background: #f39c12; }
+.gap-metric-fill.high { background: var(--green); }
+.gap-systems-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.gap-sys-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+.gap-sys-name {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.gap-sys-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.gap-sys-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html {
@@ -1216,6 +1629,74 @@ body {
 </section>
 
 <!-- ═══════════════════════════════════════════════════════
+     REAL-TIME EVOLUTION
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="evolution">
+  <div class="section-header">
+    <div class="section-label"><span class="dot" style="background:var(--gold);box-shadow:0 0 8px var(--gold-glow);"></span> LIVE EVOLUTION</div>
+    <h2 class="section-title">Watch Spark evolve in real time</h2>
+    <p class="section-desc">
+      Every conversation, every research session, every interaction changes how Spark thinks.
+      This is the live feed of those changes.
+    </p>
+  </div>
+
+  <!-- Evolution Stats -->
+  <div class="evo-stats-row" id="evo-stats"></div>
+
+  <!-- Voice Evolution Weights -->
+  <div class="evo-weights-grid" id="evo-weights"></div>
+
+  <!-- Evolution Timeline -->
+  <div class="evo-timeline" id="evo-timeline"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FILTER & DISTILLATION FUNNEL
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="filter-funnel">
+  <div class="section-header">
+    <div class="section-label"><span class="dot" style="background:var(--purple);box-shadow:0 0 8px rgba(155,89,182,0.4);"></span> INTELLIGENCE FUNNEL</div>
+    <h2 class="section-title">From raw data to real influence</h2>
+    <p class="section-desc">
+      How intelligence flows through Spark's multi-stage filter pipeline.
+      Each stage removes noise, keeping only the signal that matters.
+    </p>
+  </div>
+
+  <!-- MetaRalph Summary -->
+  <div class="funnel-meta-row" id="funnel-meta"></div>
+
+  <!-- The Funnel -->
+  <div class="funnel-container" id="funnel-stages"></div>
+
+  <!-- Trigger & Strategy Performance -->
+  <div class="trigger-perf-grid" id="trigger-strategy-perf"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SYSTEM HEALTH & GAP DIAGNOSIS
+     ═══════════════════════════════════════════════════════ -->
+<section class="section fade-in" id="gaps">
+  <div class="section-header">
+    <div class="section-label"><span class="dot" style="background:#e74c3c;box-shadow:0 0 8px rgba(231,76,60,0.4);"></span> SYSTEM HEALTH</div>
+    <h2 class="section-title">Spark Intelligence gaps &amp; diagnostics</h2>
+    <p class="section-desc">
+      Real-time diagnosis of every Spark subsystem. Gaps are opportunities for growth.
+    </p>
+  </div>
+
+  <!-- Overall Health + Core Integration -->
+  <div id="gap-header"></div>
+
+  <!-- System Health Cards -->
+  <div class="gap-systems-grid" id="gap-systems"></div>
+
+  <!-- Gap Cards -->
+  <div id="gap-list"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
      GROWTH
      ═══════════════════════════════════════════════════════ -->
 <section class="section fade-in" id="growth">
@@ -1619,10 +2100,320 @@ async function loadResearch() {
   }
 }
 
+async function loadEvolution() {
+  const data = await fetchJSON('/api/evolution');
+  if (!data) return;
+
+  // Stats row
+  const stats = document.getElementById('evo-stats');
+  const rt = data.reply_tracking || {};
+  stats.innerHTML = `
+    <div class="evo-stat">
+      <div class="evo-stat-value">${data.total_evolutions}</div>
+      <div class="evo-stat-label">EVOLUTIONS</div>
+    </div>
+    <div class="evo-stat">
+      <div class="evo-stat-value">${rt.total_tracked || 0}</div>
+      <div class="evo-stat-label">REPLIES TRACKED</div>
+    </div>
+    <div class="evo-stat">
+      <div class="evo-stat-value">${rt.hits || 0}</div>
+      <div class="evo-stat-label">REPLY HITS</div>
+    </div>
+    <div class="evo-stat">
+      <div class="evo-stat-value">${rt.hit_rate ? (rt.hit_rate * 100).toFixed(0) + '%' : '--'}</div>
+      <div class="evo-stat-label">HIT RATE</div>
+    </div>
+    <div class="evo-stat">
+      <div class="evo-stat-value">${(data.adopted_patterns || []).length}</div>
+      <div class="evo-stat-label">PATTERNS ADOPTED</div>
+    </div>
+    <div class="evo-stat">
+      <div class="evo-stat-value">${(data.evolved_interests || []).length}</div>
+      <div class="evo-stat-label">EVOLVED INTERESTS</div>
+    </div>
+  `;
+
+  // Voice weights
+  const weightsDiv = document.getElementById('evo-weights');
+  const ve = data.voice_evolution || {};
+  const boosted = ve.boosted_triggers || [];
+  const reduced = ve.reduced_triggers || [];
+  const strategies = ve.top_strategies || [];
+
+  if (boosted.length > 0 || reduced.length > 0 || strategies.length > 0) {
+    weightsDiv.innerHTML = `
+      <div class="evo-weight-card">
+        <div class="evo-weight-title">TRIGGER WEIGHTS (EVOLVED)</div>
+        ${boosted.map(t => renderWeightItem(t.trigger, t.weight, 'boost')).join('')}
+        ${reduced.map(t => renderWeightItem(t.trigger, t.weight, 'reduce')).join('')}
+        ${boosted.length === 0 && reduced.length === 0 ? '<div class="evo-weight-item"><span class="evo-weight-name" style="color:var(--text-tertiary)">Calibrating...</span></div>' : ''}
+      </div>
+      <div class="evo-weight-card">
+        <div class="evo-weight-title">STRATEGY WEIGHTS</div>
+        ${strategies.map(s => renderWeightItem(s.strategy.replace(/_/g, ' '), s.weight, s.weight >= 1.0 ? 'boost' : 'reduce')).join('')}
+        ${strategies.length === 0 ? '<div class="evo-weight-item"><span class="evo-weight-name" style="color:var(--text-tertiary)">Learning strategies...</span></div>' : ''}
+      </div>
+    `;
+  } else {
+    weightsDiv.innerHTML = `
+      <div class="evo-weight-card" style="grid-column: span 2;">
+        <div class="evo-weight-title">VOICE WEIGHTS</div>
+        <div class="evo-weight-item"><span class="evo-weight-name" style="color:var(--text-tertiary)">
+          Evolution data will appear as Spark interacts and researches on X. Each conversation and research session adjusts these weights.
+        </span></div>
+      </div>
+    `;
+  }
+
+  // Timeline
+  const timeline = document.getElementById('evo-timeline');
+  const events = data.timeline || [];
+
+  if (events.length > 0) {
+    const icons = {
+      voice_shift: '\u2191',
+      pattern_adopted: '\u2713',
+      topic_evolved: '\u25C6',
+      reply_learned: '\u21BB',
+      strategy_discovered: '\u2605',
+    };
+    timeline.innerHTML = events.map(e => {
+      const icon = icons[e.type] || '\u2022';
+      const ago = timeAgo(e.timestamp);
+      return `
+        <div class="evo-event">
+          <div class="evo-event-icon ${e.type}">${icon}</div>
+          <div class="evo-event-body">
+            <div class="evo-event-desc">${escapeHtml(e.description)}</div>
+            <div class="evo-event-meta">
+              <span class="evo-event-confidence">${(e.confidence * 100).toFixed(0)}% confidence</span>
+              <span>${ago}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    timeline.innerHTML = `
+      <div class="evo-no-data">
+        No evolution events yet. Spark evolves through X interactions and research sessions.<br>
+        Every reply, every research finding, every pattern detected feeds into this live stream.
+      </div>
+    `;
+  }
+}
+
+function renderWeightItem(name, weight, type) {
+  const pct = Math.min(100, (weight / 2) * 100);
+  const cls = type === 'boost' ? 'up' : type === 'reduce' ? 'down' : 'neutral';
+  const fillCls = type === 'boost' ? 'boost' : type === 'reduce' ? 'reduce' : 'neutral';
+  const arrow = type === 'boost' ? '\u2191' : type === 'reduce' ? '\u2193' : '';
+  return `
+    <div class="evo-weight-item">
+      <span class="evo-weight-name">${name.replace(/_/g, ' ')}</span>
+      <div class="evo-weight-bar"><div class="evo-weight-fill ${fillCls}" style="width:${pct}%"></div></div>
+      <span class="evo-weight-value ${cls}">${arrow}${weight.toFixed(2)}</span>
+    </div>
+  `;
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const s = Math.floor((now - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ── Filter Funnel ─────────────────────────────────
+async function loadFilterFunnel() {
+  try {
+    const resp = await fetch('/api/filter-funnel');
+    const data = await resp.json();
+
+    // Meta cards
+    const meta = document.getElementById('funnel-meta');
+    const ralphRate = data.metaralph ? data.metaralph.filter_rate : 0;
+    meta.innerHTML = `
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--green)">${data.active_trigger_weights}</div>
+        <div class="funnel-meta-label">ACTIVE TRIGGERS</div>
+      </div>
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--gold)">${data.active_strategy_weights}</div>
+        <div class="funnel-meta-label">ACTIVE STRATEGIES</div>
+      </div>
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--orange)">${ralphRate}%</div>
+        <div class="funnel-meta-label">METARALPH FILTER RATE</div>
+      </div>
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--text-primary)">${data.global_avg_likes ? data.global_avg_likes.toLocaleString() : '0'}</div>
+        <div class="funnel-meta-label">GLOBAL AVG LIKES</div>
+      </div>
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--purple)">${data.eidos ? data.eidos.rate : 0}%</div>
+        <div class="funnel-meta-label">EIDOS DISTILL RATE</div>
+      </div>
+      <div class="funnel-meta-card">
+        <div class="funnel-meta-value" style="color:var(--green)">${data.cognitive_x_domain || 0}</div>
+        <div class="funnel-meta-label">X-DOMAIN INSIGHTS</div>
+      </div>
+    `;
+
+    // Funnel stages
+    const funnel = document.getElementById('funnel-stages');
+    const maxCount = Math.max(...data.funnel.map(s => s.count || 1));
+    const stageColors = ['#9B59B6', '#9B59B6', '#3498db', '#00C49A', '#c8a84e', '#D97757'];
+    funnel.innerHTML = data.funnel.map((s, i) => {
+      const pct = Math.max(5, (s.count / maxCount) * 100);
+      const color = stageColors[i] || '#00C49A';
+      return `
+        <div class="funnel-stage">
+          <div class="funnel-bar" style="width:${pct}%;background:${color};"></div>
+          <div class="funnel-stage-name">${s.stage}</div>
+          <div class="funnel-count" style="color:${color}">${s.count ? s.count.toLocaleString() : '0'}</div>
+          <div class="funnel-filter">${s.filter}</div>
+          ${s.rate ? `<div class="funnel-rate">${s.rate}% filtered</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // Trigger & Strategy performance
+    const perfGrid = document.getElementById('trigger-strategy-perf');
+    let triggerHtml = '<div class="trigger-perf-card"><div class="trigger-perf-title">TRIGGER PERFORMANCE</div>';
+    if (data.trigger_performance && data.trigger_performance.length > 0) {
+      const maxLikes = Math.max(...data.trigger_performance.map(t => t.avg_likes));
+      triggerHtml += data.trigger_performance.map(t => {
+        const barPct = Math.max(5, (t.avg_likes / maxLikes) * 100);
+        const barColor = t.direction === 'boosted' ? 'var(--green)' : t.direction === 'reduced' ? 'var(--orange)' : 'var(--text-tertiary)';
+        const weightDisplay = t.weight !== 1.0 ? t.weight.toFixed(3) : '1.000';
+        return `
+          <div class="trigger-perf-item">
+            <div class="trigger-perf-name">${t.trigger.replace(/_/g, ' ')}</div>
+            <div class="trigger-perf-bar-wrap">
+              <div class="trigger-perf-bar" style="width:${barPct}%;background:${barColor};"></div>
+            </div>
+            <div class="trigger-perf-stat" style="color:${barColor}">${t.avg_likes.toLocaleString()}</div>
+            <div class="trigger-perf-stat" style="color:var(--text-tertiary);min-width:60px;font-size:10px;">${weightDisplay}x</div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      triggerHtml += '<div class="no-data">No trigger data yet.</div>';
+    }
+    triggerHtml += '</div>';
+
+    let strategyHtml = '<div class="trigger-perf-card"><div class="trigger-perf-title" style="color:var(--gold)">STRATEGY PERFORMANCE</div>';
+    if (data.strategy_performance && data.strategy_performance.length > 0) {
+      const maxSLikes = Math.max(...data.strategy_performance.map(s => s.avg_likes));
+      strategyHtml += data.strategy_performance.map(s => {
+        const barPct = Math.max(5, (s.avg_likes / maxSLikes) * 100);
+        const hasWeight = s.has_weight;
+        const barColor = hasWeight ? 'var(--gold)' : 'var(--text-tertiary)';
+        const weightText = s.weight ? s.weight.toFixed(3) + 'x' : 'n/a';
+        return `
+          <div class="trigger-perf-item">
+            <div class="trigger-perf-name" style="font-size:11px;">${s.strategy.replace(/_/g, ' ').replace(/,/g, ' + ')}</div>
+            <div class="trigger-perf-bar-wrap">
+              <div class="trigger-perf-bar" style="width:${barPct}%;background:${barColor};"></div>
+            </div>
+            <div class="trigger-perf-stat" style="color:${barColor}">${s.avg_likes.toLocaleString()}</div>
+            <div class="trigger-perf-stat" style="color:var(--text-tertiary);min-width:60px;font-size:10px;">${weightText}</div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      strategyHtml += '<div class="no-data">No strategy data yet.</div>';
+    }
+    strategyHtml += '</div>';
+
+    perfGrid.innerHTML = triggerHtml + strategyHtml;
+
+  } catch (err) {
+    console.warn('Filter funnel load failed:', err);
+  }
+}
+
+// ── Gap Diagnosis ─────────────────────────────────
+async function loadGaps() {
+  const data = await fetchJSON('/api/gaps');
+  if (!data) return;
+
+  // Header: health badge + core integration
+  const header = document.getElementById('gap-header');
+  if (header) {
+    const healthClass = data.overall_health || 'unknown';
+    const ci = data.core_integration || {};
+    const integrationChips = [
+      { name: 'Cognitive', active: ci.cognitive_learner },
+      { name: 'MetaRalph', active: ci.meta_ralph },
+      { name: 'Advisor', active: ci.advisor },
+      { name: 'EIDOS', active: ci.eidos },
+    ].map(c => `<span class="gap-chip ${c.active ? 'active' : 'inactive'}">${c.name}</span>`).join('');
+
+    header.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+        <span class="gap-health-badge ${healthClass}">${healthClass.replace('_', ' ')}</span>
+        <span style="font-size:11px;color:var(--text-tertiary);">${data.total_gaps || 0} gaps identified</span>
+        <span style="font-size:11px;color:var(--text-tertiary);margin-left:auto;">Core Integration:</span>
+        ${integrationChips}
+      </div>
+    `;
+  }
+
+  // System health cards
+  const systems = document.getElementById('gap-systems');
+  if (systems && data.system_health) {
+    const h = data.system_health;
+    const cards = [];
+    if (h.cognitive) cards.push({ name: 'Cognitive', value: h.cognitive.total_insights || 0, label: 'insights', sub: `${h.cognitive.high_confidence_pct || 0}% high-conf` });
+    if (h.advisor) cards.push({ name: 'Advisor', value: h.advisor.action_rate_pct != null ? h.advisor.action_rate_pct + '%' : 'N/A', label: 'action rate', sub: `${h.advisor.total_advice_given || 0} given` });
+    if (h.eidos) cards.push({ name: 'EIDOS', value: h.eidos.distillations || h.eidos.status || 0, label: typeof h.eidos.distillations === 'number' ? 'distillations' : 'status', sub: h.eidos.episodes ? `${h.eidos.episodes} episodes` : '' });
+    if (h.meta_ralph) cards.push({ name: 'MetaRalph', value: (h.meta_ralph.quality_rate_pct || 0) + '%', label: 'quality rate', sub: `${h.meta_ralph.total_roasted || 0} roasted` });
+    if (h.evolution) cards.push({ name: 'Evolution', value: h.evolution.total_evolutions || 0, label: 'evolutions', sub: `${h.evolution.triggers_evolved || 0} triggers` });
+    if (h.research) cards.push({ name: 'Research', value: h.research.sessions || 0, label: 'sessions', sub: `${h.research.tweets_analyzed || 0} tweets` });
+
+    systems.innerHTML = cards.map(c => `
+      <div class="gap-sys-card">
+        <div class="gap-sys-name">${esc(c.name)}</div>
+        <div class="gap-sys-value">${esc(String(c.value))}</div>
+        <div class="gap-sys-label">${esc(c.label)}</div>
+        ${c.sub ? `<div class="gap-sys-label" style="margin-top:2px;">${esc(c.sub)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Gap cards
+  const list = document.getElementById('gap-list');
+  if (list && data.gaps) {
+    if (data.gaps.length === 0) {
+      list.innerHTML = '<div class="evo-no-data">No gaps detected. All systems operating within parameters.</div>';
+      return;
+    }
+    list.innerHTML = data.gaps.map(g => {
+      const pct = g.metric != null && g.target ? Math.min(100, Math.round((g.metric / g.target) * 100)) : null;
+      const barClass = pct != null ? (pct < 33 ? 'low' : pct < 66 ? 'mid' : 'high') : '';
+      return `
+        <div class="gap-card ${g.severity || ''}">
+          <div class="gap-system">${esc(g.system || '')} &middot; ${g.severity || ''}</div>
+          <div class="gap-desc">${esc(g.gap || '')}</div>
+          <div class="gap-rec">${esc(g.recommendation || '')}</div>
+          ${pct != null ? `<div class="gap-metric-bar"><div class="gap-metric-fill ${barClass}" style="width:${pct}%"></div></div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
 }
 
 // ── Live Polling ────────────────────────────────
@@ -1631,12 +2422,16 @@ let pollCount = 0;
 
 async function pollLiveData() {
   pollCount++;
-  // Update dynamic sections (skip animation after first load)
-  const skip = false;
+  // Update dynamic sections
   loadOverview();
   loadLearningFlow();
   loadResearch();
+  loadEvolution();
   loadGrowth();
+  // Filter funnel every 2nd poll (60s)
+  if (pollCount % 2 === 0) loadFilterFunnel();
+  // Gap diagnosis every 3rd poll (90s) to reduce load
+  if (pollCount % 3 === 0) loadGaps();
   // Pulse the live indicator
   const dot = document.getElementById('live-dot');
   if (dot) { dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse'); }
@@ -1652,6 +2447,9 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPatterns();
   loadVoice();
   loadResearch();
+  loadEvolution();
+  loadFilterFunnel();
+  loadGaps();
   loadGrowth();
   // Start live polling
   setInterval(pollLiveData, POLL_INTERVAL);

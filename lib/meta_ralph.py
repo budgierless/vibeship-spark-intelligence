@@ -722,12 +722,14 @@ class MetaRalph:
         domain = context.get("domain")
 
         # PRIORITY BOOST: "Remember this" or explicit instructions
+        # Reduced from +2 to +0.5 to prevent gaming the scoring system.
+        # A "Remember this:" prefix alone should not bypass quality gates.
         priority_boost = 0
         if any(phrase in learning_lower for phrase in [
             "remember this", "remember:", "important:", "note:",
             "always remember", "don't forget", "key insight"
         ]):
-            priority_boost = 2
+            priority_boost = 0.5
 
         # DECISION/CORRECTION BOOST: User made a decision or correction
         decision_boost = 0
@@ -741,6 +743,10 @@ class MetaRalph:
             r"\bopted for\b",
             r"\binstead of\b",
             r"\brather than\b",
+            r"\bcorrected me\b",
+            r"\bcorrection:\b",
+            r"\bactually want",
+            r"\bthey want\b",
         ]
         if any(re.search(p, learning_lower) for p in decision_patterns):
             decision_boost = 1
@@ -749,7 +755,7 @@ class MetaRalph:
         importance_score = context.get("importance_score")
         is_priority = context.get("is_priority", False)
         if is_priority:
-            priority_boost = max(priority_boost, 2)
+            priority_boost = max(priority_boost, 1.0)
 
         # ACTIONABILITY: Can I act on this?
         if any(word in learning_lower for word in ["always", "never", "use", "avoid", "prefer", "should", "must", "set", "allows", "cap"]):
@@ -872,67 +878,29 @@ class MetaRalph:
     def _attempt_refinement(self, learning: str, issues: List[str]) -> Optional[str]:
         """Attempt to auto-refine a learning that needs work.
 
-        Simple rule-based refinement for common patterns.
-        Adds reasoning or specificity to boost score.
+        Only performs structural cleanup (whitespace, prefix dedup).
+        Does NOT add fake reasoning or boilerplate — if the original
+        learning lacks reasoning, it should score low honestly rather
+        than get synthetic text appended.
         """
-        refined = learning
+        refined = learning.strip()
         made_changes = False
-        learning_lower = learning.lower()
-        issues_text = " ".join(issues).lower()
 
-        # Strategy 1: Add reasoning if missing (broader matching)
-        if "no reasoning" in issues_text or "without justification" in issues_text:
-            if any(word in learning_lower for word in ["prefer", "use", "always", "never", "avoid", "should", "must", "need"]):
-                refined = f"{learning} (because it improves quality and prevents issues)"
-                made_changes = True
-            elif "critical" in learning_lower or "important" in learning_lower:
-                refined = f"{learning} - this is essential because ignoring it causes problems"
-                made_changes = True
-
-        # Strategy 2: Add domain specificity for tech mentions
-        if ("too generic" in issues_text or "obvious" in issues_text) and not made_changes:
-            tech_words = ["typescript", "javascript", "python", "react", "api", "database", "oauth", "redis", "docker",
-                         "health", "player", "game", "balance", "spawn", "queue", "bridge", "worker"]
-            for tech in tech_words:
-                if tech in learning_lower:
-                    refined = f"[{tech.upper()}] {learning}"
-                    made_changes = True
-                    break
-
-        # Strategy 3: Structure "remember/don't forget" statements - add proper reasoning
-        memory_triggers = ["remember", "don't forget", "dont forget", "keep in mind", "note:", "critical", "insight"]
-        if any(trigger in learning_lower for trigger in memory_triggers) and not made_changes:
-            if ": " in learning:
-                parts = learning.split(": ", 1)
-                if len(parts) == 2 and len(parts[1].strip()) > 10:
-                    action = parts[1].strip()
-                    refined = f"Always {action} because it prevents issues later"
-                    made_changes = True
-            elif "-" in learning:
-                # Handle bullet point style "INSIGHT: - point"
-                refined = f"Rule: {learning.replace('-', '').strip()} - apply this consistently"
-                made_changes = True
-
-        # Strategy 4: Add actionability for vague items
-        if "no actionable" in issues_text and not made_changes:
-            if any(word in learning_lower for word in ["should", "need to", "must", "always", "important"]):
-                refined = f"Action: {learning} - do this consistently in this project"
-                made_changes = True
-            elif len(learning) > 50:
-                # Extract first meaningful sentence as a rule
-                refined = f"Principle: {learning[:100]}..."
-                made_changes = True
-
-        # Strategy 5: Add outcome linkage
-        if "not linked" in issues_text and "outcome" in issues_text and not made_changes:
-            if any(word in learning_lower for word in ["prefer", "use", "avoid", "should"]):
-                refined = f"{learning} - validated by positive outcomes in similar situations"
-                made_changes = True
-
-        # Strategy 6: Convert vague actions to specific rules (fallback)
-        if not made_changes and any(word in learning_lower for word in ["should", "need to", "must"]):
-            refined = f"When working on this project: {learning}"
+        # Structural fix: collapse excessive whitespace
+        import re as _re
+        collapsed = _re.sub(r"\s{2,}", " ", refined)
+        if collapsed != refined:
+            refined = collapsed
             made_changes = True
+
+        # Structural fix: deduplicate redundant prefixes
+        #   e.g. "CRITICAL: CRITICAL: do X" → "CRITICAL: do X"
+        for prefix in ("CRITICAL:", "REMEMBER:", "RULE:", "NOTE:", "INSIGHT:"):
+            double = f"{prefix} {prefix}"
+            if refined.upper().startswith(double.upper()):
+                refined = f"{prefix} {refined[len(double):].strip()}"
+                made_changes = True
+                break
 
         return refined if made_changes else None
 

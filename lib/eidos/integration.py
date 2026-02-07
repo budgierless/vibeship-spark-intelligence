@@ -195,8 +195,10 @@ def _auto_close_episode(store, episode: Episode):
 
     if failed > passed:
         outcome = Outcome.FAILURE
+    elif passed > 0 and failed == 0:
+        outcome = Outcome.SUCCESS  # All-pass episodes are genuine successes
     elif passed > 0:
-        outcome = Outcome.PARTIAL
+        outcome = Outcome.PARTIAL  # Mixed pass/fail
     else:
         outcome = Outcome.ESCALATED
 
@@ -272,6 +274,7 @@ def _run_distillation(episode: Episode, steps: List[Step]):
     reflection = engine.reflect_on_episode(episode, steps)
     candidates = engine.generate_distillations(episode, steps, reflection)
 
+    saved = []
     for candidate in candidates:
         # Filter out primitive/low-value distillations before saving
         if _is_primitive_distillation(candidate.statement):
@@ -281,6 +284,25 @@ def _run_distillation(episode: Episode, steps: List[Step]):
             continue
         distillation = engine.finalize_distillation(candidate)
         store.save_distillation(distillation)
+        saved.append(distillation)
+
+    # Periodically merge duplicate/similar distillations
+    # (the merge function existed but was never called)
+    if saved:
+        try:
+            all_dists = store.get_all_distillations(limit=200)
+            if len(all_dists) > 10:
+                merged = engine.merge_similar_distillations(all_dists)
+                if len(merged) < len(all_dists):
+                    keep_ids = {m.distillation_id for m in merged}
+                    remove_ids = [d.distillation_id for d in all_dists if d.distillation_id not in keep_ids]
+                    if remove_ids:
+                        import sqlite3 as _sql
+                        with _sql.connect(store.db_path) as conn:
+                            for rid in remove_ids:
+                                conn.execute("DELETE FROM distillations WHERE distillation_id = ?", (rid,))
+        except Exception:
+            pass  # Never break the main flow
 
 
 def _is_primitive_distillation(statement: str) -> bool:
@@ -378,12 +400,15 @@ def create_step_before_action(
         pass  # Graceful degradation if retriever fails
 
     # Create step with FULL Step Envelope
+    # Build descriptive intent/decision from tool_input (not templates)
+    intent_desc = _describe_intent(tool_name, tool_input)
+    decision_desc = _describe_decision(tool_name, tool_input)
     step = Step(
         step_id="",
         episode_id=episode.episode_id,
         trace_id=trace_id,
-        intent=f"Execute {tool_name}",
-        decision=f"Use {tool_name} tool",
+        intent=intent_desc,
+        decision=decision_desc,
         hypothesis=prediction.get("reason", ""),  # Falsifiable hypothesis
         alternatives=[],
         assumptions=_extract_assumptions(tool_name, tool_input),
@@ -450,6 +475,7 @@ def create_step_before_action(
         )
 
     # Save step data for post-action completion (including retrieved distillation IDs)
+    # Preserve descriptive intent/decision from pre-action for distillation quality
     _save_active_step(session_id, {
         "step_id": step.step_id,
         "episode_id": episode.episode_id,
@@ -458,6 +484,9 @@ def create_step_before_action(
         "trace_id": trace_id,
         "timestamp": time.time(),
         "retrieved_distillation_ids": retrieved_memory_ids,
+        "intent": step.intent,
+        "decision": step.decision,
+        "action_details": step.action_details,
     })
 
     # Update episode step count
@@ -525,18 +554,22 @@ def complete_step_after_action(
     confidence_delta = confidence_after - confidence_before
 
     # Create completed step with FULL envelope
+    # Preserve descriptive intent/decision from pre-action step (avoid template overwrite)
+    pre_intent = step_data.get("intent", f"Execute {tool_name}")
+    pre_decision = step_data.get("decision", f"Use {tool_name} tool")
+    pre_action_details = step_data.get("action_details", {"tool": tool_name})
     step = Step(
         step_id=step_data.get("step_id", ""),
         episode_id=episode.episode_id,
         trace_id=trace_id,
-        intent=f"Execute {tool_name}",
-        decision=f"Use {tool_name} tool",
+        intent=pre_intent,
+        decision=pre_decision,
         hypothesis=prediction.get("reason", ""),
         prediction=prediction.get("reason", ""),
         stop_condition=f"If {tool_name} fails twice, diagnose",
         confidence_before=confidence_before,
         action_type=ActionType.TOOL_CALL,
-        action_details={"tool": tool_name},
+        action_details=pre_action_details,
         result=result[:500] if result else (error[:500] if error else ""),
         validation_evidence=f"exit_code={'0' if success else '1'}; output_length={len(result or error or '')}",
         evaluation=evaluation,
@@ -609,6 +642,78 @@ def _update_distillation_feedback(step_data: Dict, success: bool):
             retriever.record_usage(did, helped=success)
     except Exception:
         pass  # Never break the main flow
+
+
+def _describe_intent(tool_name: str, tool_input: Dict) -> str:
+    """Build a descriptive intent from tool name and input.
+
+    Instead of generic 'Execute Edit', produce something like
+    'Edit lib/meta_ralph.py to fix scoring threshold'.
+    """
+    ti = tool_input or {}
+    try:
+        if tool_name == "Edit":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            old = str(ti.get("old_string", ""))[:40].replace("\n", " ").strip()
+            return f"Edit {short} (replace '{old}')" if old else f"Edit {short}"
+        if tool_name == "Read":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            return f"Read {short}"
+        if tool_name == "Write":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            return f"Write {short}"
+        if tool_name == "Bash":
+            cmd = str(ti.get("command", ""))[:60].split("\n")[0].strip()
+            return f"Run command: {cmd}" if cmd else "Run shell command"
+        if tool_name == "Glob":
+            pat = ti.get("pattern", "")
+            return f"Find files matching {pat}" if pat else "Find files"
+        if tool_name == "Grep":
+            pat = ti.get("pattern", "")
+            return f"Search for '{pat[:40]}'" if pat else "Search file contents"
+        if tool_name == "Task":
+            desc = ti.get("description", "") or ti.get("prompt", "")[:50]
+            return f"Delegate: {desc}" if desc else "Delegate subtask"
+    except Exception:
+        pass
+    return f"{tool_name} operation"
+
+
+def _describe_decision(tool_name: str, tool_input: Dict) -> str:
+    """Build a descriptive decision from tool context.
+
+    Instead of 'Use Edit tool', produce something like
+    'Modify scoring threshold in meta_ralph.py'.
+    """
+    ti = tool_input or {}
+    try:
+        if tool_name == "Edit":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            new = str(ti.get("new_string", ""))[:40].replace("\n", " ").strip()
+            return f"Modify {short}: '{new}'" if new else f"Modify {short}"
+        if tool_name == "Write":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            return f"Create/overwrite {short}"
+        if tool_name == "Bash":
+            cmd = str(ti.get("command", ""))[:40].split("\n")[0].strip()
+            return f"Execute: {cmd}" if cmd else "Execute shell command"
+        if tool_name == "Read":
+            fp = ti.get("file_path", "")
+            short = fp.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] if fp else "file"
+            return f"Inspect {short}"
+        if tool_name == "Grep":
+            pat = ti.get("pattern", "")[:30]
+            return f"Search codebase for '{pat}'" if pat else "Search codebase"
+        if tool_name == "Glob":
+            return f"Locate files by pattern"
+    except Exception:
+        pass
+    return f"Apply {tool_name}"
 
 
 def _extract_assumptions(tool_name: str, tool_input: Dict) -> List[str]:

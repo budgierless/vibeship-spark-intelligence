@@ -395,10 +395,8 @@ class SparkAdvisor:
             try:
                 with os.fdopen(fd, 'w') as f:
                     json.dump(merged, f, indent=2)
-                # Atomic rename (on Windows, need to remove target first)
-                if EFFECTIVENESS_FILE.exists():
-                    EFFECTIVENESS_FILE.unlink()
-                os.rename(temp_path, EFFECTIVENESS_FILE)
+                # Atomic replace (os.replace works on Windows without separate unlink)
+                os.replace(temp_path, str(EFFECTIVENESS_FILE))
             except Exception:
                 # Clean up temp file on error
                 if os.path.exists(temp_path):

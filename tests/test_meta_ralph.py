@@ -98,10 +98,13 @@ def test_scoring_dimensions():
     result = ralph.roast("Always validate input", source="test")
     assert result.score.actionability >= 1, f"Expected actionability >= 1, got {result.score.actionability}"
 
-    # Test that priority/remember signals lead to quality verdict
-    # (may be refined, so check verdict not raw novelty score)
+    # Test that priority/remember signals boost novelty but don't bypass quality gates.
+    # Vague "remember this" text without reasoning/action should NOT reach QUALITY.
     result = ralph.roast("Remember this: important project insight", source="test")
-    assert result.verdict == RoastVerdict.QUALITY, f"Expected QUALITY for remember signal, got {result.verdict.value}"
+    assert result.score.novelty >= 1, f"Expected novelty >= 1 for remember signal, got {result.score.novelty}"
+    # But a concrete "remember" with action SHOULD reach quality:
+    result2 = ralph.roast("Remember this: always validate user input because SQL injection is real", source="test")
+    assert result2.verdict == RoastVerdict.QUALITY, f"Expected QUALITY for concrete remember, got {result2.verdict.value}"
 
     print("Scoring dimensions: PASSED")
 

@@ -113,9 +113,9 @@ def _ensure_dirs() -> None:
 def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    if path.exists():
-        path.unlink()
-    tmp.rename(path)
+    # os.replace is atomic even on Windows (no unlink+rename race)
+    import os
+    os.replace(str(tmp), str(path))
 
 
 def _read_json(path: Path, default: Dict[str, Any]) -> Dict[str, Any]:
@@ -441,10 +441,23 @@ def invalidate_packets(
     tool_name: Optional[str] = None,
     intent_family: Optional[str] = None,
     reason: str = "filtered_invalidation",
+    file_hint: Optional[str] = None,
 ) -> int:
+    """Invalidate matching packets.
+
+    When *file_hint* is provided (e.g. an edited file path), only
+    packets whose advisory text or advice items reference that file
+    are invalidated, rather than blanket project-wide invalidation.
+    """
     index = _load_index()
     meta = index.get("packet_meta") or {}
     to_invalidate: List[str] = []
+
+    # Normalise file_hint for substring matching
+    file_hint_lower = ""
+    if file_hint:
+        file_hint_lower = file_hint.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
     for packet_id, row in meta.items():
         item = row or {}
         if project_key and item.get("project_key") != project_key:
@@ -453,6 +466,18 @@ def invalidate_packets(
             continue
         if intent_family and item.get("intent_family") != intent_family:
             continue
+
+        # If file_hint given, only invalidate packets that reference
+        # the same file (by filename match in advisory text or items).
+        if file_hint_lower:
+            pkt_text = str(item.get("advisory_text") or "").lower()
+            pkt_tool = str(item.get("tool_name") or "").lower()
+            items_text = str(item.get("advice_items") or "").lower()
+            if file_hint_lower not in pkt_text and file_hint_lower not in items_text:
+                # Also skip wildcard baseline packets — those aren't file-specific
+                if pkt_tool == "*":
+                    continue
+
         to_invalidate.append(packet_id)
     count = 0
     for packet_id in to_invalidate:
