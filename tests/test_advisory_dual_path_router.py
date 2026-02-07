@@ -4,6 +4,7 @@ import json
 
 from lib.advisor import Advice
 from lib.advisory_gate import GateDecision, GateResult
+import lib.advice_feedback as advice_feedback
 import lib.advisory_engine as engine
 import lib.advisory_packet_store as packet_store
 import lib.advisory_state as advisory_state
@@ -17,6 +18,9 @@ def _patch_state_and_store(monkeypatch, tmp_path):
     monkeypatch.setattr(packet_store, "PACKET_DIR", packet_dir)
     monkeypatch.setattr(packet_store, "INDEX_FILE", packet_dir / "index.json")
     monkeypatch.setattr(packet_store, "PREFETCH_QUEUE_FILE", packet_dir / "prefetch_queue.jsonl")
+
+    monkeypatch.setattr(advice_feedback, "REQUESTS_FILE", tmp_path / "advice_feedback_requests.jsonl")
+    monkeypatch.setattr(advice_feedback, "STATE_FILE", tmp_path / "advice_feedback_state.json")
 
     monkeypatch.setattr(engine, "ENGINE_LOG", tmp_path / "advisory_engine.jsonl")
     monkeypatch.setattr(engine, "_project_key", lambda: "proj")
@@ -77,6 +81,12 @@ def test_pre_tool_uses_packet_path_when_available(monkeypatch, tmp_path):
 
     text = engine.on_pre_tool("s1", "Edit", {"file_path": "x.py"})
     assert text == "Use packet guidance."
+    req_lines = advice_feedback.REQUESTS_FILE.read_text(encoding="utf-8").splitlines()
+    assert req_lines
+    row = json.loads(req_lines[-1])
+    assert row["tool"] == "Edit"
+    assert row["advice_ids"] == ["pkt-a1"]
+    assert row.get("route") in {"packet_exact", "packet_relaxed"}
 
 
 def test_pre_tool_falls_back_to_live_and_persists_packet(monkeypatch, tmp_path):
@@ -126,4 +136,3 @@ def test_on_user_prompt_creates_baseline_and_prefetch_job(monkeypatch, tmp_path)
     assert len(lines) >= 1
     row = json.loads(lines[-1])
     assert row["session_id"] == "s3"
-

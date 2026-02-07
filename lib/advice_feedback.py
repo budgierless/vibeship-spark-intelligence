@@ -38,6 +38,11 @@ def record_advice_request(
     session_id: str,
     tool: str,
     advice_ids: List[str],
+    advice_texts: Optional[List[str]] = None,
+    sources: Optional[List[str]] = None,
+    trace_id: Optional[str] = None,
+    route: Optional[str] = None,
+    packet_id: Optional[str] = None,
     min_interval_s: int = 600,
 ) -> bool:
     """Record a feedback request when advice was shown."""
@@ -54,6 +59,11 @@ def record_advice_request(
             "session_id": session_id,
             "tool": tool,
             "advice_ids": advice_ids[:20],
+            "advice_texts": [str(x)[:240] for x in (advice_texts or [])[:20]],
+            "sources": [str(x)[:80] for x in (sources or [])[:20]],
+            "trace_id": (str(trace_id)[:120] if trace_id else None),
+            "route": (str(route)[:80] if route else None),
+            "packet_id": (str(packet_id)[:120] if packet_id else None),
             "created_at": now,
         }
         with REQUESTS_FILE.open("a", encoding="utf-8") as f:

@@ -302,6 +302,23 @@ def on_pre_tool(
                 )
                 packet_id = save_packet(packet_payload)
 
+            try:
+                from .advice_feedback import record_advice_request
+
+                record_advice_request(
+                    session_id=session_id,
+                    tool=tool_name,
+                    advice_ids=shown_ids,
+                    advice_texts=[str(getattr(a, "text", "") or "") for a in emitted_advice],
+                    sources=[str(getattr(a, "source", "") or "") for a in emitted_advice],
+                    trace_id=trace_id,
+                    route=route,
+                    packet_id=packet_id,
+                    min_interval_s=120,
+                )
+            except Exception:
+                pass
+
         save_state(state)
 
         _log_engine_event(

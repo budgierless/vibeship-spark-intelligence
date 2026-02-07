@@ -1374,6 +1374,7 @@ class SparkAdvisor:
             "tool": tool,
             "trace_id": trace_id,
             "advice_ids": [a.advice_id for a in advice_list],
+            "advice_texts": [a.text[:160] for a in advice_list],
             "insight_keys": [a.insight_key for a in advice_list],
             "sources": [a.source for a in advice_list],
         }
