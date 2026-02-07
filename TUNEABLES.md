@@ -1088,6 +1088,32 @@ This is the active hot-path advisory stack used by hooks:
     "cache_ttl": 120,
     "min_rank_score": 0.35
   },
+  "advisory_engine": {
+    "enabled": true,
+    "max_ms": 4000,
+    "include_mind": false,
+    "prefetch_queue_enabled": true,
+    "prefetch_inline_enabled": true,
+    "prefetch_inline_max_jobs": 1
+  },
+  "advisory_gate": {
+    "max_emit_per_call": 3,
+    "tool_cooldown_s": 30,
+    "warning_threshold": 0.8,
+    "note_threshold": 0.5,
+    "whisper_threshold": 0.35
+  },
+  "advisory_packet_store": {
+    "packet_ttl_s": 900,
+    "max_index_packets": 2000,
+    "relaxed_effectiveness_weight": 2.0
+  },
+  "advisory_prefetch": {
+    "worker_enabled": true,
+    "max_jobs_per_run": 3,
+    "max_tools_per_job": 3,
+    "min_probability": 0.25
+  },
   "synthesizer": {
     "mode": "auto",
     "preferred_provider": "ollama",
@@ -1121,6 +1147,10 @@ Components fall back to hard-coded defaults when a key is absent.
 | `promotion` | Promoter + auto-promotion interval | `adapter_budgets`, `confidence_floor`, `min_age_hours`, `auto_interval_s` |
 | `synthesizer` | Advisory synthesizer | `mode`, `preferred_provider`, `ai_timeout_s`, `cache_ttl_s`, `max_cache_entries` |
 | `advisor` | Advisor | `min_reliability`, `min_validations_strong`, `max_items`, `cache_ttl`, `min_rank_score` |
+| `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs` |
+| `advisory_gate` | Advisory emission policy | `max_emit_per_call`, `tool_cooldown_s`, `warning_threshold`, `note_threshold`, `whisper_threshold` |
+| `advisory_packet_store` | Packet lifecycle + relaxed lookup weighting | `packet_ttl_s`, `max_index_packets`, `relaxed_effectiveness_weight`, `relaxed_low_effectiveness_threshold`, `relaxed_low_effectiveness_penalty` |
+| `advisory_prefetch` | Prefetch worker planning limits | `worker_enabled`, `max_jobs_per_run`, `max_tools_per_job`, `min_probability` |
 | `meta_ralph` | Meta-Ralph quality gate | `quality_threshold`, `needs_work_threshold`, `needs_work_close_delta`, `min_outcome_samples`, `min_tuneable_samples` |
 | `eidos` | EIDOS Budget defaults | `max_steps`, `max_time_seconds`, `max_retries_per_error`, `max_file_touches`, `no_evidence_limit` |
 | `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `*_enabled` task flags |
@@ -1150,5 +1180,5 @@ def _load_X_config():
     # Override module-level constants from cfg
 ```
 
-Most components load config once at module import. The advisory synthesizer hot-reloads when `tuneables.json` changes.
+Most components load config once at module import. The advisory synthesizer hot-reloads when `tuneables.json` changes, and Pulse runtime apply now hot-updates `advisory_engine`, `advisory_gate`, `advisory_packet_store`, and `advisory_prefetch` without restart.
 

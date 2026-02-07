@@ -22,6 +22,13 @@ PREFETCH_QUEUE_FILE = PACKET_DIR / "prefetch_queue.jsonl"
 
 DEFAULT_PACKET_TTL_S = 900.0
 MAX_INDEX_PACKETS = 2000
+RELAXED_MATCH_WEIGHT_TOOL = 4.0
+RELAXED_MATCH_WEIGHT_INTENT = 3.0
+RELAXED_MATCH_WEIGHT_PLANE = 2.0
+RELAXED_WILDCARD_TOOL_BONUS = 0.5
+RELAXED_EFFECTIVENESS_WEIGHT = 2.0
+RELAXED_LOW_EFFECTIVENESS_THRESHOLD = 0.3
+RELAXED_LOW_EFFECTIVENESS_PENALTY = 0.5
 
 REQUIRED_PACKET_FIELDS = {
     "packet_id",
@@ -179,7 +186,7 @@ def build_packet(
     advice_items: Optional[List[Dict[str, Any]]] = None,
     lineage: Optional[Dict[str, Any]] = None,
     trace_id: Optional[str] = None,
-    ttl_s: float = DEFAULT_PACKET_TTL_S,
+    ttl_s: Optional[float] = None,
 ) -> Dict[str, Any]:
     created = _now()
     project = _sanitize_token(project_key, "unknown_project")
@@ -195,6 +202,7 @@ def build_packet(
     if trace_id:
         safe_lineage.setdefault("trace_id", trace_id)
 
+    ttl_value = DEFAULT_PACKET_TTL_S if ttl_s is None else float(ttl_s or DEFAULT_PACKET_TTL_S)
     return {
         "packet_id": packet_id,
         "project_key": project,
@@ -208,7 +216,7 @@ def build_packet(
         "lineage": safe_lineage,
         "created_ts": created,
         "updated_ts": created,
-        "fresh_until_ts": created + max(30.0, float(ttl_s or DEFAULT_PACKET_TTL_S)),
+        "fresh_until_ts": created + max(30.0, float(ttl_value)),
         "invalidated": False,
         "invalidate_reason": "",
         "usage_count": 0,
@@ -367,17 +375,17 @@ def lookup_relaxed(
             continue
         score = 0.0
         if tool_name and row.get("tool_name") == tool_name:
-            score += 4.0
+            score += RELAXED_MATCH_WEIGHT_TOOL
         if intent_family and row.get("intent_family") == intent_family:
-            score += 3.0
+            score += RELAXED_MATCH_WEIGHT_INTENT
         if task_plane and row.get("task_plane") == task_plane:
-            score += 2.0
+            score += RELAXED_MATCH_WEIGHT_PLANE
         if not tool_name and row.get("tool_name") == "*":
-            score += 0.5
+            score += RELAXED_WILDCARD_TOOL_BONUS
         effectiveness = max(0.0, min(1.0, float(row.get("effectiveness_score", 0.5) or 0.5)))
-        score += effectiveness * 2.0
-        if effectiveness < 0.3:
-            score -= 0.5
+        score += effectiveness * RELAXED_EFFECTIVENESS_WEIGHT
+        if effectiveness < RELAXED_LOW_EFFECTIVENESS_THRESHOLD:
+            score -= RELAXED_LOW_EFFECTIVENESS_PENALTY
         score += min(1.0, max(0.0, (float(row.get("updated_ts", 0.0)) / 1e10)))
         candidates.append((score, float(row.get("updated_ts", 0.0)), packet_id))
 
@@ -551,6 +559,76 @@ def enqueue_prefetch_job(job: Dict[str, Any]) -> str:
     return str(payload["job_id"])
 
 
+def apply_packet_store_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Apply packet store tuneables used by packet creation and relaxed ranking."""
+    global DEFAULT_PACKET_TTL_S
+    global MAX_INDEX_PACKETS
+    global RELAXED_EFFECTIVENESS_WEIGHT
+    global RELAXED_LOW_EFFECTIVENESS_THRESHOLD
+    global RELAXED_LOW_EFFECTIVENESS_PENALTY
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "packet_ttl_s" in cfg:
+        try:
+            DEFAULT_PACKET_TTL_S = max(30.0, min(86400.0, float(cfg.get("packet_ttl_s") or 30.0)))
+            applied.append("packet_ttl_s")
+        except Exception:
+            warnings.append("invalid_packet_ttl_s")
+
+    if "max_index_packets" in cfg:
+        try:
+            MAX_INDEX_PACKETS = max(100, min(50000, int(cfg.get("max_index_packets") or 100)))
+            applied.append("max_index_packets")
+        except Exception:
+            warnings.append("invalid_max_index_packets")
+
+    if "relaxed_effectiveness_weight" in cfg:
+        try:
+            RELAXED_EFFECTIVENESS_WEIGHT = max(
+                0.0,
+                min(10.0, float(cfg.get("relaxed_effectiveness_weight") or 0.0)),
+            )
+            applied.append("relaxed_effectiveness_weight")
+        except Exception:
+            warnings.append("invalid_relaxed_effectiveness_weight")
+
+    if "relaxed_low_effectiveness_threshold" in cfg:
+        try:
+            RELAXED_LOW_EFFECTIVENESS_THRESHOLD = max(
+                0.0,
+                min(1.0, float(cfg.get("relaxed_low_effectiveness_threshold") or 0.0)),
+            )
+            applied.append("relaxed_low_effectiveness_threshold")
+        except Exception:
+            warnings.append("invalid_relaxed_low_effectiveness_threshold")
+
+    if "relaxed_low_effectiveness_penalty" in cfg:
+        try:
+            RELAXED_LOW_EFFECTIVENESS_PENALTY = max(
+                0.0,
+                min(5.0, float(cfg.get("relaxed_low_effectiveness_penalty") or 0.0)),
+            )
+            applied.append("relaxed_low_effectiveness_penalty")
+        except Exception:
+            warnings.append("invalid_relaxed_low_effectiveness_penalty")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def get_packet_store_config() -> Dict[str, Any]:
+    return {
+        "packet_ttl_s": float(DEFAULT_PACKET_TTL_S),
+        "max_index_packets": int(MAX_INDEX_PACKETS),
+        "relaxed_effectiveness_weight": float(RELAXED_EFFECTIVENESS_WEIGHT),
+        "relaxed_low_effectiveness_threshold": float(RELAXED_LOW_EFFECTIVENESS_THRESHOLD),
+        "relaxed_low_effectiveness_penalty": float(RELAXED_LOW_EFFECTIVENESS_PENALTY),
+    }
+
+
 def get_store_status() -> Dict[str, Any]:
     index = _load_index()
     meta = index.get("packet_meta") or {}
@@ -588,5 +666,6 @@ def get_store_status() -> Dict[str, Any]:
         "feedback_total": feedback_total,
         "hit_rate": (emit_total / max(usage_total, 1)) if usage_total > 0 else None,
         "avg_effectiveness_score": round(float(avg_effectiveness), 3),
+        "config": get_packet_store_config(),
         "index_file": str(INDEX_FILE),
     }

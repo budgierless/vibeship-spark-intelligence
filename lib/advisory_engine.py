@@ -27,6 +27,78 @@ except Exception:
     INLINE_PREFETCH_MAX_JOBS = 1
 
 
+def _parse_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return bool(default)
+
+
+def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Apply advisory engine runtime tuneables."""
+    global ENGINE_ENABLED
+    global MAX_ENGINE_MS
+    global INCLUDE_MIND_IN_MEMORY
+    global ENABLE_PREFETCH_QUEUE
+    global ENABLE_INLINE_PREFETCH_WORKER
+    global INLINE_PREFETCH_MAX_JOBS
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "enabled" in cfg:
+        ENGINE_ENABLED = _parse_bool(cfg.get("enabled"), ENGINE_ENABLED)
+        applied.append("enabled")
+
+    if "max_ms" in cfg:
+        try:
+            MAX_ENGINE_MS = max(250.0, min(20000.0, float(cfg.get("max_ms"))))
+            applied.append("max_ms")
+        except Exception:
+            warnings.append("invalid_max_ms")
+
+    if "include_mind" in cfg:
+        INCLUDE_MIND_IN_MEMORY = _parse_bool(cfg.get("include_mind"), INCLUDE_MIND_IN_MEMORY)
+        applied.append("include_mind")
+
+    if "prefetch_queue_enabled" in cfg:
+        ENABLE_PREFETCH_QUEUE = _parse_bool(cfg.get("prefetch_queue_enabled"), ENABLE_PREFETCH_QUEUE)
+        applied.append("prefetch_queue_enabled")
+
+    if "prefetch_inline_enabled" in cfg:
+        ENABLE_INLINE_PREFETCH_WORKER = _parse_bool(
+            cfg.get("prefetch_inline_enabled"),
+            ENABLE_INLINE_PREFETCH_WORKER,
+        )
+        applied.append("prefetch_inline_enabled")
+
+    if "prefetch_inline_max_jobs" in cfg:
+        try:
+            INLINE_PREFETCH_MAX_JOBS = max(1, min(20, int(cfg.get("prefetch_inline_max_jobs") or 1)))
+            applied.append("prefetch_inline_max_jobs")
+        except Exception:
+            warnings.append("invalid_prefetch_inline_max_jobs")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def get_engine_config() -> Dict[str, Any]:
+    return {
+        "enabled": bool(ENGINE_ENABLED),
+        "max_ms": float(MAX_ENGINE_MS),
+        "include_mind": bool(INCLUDE_MIND_IN_MEMORY),
+        "prefetch_queue_enabled": bool(ENABLE_PREFETCH_QUEUE),
+        "prefetch_inline_enabled": bool(ENABLE_INLINE_PREFETCH_WORKER),
+        "prefetch_inline_max_jobs": int(INLINE_PREFETCH_MAX_JOBS),
+    }
+
+
 def _project_key() -> str:
     try:
         from .memory_banks import infer_project_key
@@ -169,7 +241,7 @@ def on_pre_tool(
             save_packet,
         )
         from .advisor import advise_on_tool
-        from .advisory_gate import evaluate
+        from .advisory_gate import evaluate, get_tool_cooldown_s
         from .advisory_synthesizer import synthesize
         from .advisory_emitter import emit_advisory
 
@@ -295,7 +367,7 @@ def on_pre_tool(
         if emitted:
             shown_ids = [d.advice_id for d in gate_result.emitted]
             mark_advice_shown(state, shown_ids)
-            suppress_tool_advice(state, tool_name, duration_s=30)
+            suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
 
             if route == "live":
                 lineage_sources = []
@@ -591,7 +663,11 @@ def _rotate_engine_log() -> None:
 
 
 def get_engine_status() -> Dict[str, Any]:
-    status = {"enabled": ENGINE_ENABLED, "max_ms": MAX_ENGINE_MS}
+    status = {
+        "enabled": ENGINE_ENABLED,
+        "max_ms": MAX_ENGINE_MS,
+        "config": get_engine_config(),
+    }
 
     try:
         from .advisory_synthesizer import get_synth_status

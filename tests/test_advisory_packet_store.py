@@ -196,3 +196,38 @@ def test_record_packet_feedback_for_advice(monkeypatch, tmp_path):
     assert updated is not None
     assert int(updated.get("feedback_count", 0)) >= 1
     assert int(updated.get("noisy_count", 0)) >= 1
+
+
+def test_packet_store_apply_config_updates_defaults(monkeypatch, tmp_path):
+    _patch_store_paths(monkeypatch, tmp_path)
+    monkeypatch.setattr(store, "DEFAULT_PACKET_TTL_S", 900.0)
+    monkeypatch.setattr(store, "MAX_INDEX_PACKETS", 2000)
+
+    result = store.apply_packet_store_config(
+        {
+            "packet_ttl_s": 1800,
+            "max_index_packets": 3500,
+            "relaxed_effectiveness_weight": 3.0,
+            "relaxed_low_effectiveness_threshold": 0.25,
+            "relaxed_low_effectiveness_penalty": 0.8,
+        }
+    )
+    assert "packet_ttl_s" in result.get("applied", [])
+    assert "max_index_packets" in result.get("applied", [])
+
+    packet = store.build_packet(
+        project_key="proj",
+        session_context_key="ctx",
+        tool_name="Read",
+        intent_family="knowledge_alignment",
+        task_plane="build_delivery",
+        advisory_text="Read docs first.",
+        source_mode="deterministic",
+        lineage={"sources": ["baseline"], "memory_absent_declared": False},
+    )
+    ttl_s = float(packet.get("fresh_until_ts", 0.0)) - float(packet.get("created_ts", 0.0))
+    assert 1799.0 <= ttl_s <= 1801.0
+
+    cfg = store.get_packet_store_config()
+    assert int(cfg.get("max_index_packets", 0)) == 3500
+    assert float(cfg.get("packet_ttl_s", 0.0)) == 1800.0

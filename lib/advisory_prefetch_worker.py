@@ -13,6 +13,69 @@ from .advisory_prefetch_planner import plan_prefetch_jobs
 
 WORKER_ENABLED = os.getenv("SPARK_ADVISORY_PREFETCH_WORKER", "1") != "0"
 PROCESSED_MAX = 4000
+PREFETCH_MAX_JOBS = 3
+PREFETCH_MAX_TOOLS_PER_JOB = 3
+PREFETCH_MIN_PROBABILITY = 0.25
+
+
+def _parse_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return bool(default)
+
+
+def apply_prefetch_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Apply prefetch worker runtime tuneables."""
+    global WORKER_ENABLED
+    global PREFETCH_MAX_JOBS
+    global PREFETCH_MAX_TOOLS_PER_JOB
+    global PREFETCH_MIN_PROBABILITY
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "worker_enabled" in cfg:
+        WORKER_ENABLED = _parse_bool(cfg.get("worker_enabled"), WORKER_ENABLED)
+        applied.append("worker_enabled")
+
+    if "max_jobs_per_run" in cfg:
+        try:
+            PREFETCH_MAX_JOBS = max(1, min(50, int(cfg.get("max_jobs_per_run") or 1)))
+            applied.append("max_jobs_per_run")
+        except Exception:
+            warnings.append("invalid_max_jobs_per_run")
+
+    if "max_tools_per_job" in cfg:
+        try:
+            PREFETCH_MAX_TOOLS_PER_JOB = max(1, min(10, int(cfg.get("max_tools_per_job") or 1)))
+            applied.append("max_tools_per_job")
+        except Exception:
+            warnings.append("invalid_max_tools_per_job")
+
+    if "min_probability" in cfg:
+        try:
+            PREFETCH_MIN_PROBABILITY = max(0.0, min(1.0, float(cfg.get("min_probability") or 0.0)))
+            applied.append("min_probability")
+        except Exception:
+            warnings.append("invalid_min_probability")
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def get_prefetch_config() -> Dict[str, Any]:
+    return {
+        "worker_enabled": bool(WORKER_ENABLED),
+        "max_jobs_per_run": int(PREFETCH_MAX_JOBS),
+        "max_tools_per_job": int(PREFETCH_MAX_TOOLS_PER_JOB),
+        "min_probability": float(PREFETCH_MIN_PROBABILITY),
+    }
 
 
 def _worker_state_file():
@@ -121,10 +184,15 @@ def _pending_jobs(rows: List[Dict[str, Any]], processed_ids: List[str]) -> List[
 
 def process_prefetch_queue(
     *,
-    max_jobs: int = 3,
-    max_tools_per_job: int = 3,
+    max_jobs: int | None = None,
+    max_tools_per_job: int | None = None,
+    min_probability: float | None = None,
 ) -> Dict[str, Any]:
     """Consume queued prefetch intents and create predictive packets."""
+    max_jobs_value = max(1, int(max_jobs or PREFETCH_MAX_JOBS))
+    max_tools_value = max(1, int(max_tools_per_job or PREFETCH_MAX_TOOLS_PER_JOB))
+    min_prob_value = max(0.0, min(1.0, float(PREFETCH_MIN_PROBABILITY if min_probability is None else min_probability)))
+
     state = _load_state()
     if not WORKER_ENABLED:
         state["last_result"] = {"ok": False, "reason": "worker_disabled"}
@@ -137,7 +205,7 @@ def process_prefetch_queue(
 
     rows = _read_queue_rows()
     pending = _pending_jobs(rows, state.get("processed_job_ids") or [])
-    jobs = pending[: max(0, int(max_jobs or 0))]
+    jobs = pending[: max(0, int(max_jobs_value))]
     if not jobs:
         state["last_run_at"] = time.time()
         state["last_result"] = {"ok": True, "jobs_processed": 0, "packets_created": 0}
@@ -152,7 +220,11 @@ def process_prefetch_queue(
         job_id = str(job.get("job_id") or "").strip()
         if not job_id:
             continue
-        plans = plan_prefetch_jobs(job, max_jobs=max_tools_per_job, min_probability=0.25)
+        plans = plan_prefetch_jobs(
+            job,
+            max_jobs=max_tools_value,
+            min_probability=min_prob_value,
+        )
         local_packets: List[str] = []
         for planned in plans:
             tool_name = str(planned.get("tool_name") or "").strip() or "*"
@@ -221,4 +293,5 @@ def get_worker_status() -> Dict[str, Any]:
         "pending_jobs": len(pending),
         "last_result": state.get("last_result") or {},
         "packets_total": int(store.get("total_packets", 0) or 0),
+        "config": get_prefetch_config(),
     }

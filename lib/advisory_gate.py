@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .diagnostics import log_debug
 
@@ -96,6 +96,104 @@ PHASE_RELEVANCE = {
         "user_understanding": 0.8,
     },
 }
+
+
+def _clamp_float(value: Any, default: float, min_value: float, max_value: float) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        parsed = float(default)
+    return max(min_value, min(max_value, parsed))
+
+
+def apply_gate_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Apply advisory gate runtime tuneables."""
+    global MAX_EMIT_PER_CALL
+    global TOOL_COOLDOWN_S
+    global ADVICE_REPEAT_COOLDOWN_S
+
+    applied: List[str] = []
+    warnings: List[str] = []
+    if not isinstance(cfg, dict):
+        return {"applied": applied, "warnings": warnings}
+
+    if "max_emit_per_call" in cfg:
+        try:
+            MAX_EMIT_PER_CALL = max(1, min(10, int(cfg.get("max_emit_per_call") or 1)))
+            applied.append("max_emit_per_call")
+        except Exception:
+            warnings.append("invalid_max_emit_per_call")
+
+    if "tool_cooldown_s" in cfg:
+        try:
+            TOOL_COOLDOWN_S = max(1, min(3600, int(cfg.get("tool_cooldown_s") or 1)))
+            applied.append("tool_cooldown_s")
+        except Exception:
+            warnings.append("invalid_tool_cooldown_s")
+
+    if "advice_repeat_cooldown_s" in cfg:
+        try:
+            ADVICE_REPEAT_COOLDOWN_S = max(
+                5, min(86400, int(cfg.get("advice_repeat_cooldown_s") or 5))
+            )
+            applied.append("advice_repeat_cooldown_s")
+        except Exception:
+            warnings.append("invalid_advice_repeat_cooldown_s")
+
+    warning_threshold = _clamp_float(
+        cfg.get("warning_threshold", AUTHORITY_THRESHOLDS.get(AuthorityLevel.WARNING, 0.8)),
+        AUTHORITY_THRESHOLDS.get(AuthorityLevel.WARNING, 0.8),
+        0.2,
+        0.99,
+    )
+    note_threshold = _clamp_float(
+        cfg.get("note_threshold", AUTHORITY_THRESHOLDS.get(AuthorityLevel.NOTE, 0.5)),
+        AUTHORITY_THRESHOLDS.get(AuthorityLevel.NOTE, 0.5),
+        0.1,
+        0.95,
+    )
+    whisper_threshold = _clamp_float(
+        cfg.get("whisper_threshold", AUTHORITY_THRESHOLDS.get(AuthorityLevel.WHISPER, 0.35)),
+        AUTHORITY_THRESHOLDS.get(AuthorityLevel.WHISPER, 0.35),
+        0.01,
+        0.9,
+    )
+
+    if "warning_threshold" in cfg:
+        applied.append("warning_threshold")
+    if "note_threshold" in cfg:
+        applied.append("note_threshold")
+    if "whisper_threshold" in cfg:
+        applied.append("whisper_threshold")
+
+    # Keep threshold ordering sane: warning > note > whisper.
+    if warning_threshold <= note_threshold:
+        note_threshold = max(0.1, warning_threshold - 0.05)
+        warnings.append("note_threshold_auto_adjusted")
+    if note_threshold <= whisper_threshold:
+        whisper_threshold = max(0.01, note_threshold - 0.05)
+        warnings.append("whisper_threshold_auto_adjusted")
+
+    AUTHORITY_THRESHOLDS[AuthorityLevel.WARNING] = warning_threshold
+    AUTHORITY_THRESHOLDS[AuthorityLevel.NOTE] = note_threshold
+    AUTHORITY_THRESHOLDS[AuthorityLevel.WHISPER] = whisper_threshold
+
+    return {"applied": applied, "warnings": warnings}
+
+
+def get_gate_config() -> Dict[str, Any]:
+    return {
+        "max_emit_per_call": int(MAX_EMIT_PER_CALL),
+        "tool_cooldown_s": int(TOOL_COOLDOWN_S),
+        "advice_repeat_cooldown_s": int(ADVICE_REPEAT_COOLDOWN_S),
+        "warning_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.WARNING, 0.8)),
+        "note_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.NOTE, 0.5)),
+        "whisper_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.WHISPER, 0.35)),
+    }
+
+
+def get_tool_cooldown_s() -> int:
+    return max(1, int(TOOL_COOLDOWN_S))
 
 
 @dataclass
