@@ -52,11 +52,11 @@ TRIGGER_KEYWORDS = {
 # ── Engagement thresholds per topic category ─────────────────
 # Used to build min_faves:N into queries so the API only returns viral tweets.
 CATEGORY_MIN_LIKES = {
-    "core": 20,        # Niche topics (vibecoding) - lower bar to not miss signal
-    "technical": 30,   # Broader tech topics
-    "frontier": 50,    # Very broad topics (AGI) - need higher bar
-    "culture": 40,     # Culture topics must prove signal
-    "discovered": 25,  # Discovered topics get a chance
+    "core": 50,        # Niche topics (vibecoding) - only proven viral
+    "technical": 75,   # Broader tech topics - higher bar
+    "frontier": 100,   # Very broad topics (AGI) - must be genuinely viral
+    "culture": 75,     # Culture topics must prove real signal
+    "discovered": 50,  # Discovered topics - still need to prove value
 }
 
 # ── Search topics (tiered) ──────────────────────────────────
