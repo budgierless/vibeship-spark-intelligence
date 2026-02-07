@@ -265,3 +265,39 @@ To reach 9.5/10 controlled readiness, the fastest path is:
 1. implement prefetch worker,
 2. implement packet effectiveness rerank,
 3. run strict daily measurement loop for one week.
+
+---
+
+## Addendum (2026-02-07): Detailed Execution Updates Applied
+
+The detailed step-by-step expansion has been added in:
+
+- `docs/reports/V1_CONTROL_PRODUCTION_EXECUTION_GUIDE_2026-02-07.md`
+
+This addendum captures the key deltas now required for control-grade operation.
+
+### A) Morning checklist hardening (new mandatory checks)
+
+1. Verify runtime tune apply status each morning via `/api/tuneables/status`.
+2. Capture advisory latency-tail metrics from `~/.spark/advisory_engine.jsonl` (p50/p95/p99 + route split).
+3. Keep one-change-per-window discipline and require measured keep/rollback decisions.
+
+### B) Two additional must-build features
+
+1. Advisory feedback capture in Pulse (`Helpful`, `Not Helpful`, `Too Noisy`) tied to ranking/gating.
+2. A3 prefetch worker + packet effectiveness rerank (`effectiveness_score`, `usage_count`).
+
+### C) Tuneables coverage gaps to add in Pulse
+
+1. `advisory_engine` section (budget, prefetch toggle, memory include toggle, emit controls).
+2. `advisory_gate` section (emit budget, cooldowns, authority thresholds, phase multipliers).
+3. `advisory_packet_store` section (packet TTL, index cap, relaxed-route scoring weights).
+4. complete memory gate weights (`recurrence`, `evidence`).
+5. `request_tracker` section (`max_pending`, `max_completed`, `max_age_seconds`).
+6. `memory_capture` section (`auto_save_threshold`, `suggest_threshold`, `max_capture_chars`).
+7. `queue` section (`max_events`, `tail_chunk_bytes`).
+
+### D) Updated practical status framing
+
+1. Production loop gates are currently passing, but latency-tail and live-route share still require hardening before 9.5 control readiness.
+2. Use the execution guide above as the operating playbook for daily iteration windows.
