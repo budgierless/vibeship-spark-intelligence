@@ -27,6 +27,30 @@ from .models import (
 )
 
 
+def _normalize_distillation_statement(text: str) -> str:
+    """Normalize statements so semantically identical distillations collapse."""
+    s = (text or "").strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    # Canonicalize budget percentage variants of the same heuristic.
+    s = re.sub(
+        r"when budget is \d+% used without progress",
+        "when budget is <pct> used without progress",
+        s,
+    )
+    return s
+
+
+def _merge_unique_str(items_a: List[str], items_b: List[str]) -> List[str]:
+    out: List[str] = []
+    for item in (items_a or []) + (items_b or []):
+        v = str(item or "").strip()
+        if not v:
+            continue
+        if v not in out:
+            out.append(v)
+    return out
+
+
 class EidosStore:
     """
     SQLite-based persistence for EIDOS intelligence primitives.
@@ -429,31 +453,108 @@ class EidosStore:
     # ==================== Distillation Operations ====================
 
     def save_distillation(self, distillation: Distillation) -> str:
-        """Save a distillation to the database."""
+        """Save a distillation to the database with duplicate-statement collapsing."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.row_factory = sqlite3.Row
+            target_norm = _normalize_distillation_statement(distillation.statement)
+            existing = None
+            candidates = conn.execute(
+                """SELECT * FROM distillations
+                   WHERE type = ?""",
+                (distillation.type.value,),
+            ).fetchall()
+            for row in candidates:
+                if _normalize_distillation_statement(row["statement"] or "") == target_norm:
+                    existing = row
+                    break
+
+            if existing:
+                merged_domains = _merge_unique_str(
+                    json.loads(existing["domains"] or "[]"),
+                    distillation.domains,
+                )
+                merged_triggers = _merge_unique_str(
+                    json.loads(existing["triggers"] or "[]"),
+                    distillation.triggers,
+                )
+                merged_anti_triggers = _merge_unique_str(
+                    json.loads(existing["anti_triggers"] or "[]"),
+                    distillation.anti_triggers,
+                )
+                merged_source_steps = _merge_unique_str(
+                    json.loads(existing["source_steps"] or "[]"),
+                    distillation.source_steps,
+                )
+
+                merged_validation = int(existing["validation_count"] or 0) + int(distillation.validation_count or 0)
+                merged_contradiction = int(existing["contradiction_count"] or 0) + int(distillation.contradiction_count or 0)
+                merged_retrieved = int(existing["times_retrieved"] or 0) + int(distillation.times_retrieved or 0)
+                merged_used = int(existing["times_used"] or 0) + int(distillation.times_used or 0)
+                merged_helped = int(existing["times_helped"] or 0) + int(distillation.times_helped or 0)
+                merged_confidence = max(float(existing["confidence"] or 0.0), float(distillation.confidence or 0.0))
+                merged_created = min(float(existing["created_at"] or time.time()), float(distillation.created_at or time.time()))
+
+                existing_revalidate = existing["revalidate_by"]
+                if existing_revalidate is None:
+                    merged_revalidate = distillation.revalidate_by
+                elif distillation.revalidate_by is None:
+                    merged_revalidate = existing_revalidate
+                else:
+                    merged_revalidate = max(float(existing_revalidate), float(distillation.revalidate_by))
+
+                conn.execute(
+                    """UPDATE distillations
+                       SET statement = ?, domains = ?, triggers = ?, anti_triggers = ?,
+                           source_steps = ?, validation_count = ?, contradiction_count = ?,
+                           confidence = ?, times_retrieved = ?, times_used = ?, times_helped = ?,
+                           created_at = ?, revalidate_by = ?
+                       WHERE distillation_id = ?""",
+                    (
+                        str(existing["statement"] or distillation.statement),
+                        json.dumps(merged_domains),
+                        json.dumps(merged_triggers),
+                        json.dumps(merged_anti_triggers),
+                        json.dumps(merged_source_steps),
+                        merged_validation,
+                        merged_contradiction,
+                        merged_confidence,
+                        merged_retrieved,
+                        merged_used,
+                        merged_helped,
+                        merged_created,
+                        merged_revalidate,
+                        str(existing["distillation_id"]),
+                    ),
+                )
+                conn.commit()
+                return str(existing["distillation_id"])
+
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO distillations (
                     distillation_id, type, statement, domains, triggers, anti_triggers,
                     source_steps, validation_count, contradiction_count, confidence,
                     times_retrieved, times_used, times_helped, created_at, revalidate_by
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                distillation.distillation_id,
-                distillation.type.value,
-                distillation.statement,
-                json.dumps(distillation.domains),
-                json.dumps(distillation.triggers),
-                json.dumps(distillation.anti_triggers),
-                json.dumps(distillation.source_steps),
-                distillation.validation_count,
-                distillation.contradiction_count,
-                distillation.confidence,
-                distillation.times_retrieved,
-                distillation.times_used,
-                distillation.times_helped,
-                distillation.created_at,
-                distillation.revalidate_by
-            ))
+                """,
+                (
+                    distillation.distillation_id,
+                    distillation.type.value,
+                    distillation.statement,
+                    json.dumps(distillation.domains),
+                    json.dumps(distillation.triggers),
+                    json.dumps(distillation.anti_triggers),
+                    json.dumps(distillation.source_steps),
+                    distillation.validation_count,
+                    distillation.contradiction_count,
+                    distillation.confidence,
+                    distillation.times_retrieved,
+                    distillation.times_used,
+                    distillation.times_helped,
+                    distillation.created_at,
+                    distillation.revalidate_by,
+                ),
+            )
             conn.commit()
         return distillation.distillation_id
 

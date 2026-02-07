@@ -210,6 +210,8 @@ def test_packet_store_apply_config_updates_defaults(monkeypatch, tmp_path):
             "relaxed_effectiveness_weight": 3.0,
             "relaxed_low_effectiveness_threshold": 0.25,
             "relaxed_low_effectiveness_penalty": 0.8,
+            "relaxed_min_match_dimensions": 1,
+            "relaxed_min_match_score": 3.0,
         }
     )
     assert "packet_ttl_s" in result.get("applied", [])
@@ -231,3 +233,32 @@ def test_packet_store_apply_config_updates_defaults(monkeypatch, tmp_path):
     cfg = store.get_packet_store_config()
     assert int(cfg.get("max_index_packets", 0)) == 3500
     assert float(cfg.get("packet_ttl_s", 0.0)) == 1800.0
+    assert int(cfg.get("relaxed_min_match_dimensions", 0)) == 1
+    assert float(cfg.get("relaxed_min_match_score", 0.0)) == 3.0
+
+
+def test_relaxed_lookup_rejects_plane_only_match(monkeypatch, tmp_path):
+    _patch_store_paths(monkeypatch, tmp_path)
+
+    packet = store.build_packet(
+        project_key="proj",
+        session_context_key="ctx",
+        tool_name="Read",
+        intent_family="knowledge_alignment",
+        task_plane="build_delivery",
+        advisory_text="Read docs first.",
+        source_mode="prefetch",
+        lineage={"sources": ["prefetch"], "memory_absent_declared": False},
+        ttl_s=300,
+    )
+    store.save_packet(packet)
+
+    # Same project and plane, but different tool + intent should not pass
+    # relaxed minimum match score.
+    chosen = store.lookup_relaxed(
+        project_key="proj",
+        tool_name="Bash",
+        intent_family="orchestration_execution",
+        task_plane="build_delivery",
+    )
+    assert chosen is None

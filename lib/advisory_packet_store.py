@@ -29,6 +29,8 @@ RELAXED_WILDCARD_TOOL_BONUS = 0.5
 RELAXED_EFFECTIVENESS_WEIGHT = 2.0
 RELAXED_LOW_EFFECTIVENESS_THRESHOLD = 0.3
 RELAXED_LOW_EFFECTIVENESS_PENALTY = 0.5
+RELAXED_MIN_MATCH_DIMENSIONS = 1
+RELAXED_MIN_MATCH_SCORE = 3.0
 
 REQUIRED_PACKET_FIELDS = {
     "packet_id",
@@ -374,14 +376,28 @@ def lookup_relaxed(
         if float(row.get("fresh_until_ts", 0.0)) < now_value:
             continue
         score = 0.0
+        match_score = 0.0
+        match_dimensions = 0
         if tool_name and row.get("tool_name") == tool_name:
             score += RELAXED_MATCH_WEIGHT_TOOL
+            match_score += RELAXED_MATCH_WEIGHT_TOOL
+            match_dimensions += 1
         if intent_family and row.get("intent_family") == intent_family:
             score += RELAXED_MATCH_WEIGHT_INTENT
+            match_score += RELAXED_MATCH_WEIGHT_INTENT
+            match_dimensions += 1
         if task_plane and row.get("task_plane") == task_plane:
             score += RELAXED_MATCH_WEIGHT_PLANE
+            match_score += RELAXED_MATCH_WEIGHT_PLANE
+            match_dimensions += 1
         if not tool_name and row.get("tool_name") == "*":
             score += RELAXED_WILDCARD_TOOL_BONUS
+            match_score += RELAXED_WILDCARD_TOOL_BONUS
+            match_dimensions += 1
+        if match_dimensions < RELAXED_MIN_MATCH_DIMENSIONS:
+            continue
+        if match_score < RELAXED_MIN_MATCH_SCORE:
+            continue
         effectiveness = max(0.0, min(1.0, float(row.get("effectiveness_score", 0.5) or 0.5)))
         score += effectiveness * RELAXED_EFFECTIVENESS_WEIGHT
         if effectiveness < RELAXED_LOW_EFFECTIVENESS_THRESHOLD:
@@ -566,6 +582,8 @@ def apply_packet_store_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global RELAXED_EFFECTIVENESS_WEIGHT
     global RELAXED_LOW_EFFECTIVENESS_THRESHOLD
     global RELAXED_LOW_EFFECTIVENESS_PENALTY
+    global RELAXED_MIN_MATCH_DIMENSIONS
+    global RELAXED_MIN_MATCH_SCORE
 
     applied: List[str] = []
     warnings: List[str] = []
@@ -616,6 +634,26 @@ def apply_packet_store_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
         except Exception:
             warnings.append("invalid_relaxed_low_effectiveness_penalty")
 
+    if "relaxed_min_match_dimensions" in cfg:
+        try:
+            RELAXED_MIN_MATCH_DIMENSIONS = max(
+                0,
+                min(3, int(cfg.get("relaxed_min_match_dimensions") or 0)),
+            )
+            applied.append("relaxed_min_match_dimensions")
+        except Exception:
+            warnings.append("invalid_relaxed_min_match_dimensions")
+
+    if "relaxed_min_match_score" in cfg:
+        try:
+            RELAXED_MIN_MATCH_SCORE = max(
+                0.0,
+                min(10.0, float(cfg.get("relaxed_min_match_score") or 0.0)),
+            )
+            applied.append("relaxed_min_match_score")
+        except Exception:
+            warnings.append("invalid_relaxed_min_match_score")
+
     return {"applied": applied, "warnings": warnings}
 
 
@@ -626,6 +664,8 @@ def get_packet_store_config() -> Dict[str, Any]:
         "relaxed_effectiveness_weight": float(RELAXED_EFFECTIVENESS_WEIGHT),
         "relaxed_low_effectiveness_threshold": float(RELAXED_LOW_EFFECTIVENESS_THRESHOLD),
         "relaxed_low_effectiveness_penalty": float(RELAXED_LOW_EFFECTIVENESS_PENALTY),
+        "relaxed_min_match_dimensions": int(RELAXED_MIN_MATCH_DIMENSIONS),
+        "relaxed_min_match_score": float(RELAXED_MIN_MATCH_SCORE),
     }
 
 

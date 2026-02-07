@@ -59,6 +59,68 @@ def _normalize_struggle_key(text: str) -> str:
     return _normalize_struggle_text(text).lower()
 
 
+def _is_low_signal_struggle_task(task: str) -> bool:
+    """Detect telemetry-heavy struggle labels that should not auto-validate aggressively."""
+    t = (task or "").strip().lower()
+    if not t:
+        return False
+    noisy_tokens = (
+        "_error",
+        "mcp__",
+        "command_not_found",
+        "permission_denied",
+        "file_not_found",
+        "timeout",
+        "syntax_error",
+        "fails with",
+    )
+    return any(token in t for token in noisy_tokens)
+
+
+def _is_auto_evidence_line(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    return (
+        t.startswith("auto-linked from ")
+        or t.startswith("tool=")
+        or " success=true" in t
+        or " success=false" in t
+    )
+
+
+def _validation_quality_weight(
+    category: "CognitiveCategory",
+    insight_text: str,
+    evidence: List[str],
+) -> float:
+    """
+    Discount reliability for telemetry/test-like insights so auto-counted events
+    do not look equivalent to outcome-backed human-useful validation.
+    """
+    text = (insight_text or "").strip().lower()
+    weight = 1.0
+
+    if text.startswith("test:"):
+        weight *= 0.05
+
+    if len(text) > 400:
+        weight *= 0.2
+
+    if category == CognitiveCategory.SELF_AWARENESS and "i struggle with" in text:
+        if _is_low_signal_struggle_task(text):
+            weight *= 0.15
+
+    ev = [str(e or "").strip() for e in (evidence or []) if str(e or "").strip()]
+    if ev:
+        auto_count = sum(1 for e in ev if _is_auto_evidence_line(e))
+        auto_ratio = auto_count / max(len(ev), 1)
+        if auto_ratio >= 0.5:
+            weight *= 0.25
+
+    return max(0.05, min(1.0, float(weight)))
+
+
 def _coerce_int(value: Any, default: int = 0) -> int:
     try:
         if value is None:
@@ -193,10 +255,12 @@ class CognitiveInsight:
     @property
     def reliability(self) -> float:
         """How reliable is this insight based on validation history?"""
-        total = self.times_validated + self.times_contradicted
+        weight = _validation_quality_weight(self.category, self.insight, self.evidence)
+        weighted_validated = float(self.times_validated) * weight
+        total = weighted_validated + float(self.times_contradicted)
         if total == 0:
-            return self.confidence
-        return self.times_validated / total
+            return max(0.05, min(0.99, float(self.confidence) * weight))
+        return weighted_validated / total
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -426,8 +490,10 @@ class CognitiveLearner:
             CognitiveCategory.SELF_AWARENESS,
             f"struggle:{_normalize_struggle_key(task_type)}",
         )
+        low_signal = _is_low_signal_struggle_task(normalized_task)
         if key in self.insights:
-            self._touch_validation(self.insights[key], validated_delta=1)
+            if not low_signal:
+                self._touch_validation(self.insights[key], validated_delta=1)
             if failure_reason not in self.insights[key].evidence:
                 self.insights[key].evidence.append(failure_reason[:200])
                 self.insights[key].evidence = self.insights[key].evidence[-10:]
@@ -436,7 +502,7 @@ class CognitiveLearner:
                 category=CognitiveCategory.SELF_AWARENESS,
                 insight=f"I struggle with {normalized_task} tasks",
                 evidence=[failure_reason[:200]],
-                confidence=0.5,
+                confidence=0.35 if low_signal else 0.5,
                 context=f"Tasks involving {normalized_task}"
             )
         self._save_insights()
@@ -1399,7 +1465,8 @@ class CognitiveLearner:
                 context=base_insight.context,
                 counter_examples=base_insight.counter_examples,
                 created_at=earliest_created or base_insight.created_at,
-                times_validated=len(keys) - 1 + total_validated,  # Each duplicate counts as validation
+                # Keep original totals; dedupe itself is not a true validation.
+                times_validated=total_validated,
                 times_contradicted=total_contradicted,
                 promoted=base_insight.promoted,
                 promoted_to=base_insight.promoted_to,

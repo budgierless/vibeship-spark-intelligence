@@ -629,7 +629,7 @@ class EscapeProtocol:
             statement = f"Avoid repeatedly attempting '{failed_decisions[0][:30]}' without new information"
             dist_type = DistillationType.ANTI_PATTERN
         else:
-            statement = f"When budget is {episode.budget_percentage_used():.0%} used without progress, simplify scope"
+            statement = "When budget is high without progress, simplify scope"
             dist_type = DistillationType.HEURISTIC
 
         return Distillation(
