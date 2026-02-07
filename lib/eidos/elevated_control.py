@@ -30,6 +30,46 @@ from .models import (
 )
 from .store import get_store
 
+import re
+
+
+def _generalize_failed_decision(raw: str) -> str:
+    """Extract a generalizable tool/action pattern from a literal decision string.
+
+    Instead of encoding 'Execute: cd C:\\Users\\USER && find ...' verbatim,
+    produce something like 'Bash find commands' that matches future similar actions
+    without matching every unrelated Bash command.
+    """
+    low = raw.lower().strip()
+
+    # Extract tool type from "Execute: ..." or "Modify ..." or "Inspect ..." patterns
+    tool_map = {
+        "execute:": "Bash",
+        "run command:": "Bash",
+        "modify": "Edit",
+        "inspect": "Read",
+        "locate files": "Glob",
+        "search for": "Grep",
+    }
+    tool_type = "tool"
+    for prefix, tname in tool_map.items():
+        if low.startswith(prefix):
+            tool_type = tname
+            break
+
+    # Extract the actual command verb from Bash decisions
+    if tool_type == "Bash":
+        # Find common command names in the decision
+        cmd_patterns = re.findall(
+            r'\b(find|grep|cd|ls|dir|cat|type|timeout|curl|pip|npm|git|python|pytest|mkdir|rm|cp|mv|chmod|findstr)\b',
+            low
+        )
+        if cmd_patterns:
+            return f"'{cmd_patterns[0]}' commands"
+
+    # For non-Bash, use the tool type
+    return f"{tool_type} operations"
+
 
 # ===== WATCHER TYPES =====
 
@@ -626,7 +666,11 @@ class EscapeProtocol:
             statement = f"When error '{error_types[0][:30]}' occurs twice, stop and diagnose instead of retrying"
             dist_type = DistillationType.SHARP_EDGE
         elif failed_decisions:
-            statement = f"Avoid repeatedly attempting '{failed_decisions[0][:30]}' without new information"
+            # Extract the generalizable pattern, not the literal command
+            # e.g. "Execute: cd C:\Users\USER && find ..." -> "Bash find commands"
+            raw = failed_decisions[0]
+            tool_hint = _generalize_failed_decision(raw)
+            statement = f"When repeated {tool_hint} attempts fail without progress, step back and try a different approach"
             dist_type = DistillationType.ANTI_PATTERN
         else:
             statement = "When budget is high without progress, simplify scope"

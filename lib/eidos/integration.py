@@ -463,6 +463,27 @@ def _is_primitive_distillation(statement: str) -> bool:
             if overlap / total > 0.7 and len(condition) < 30:
                 return True
 
+    # Command echo tautology: condition and action contain the same command/path
+    # e.g. "When Run command: start X, try: Execute: start X"
+    # Catches cases where "Run command:" vs "Execute:" use different prefixes
+    # but the actual command payload is the same
+    cmd_prefixes = r"(?:run command|execute|modify|inspect|locate|search for|write|read|edit):?\s*"
+    m2 = re.match(rf"when\s+{cmd_prefixes}(.{{10,}}?),?\s+try:?\s*{cmd_prefixes}(.{{10,}})", s)
+    if m2:
+        payload1 = re.sub(r'[^a-z0-9]', '', m2.group(1).lower())
+        payload2 = re.sub(r'[^a-z0-9]', '', m2.group(2).lower())
+        if payload1 and payload2:
+            # If payloads are identical or one contains the other
+            if payload1 == payload2 or payload1 in payload2 or payload2 in payload1:
+                return True
+            # Or high word overlap
+            words1 = set(re.findall(r'[a-z]{3,}', m2.group(1).lower()))
+            words2 = set(re.findall(r'[a-z]{3,}', m2.group(2).lower()))
+            if words1 and words2:
+                overlap_ratio = len(words1 & words2) / max(len(words1 | words2), 1)
+                if overlap_ratio > 0.6:
+                    return True
+
     return False
 
 
@@ -751,6 +772,8 @@ def _update_distillation_feedback(step_data: Dict, success: bool):
     - Successes only recorded if the step had high surprise (unexpected success
       where distillation may have genuinely helped)
     - Routine successes (most tool calls) are skipped to avoid noise
+    - Anti-patterns only get feedback if the step is actually doing what the
+      anti-pattern warns against (prevents "blame all anti-patterns for everything")
 
     This prevents the "blame everyone for everything" anti-pattern where
     irrelevant distillations get contradicted just because a Read failed.
@@ -770,11 +793,58 @@ def _update_distillation_feedback(step_data: Dict, success: bool):
 
     try:
         from .retriever import get_retriever
+        from .store import get_store as _get_store
         retriever = get_retriever()
+        store = _get_store()
+        step_decision = (step_data.get("decision") or "").lower()
+
         for did in distillation_ids:
+            # For anti-patterns, only record feedback if the step is actually
+            # doing what the anti-pattern warns against. Otherwise the
+            # anti-pattern accumulates contradictions from unrelated actions.
+            dist = store.get_distillation(did)
+            if dist and dist.type.value == "anti_pattern":
+                if not _is_anti_pattern_relevant(dist.statement, step_decision):
+                    continue  # Skip feedback — not relevant to this step
+
             retriever.record_usage(did, helped=success)
     except Exception:
         pass  # Never break the main flow
+
+
+def _is_anti_pattern_relevant(anti_statement: str, step_decision: str) -> bool:
+    """Check if an anti-pattern is actually about what this step is doing.
+
+    An anti-pattern like "When repeated 'find' commands fail..." should only
+    get feedback when the step is actually running a find command, not when
+    it's running git push.
+    """
+    import re
+    anti_lower = anti_statement.lower()
+    decision_lower = step_decision.lower()
+
+    # Extract quoted content from anti-pattern (the specific thing to avoid)
+    quoted = re.findall(r"'([^']+)'", anti_lower)
+    if quoted:
+        # Check if any quoted term appears in the step decision
+        return any(q in decision_lower for q in quoted)
+
+    # Extract key action words from anti-pattern
+    anti_words = set(re.findall(r'\b[a-z]{4,}\b', anti_lower))
+    decision_words = set(re.findall(r'\b[a-z]{4,}\b', decision_lower))
+
+    # Remove generic words
+    generic = {
+        "when", "repeated", "attempts", "fail", "without", "progress",
+        "step", "back", "different", "approach", "avoid", "repeatedly",
+        "attempting", "information", "commands", "operations",
+    }
+    anti_words -= generic
+    decision_words -= generic
+
+    # Need at least 2 meaningful word overlap
+    overlap = len(anti_words & decision_words)
+    return overlap >= 2
 
 
 def _describe_intent(tool_name: str, tool_input: Dict) -> str:

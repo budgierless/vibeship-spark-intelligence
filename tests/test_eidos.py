@@ -64,6 +64,18 @@ class TestPrimitiveFilter:
     def test_rejects_try_use_tool_pattern(self):
         assert _is_primitive_distillation("When something, try: Use Bash tool to run")
 
+    def test_rejects_command_echo_tautology(self):
+        """Catches 'When Run command: X, try: Execute: X' tautologies."""
+        assert _is_primitive_distillation(
+            'When Run command: start "" "http://localhost:5555", try: Execute: start "" "http://localhost:5555"'
+        )
+
+    def test_rejects_cross_prefix_tautology(self):
+        """Catches tautologies even when condition/action use different prefixes."""
+        assert _is_primitive_distillation(
+            'When Run command: cd /project && npm test, try: Execute: cd /project && npm test'
+        )
+
     def test_keeps_budget_heuristic(self):
         assert not _is_primitive_distillation(
             "When budget is 82% used without progress, simplify scope"
@@ -332,3 +344,81 @@ class TestAutoTuner:
         report = tuner.run(dry_run=True, force=True)
         for change in report.changes:
             assert abs(change.delta) <= tuner.max_change + 0.001  # float tolerance
+
+
+# ===== Anti-Pattern Fix Tests =====
+
+class TestAntiPatternFixes:
+    """Test the anti-pattern contradiction storm fixes."""
+
+    def test_generalize_failed_decision_bash(self):
+        from lib.eidos.elevated_control import _generalize_failed_decision
+        result = _generalize_failed_decision("Execute: cd C:\\Users\\USER && find . -name '*.py'")
+        assert "commands" in result.lower()  # Should generalize to "'cd' commands" or similar
+        assert "C:\\Users" not in result  # No literal paths
+
+    def test_generalize_failed_decision_git(self):
+        from lib.eidos.elevated_control import _generalize_failed_decision
+        result = _generalize_failed_decision("Execute: git push origin main")
+        assert "git" in result.lower()
+
+    def test_generalize_failed_decision_non_bash(self):
+        from lib.eidos.elevated_control import _generalize_failed_decision
+        result = _generalize_failed_decision("Inspect auth.py")
+        assert "Read" in result or "operations" in result
+
+    def test_generalize_failed_decision_glob(self):
+        from lib.eidos.elevated_control import _generalize_failed_decision
+        result = _generalize_failed_decision("Locate files by pattern **/*.py")
+        assert "Glob" in result
+
+    def test_anti_pattern_relevance_matching(self):
+        from lib.eidos.integration import _is_anti_pattern_relevant
+        # Anti-pattern about 'find' should match find commands
+        assert _is_anti_pattern_relevant(
+            "When repeated 'find' commands fail, try a different approach",
+            "Execute: find . -name '*.py'"
+        )
+
+    def test_anti_pattern_relevance_no_match(self):
+        from lib.eidos.integration import _is_anti_pattern_relevant
+        # Anti-pattern about 'find' should NOT match git commands
+        assert not _is_anti_pattern_relevant(
+            "When repeated 'find' commands fail, try a different approach",
+            "Execute: git push origin main"
+        )
+
+    def test_confidence_decay_on_high_contradiction(self, tmp_path):
+        """Distillations with >80% contradiction rate should lose confidence."""
+        store = EidosStore(str(tmp_path / "eidos.db"))
+        dist = Distillation(
+            distillation_id="", type=DistillationType.ANTI_PATTERN,
+            statement="Test decay", confidence=0.7,
+        )
+        did = store.save_distillation(dist)
+
+        # Simulate 12 contradictions (100% rate, > 10 uses)
+        for _ in range(12):
+            store.record_distillation_usage(did, helped=False)
+
+        updated = store.get_distillation(did)
+        assert updated.confidence < 0.7  # Should have decayed
+        assert updated.contradiction_count == 12
+
+    def test_confidence_stable_when_helped(self, tmp_path):
+        """Distillations with good track record should keep confidence."""
+        store = EidosStore(str(tmp_path / "eidos.db"))
+        dist = Distillation(
+            distillation_id="", type=DistillationType.HEURISTIC,
+            statement="Test stable", confidence=0.7,
+        )
+        did = store.save_distillation(dist)
+
+        # 8 helped, 2 contradicted (80% helpful, not > 80% contradictions)
+        for _ in range(8):
+            store.record_distillation_usage(did, helped=True)
+        for _ in range(2):
+            store.record_distillation_usage(did, helped=False)
+
+        updated = store.get_distillation(did)
+        assert updated.confidence == 0.7  # No decay

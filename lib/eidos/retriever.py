@@ -29,6 +29,16 @@ from typing import Any, Dict, List, Optional, Set
 from .models import Step, Distillation, DistillationType, Evaluation
 from .store import EidosStore, get_store
 
+# Words that appear in nearly every tool intent — useless for matching.
+# Prevents "any Bash command matches any Bash anti-pattern".
+_TOOL_STOP_WORDS = {
+    "execute", "run", "command", "bash", "tool", "read", "write", "edit",
+    "grep", "glob", "inspect", "modify", "locate", "search", "file", "files",
+    "path", "directory", "content", "pattern", "avoid", "repeatedly",
+    "attempting", "without", "new", "information", "stop", "try", "use",
+    "operations", "commands", "approach", "different", "progress",
+}
+
 
 class StructuralRetriever:
     """
@@ -297,7 +307,11 @@ class StructuralRetriever:
         return [h for h in heuristics if h.type == DistillationType.HEURISTIC][:10]
 
     def _get_anti_patterns(self, intent: str, hypothesis: str) -> List[Distillation]:
-        """Get anti-patterns for the context."""
+        """Get anti-patterns for the context.
+
+        Uses stricter matching than heuristics: requires 4+ keyword overlap
+        (not 2) and filters out common tool words that would match everything.
+        """
         intent_key = self._normalize_intent(intent)
 
         # Get anti-patterns matching intent
@@ -308,13 +322,19 @@ class StructuralRetriever:
 
         relevant = []
         for anti in all_anti:
-            # Check triggers
+            # Check triggers (exact match is fine)
             if self._matches_trigger(intent_key, anti.anti_triggers):
                 relevant.append(anti)
                 continue
 
-            # Check statement for keyword match
-            if self._has_keyword_overlap(intent + " " + hypothesis, anti.statement):
+            # Stricter keyword match for anti-patterns: 4+ overlap
+            # with tool-name words excluded to prevent "any Bash matches any Bash"
+            if self._has_keyword_overlap(
+                intent + " " + hypothesis,
+                anti.statement,
+                min_overlap=4,
+                extra_stop_words=_TOOL_STOP_WORDS
+            ):
                 relevant.append(anti)
 
         return relevant[:10]
@@ -369,13 +389,19 @@ class StructuralRetriever:
         overlap = len(error_words & statement_words)
         return overlap >= 3
 
-    def _has_keyword_overlap(self, text1: str, text2: str, min_overlap: int = 2) -> bool:
+    def _has_keyword_overlap(
+        self, text1: str, text2: str,
+        min_overlap: int = 2,
+        extra_stop_words: set = None
+    ) -> bool:
         """Check if two texts have significant keyword overlap."""
         stop_words = {
             "the", "a", "an", "and", "or", "but", "if", "then", "so", "to",
             "of", "in", "on", "for", "with", "by", "is", "are", "was", "were",
             "be", "been", "being", "user", "request", "when"
         }
+        if extra_stop_words:
+            stop_words = stop_words | extra_stop_words
 
         words1 = set(re.findall(r'\b[a-z]+\b', text1.lower())) - stop_words
         words2 = set(re.findall(r'\b[a-z]+\b', text2.lower())) - stop_words

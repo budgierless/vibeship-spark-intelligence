@@ -678,7 +678,12 @@ class EidosStore:
             conn.commit()
 
     def record_distillation_usage(self, distillation_id: str, helped: bool):
-        """Record that a distillation was used and whether it helped."""
+        """Record that a distillation was used and whether it helped.
+
+        Also applies confidence decay: when contradiction rate exceeds 80%
+        over 10+ uses, confidence drops by 0.05 per contradiction.
+        Distillations with confidence < 0.1 are effectively dead.
+        """
         with sqlite3.connect(self.db_path) as conn:
             if helped:
                 conn.execute(
@@ -697,6 +702,28 @@ class EidosStore:
                        WHERE distillation_id = ?""",
                     (distillation_id,)
                 )
+
+            # Confidence decay: check if this distillation has a bad track record
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT times_used, times_helped, contradiction_count, confidence "
+                "FROM distillations WHERE distillation_id = ?",
+                (distillation_id,)
+            ).fetchone()
+
+            if row and row["times_used"] >= 10:
+                total = row["times_used"]
+                contra = row["contradiction_count"]
+                contra_rate = contra / max(total, 1)
+
+                if contra_rate > 0.8:
+                    # High contradiction rate — decay confidence
+                    new_conf = max(0.05, row["confidence"] - 0.05)
+                    conn.execute(
+                        "UPDATE distillations SET confidence = ? WHERE distillation_id = ?",
+                        (round(new_conf, 3), distillation_id)
+                    )
+
             conn.commit()
 
     def _row_to_distillation(self, row: sqlite3.Row) -> Distillation:

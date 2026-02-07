@@ -435,71 +435,134 @@ const SceneFindings: React.FC = () => {
 };
 
 // ════════════════════════════════════════════════════════
-//  SCENE 4: THE REVEAL (11.5–14s, frames 345–420)
+//  SCENE 4: THE REVEAL (10.5–14s, frames 315–420)
 // ════════════════════════════════════════════════════════
 
 const SceneReveal: React.FC = () => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // localhost pulse glow
+  const pulse = 0.7 + 0.3 * Math.sin(frame * 0.15);
 
   return (
-    <AbsoluteFill style={{ padding: "50px 80px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-      <div style={{
-        opacity: interpolate(frame, [3, 14], [0, 1], { extrapolateRight: "clamp" }),
-        fontFamily: T.fontMono, fontSize: 22, letterSpacing: 5,
-        textTransform: "uppercase" as const, color: T.green, marginBottom: 32, textAlign: "center",
-      }}>
-        but the single most viral tweet?
-      </div>
+    <AbsoluteFill style={{ padding: "45px 70px", display: "flex", flexDirection: "row", gap: 60, alignItems: "center" }}>
+      {/* Left: the tweet */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Label text="The Most Viral Tweet" delay={2} />
 
-      <div style={{
-        opacity: interpolate(frame, [10, 28], [0, 1], { extrapolateRight: "clamp" }),
-        transform: `translateY(${interpolate(frame, [10, 28], [20, 0], { extrapolateRight: "clamp" })}px)`,
-        textAlign: "center", maxWidth: 1400,
-      }}>
         <div style={{
-          fontFamily: T.fontSerif, fontSize: 72, fontWeight: 400,
-          color: T.textPrimary, lineHeight: 1.25,
+          opacity: interpolate(frame, [6, 20], [0, 1], { extrapolateRight: "clamp" }),
+          transform: `translateY(${interpolate(frame, [6, 20], [15, 0], { extrapolateRight: "clamp" })}px)`,
+          marginBottom: 24,
         }}>
-          Someone confessing they knew{" "}
-          <span style={{ color: T.orange, textShadow: `0 0 30px ${T.orangeGlow}` }}>nothing</span>{" "}
-          about coding — then showing what they built.
+          <div style={{ fontFamily: T.fontSerif, fontSize: 60, fontWeight: 400, color: T.textPrimary, lineHeight: 1.2 }}>
+            A <span style={{ color: T.orange, textShadow: `0 0 30px ${T.orangeGlow}` }}>comedy account</span>{"\n"}
+            broke every record
+          </div>
         </div>
-      </div>
 
-      <div style={{
-        marginTop: 36,
-        opacity: interpolate(frame, [28, 40], [0, 1], { extrapolateRight: "clamp" }),
-        transform: `scale(${interpolate(frame, [28, 40], [0.8, 1], { extrapolateRight: "clamp" })})`,
-        textAlign: "center",
-      }}>
+        {/* Stylized tweet card */}
         <div style={{
-          fontFamily: T.fontMono, fontSize: 130, fontWeight: 800,
-          color: T.green, textShadow: `0 0 50px ${T.greenGlow}`, lineHeight: 1,
+          background: T.bgCard, border: `1px solid ${T.border}`,
+          borderLeft: `4px solid ${T.orange}`,
+          padding: "28px 30px",
+          opacity: interpolate(frame, [16, 30], [0, 1], { extrapolateRight: "clamp" }),
+          transform: `translateX(${interpolate(frame, [16, 30], [-30, 0], { extrapolateRight: "clamp" })}px)`,
         }}>
-          <Counter to={12706} delay={30} duration={20} />
-        </div>
-        <div style={{ fontFamily: T.fontMono, fontSize: 24, letterSpacing: 4, color: T.textTertiary, textTransform: "uppercase" as const, marginTop: 10 }}>
-          likes on a single tweet
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 28, color: T.textPrimary, lineHeight: 1.55,
+          }}>
+            <span style={{ color: T.textSecondary }}>"</span>i know literally{" "}
+            <span style={{ color: T.orange, fontWeight: 700 }}>NOTHING</span>{" "}
+            about coding. ZERO.
+          </div>
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 28, color: T.textPrimary, lineHeight: 1.55, marginTop: 8,
+          }}>
+            and i just built a fully functioning web app in minutes.
+          </div>
+
+          {/* The punchline */}
+          <div style={{
+            marginTop: 20, padding: "14px 20px",
+            background: `rgba(217, 119, 87, 0.08)`,
+            border: `1px solid rgba(217, 119, 87, 0.25)`,
+            opacity: interpolate(frame, [32, 44], [0, 1], { extrapolateRight: "clamp" }),
+            transform: `scale(${interpolate(frame, [32, 44], [0.95, 1], { extrapolateRight: "clamp" })})`,
+          }}>
+            <div style={{
+              fontFamily: T.fontMono, fontSize: 32, fontWeight: 700,
+              color: T.orange, textShadow: `0 0 ${20 * pulse}px ${T.orangeGlow}`,
+            }}>
+              localhost:3000
+            </div>
+            <div style={{
+              fontFamily: T.fontMono, fontSize: 22, color: T.textTertiary, marginTop: 4,
+            }}>
+              check it out<span style={{ color: T.textSecondary }}>"</span>
+            </div>
+          </div>
+
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 20, color: T.textTertiary, marginTop: 16,
+            opacity: interpolate(frame, [40, 52], [0, 1], { extrapolateRight: "clamp" }),
+          }}>
+            she knew exactly what she was doing.
+          </div>
         </div>
       </div>
 
-      <div style={{
-        marginTop: 38, textAlign: "center", maxWidth: 1100,
-        opacity: interpolate(frame, [42, 55], [0, 1], { extrapolateRight: "clamp" }),
-        transform: `translateY(${interpolate(frame, [42, 55], [12, 0], { extrapolateRight: "clamp" })}px)`,
-      }}>
+      {/* Right: the numbers + insight */}
+      <div style={{ flex: 0.85, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         <div style={{
-          fontFamily: T.fontSerif, fontSize: 44, fontWeight: 400,
-          color: T.textSecondary, lineHeight: 1.35,
+          opacity: interpolate(frame, [28, 42], [0, 1], { extrapolateRight: "clamp" }),
+          transform: `scale(${interpolate(frame, [28, 42], [0.85, 1], { extrapolateRight: "clamp" })})`,
+          textAlign: "center", marginBottom: 36,
         }}>
-          People don't want to be{" "}
-          <span style={{ color: T.textTertiary, textDecoration: "line-through", textDecorationColor: T.textTertiary }}>taught</span>
-          . They want to be{" "}
-          <span style={{ color: T.green, textShadow: `0 0 30px ${T.greenGlow}` }}>shown</span>.
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 120, fontWeight: 800,
+            color: T.green, textShadow: `0 0 50px ${T.greenGlow}`, lineHeight: 1,
+          }}>
+            <Counter to={12706} delay={30} duration={22} />
+          </div>
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 22, letterSpacing: 4,
+            color: T.textTertiary, textTransform: "uppercase" as const, marginTop: 10,
+          }}>
+            likes on a single tweet
+          </div>
+        </div>
+
+        <div style={{ width: "100%", height: 1, background: T.border, marginBottom: 32 }} />
+
+        {/* The real insight */}
+        <div style={{
+          opacity: interpolate(frame, [52, 66], [0, 1], { extrapolateRight: "clamp" }),
+          transform: `translateY(${interpolate(frame, [52, 66], [15, 0], { extrapolateRight: "clamp" })}px)`,
+        }}>
+          <div style={{
+            fontFamily: T.fontMono, fontSize: 24, color: T.textSecondary, lineHeight: 1.55, marginBottom: 24,
+          }}>
+            Not a thread. Not a tutorial.{"\n"}
+            A <span style={{ color: T.orange, fontWeight: 700 }}>joke</span> — and it outperformed every serious post in our dataset.
+          </div>
+
+          <div style={{
+            fontFamily: T.fontSerif, fontSize: 46, fontWeight: 400,
+            color: T.textPrimary, lineHeight: 1.3,
+            opacity: interpolate(frame, [64, 78], [0, 1], { extrapolateRight: "clamp" }),
+            transform: `translateY(${interpolate(frame, [64, 78], [10, 0], { extrapolateRight: "clamp" })}px)`,
+          }}>
+            Make them{" "}
+            <span style={{ color: T.textTertiary, textDecoration: "line-through", textDecorationColor: T.textTertiary }}>learn</span>
+            ?{" "}Make them{" "}
+            <span style={{ color: T.green, textShadow: `0 0 30px ${T.greenGlow}` }}>laugh</span>.
+          </div>
         </div>
       </div>
 
-      <Attribution delay={42} />
+      <Attribution delay={50} />
     </AbsoluteFill>
   );
 };
@@ -522,26 +585,26 @@ export const IntelligenceFunnel: React.FC = () => {
       <Particles count={20} seed={42} />
 
       {/* Scenes overlap by 15 frames for smooth cross-dissolve */}
-      <Sequence from={0} durationInFrames={145}>
-        <SceneWrap durationInFrames={145} fadeIn={0} fadeOut={15}>
+      <Sequence from={0} durationInFrames={135}>
+        <SceneWrap durationInFrames={135} fadeIn={0} fadeOut={15}>
           <SceneFunnel />
         </SceneWrap>
       </Sequence>
 
-      <Sequence from={130} durationInFrames={120}>
-        <SceneWrap durationInFrames={120} fadeIn={15} fadeOut={15}>
+      <Sequence from={120} durationInFrames={115}>
+        <SceneWrap durationInFrames={115} fadeIn={15} fadeOut={15}>
           <SceneTriggers />
         </SceneWrap>
       </Sequence>
 
-      <Sequence from={235} durationInFrames={120}>
-        <SceneWrap durationInFrames={120} fadeIn={15} fadeOut={15}>
+      <Sequence from={220} durationInFrames={115}>
+        <SceneWrap durationInFrames={115} fadeIn={15} fadeOut={15}>
           <SceneFindings />
         </SceneWrap>
       </Sequence>
 
-      <Sequence from={340} durationInFrames={80}>
-        <SceneWrap durationInFrames={80} fadeIn={15} fadeOut={0}>
+      <Sequence from={320} durationInFrames={100}>
+        <SceneWrap durationInFrames={100} fadeIn={15} fadeOut={0}>
           <SceneReveal />
         </SceneWrap>
       </Sequence>
