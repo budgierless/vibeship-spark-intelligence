@@ -148,7 +148,7 @@ def main():
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-08T19:32:25
+Last updated: 2026-02-08T20:42:45
 
 - [user_understanding] ... right now, after all the changes that you have done. Can you show me how the new results are? Because whenever we do such improvements and changes, we have to be doing this matter of implementations and iterations in such a way that we iterate, we see what changed, and then we look at it, and then we can iterate more, we can iterate more until we get it right. So, can we actually see right now what are the results that we are getting in? Feel free to create a test environment or build someth... (93% reliable, 98 validations)
 - [reasoning] #!/usr/bin/env python3
@@ -167,12 +167,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optio... (100% reliable, 32 validations)
-- [reasoning]         current.confidence = max(current.confidence, disk.confidence)
-        # Use max instead of sum to avoid double-counting from the same process,
-        # but if disk has more, take disk's value (concurrent processes accumulate)
-        current.times_validated = max(current.times_validated, disk.times_validated)
-        current.times_contradicted = max(current.times_contradicted, disk.times_contradicted) (100% reliable, 10 validations)
+from typing import Any, Dict, List, Optio... (94% reliable, 61 validations)
 - [context] **Always verify:** Is bridge_worker running? Is the queue being processed?
 
 ### Rule 3: Pipeline Health Before Tuning
@@ -187,7 +182,7 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
 
 **CRITICAL:** Never claim improvement... (88% reliable, 60 validations)
 - [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (98% reliable, 317 validations)
-- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (96% reliable, 502 validations)
+- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (96% reliable, 507 validations)
 - [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (81% reliable, 150 validations)
 - [context] And think about the strategy that MoltBook adopted too with their curl mechanism for entrance, but check how we were doing this with SparkNet and recommend the best methodology that also works with our system perfectly. I don't think we should be doing this as an ex entrance (96% reliable, 159 validations)
 - [context] ### Improvement Workflow (Updated - Reality-Grounded)
@@ -240,14 +235,15 @@ def main():
     sequencing, deliverables, and success metrics.
 
   If you want, I can link these from README.md so theyâ€™re always frontâ€‘andâ€‘center. (99% reliable, 798 validations)
+- [reasoning] [DEPTH:visual hierarchy:d1] Strong GROUND reasoning: Set `@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; animation: none !important; scroll-behavior: auto !important; } }` to kill 300ms ease-out fades, trading smooth cognitive easing for vestibular safety. Layer `@media (prefers-color-scheme: dark) { :root { --su (100% reliable, 6 validations)
 
 ## Project Focus
 - Phase: discovery
 
 ## Project Questions
-- What is the project goal in one sentence?
-- How will we know it's complete?
-- What could make this fail later?
+- What architecture decision matters most?
+- What will cause problems later if ignored?
+- What signals completion beyond tests passing?
 
 ## Promoted Learnings (Docs)
 - Ship it: finalize launch plan for marketing *When: test* (100% reliable, 4 validations)
