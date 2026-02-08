@@ -80,7 +80,7 @@ def _is_gibberish(text: str) -> bool:
 
 DEPTH_API = "http://localhost:5555"
 OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "phi4-mini:latest"  # Stronger reasoning for engineering domains
+OLLAMA_MODEL = "kimi-k2.5:cloud"  # Kimi 2.5 — strong engineering reasoning via Ollama cloud
 
 SPARK_DIR = Path.home() / ".spark"
 TRAINING_LOG = SPARK_DIR / "depth_training.jsonl"
@@ -2515,7 +2515,7 @@ async def run_benchmark_session(
             # Generate answer with NO knowledge injection, NO strategies
             answer = await _generate_answer(
                 topic, depth, question, answers,
-                prior_knowledge=[],  # ZERO injection
+                knowledge=[],  # ZERO injection
                 last_pushback=last_pushback,
                 strategy_mem=None,  # NO strategies
                 domain=domain,
@@ -3088,7 +3088,7 @@ async def ab_test(
             prior_knowledge = kb.retrieve(test_topic, depth, limit=3, domain=domain)
             answer = await _generate_answer(
                 test_topic, depth, question, answers,
-                prior_knowledge=prior_knowledge,
+                knowledge=prior_knowledge,
                 last_pushback=last_pushback,
                 strategy_mem=strategy_mem,
                 domain=domain,
