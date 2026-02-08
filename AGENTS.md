@@ -5,7 +5,6 @@
 *Auto-promoted insights from Spark*
 
 - thank you can we actually save this into a doc and pooint claude.md to it *When: auto-captured from conversation* (81% reliable, 35 validations)
-- I struggle with mcp__x-twitter__get_user_profile_error tasks *When: Tasks involving mcp__x-twitter__get_user_profile_e* (76% reliable, 64 validations)
 - I struggle with tool_0_error tasks *When: Tasks involving tool_0_error* (100% reliable, 35 validations)
 - I struggle with tool_1_error tasks *When: Tasks involving tool_1_error* (100% reliable, 33 validations)
 - I struggle with tool_2_error tasks *When: Tasks involving tool_2_error* (100% reliable, 29 validations)
@@ -26,3 +25,7 @@
 - I struggle with tool_45_error tasks *When: Tasks involving tool_45_error* (100% reliable, 3 validations)
 - I struggle with tool_49_error tasks *When: Tasks involving tool_49_error* (100% reliable, 61 validations)
 - [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. *When: [domain:x_social] Gap in Spark Intelligence identi* (84% reliable, 64 validations)
+- I struggle with tool_33_error tasks *When: Tasks involving tool_33_error* (100% reliable, 6 validations)
+- DEPTH meta-analysis after 6 sessions: avg 74/100. Strongest: D9 (8.5). Weakest: D3 (6.3). Still improving. *When: Metacognitive analysis of DEPTH training trajector* (100% reliable, 4 validations)
+- Weak Socratic lenses on 'perception': Expose (depths [5]). These reasoning modes need practice. *When: DEPTH training, 67/100* (100% reliable, 9 validations)
+- WebFetch fails repeatedly with: Request failed with status code 404 *When: error_pattern:WebFetch* (100% reliable, 4 validations)
