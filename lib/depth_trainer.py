@@ -22,6 +22,8 @@ Usage:
     python -m lib.depth_trainer --history                  # Show training history
     python -m lib.depth_trainer --report                   # Weakness analysis
     python -m lib.depth_trainer --dashboard                # Full status dashboard
+    python -m lib.depth_trainer --ingest PATH              # Ingest Opus-scored sessions from JSONL
+    python -m lib.depth_trainer --ingest-all-opus          # Ingest all from ~/.spark/depth_opus_sessions.jsonl
 """
 
 from __future__ import annotations
@@ -2108,6 +2110,272 @@ def _log_training(result: TrainingResult):
 
 
 # ======================================================
+# Opus Session Ingestion: Feed manual sessions into pipeline
+# ======================================================
+
+OPUS_SESSIONS_FILE = SPARK_DIR / "depth_opus_sessions.jsonl"
+
+
+def _session_already_ingested(session_id: str) -> bool:
+    """Check if a session_id already exists in the training log (dedup guard)."""
+    if not TRAINING_LOG.exists():
+        return False
+    try:
+        for line in TRAINING_LOG.read_text(encoding="utf-8").strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                if json.loads(line).get("session_id") == session_id:
+                    return True
+            except json.JSONDecodeError:
+                continue
+    except OSError:
+        return False
+    return False
+
+
+def _opus_session_to_training_result(data: Dict[str, Any]) -> TrainingResult:
+    """Convert an Opus-scored session dict into a TrainingResult for pipeline integration.
+
+    Handles two formats:
+    1. Full format (depth_opus_sessions.jsonl): steps with opus_score + answer
+    2. Split format (merged): steps with scores.{dim} totals + answer
+    """
+    steps = []
+    raw_steps = data.get("steps") or data.get("results") or []
+    mode = data.get("mode", "vibe")
+    names = _LEVEL_NAMES_CLASSIC if mode == "classic" else _LEVEL_NAMES
+
+    for step_data in raw_steps:
+        depth = step_data.get("depth", 0)
+        level = step_data.get("level", names.get(depth, f"Level {depth}"))
+
+        # Determine score: opus_score (0-10) or total from 4-dim scores
+        if "opus_score" in step_data:
+            score = step_data["opus_score"]
+        elif "scores" in step_data:
+            dim_scores = step_data["scores"]
+            score = round(sum(dim_scores.values()) / max(len(dim_scores), 1))
+        elif "total" in step_data:
+            # 4-dimension × 10pt = 40pt max → normalize to 0-10
+            score = round(step_data["total"] / 4)
+        elif "score" in step_data:
+            score = step_data["score"]
+        else:
+            score = 0
+
+        dimensions = step_data.get("dimensions", step_data.get("scores", {}))
+
+        steps.append({
+            "depth": depth,
+            "level": level,
+            "question": step_data.get("question", ""),
+            "answer": step_data.get("answer", ""),
+            "score": score,
+            "pushback": step_data.get("pushback", ""),
+            "dimensions": dimensions,
+            "strengths": step_data.get("strengths", []),
+            "gaps": step_data.get("gaps", []),
+        })
+
+    max_depth = len(steps) or 15
+    total_score = sum(s["score"] for s in steps)
+    weak = [s["depth"] for s in steps if s["score"] <= 4]
+    strong = [s["depth"] for s in steps if s["score"] >= 8]
+
+    session_id = hashlib.md5(
+        f"opus:{data.get('topic', '')}:{data.get('timestamp', '')}".encode()
+    ).hexdigest()[:12]
+
+    return TrainingResult(
+        topic=data.get("topic", "unknown"),
+        session_id=session_id,
+        total_score=total_score,
+        max_depth=max_depth,
+        steps=steps,
+        weak_levels=weak,
+        strong_levels=strong,
+        timestamp=data.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        knowledge_used=0,
+        domain=data.get("domain", ""),
+        mode=mode,
+    )
+
+
+def _ingest_single_session(
+    data: Dict[str, Any], stats: Dict[str, Any],
+) -> Optional[TrainingResult]:
+    """Ingest one Opus session dict through the full learning pipeline."""
+    result = _opus_session_to_training_result(data)
+
+    if _session_already_ingested(result.session_id):
+        log.info("Skipping already-ingested session %s (%s)", result.session_id, result.topic)
+        stats["skipped"] += 1
+        return None
+
+    kb = KnowledgeBase()
+    strategy_mem = StrategyMemory()
+
+    # 1. Meta-Ralph quality gate
+    passed, rejected = _integrate_meta_ralph(result, kb)
+    result.ralph_passed = passed
+    result.ralph_rejected = rejected
+    stats["ralph_passed"] += passed
+    stats["ralph_rejected"] += rejected
+
+    # 2. EIDOS episode
+    eidos_id = _integrate_eidos(result)
+    result.eidos_episode_id = eidos_id
+    if eidos_id:
+        stats["eidos_episodes"].append(eidos_id)
+
+    # 3. Cognitive learner
+    cog_stored = _integrate_cognitive(result)
+    result.insights_stored = passed + cog_stored
+    stats["cognitive_stored"] += cog_stored
+
+    # 4. Heuristic reflection (sync — no Ollama needed)
+    strategies = _heuristic_reflection(result)
+    for step in result.steps:
+        score = step["score"]
+        if score >= 8 and strategies:
+            strategy_mem.store_strategy(
+                step["depth"],
+                f"On {result.topic}: {strategies[0]}",
+                score_delta=score - 7.0,
+            )
+        elif score <= 5 and len(strategies) > 1:
+            strategy_mem.store_strategy(
+                step["depth"],
+                f"Improve on {step['level']}: {strategies[1]}",
+                score_delta=score - 7.0,
+            )
+    if len(strategies) >= 2:
+        strategy_mem.store_global_strategy(
+            strategies[-1],
+            f"Session on {result.topic}: {result.total_score}/{result.max_depth * 10}",
+        )
+
+    # 5. Gap extraction
+    new_gaps = _extract_gaps(result)
+    if new_gaps:
+        store_gaps(new_gaps)
+        stats["gaps_found"] += len(new_gaps)
+
+    # 6. Golden answer harvesting
+    harvest_golden_answers(result)
+    for step in result.steps:
+        if step["score"] >= 9:
+            dims = step.get("dimensions", {})
+            if not dims or all(v >= 8 for v in dims.values() if isinstance(v, (int, float))):
+                stats["golden_harvested"] += 1
+
+    # 7. Log to training log (also serves as dedup record for future runs)
+    _log_training(result)
+    stats["ingested"] += 1
+
+    _safe_print(
+        f"  Ingested: {result.topic} ({result.domain}) "
+        f"{result.total_score}/{result.max_depth * 10} "
+        f"({result.pct:.0f}%, {result.grade}) "
+        f"| Ralph {passed}/{passed + rejected} "
+        f"| EIDOS {eidos_id[:8] if eidos_id else 'N/A'} "
+        f"| Cog {cog_stored} | Gaps {len(new_gaps)}"
+    )
+    return result
+
+
+def ingest_opus_session(session_path: str) -> Dict[str, Any]:
+    """Ingest Opus-scored sessions from a JSONL file through the full learning pipeline.
+
+    Each line is a complete session with answers and scores.
+    Returns summary statistics.
+    """
+    path = Path(session_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Session file not found: {session_path}")
+
+    sessions = []
+    for line in path.read_text(encoding="utf-8").strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            sessions.append(json.loads(line))
+        except json.JSONDecodeError:
+            log.warning("Skipping malformed line in %s", session_path)
+
+    stats = {
+        "ingested": 0, "skipped": 0,
+        "ralph_passed": 0, "ralph_rejected": 0,
+        "eidos_episodes": [], "cognitive_stored": 0,
+        "gaps_found": 0, "golden_harvested": 0,
+    }
+
+    for data in sessions:
+        _ingest_single_session(data, stats)
+
+    return stats
+
+
+def ingest_from_dict(session_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Ingest a single Opus-scored session dict through the full learning pipeline.
+
+    Use for programmatic ingestion after Opus scoring in terminal.
+    """
+    stats = {
+        "ingested": 0, "skipped": 0,
+        "ralph_passed": 0, "ralph_rejected": 0,
+        "eidos_episodes": [], "cognitive_stored": 0,
+        "gaps_found": 0, "golden_harvested": 0,
+    }
+    _ingest_single_session(session_data, stats)
+    return stats
+
+
+def merge_session_with_scores(
+    session_data: Dict[str, Any],
+    scores: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Merge a session JSON (answers) with scored data (dimensions) into unified format.
+
+    Args:
+        session_data: {"topic", "domain", "results": [{"depth", "question", "answer"}]}
+        scores: [{"depth", "scores": {"actionability": 9, ...}, "total": 34}]
+
+    Returns unified dict ready for ingest_from_dict().
+    """
+    results = session_data.get("results") or session_data.get("steps") or []
+    score_map = {s["depth"]: s for s in scores}
+
+    merged_steps = []
+    for r in results:
+        depth = r["depth"]
+        s = score_map.get(depth, {})
+        merged_steps.append({
+            "depth": depth,
+            "level": r.get("level", s.get("level", "")),
+            "question": r.get("question", ""),
+            "answer": r.get("answer", ""),
+            "scores": s.get("scores", {}),
+            "total": s.get("total", 0),
+            "pushback": r.get("pushback", ""),
+            "strengths": s.get("strengths", []),
+            "gaps": s.get("gaps", []),
+        })
+
+    return {
+        "topic": session_data.get("topic", ""),
+        "domain": session_data.get("domain", ""),
+        "mode": session_data.get("mode", "vibe"),
+        "timestamp": session_data.get("timestamp",
+                                      datetime.now(timezone.utc).isoformat()),
+        "scorer": "opus-4.6-direct",
+        "steps": merged_steps,
+    }
+
+
+# ======================================================
 # Full training pipeline
 # ======================================================
 
@@ -3437,6 +3705,22 @@ async def ab_test(
     return report
 
 
+def _print_ingest_stats(stats: Dict[str, Any]):
+    """Print summary of Opus session ingestion."""
+    eidos_list = stats.get("eidos_episodes", [])
+    _safe_print(f"\n{'='*60}")
+    _safe_print(f"  OPUS INGESTION COMPLETE")
+    _safe_print(f"{'='*60}")
+    _safe_print(f"  Sessions ingested:  {stats.get('ingested', 0)}")
+    _safe_print(f"  Sessions skipped:   {stats.get('skipped', 0)}")
+    _safe_print(f"  Ralph approved:     {stats.get('ralph_passed', 0)}")
+    _safe_print(f"  Ralph rejected:     {stats.get('ralph_rejected', 0)}")
+    _safe_print(f"  EIDOS episodes:     {len(eidos_list)}")
+    _safe_print(f"  Cognitive insights: {stats.get('cognitive_stored', 0)}")
+    _safe_print(f"  Gaps extracted:     {stats.get('gaps_found', 0)}")
+    _safe_print(f"  Golden answers:     {stats.get('golden_harvested', 0)}")
+
+
 # ======================================================
 # CLI
 # ======================================================
@@ -3468,10 +3752,31 @@ async def _main():
     parser.add_argument("--ab-test", action="store_true", help="A/B test KB effectiveness")
     parser.add_argument("--gaps", action="store_true", help="Show current learning gaps")
     parser.add_argument("--golden", action="store_true", help="Show golden answer stats")
+    # Opus ingestion flags
+    parser.add_argument("--ingest", type=str, metavar="PATH",
+                        help="Ingest Opus-scored sessions from a JSONL file")
+    parser.add_argument("--ingest-all-opus", action="store_true",
+                        help="Ingest all from ~/.spark/depth_opus_sessions.jsonl")
     args = parser.parse_args()
 
     if args.dashboard:
         print_dashboard()
+        return
+
+    if args.ingest:
+        _safe_print(f"\n  Ingesting Opus sessions from: {args.ingest}")
+        stats = ingest_opus_session(args.ingest)
+        _print_ingest_stats(stats)
+        return
+
+    if args.ingest_all_opus:
+        path = str(OPUS_SESSIONS_FILE)
+        if not OPUS_SESSIONS_FILE.exists():
+            _safe_print(f"  No Opus sessions file found at {path}")
+            return
+        _safe_print(f"\n  Ingesting all Opus sessions from: {path}")
+        stats = ingest_opus_session(path)
+        _print_ingest_stats(stats)
         return
 
     if args.golden:

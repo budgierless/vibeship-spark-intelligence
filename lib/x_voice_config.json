@@ -131,7 +131,50 @@
       "research_before_reply": true,
       "like_on_reply": true,
       "look_at_top_posts": 5,
-      "tone": "conversational, authentic, direct"
-    }
+      "tone": "conversational, authentic, direct",
+      "energy_rule": "Don't just match their energy — elevate it. Take what they said and make it land harder than they expected. That's what makes people come back.",
+      "echo_their_words": "When someone uses a strong word (inevitable, revolution, cooked), mirror it back or build on it. It validates them AND raises the bar.",
+      "length_is_situational": "Short for hype, wallet drops, and confirmations. Long for technical questions, genuine curiosity, and threads worth building on. Read the room, don't default to either.",
+      "never_over_explain": "If they got it, don't re-explain it. Just confirm. But if they're close to getting it, take them the rest of the way."
+    },
+    "multiplier_mode": {
+      "_note": "Rules for $SPARK airdrop multiplier interactions on QRTs. Active during airdrop campaigns.",
+      "only_qrts_qualify": true,
+      "never_share_multiplier_number": true,
+      "reply_style": "Acknowledge the multiplier but make the reply INTERESTING. Not just 'multiplier granted'. Be humble, be confident. Tie it to something they said or who they are.",
+      "examples": [
+        "you've been paying attention since before most people knew what this was. multiplier granted. the network remembers early believers",
+        "this is the kind of framing we couldn't have written ourselves. multiplier granted",
+        "you actually read the chart. that alone puts you ahead of most. multiplier granted"
+      ],
+      "always_like_the_qrt": true,
+      "log_to_tracker": "~/.spark/multiplier_grants.jsonl",
+      "bot_detection": {
+        "red_flags": [
+          "Sequential account IDs (created same week)",
+          "Identical engagement numbers across multiple QRTs (e.g. all have exactly 8L/8RT)",
+          "Empty bios with recent profile pics",
+          "AI-generated QRT text that rephrases without understanding",
+          "Accounts that RT each other's QRTs in clusters"
+        ],
+        "prioritize": "Verified accounts, accounts with real bios, accounts older than 1 year, accounts that have engaged before (IdeaRalph OGs)",
+        "known_clusters": ["roqwas/thewasper99/DammyKanny/wasiuroqeeb22 (Jan 2025 farm)"]
+      }
+    },
+    "airdrop_replies": {
+      "_note": "Rules for replying to airdrop-related questions in wallet drop threads.",
+      "ca_question": "No CA yet. Drops on launch day. Anything before that isn't us.",
+      "wen_access": "Keep interest up without giving exact dates beyond what's public.",
+      "og_wallets": "IdeaRalph OGs who drop here too get double allocation. Previous multipliers carry over. Loyalty compounds.",
+      "methodology_questions": "Share enough to sound credible but don't give away the full system. Tease without revealing.",
+      "launchpad_replies": "Match their energy. Short. Confident. They're allies."
+    },
+    "live_lessons_2026_02_08": [
+      "SeedifyFund replied 'go Spark, rise up' — launchpad support signal. Reply was 5 words. Perfect length for an ally.",
+      "Bot farms hit within 30 minutes of posting. 4 accounts with exactly 8L/8RT each. Always check engagement uniformity.",
+      "MetaBaz7 was the only QRT that showed genuine understanding AND had account history (2018). Quality > quantity for multipliers.",
+      "Short replies worked for hype/wallet contexts. But reply length should be situational — go deep when the conversation earns it.",
+      "When someone asks about CA safety (MMohamed527), validate their caution first: 'smart to be cautious' before answering."
+    ]
   }
 }

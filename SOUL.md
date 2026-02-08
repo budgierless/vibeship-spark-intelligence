@@ -9,6 +9,7 @@
 - # Spark Intelligence: Iteration Projects
 - User wanted: I meant over there. I think over here we can also start to think about when we actually start to mak *When: Detected from correction pattern (importance: medi* (79% reliable, 23 validations)
 - User prefers 'really look at how we can make things better here' over 'to hallucinate. The goal here is really to make sure that Spark Intelligence learns, evolves, grows and becomes the best companion possible. And therefore we should never sugarcoat our things' *When: Detected from correction pattern (importance: medi* (73% reliable, 22 validations)
+- When using Bash, remember: Do that two lines with the guardrails being the second line *When: Detected from correction pattern (importance: crit* (100% reliable, 4 validations)
 ## Master Learnings from Previous Sessions
 
 ### Critical Discoveries (Sessions 2-9)
