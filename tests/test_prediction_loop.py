@@ -239,3 +239,91 @@ def test_match_predictions_hard_link_beats_similarity(tmp_path, monkeypatch):
     stats = pl.match_predictions(max_age_s=6 * 3600, sim_threshold=0.95)
     assert stats["matched"] == 1
     assert stats["validated"] == 1
+
+
+def test_build_predictions_tags_test_namespace(tmp_path, monkeypatch):
+    pred_file = tmp_path / "predictions.jsonl"
+    monkeypatch.setattr(pl, "PREDICTIONS_FILE", pred_file)
+    monkeypatch.setattr(
+        pl,
+        "read_recent_exposures",
+        lambda **_kwargs: [
+            {
+                "insight_key": "k1",
+                "text": "insight from test run",
+                "source": "chip_merge",
+                "session_id": "pytest-session-1",
+            }
+        ],
+    )
+    monkeypatch.setattr(pl, "get_cognitive_learner", lambda: object())
+    monkeypatch.setenv("SPARK_PREDICTION_TOTAL_BUDGET", "40")
+    monkeypatch.delenv("SPARK_NAMESPACE", raising=False)
+
+    pl.build_predictions()
+    rows = _read_jsonl(pred_file)
+    assert len(rows) == 1
+    assert rows[0]["namespace"] == "test"
+
+
+def test_match_predictions_excludes_test_namespace(tmp_path, monkeypatch):
+    now = time.time()
+    pred_file = tmp_path / "predictions.jsonl"
+    out_file = tmp_path / "outcomes.jsonl"
+    pred_rows = [
+        {
+            "prediction_id": "prod-1",
+            "insight_key": "ins:prod",
+            "type": "general",
+            "text": "stable prod prediction",
+            "expected_polarity": "pos",
+            "created_at": now - 60,
+            "expires_at": now + 3600,
+            "namespace": "prod",
+        },
+        {
+            "prediction_id": "test-1",
+            "insight_key": "ins:test",
+            "type": "general",
+            "text": "test only prediction",
+            "expected_polarity": "pos",
+            "created_at": now - 60,
+            "expires_at": now + 3600,
+            "namespace": "test",
+        },
+    ]
+    outcome_rows = [
+        {
+            "outcome_id": "o-prod",
+            "text": "stable prod prediction",
+            "polarity": "pos",
+            "created_at": now - 30,
+            "namespace": "prod",
+        },
+        {
+            "outcome_id": "o-test",
+            "text": "test only prediction",
+            "polarity": "pos",
+            "created_at": now - 30,
+            "namespace": "test",
+        },
+    ]
+    with pred_file.open("w", encoding="utf-8") as f:
+        for row in pred_rows:
+            f.write(json.dumps(row) + "\n")
+    with out_file.open("w", encoding="utf-8") as f:
+        for row in outcome_rows:
+            f.write(json.dumps(row) + "\n")
+
+    monkeypatch.setattr(pl, "PREDICTIONS_FILE", pred_file)
+    monkeypatch.setattr(pl, "OUTCOMES_FILE", out_file)
+    monkeypatch.setattr(pl, "embed_texts", lambda _texts: [])
+    monkeypatch.setattr(pl, "_load_state", lambda: {"matched_ids": []})
+    monkeypatch.setattr(pl, "_save_state", lambda _state: None)
+    monkeypatch.setattr(pl, "get_outcome_links", lambda limit=5000: [])
+    cog = SimpleNamespace(insights={}, _save_insights=lambda: None)
+    monkeypatch.setattr(pl, "get_cognitive_learner", lambda: cog)
+
+    stats = pl.match_predictions(max_age_s=6 * 3600, sim_threshold=0.5)
+    assert stats["matched"] == 1
+    assert stats["validated"] == 1

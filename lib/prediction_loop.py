@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -63,6 +64,9 @@ MATCH_WINDOW_BY_TYPE_S = {
     "project_done": 30 * 24 * 3600,
     "general": 24 * 3600,
 }
+TEST_NAMESPACE_PATTERN = re.compile(
+    r"(^|[\\/_:\-\s])(test|tests|pytest|unittest|integration|ci|smoke)([\\/_:\-\s]|$)"
+)
 
 
 def _load_state() -> Dict:
@@ -106,6 +110,44 @@ def _prediction_type(category: str, insight_text: str) -> str:
     if category in ("wisdom", "reasoning", "meta_learning"):
         return "principle"
     return "general"
+
+
+def _looks_like_test_namespace(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    text = _normalize(str(value))
+    if not text:
+        return False
+    if text in {"test", "tests", "pytest", "unittest", "integration", "ci", "smoke"}:
+        return True
+    if text.startswith("test-") or text.startswith("test_") or text.startswith("pytest"):
+        return True
+    return bool(TEST_NAMESPACE_PATTERN.search(text))
+
+
+def _resolve_namespace(*values: Optional[str]) -> str:
+    forced = str(os.environ.get("SPARK_NAMESPACE", "")).strip().lower()
+    if forced in {"prod", "production"}:
+        return "prod"
+    if forced in {"test", "testing", "ci"}:
+        return "test"
+    for value in values:
+        if _looks_like_test_namespace(value):
+            return "test"
+    return "prod"
+
+
+def _row_namespace(row: Dict) -> str:
+    explicit = row.get("namespace")
+    if explicit:
+        return "test" if str(explicit).strip().lower() == "test" else "prod"
+    return _resolve_namespace(
+        row.get("session_id"),
+        row.get("source"),
+        row.get("trace_id"),
+        row.get("project_key"),
+        row.get("tool"),
+    )
 
 
 def _load_prediction_budget_config() -> Tuple[int, int, Dict[str, int]]:
@@ -221,6 +263,7 @@ def build_predictions(max_age_s: float = 6 * 3600) -> int:
             "expires_at": now + max_age_s,
             "source": source,
             "session_id": session_id,
+            "namespace": _resolve_namespace(session_id, source, ex.get("trace_id")),
         }
         trace_id = ex.get("trace_id")
         if trace_id:
@@ -261,6 +304,7 @@ def build_project_predictions(max_age_s: float = 14 * 24 * 3600) -> int:
                     "project_key": project_key,
                     "domain": domain,
                     "entity_id": _hash_id(project_key, "done"),
+                    "namespace": _resolve_namespace(project_key, "project_profile"),
                 })
 
         for m in profile.get("milestones") or []:
@@ -287,6 +331,7 @@ def build_project_predictions(max_age_s: float = 14 * 24 * 3600) -> int:
                 "project_key": project_key,
                 "domain": domain,
                 "entity_id": entity_id,
+                "namespace": _resolve_namespace(project_key, "project_profile"),
             })
 
     _append_jsonl(PREDICTIONS_FILE, preds)
@@ -320,6 +365,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
     for ev in events:
         processed += 1
         trace_id = (ev.data or {}).get("trace_id")
+        namespace = _resolve_namespace(ev.session_id, ev.tool_name, trace_id, (ev.data or {}).get("cwd"))
         if ev.event_type == EventType.USER_PROMPT:
             payload = (ev.data or {}).get("payload") or {}
             role = payload.get("role") or "user"
@@ -339,6 +385,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "polarity": polarity,
                 "created_at": ev.timestamp,
                 "session_id": ev.session_id,
+                "namespace": namespace,
             }
             if trace_id:
                 row["trace_id"] = trace_id
@@ -360,6 +407,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "polarity": "neg",
                 "created_at": ev.timestamp,
                 "session_id": ev.session_id,
+                "namespace": namespace,
             }
             if trace_id:
                 row["trace_id"] = trace_id
@@ -391,6 +439,7 @@ def collect_outcomes(limit: int = 200) -> Dict[str, int]:
                 "polarity": "pos",
                 "created_at": ev.timestamp,
                 "session_id": ev.session_id,
+                "namespace": namespace,
             }
             if trace_id:
                 row["trace_id"] = trace_id
@@ -481,8 +530,27 @@ def match_predictions(
     now = time.time()
 
     max_window = max(float(max_age_s or 0.0), max(MATCH_WINDOW_BY_TYPE_S.values()))
-    preds = [p for p in preds if (now - float(p.get("created_at") or 0.0)) <= max_window]
-    outcomes = [o for o in outcomes if (now - float(o.get("created_at") or 0.0)) <= max_window]
+    filtered_preds: List[Dict] = []
+    for pred in preds:
+        if (now - float(pred.get("created_at") or 0.0)) > max_window:
+            continue
+        pred_ns = _row_namespace(pred)
+        pred["namespace"] = pred_ns
+        if pred_ns == "test":
+            continue
+        filtered_preds.append(pred)
+    preds = filtered_preds
+
+    filtered_outcomes: List[Dict] = []
+    for outcome in outcomes:
+        if (now - float(outcome.get("created_at") or 0.0)) > max_window:
+            continue
+        out_ns = _row_namespace(outcome)
+        outcome["namespace"] = out_ns
+        if out_ns == "test":
+            continue
+        filtered_outcomes.append(outcome)
+    outcomes = filtered_outcomes
 
     pred_texts = [p.get("text") or "" for p in preds]
     outcome_texts = [o.get("text") or "" for o in outcomes]
