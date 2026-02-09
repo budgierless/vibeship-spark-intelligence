@@ -103,9 +103,10 @@ Perspective: {level_lens}
 
 Question:
 {question}
-
+{approach_guidance}
 Provide a thorough, specific, and actionable answer.
-Reference concrete examples, specific values, and real-world tradeoffs."""
+Reference concrete examples, specific values, and real-world tradeoffs.
+IMPORTANT: Complete all code blocks fully. Never leave functions or configs half-written."""
 
 _DEEPSEEK_LOG_PATH = Path.home() / ".spark" / "logs" / "deepseek_calls.jsonl"
 
@@ -113,6 +114,7 @@ _DEEPSEEK_LOG_PATH = Path.home() / ".spark" / "logs" / "deepseek_calls.jsonl"
 _ALLOWED_PROMPT_FIELDS = {
     "question", "topic", "depth", "max_depth", "mode",
     "level_name", "level_lens", "domain_id",
+    "approach_guidance",  # Sanitized advisory hints (no Spark internals)
 }
 
 _MAX_ANSWER_LENGTH = 4000
@@ -171,12 +173,17 @@ class DepthAnswerGenerator:
     async def generate(
         self, question: str, topic: str, depth: int, max_depth: int,
         domain_id: str, mode: str, level_name: str, level_lens: str,
+        approach_guidance: str = "",
     ) -> Optional[str]:
         """Generate answer using configured provider with sanitized prompt."""
+        # Format approach_guidance block (only if provided)
+        guidance_block = ""
+        if approach_guidance:
+            guidance_block = f"\nApproach guidance:\n{approach_guidance}\n"
         prompt = self._build_sanitized_prompt(
             question=question, topic=topic, depth=depth, max_depth=max_depth,
             domain_id=domain_id, mode=mode, level_name=level_name,
-            level_lens=level_lens,
+            level_lens=level_lens, approach_guidance=guidance_block,
         )
 
         t0 = time.time()
@@ -196,7 +203,7 @@ class DepthAnswerGenerator:
 
     async def _call_api(self, prompt: str, depth: int) -> Optional[str]:
         """Call the configured provider API."""
-        timeout = 30.0 + (depth * 3.0)
+        timeout = 60.0 + (depth * 5.0)
 
         if self.provider == "ollama":
             return await self._call_ollama(prompt, timeout, depth)
@@ -213,7 +220,7 @@ class DepthAnswerGenerator:
         payload = {
             "model": self.config["model"],
             "messages": [{"role": "user", "content": prompt}],  # Single-turn only
-            "max_tokens": 1024,
+            "max_tokens": 2048,
             "temperature": 0.7,
         }
         for attempt in range(2):
