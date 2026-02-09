@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -27,6 +28,14 @@ from lib.primitive_filter import is_primitive_text
 
 PREDICTIONS_FILE = Path.home() / ".spark" / "predictions.jsonl"
 STATE_FILE = Path.home() / ".spark" / "prediction_state.json"
+
+DEFAULT_SOURCE_BUDGETS = {
+    "chip_merge": 80,
+    "spark_inject": 60,
+    "sync_context": 40,
+}
+DEFAULT_SOURCE_BUDGET = 30
+DEFAULT_TOTAL_PREDICTION_BUDGET = 180
 
 
 POSITIVE_OUTCOME = {
@@ -82,6 +91,47 @@ def _prediction_type(category: str, insight_text: str) -> str:
     return "general"
 
 
+def _load_prediction_budget_config() -> Tuple[int, int, Dict[str, int]]:
+    total_budget = DEFAULT_TOTAL_PREDICTION_BUDGET
+    default_source_budget = DEFAULT_SOURCE_BUDGET
+    source_budgets = dict(DEFAULT_SOURCE_BUDGETS)
+
+    raw_total = os.environ.get("SPARK_PREDICTION_TOTAL_BUDGET")
+    if raw_total:
+        try:
+            total_budget = max(20, min(2000, int(raw_total)))
+        except Exception:
+            pass
+
+    raw_default = os.environ.get("SPARK_PREDICTION_DEFAULT_SOURCE_BUDGET")
+    if raw_default:
+        try:
+            default_source_budget = max(1, min(2000, int(raw_default)))
+        except Exception:
+            pass
+
+    raw = os.environ.get("SPARK_PREDICTION_SOURCE_BUDGETS", "").strip()
+    if not raw:
+        return total_budget, default_source_budget, source_budgets
+
+    for part in raw.split(","):
+        token = part.strip()
+        if not token or "=" not in token:
+            continue
+        source, raw_value = token.split("=", 1)
+        source = source.strip()
+        if not source:
+            continue
+        try:
+            value = int(raw_value.strip())
+            if value <= 0:
+                continue
+            source_budgets[source] = min(value, 2000)
+        except Exception:
+            continue
+    return total_budget, default_source_budget, source_budgets
+
+
 def _load_jsonl(path: Path, limit: int = 300) -> List[Dict]:
     """Load last N lines from JSONL file using memory-efficient tail read."""
     if not path.exists():
@@ -112,16 +162,21 @@ def _append_jsonl(path: Path, rows: List[Dict]) -> None:
 
 def build_predictions(max_age_s: float = 6 * 3600) -> int:
     """Generate predictions for recently surfaced insights."""
-    exposures = read_recent_exposures(limit=200, max_age_s=max_age_s)
+    total_budget, default_source_budget, source_budgets = _load_prediction_budget_config()
+    scan_limit = max(200, min(2000, total_budget * 4))
+    exposures = read_recent_exposures(limit=scan_limit, max_age_s=max_age_s)
     if not exposures:
         return 0
 
     existing = {p.get("prediction_id") for p in _load_jsonl(PREDICTIONS_FILE, limit=500)}
     cog = get_cognitive_learner()
     preds: List[Dict] = []
+    source_counts: Dict[str, int] = {}
     now = time.time()
 
     for ex in exposures:
+        if len(preds) >= total_budget:
+            break
         key = ex.get("insight_key")
         text = ex.get("text") or ""
         category = ex.get("category") or ""
@@ -133,6 +188,9 @@ def build_predictions(max_age_s: float = 6 * 3600) -> int:
             continue
         pred_id = _hash_id(key or "", text, source)
         if pred_id in existing:
+            continue
+        source_cap = int(source_budgets.get(source, default_source_budget))
+        if source_counts.get(source, 0) >= source_cap:
             continue
 
         pred = {
@@ -151,6 +209,7 @@ def build_predictions(max_age_s: float = 6 * 3600) -> int:
         if trace_id:
             pred["trace_id"] = trace_id
         preds.append(pred)
+        source_counts[source] = source_counts.get(source, 0) + 1
 
     _append_jsonl(PREDICTIONS_FILE, preds)
     return len(preds)
