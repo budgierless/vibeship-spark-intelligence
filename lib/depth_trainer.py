@@ -24,6 +24,8 @@ Usage:
     python -m lib.depth_trainer --dashboard                # Full status dashboard
     python -m lib.depth_trainer --ingest PATH              # Ingest Opus-scored sessions from JSONL
     python -m lib.depth_trainer --ingest-all-opus          # Ingest all from ~/.spark/depth_opus_sessions.jsonl
+    python -m lib.depth_trainer --topic "caching" --forge-score  # Re-score with Opus+Codex dual scoring
+    python -m lib.depth_trainer --loop --cycles 2 --forge-score  # Autonomous loop with forge scoring
 """
 
 from __future__ import annotations
@@ -477,6 +479,7 @@ class TrainingResult:
     knowledge_used: int = 0  # how many prior learnings were injected
     domain: str = ""
     mode: str = "vibe"
+    forge_scored: bool = False  # True if re-scored by Opus+Codex forge
 
     @property
     def per_depth_scores(self) -> Dict[int, int]:
@@ -516,7 +519,7 @@ class TrainingResult:
     def depth_profile(self) -> str:
         """Visual profile like: .:-=+*#%@@"""
         bars = " .:-=+*#%@"
-        return "".join(bars[min(s.get("score", 0), 9)] for s in self.steps)
+        return "".join(bars[min(int(round(s.get("score", 0))), 9)] for s in self.steps)
 
     @property
     def pct(self) -> float:
@@ -2080,6 +2083,7 @@ def _log_training(result: TrainingResult):
             "dimensions": s.get("dimensions", {}),
             "gaps": s.get("gaps", []),
             "strengths": s.get("strengths", []),
+            **({"forge_metadata": s["forge_metadata"]} if "forge_metadata" in s else {}),
         }
         for s in result.steps
     ]
@@ -2104,6 +2108,7 @@ def _log_training(result: TrainingResult):
         "eidos_episode_id": result.eidos_episode_id,
         "knowledge_used": result.knowledge_used,
         "timestamp": result.timestamp,
+        "forge_scored": result.forge_scored,
     }
     with open(TRAINING_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
@@ -2387,6 +2392,7 @@ async def train(
     strategy_mem: StrategyMemory = None,
     domain: str = None,
     mode: str = "vibe",
+    forge_score: bool = False,
 ) -> TrainingResult:
     """Run a full DEPTH training session with Ralph loop + Spark integration."""
 
@@ -2399,6 +2405,43 @@ async def train(
         topic, verbose=verbose, kb=kb, strategy_mem=strategy_mem,
         domain=domain, mode=mode,
     )
+
+    # Forge dual-scoring: re-score all depths with Opus 4.6 + Codex 5.3
+    if forge_score:
+        try:
+            from lib.depth_forge_scorer import score_session
+            if verbose:
+                _safe_print("  [FORGE] Re-scoring with Opus 4.6 + Codex 5.3...")
+            forge_result = await score_session(
+                steps=result.steps, topic=result.topic,
+                domain=result.domain or domain or "", mode=result.mode or mode,
+            )
+            # Replace phi4-mini scores with forge consensus
+            for i, rescored in enumerate(forge_result["rescored_steps"]):
+                if i < len(result.steps):
+                    result.steps[i]["score"] = rescored["score"]
+                    result.steps[i]["dimensions"] = rescored["dimensions"]
+                    result.steps[i]["strengths"] = rescored.get("strengths", [])
+                    result.steps[i]["gaps"] = rescored.get("gaps", [])
+                    result.steps[i]["forge_metadata"] = rescored.get("metadata", {})
+            # Recalculate aggregates (round scores to ints for compatibility)
+            for s in result.steps:
+                s["score"] = round(s["score"])
+            result.total_score = sum(s["score"] for s in result.steps)
+            result.weak_levels = [s["depth"] for s in result.steps if s["score"] <= 4]
+            result.strong_levels = [s["depth"] for s in result.steps if s["score"] >= 8]
+            result.forge_scored = True
+            if verbose:
+                _safe_print(f"  [FORGE] Done: agreement={forge_result['agreement_rate']:.0%}, "
+                            f"confidence={forge_result['confidence']}, "
+                            f"new total={result.total_score}/{result.max_depth * 10} "
+                            f"({result.pct:.0f}%)")
+                if forge_result.get("disagreements"):
+                    _safe_print(f"  [FORGE] Disagreements: {len(forge_result['disagreements'])} dimensions")
+        except Exception as e:
+            log.error("Forge scoring failed, keeping phi4-mini scores: %s", e)
+            if verbose:
+                _safe_print(f"  [FORGE] Failed: {e} (keeping phi4-mini scores)")
 
     if integrate:
         if verbose:
@@ -2456,6 +2499,7 @@ async def run_autonomous_loop(
     verbose: bool = True,
     domain: str = None,
     mode: str = "vibe",
+    forge_score: bool = False,
 ) -> List[TrainingResult]:
     """Run autonomous training cycles: discover -> train -> learn -> repeat.
 
@@ -2552,6 +2596,7 @@ async def run_autonomous_loop(
                     strategy_mem=strategy_mem,
                     domain=domain,
                     mode=mode,
+                    forge_score=forge_score,
                 )
                 cycle_results.append(result)
                 all_results.append(result)
@@ -2970,7 +3015,7 @@ def print_dashboard():
 # Domain-specific training
 # ======================================================
 
-async def train_all_domains(verbose: bool = True) -> List[TrainingResult]:
+async def train_all_domains(verbose: bool = True, forge_score: bool = False) -> List[TrainingResult]:
     """Run DEPTH training across all available YAML domains."""
     kb = KnowledgeBase()
     strategy_mem = StrategyMemory()
@@ -2987,7 +3032,7 @@ async def train_all_domains(verbose: bool = True) -> List[TrainingResult]:
         try:
             r = await train(
                 topic, verbose=verbose, kb=kb, strategy_mem=strategy_mem,
-                domain=domain_id, mode="vibe",
+                domain=domain_id, mode="vibe", forge_score=forge_score,
             )
             results.append(r)
         except Exception as e:
@@ -3008,11 +3053,11 @@ async def train_all_domains(verbose: bool = True) -> List[TrainingResult]:
     return results
 
 
-async def train_self(verbose: bool = True) -> TrainingResult:
+async def train_self(verbose: bool = True, forge_score: bool = False) -> TrainingResult:
     """Run DEPTH on Spark's own learning -- meta self-assessment."""
     kb = KnowledgeBase()
     strategy_mem = StrategyMemory()
-    return await train("how Spark learns and improves itself", verbose=verbose, kb=kb, strategy_mem=strategy_mem)
+    return await train("how Spark learns and improves itself", verbose=verbose, kb=kb, strategy_mem=strategy_mem, forge_score=forge_score)
 
 
 # ======================================================
@@ -3752,6 +3797,9 @@ async def _main():
     parser.add_argument("--ab-test", action="store_true", help="A/B test KB effectiveness")
     parser.add_argument("--gaps", action="store_true", help="Show current learning gaps")
     parser.add_argument("--golden", action="store_true", help="Show golden answer stats")
+    # Forge dual-scoring flags
+    parser.add_argument("--forge-score", action="store_true",
+                        help="Re-score with Opus 4.6 + Codex 5.3 dual scoring via CLI (~$0.70/session)")
     # Opus ingestion flags
     parser.add_argument("--ingest", type=str, metavar="PATH",
                         help="Ingest Opus-scored sessions from a JSONL file")
@@ -3866,11 +3914,12 @@ async def _main():
             verbose=not args.quiet,
             domain=args.domain,
             mode=mode,
+            forge_score=args.forge_score,
         )
     elif args.self:
-        await train_self(verbose=not args.quiet)
+        await train_self(verbose=not args.quiet, forge_score=args.forge_score)
     elif args.all:
-        await train_all_domains(verbose=not args.quiet)
+        await train_all_domains(verbose=not args.quiet, forge_score=args.forge_score)
     elif args.topic:
         await train(
             args.topic,
@@ -3878,6 +3927,7 @@ async def _main():
             verbose=not args.quiet,
             domain=args.domain,
             mode=mode,
+            forge_score=args.forge_score,
         )
     else:
         parser.print_help()

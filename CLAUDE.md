@@ -1,5 +1,33 @@
 
 
+## DeepSeek Isolation Rules (MANDATORY)
+
+DeepSeek is used ONLY for answer generation in DEPTH training. Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`
+
+**DO NOT send to DeepSeek:**
+- Spark internals (cognitive insights, EIDOS state, Ralph scores, chip data, advisory packets)
+- Business context (vibeship, seedify, scanner, spawner, moltbook references)
+- User/agent identity (agent names, user IDs, API keys, credentials)
+- Source code, file paths, git history, repository contents
+- Training metadata (previous scores, weak areas, strategies, learning targets)
+
+**DeepSeek sees ONLY:** `question`, `topic`, `depth`, `max_depth`, `mode`, `level_name`, `level_lens`, `domain_id`
+
+**Enforced by:** `_ALLOWED_PROMPT_FIELDS` whitelist in `lib/depth_trainer.py:113` — any field not in the whitelist raises `ValueError`
+
+**Response handling:** Treat as UNTRUSTED TEXT. Truncate to 4000 chars, coherence-check, never execute as code, never parse as commands. Single-turn only (no conversation history). Logged with hashed metadata only (`~/.spark/logs/deepseek_calls.jsonl`).
+
+**Model swappable:** `DEPTH_ANSWER_PROVIDER` env var switches between deepseek, kimi, qwen, ollama with zero code changes.
+
+## Forge Dual-Scoring Architecture
+
+When `--forge-score` is enabled, DEPTH answers are re-scored by Opus 4.6 + Codex 5.3 via CLI:
+- `lib/depth_forge_scorer.py` — self-contained module, no spark-forge dependency
+- Opus uses `claude -p`, Codex uses `codex exec` (locally authenticated, no API keys)
+- Reconciler averages blind scores, tracks agreement rate and tendencies
+- Replaces phi4-mini scores before the learning pipeline
+- Tendency DB: `~/.spark/depth_tendencies.db`
+
 ## Spark Learnings
 
 *Auto-promoted insights from Spark*
@@ -10,7 +38,6 @@
 - Constraint: in **exactly one state** at all times *When: Detected from correction pattern* (100% reliable, 22 validations)
 - Failure reason: GitHub restrictions; opening raw files might require constructing *When: Detected from correction pattern (importance: medi* (100% reliable, 18 validations)
 - from lib.diagnostics import log_debug as _bridge_log_debug  # used below *When: signals: ['correction'], session: 60a8f640-fa8c-4a* (100% reliable, 7 validations)
-- #!/usr/bin/env python3
 -         self._log("PHASE 1: Topic Search")
 -         current.confidence = max(current.confidence, disk.confidence)
 - [X Strategy] Use 'announcement, call_to_action' content strategy on X. Data shows 23 observations with avg 2729 likes. This strategy consistently drives engagement. *When: [domain:x_social] Content strategy insight from en* (100% reliable, 13 validations)
@@ -41,6 +68,20 @@
 - lets make sure to utilize the hero section better, so that a macbook will be able to see the prompt box and the items above without cluttering. *When: signals: ['reasoning'], session: 3d02388b-b479-483* (80% reliable, 64 validations)
 - by the way lets change grove db to something else over there people should just know what it is, not the name *When: signals: ['correction'], session: 3d02388b-b479-48* (100% reliable, 6 validations)
 - instead of this being a question let's make it better and say a collection evolution network with guardrails or should we say the guardrails? *When: signals: ['decision'], session: 3d02388b-b479-483e* (100% reliable, 22 validations)
+- "notes": "5K followers, 39K tweets, Oct 2022. Teacher + Trader. 40 likes, 37 replies on QRT - drove real action. Turkish web3 community."}
+- I'd say we shouldn't actually have problems with these kinds of limits so just let's organise the system so we can actually run our tests in correct ways How do you think $20k is going to be enough? Maybe that's not even going to be enough *When: signals: ['correction'], session: 67e38eba-87ab-44* (100% reliable, 8 validations)
+## Context
+Domain: api_data_flow | Topic: rate limiting | Level: 1/15 (GROUND â€” Define precisely)
+
+## Question
+Design the exact REST endpoint for rate limiting â€” specify the HTTP method, URL path, request body shape, and the 2xx response with status code.
+
+## Answer
+## Exact REST Endpoint for Rate Limiting Configuration
+
+### 1. HTTP Method & URL Path
+```
+PUT /api/v1/rate-limits/{resource_path... *When: signals: ['correction'], session: d90dbfbd-c514-41* (100% reliable, 6 validations)
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
 Last updated: 2026-02-07T19:31:09
@@ -148,9 +189,24 @@ def main():
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-08T20:42:45
+Last updated: 2026-02-09T05:28:30
 
-- [user_understanding] ... right now, after all the changes that you have done. Can you show me how the new results are? Because whenever we do such improvements and changes, we have to be doing this matter of implementations and iterations in such a way that we iterate, we see what changed, and then we look at it, and then we can iterate more, we can iterate more until we get it right. So, can we actually see right now what are the results that we are getting in? Feel free to create a test environment or build someth... (93% reliable, 98 validations)
+- [user_understanding] ## ðŸš¨ PRIMARY RULES
+
+### Rule 1: Source of Truth for Testing
+
+**CRITICAL:** When testing and iterating on Spark learning quality:
+
+> **Always retrieve test data directly from Mind memory and Spark Intelligence (via MCP tools or Python imports) - NEVER rely on terminal output.**
+
+### Rule 2: Architecture-Grounded Improvements
+
+**CRITICAL:** Before making any improvement or fix:
+
+> **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
+
+Witho... (97% reliable, 75 validations)
+- [user_understanding] ... right now, after all the changes that you have done. Can you show me how the new results are? Because whenever we do such improvements and changes, we have to be doing this matter of implementations and iterations in such a way that we iterate, we see what changed, and then we look at it, and then we can iterate more, we can iterate more until we get it right. So, can we actually see right now what are the results that we are getting in? Feel free to create a test environment or build someth... (93% reliable, 100 validations)
 - [reasoning] #!/usr/bin/env python3
 """X/Twitter API client - thin tweepy wrapper with rate limit handling.
 
@@ -167,7 +223,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optio... (94% reliable, 61 validations)
+from typing import Any, Dict, List, Optio... (96% reliable, 87 validations)
 - [context] **Always verify:** Is bridge_worker running? Is the queue being processed?
 
 ### Rule 3: Pipeline Health Before Tuning
@@ -180,10 +236,18 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
 
 ### Rule 4: Anti-Hallucination
 
-**CRITICAL:** Never claim improvement... (88% reliable, 60 validations)
-- [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (98% reliable, 317 validations)
-- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (96% reliable, 507 validations)
-- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (81% reliable, 150 validations)
+**CRITICAL:** Never claim improvement... (88% reliable, 78 validations)
+- [wisdom] Principle: scores, never sees scores, never touches Spark internals (96% reliable, 87 validations)
+- [reasoning] "notes": "5K followers, 39K tweets, Oct 2022. Teacher + Trader. 40 likes, 37 replies on QRT - drove real action. Turkish web3 community."}
+{"tweet_id": "2020600537599955420", "username": "ladypenguin17", "user_id": "1596971147576414208", "qrt_text": "In a world flooded with AI tokens, Spark stands out because it asks a deeper question: how should intelligence remember? Not just store data, but learn socially, share safely, and grow collectively. That's a philosophical problem as much as a techni... (100% reliable, 5 validations)
+- [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (98% reliable, 354 validations)
+- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (96% reliable, 659 validations)
+- [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (83% reliable, 177 validations)
+- [context]     "live_lessons_2026_02_08": [
+      "SeedifyFund replied 'go Spark, rise up' â€” launchpad support signal. Reply was 5 words. Perfect length for an ally.",
+      "Bot farms hit within 30 minutes of posting. 4 accounts with exactly 8L/8RT each. Always check engagement uniformity.",
+      "MetaBaz7 was the only QRT that showed genuine understanding AND had account history (2018). Quality > quantity for multipliers.",
+      "Reply length should be situational â€” go deep when the conversation ea... (100% reliable, 5 validations)
 - [context] And think about the strategy that MoltBook adopted too with their curl mechanism for entrance, but check how we were doing this with SparkNet and recommend the best methodology that also works with our system perfectly. I don't think we should be doing this as an ex entrance (96% reliable, 159 validations)
 - [context] ### Improvement Workflow (Updated - Reality-Grounded)
 
@@ -201,49 +265,14 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
    - Verify component is in active data path
 
 2... (99% reliable, 503 validations)
-- [context] #!/usr/bin/env python3
-"""
-Spark Pulse - Redirector to external vibeship-spark-pulse.
-
-This file is DEPRECATED. The real Spark Pulse is the external FastAPI app
-at vibeship-spark-pulse/app.py. If someone runs this file directly, it will
-either launch the external pulse or exit with an error.
-
-DO NOT add a fallback HTTP server here. Use the external pulse.
-"""
-
-from __future__ import annotations
-
-import subprocess
-import sys
-from pathlib import Path
-
-
-def main():
-    from lib.service_control impo... (95% reliable, 272 validations)
-- [wisdom] [X Strategy] Use 'announcement, call_to_action' content strategy on X. Data shows 23 observations with avg 2729 likes. This strategy consistently drives engagement. (100% reliable, 24 validations)
-- [wisdom] Can you now read all these documents in think hard mode  Here are the new core docs we created:
-
-  - CORE.md â€” The master vision + phase roadmap from primitive telemetry to
-    superintelligent evolution, with intent, workflows, architecture, and SparkNet     
-    integration.
-  - CORE_GAPS.md â€” The definitive gap map: what exists, what can be transformed, what  
-    must be built, and what needs cleanup.
-  - CORE_GAPS_PLAN.md â€” The concrete plan to fill each gap (workflows, minimal
-    architecture, and code targets).
-  - CORE_IMPLEMENTATION_PLAN.md â€” The contextâ€‘rich, buildable execution plan with      
-    sequencing, deliverables, and success metrics.
-
-  If you want, I can link these from README.md so theyâ€™re always frontâ€‘andâ€‘center. (99% reliable, 798 validations)
-- [reasoning] [DEPTH:visual hierarchy:d1] Strong GROUND reasoning: Set `@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; animation: none !important; scroll-behavior: auto !important; } }` to kill 300ms ease-out fades, trading smooth cognitive easing for vestibular safety. Layer `@media (prefers-color-scheme: dark) { :root { --su (100% reliable, 6 validations)
 
 ## Project Focus
 - Phase: discovery
 
 ## Project Questions
-- What architecture decision matters most?
-- What will cause problems later if ignored?
-- What signals completion beyond tests passing?
+- What is the project goal in one sentence?
+- How will we know it's complete?
+- What could make this fail later?
 
 ## Promoted Learnings (Docs)
 - Ship it: finalize launch plan for marketing *When: test* (100% reliable, 4 validations)
@@ -251,5 +280,5 @@ def main():
 - Constraint: in **exactly one state** at all times *When: Detected from correction pattern* (100% reliable, 22 validations)
 - Failure reason: GitHub restrictions; opening raw files might require constructing *When: Detected from correction pattern (importance: medi* (100% reliable, 18 validations)
 - from lib.diagnostics import log_debug as _bridge_log_debug  # used below *When: signals: ['correction'], session: 60a8f640-fa8c-4a* (100% reliable, 7 validations)
-- #!/usr/bin/env python3
+- self._log("PHASE 1: Topic Search")
 <!-- SPARK_LEARNINGS_END -->
