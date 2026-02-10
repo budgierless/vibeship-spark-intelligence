@@ -24,6 +24,19 @@ learning_sources:
       - Accuracy corrections
       - Style preferences
 
+  # OpenClaw agent sessions
+  openclaw:
+    enabled: true
+    description: "Learn from OpenClaw agent sessions, tool usage, and outcomes"
+    learns:
+      - Tool effectiveness patterns
+      - User preferences and workflow style
+      - Multi-agent coordination patterns
+      - Session lifecycle and model switching behavior
+    adapter: "openclaw_tailer"
+    agent: "main"
+    poll_interval: 2.0
+
   # OPT-IN - Internet learning for higher intelligence
   x_twitter:
     enabled: true  # User can set to false

@@ -16,6 +16,7 @@ from .output_adapters import (
     write_cursor,
     write_windsurf,
     write_clawdbot,
+    write_openclaw,
     write_exports,
 )
 from .project_context import get_project_context, filter_insights_for_context
@@ -516,6 +517,12 @@ def sync_context(
         targets["clawdbot"] = "written" if ok else "skipped"
     except Exception:
         targets["clawdbot"] = "error"
+
+    try:
+        ok = write_openclaw(context)
+        targets["openclaw"] = "written" if ok else "skipped"
+    except Exception:
+        targets["openclaw"] = "error"
 
     try:
         write_exports(context)
