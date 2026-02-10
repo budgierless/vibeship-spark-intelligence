@@ -29,3 +29,4 @@
 - DEPTH meta-analysis after 6 sessions: avg 74/100. Strongest: D9 (8.5). Weakest: D3 (6.3). Still improving. *When: Metacognitive analysis of DEPTH training trajector* (100% reliable, 4 validations)
 - Weak Socratic lenses on 'perception': Expose (depths [5]). These reasoning modes need practice. *When: DEPTH training, 67/100* (100% reliable, 9 validations)
 - WebFetch fails repeatedly with: Request failed with status code 404 *When: error_pattern:WebFetch* (100% reliable, 4 validations)
+- Weak Socratic lenses on 'Build a Python rate limiter class using the token bucket algorithm with async su': Architect (depths [2]). These reasoning modes need practice. *When: DEPTH training, 8/20* (80% reliable, 4 validations)

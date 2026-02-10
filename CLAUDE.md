@@ -68,8 +68,11 @@ When `--forge-score` is enabled, DEPTH answers are re-scored by Opus 4.6 + Codex
 - lets make sure to utilize the hero section better, so that a macbook will be able to see the prompt box and the items above without cluttering. *When: signals: ['reasoning'], session: 3d02388b-b479-483* (80% reliable, 64 validations)
 - by the way lets change grove db to something else over there people should just know what it is, not the name *When: signals: ['correction'], session: 3d02388b-b479-48* (100% reliable, 6 validations)
 - instead of this being a question let's make it better and say a collection evolution network with guardrails or should we say the guardrails? *When: signals: ['decision'], session: 3d02388b-b479-483e* (100% reliable, 22 validations)
-- "notes": "5K followers, 39K tweets, Oct 2022. Teacher + Trader. 40 likes, 37 replies on QRT - drove real action. Turkish web3 community."}
 - I'd say we shouldn't actually have problems with these kinds of limits so just let's organise the system so we can actually run our tests in correct ways How do you think $20k is going to be enough? Maybe that's not even going to be enough *When: signals: ['correction'], session: 67e38eba-87ab-44* (100% reliable, 8 validations)
+- [DEPTH:visual hierarchy:d10] Strong SIMPLIFY/Distill reasoning: Implement a `PerformanceObserver` observing `'longtask'` entries that debounces updates to CSS custom properties (e.g., `--motion-intensity: 0`) via `document.documentElement.style.setProperty` when main-thread blocks exceed 50ms, batching writes via `requestIdleCallback`. Persist performance budget *When: Scored 8/10 on 'Considering your proposed use of `* (100% reliable, 10 validations)
+- **Enable advanced rendering instrumentation**: Check "Layer borders" (orange for promoted layers) and "Pain *When: Scored 8/10 on 'Based on your explanation about me* (100% reliable, 7 validations)
+- Constraint: present and valid *When: Detected from correction pattern (importance: medi* (100% reliable, 3 validations)
+- [DEPTH:loading states:d5] Strong OPTIMIZE reasoning: ## **Measuring Layer Promotion/Depromotion Bottlenecks**
 ## Context
 Domain: api_data_flow | Topic: rate limiting | Level: 1/15 (GROUND â€” Define precisely)
 
@@ -189,7 +192,7 @@ def main():
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-09T05:28:30
+Last updated: 2026-02-10T12:37:16
 
 - [user_understanding] ## ðŸš¨ PRIMARY RULES
 
@@ -205,50 +208,12 @@ Last updated: 2026-02-09T05:28:30
 
 > **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
 
-Witho... (97% reliable, 75 validations)
-- [user_understanding] ... right now, after all the changes that you have done. Can you show me how the new results are? Because whenever we do such improvements and changes, we have to be doing this matter of implementations and iterations in such a way that we iterate, we see what changed, and then we look at it, and then we can iterate more, we can iterate more until we get it right. So, can we actually see right now what are the results that we are getting in? Feel free to create a test environment or build someth... (93% reliable, 100 validations)
-- [reasoning] #!/usr/bin/env python3
-"""X/Twitter API client - thin tweepy wrapper with rate limit handling.
-
-Provides authenticated access to X API v2 for the scheduler daemon.
-All methods return dicts/lists and never raise exceptions to callers --
-errors are logged and empty results returned.
-
-Singleton: use get_x_client() to get the shared instance.
-"""
-
-from __future__ import annotations
-
-import logging
-import os
-import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optio... (96% reliable, 87 validations)
-- [context] **Always verify:** Is bridge_worker running? Is the queue being processed?
-
-### Rule 3: Pipeline Health Before Tuning
-
-**CRITICAL:** Before ANY tuning or iteration session:
-
-> **Run `python tests/test_pipeline_health.py` FIRST. Scoring metrics are meaningless if the pipeline isn't operational.**
-
-Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`. Perfect scoring, broken pipeline = zero learning.
-
-### Rule 4: Anti-Hallucination
-
-**CRITICAL:** Never claim improvement... (88% reliable, 78 validations)
-- [wisdom] Principle: scores, never sees scores, never touches Spark internals (96% reliable, 87 validations)
-- [reasoning] "notes": "5K followers, 39K tweets, Oct 2022. Teacher + Trader. 40 likes, 37 replies on QRT - drove real action. Turkish web3 community."}
-{"tweet_id": "2020600537599955420", "username": "ladypenguin17", "user_id": "1596971147576414208", "qrt_text": "In a world flooded with AI tokens, Spark stands out because it asks a deeper question: how should intelligence remember? Not just store data, but learn socially, share safely, and grow collectively. That's a philosophical problem as much as a techni... (100% reliable, 5 validations)
-- [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (98% reliable, 354 validations)
-- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (96% reliable, 659 validations)
+Witho... (88% reliable, 75 validations)
+- [wisdom] Principle: scores, never sees scores, never touches Spark internals (84% reliable, 87 validations)
+- [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (92% reliable, 354 validations)
 - [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (83% reliable, 177 validations)
-- [context]     "live_lessons_2026_02_08": [
-      "SeedifyFund replied 'go Spark, rise up' â€” launchpad support signal. Reply was 5 words. Perfect length for an ally.",
-      "Bot farms hit within 30 minutes of posting. 4 accounts with exactly 8L/8RT each. Always check engagement uniformity.",
-      "MetaBaz7 was the only QRT that showed genuine understanding AND had account history (2018). Quality > quantity for multipliers.",
-      "Reply length should be situational â€” go deep when the conversation ea... (100% reliable, 5 validations)
-- [context] And think about the strategy that MoltBook adopted too with their curl mechanism for entrance, but check how we were doing this with SparkNet and recommend the best methodology that also works with our system perfectly. I don't think we should be doing this as an ex entrance (96% reliable, 159 validations)
+- [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (82% reliable, 659 validations)
+- [context] And think about the strategy that MoltBook adopted too with their curl mechanism for entrance, but check how we were doing this with SparkNet and recommend the best methodology that also works with our system perfectly. I don't think we should be doing this as an ex entrance (87% reliable, 159 validations)
 - [context] ### Improvement Workflow (Updated - Reality-Grounded)
 
 **CRITICAL:** See "Reality-Grounded Iteration Methodology" section for full details.
@@ -264,7 +229,41 @@ Session 2 lesson: Meta-Ralph showed 39.4% quality rate, but `learnings_stored=0`
    - Identify which layer you're modifying
    - Verify component is in active data path
 
-2... (99% reliable, 503 validations)
+2... (78% reliable, 503 validations)
+- [wisdom] [X Strategy] Use 'announcement, call_to_action' content strategy on X. Data shows 23 observations with avg 2729 likes. This strategy consistently drives engagement. (100% reliable, 24 validations)
+- [wisdom] Can you now read all these documents in think hard mode  Here are the new core docs we created:
+
+  - CORE.md â€” The master vision + phase roadmap from primitive telemetry to
+    superintelligent evolution, with intent, workflows, architecture, and SparkNet     
+    integration.
+  - CORE_GAPS.md â€” The definitive gap map: what exists, what can be transformed, what  
+    must be built, and what needs cleanup.
+  - CORE_GAPS_PLAN.md â€” The concrete plan to fill each gap (workflows, minimal
+    architecture, and code targets).
+  - CORE_IMPLEMENTATION_PLAN.md â€” The contextâ€‘rich, buildable execution plan with      
+    sequencing, deliverables, and success metrics.
+
+  If you want, I can link these from README.md so theyâ€™re always frontâ€‘andâ€‘center. (83% reliable, 798 validations)
+- [reasoning] Always Read a file before Edit to verify current content (98% reliable, 395 validations)
+- [reasoning] ## Code Content Extraction (NEW)
+
+### The Problem
+
+Code written via Write/Edit tools contains valuable learning signals in:
+- Docstrings with design decisions
+- Comments with "REMEMBER:", "PRINCIPLE:", "CORRECTION:"
+- Architecture explanations
+- Balance formulas with reasoning
+
+**Before:** These were completely ignored. Only user messages were analyzed.
+
+### The Solution
+
+Added to `observe.py` PostToolUse handler:
+```python
+if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
+    ... (100% reliable, 57 validations)
+- [reasoning] I decided to use TypeScript because it has better type safety (94% reliable, 131 validations)
 
 ## Project Focus
 - Phase: discovery
