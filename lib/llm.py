@@ -201,24 +201,23 @@ def synthesize_advisory(
     pattern_text = "\n".join(f"- {p}" for p in patterns[:15])
     insight_text = "\n".join(f"- {i}" for i in insights[:15])
 
-    prompt = f"""You are Spark Intelligence, an AI learning system that observes coding sessions and produces actionable advice.
+    prompt = f"""You are Spark Intelligence, observing a live coding session. Based on ONLY the data below, produce 2-4 specific recommendations.
 
-Given these recently detected patterns and insights, synthesize 2-4 specific, actionable recommendations.
-
-PATTERNS:
+WHAT'S HAPPENING NOW (patterns from this session):
 {pattern_text}
 
-INSIGHTS:
+LEARNED INSIGHTS (from past sessions):
 {insight_text}
 
 {f"CONTEXT: {context}" if context else ""}
 
-Rules:
-- Be specific and actionable (not "write better code" but "extract the retry logic in bridge_worker into a shared utility")
-- Reference actual files/functions when possible
-- Prioritize by impact
-- Keep each recommendation to 1-2 sentences
-- Format as a numbered list"""
+CRITICAL RULES:
+- ONLY recommend things supported by the data above. If the patterns show file edits, talk about those files. If they show errors, address those errors.
+- Never produce generic coding tips like "batch operations" or "use linting" — those are useless.
+- Reference specific files, functions, or behaviors you can see in the data.
+- If the data is too vague to make specific recommendations, say "Insufficient data for specific advice" instead of making something up.
+- Each recommendation: 1-2 sentences, actionable NOW.
+- Format as a numbered list."""
 
     return ask_claude(
         prompt,

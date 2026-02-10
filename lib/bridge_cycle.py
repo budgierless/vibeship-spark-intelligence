@@ -382,33 +382,13 @@ def run_bridge_cycle(
                 from lib.llm import synthesize_advisory, interpret_patterns
                 from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
 
-                # 1. Synthesize advisory from recent patterns + insights
-                cog = get_cognitive_learner()
-                recent_insights = []
-                try:
-                    # Get top-ranked validated insights
-                    ranked = cog.get_ranked_insights(min_reliability=0.3, min_validations=0, limit=10)
-                    for ins in ranked:
-                        recent_insights.append(ins.insight if hasattr(ins, "insight") else str(ins))
-                except Exception:
-                    pass
-                # Also pull recent self-awareness insights
-                try:
-                    for ins in cog.get_self_awareness_insights()[:5]:
-                        recent_insights.append(ins.insight if hasattr(ins, "insight") else str(ins))
-                except Exception:
-                    pass
+                # 1. Build rich pattern summaries from actual event data
+                pattern_summaries = _build_pattern_summaries(
+                    user_prompt_events or [], edit_write_events or [], stats
+                )
 
-                pattern_summaries = []
-                if pipeline_metrics:
-                    pm = stats.get("pipeline", {})
-                    ly = pm.get("learning_yield", {})
-                    if ly.get("patterns_detected"):
-                        pattern_summaries.append(f"{ly['patterns_detected']} patterns detected")
-                    if ly.get("error_patterns_found"):
-                        pattern_summaries.append(f"{ly['error_patterns_found']} error patterns found")
-                    if ly.get("tool_effectiveness_updates"):
-                        pattern_summaries.append(f"{ly['tool_effectiveness_updates']} tool effectiveness updates")
+                # 2. Get filtered, relevant insights (no benchmark noise)
+                recent_insights = _get_filtered_insights()
 
                 if recent_insights or pattern_summaries:
                     advisory = synthesize_advisory(
@@ -500,6 +480,174 @@ def run_bridge_cycle(
         _maybe_notify_openclaw(stats)
 
     return stats
+
+
+# --- Noise patterns to filter from insights before LLM prompt ---
+_INSIGHT_NOISE_PATTERNS = [
+    "Strong reasoning on",       # depth forge benchmark scores
+    "Weak reasoning on",         # depth forge benchmark scores
+    "reasoning on '",            # depth forge benchmark scores
+    "mcp__x-twitter__",          # Twitter API error struggles
+    "depth forge",               # depth forge benchmarks
+    "Profile: ",                 # benchmark profile strings like *#%####%##
+    "Strongest at depths",       # depth forge metrics
+    "DEPTH score on",            # depth forge regression reports
+    "DEPTH meta-analysis",       # depth forge meta-analysis
+    "grade A", "grade B", "grade C", "grade D", "grade F",  # benchmark grades
+    "free-tier",                 # polluted insight from old data
+    "content strategy on X",     # X/Twitter strategy noise
+    "lets push git",             # raw user transcript fragments
+    "remember: Do it",           # raw user transcript fragments
+    "testing pipeline flow",     # generic test noise
+]
+
+
+def _looks_like_raw_transcript(text: str) -> bool:
+    """Detect raw user transcript fragments that aren't real insights."""
+    # Very informal language, questions, or commands pasted verbatim
+    indicators = [
+        text.count(",") > 3 and len(text) > 80,  # long rambling sentence
+        "lets " in text.lower() and "push" in text.lower(),
+        text.startswith("When using Bash"),
+    ]
+    return any(indicators)
+
+
+def _is_noise_insight(text: str) -> bool:
+    """Return True if insight is benchmark noise / not actionable."""
+    t = text.lower()
+    for pattern in _INSIGHT_NOISE_PATTERNS:
+        if pattern.lower() in t:
+            return True
+    # Skip very short insights (< 20 chars) — too vague to be useful
+    if len(text.strip()) < 20:
+        return True
+    # Skip raw transcript fragments
+    if _looks_like_raw_transcript(text):
+        return True
+    # Skip insights with code blocks — usually raw examples, not distilled wisdom
+    if "```" in text:
+        return True
+    # Skip insights that are just "Prefer X over Y" with raw data fragments
+    if text.startswith("Prefer '") and "over '" in text:
+        return True
+    # Skip "User prefers:" followed by very short/vague content
+    if text.startswith("User prefers:") and len(text) < 40:
+        return True
+    return False
+
+
+def _get_filtered_insights(limit: int = 10) -> list:
+    """Get recent cognitive insights, filtered for relevance.
+
+    Excludes depth forge benchmarks, Twitter API errors, and other noise
+    that produces generic/hallucinated advisories.
+    """
+    from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
+
+    cog = get_cognitive_learner()
+    filtered = []
+
+    # Prefer wisdom, context, and meta_learning categories — these are most actionable
+    preferred_categories = [
+        CognitiveCategory.WISDOM,
+        CognitiveCategory.CONTEXT,
+        CognitiveCategory.META_LEARNING,
+        CognitiveCategory.USER_UNDERSTANDING,
+    ]
+
+    try:
+        ranked = cog.get_ranked_insights(min_reliability=0.5, min_validations=2, limit=30)
+        for ins in ranked:
+            text = ins.insight if hasattr(ins, "insight") else str(ins)
+            if _is_noise_insight(text):
+                continue
+            cat = ins.category if hasattr(ins, "category") else None
+            # Boost preferred categories to front
+            if cat in preferred_categories:
+                filtered.insert(0, text)
+            else:
+                filtered.append(text)
+            if len(filtered) >= limit:
+                break
+    except Exception:
+        pass
+
+    # Add self-awareness insights (filtered)
+    try:
+        for ins in cog.get_self_awareness_insights()[:5]:
+            text = ins.insight if hasattr(ins, "insight") else str(ins)
+            if not _is_noise_insight(text) and text not in filtered:
+                filtered.append(text)
+                if len(filtered) >= limit:
+                    break
+    except Exception:
+        pass
+
+    return filtered[:limit]
+
+
+def _build_pattern_summaries(
+    user_prompts: list, edit_events: list, stats: dict
+) -> list:
+    """Build descriptive pattern summaries from actual event data.
+
+    Instead of just "16 patterns detected", produces things like:
+    - "User edited lib/bridge_cycle.py, lib/llm.py (Python refactoring session)"
+    - "Heavy use of exec tool (12 calls) — debugging/testing workflow"
+    - "Error patterns: 3 failed tool calls (Read, exec)"
+    """
+    summaries = []
+
+    # 1. Files being edited — shows what the session is about
+    edited_files = set()
+    for ev in edit_events:
+        ti = ev.tool_input or {}
+        fp = ti.get("file_path") or ti.get("path") or ""
+        if fp:
+            # Just filename, not full path
+            from pathlib import PurePosixPath, PureWindowsPath
+            try:
+                name = PureWindowsPath(fp).name if "\\" in fp else PurePosixPath(fp).name
+            except Exception:
+                name = fp.split("/")[-1].split("\\")[-1]
+            edited_files.add(name)
+    if edited_files:
+        files_str = ", ".join(sorted(edited_files)[:5])
+        if len(edited_files) > 5:
+            files_str += f" (+{len(edited_files)-5} more)"
+        summaries.append(f"Files being edited: {files_str}")
+
+    # 2. User prompt themes — what the human is asking about
+    prompt_snippets = []
+    for ev in user_prompts[-5:]:
+        payload = (ev.data or {}).get("payload") or {}
+        txt = str(payload.get("text") or "").strip()
+        if txt and len(txt) > 10:
+            # First 80 chars of each prompt
+            prompt_snippets.append(txt[:80].replace("\n", " "))
+    if prompt_snippets:
+        summaries.append(f"Recent user requests: {'; '.join(prompt_snippets[:3])}")
+
+    # 3. Pipeline stats with context
+    pm = stats.get("pipeline", {})
+    ly = pm.get("learning_yield", {})
+    if ly.get("error_patterns_found"):
+        summaries.append(f"{ly['error_patterns_found']} error patterns detected in this cycle")
+    if ly.get("tool_effectiveness_updates"):
+        summaries.append(f"{ly['tool_effectiveness_updates']} tool effectiveness observations")
+
+    # 4. Feedback loop stats
+    fb = stats.get("feedback", {})
+    if fb:
+        summaries.append(f"Agent feedback: {fb}")
+
+    # 5. Content learning
+    cl = stats.get("content_learned", 0)
+    if cl > 0:
+        summaries.append(f"{cl} code patterns learned from edits")
+
+    return summaries
 
 
 def _write_llm_advisory(advisory: str) -> None:
