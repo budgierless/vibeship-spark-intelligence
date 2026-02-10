@@ -287,7 +287,21 @@ CRITICAL RULES:
 - Reference specific files, functions, or behaviors you can see in the data.
 - If the data is too vague to make specific recommendations, say "Insufficient data for specific advice" instead of making something up.
 - Each recommendation: 1-2 sentences, actionable NOW.
-- Format as a numbered list."""
+- Format as a numbered list.
+
+NEVER suggest any of these (they are generic waste):
+- "Check if services are running" or "verify pipeline flow"
+- "Review recent changes" or "check logs"
+- "Run tests" or "validate integration"
+- "Consider adding error handling"
+- Anything about "monitoring" or "observing" patterns
+- Restating what already happened as a recommendation
+
+GOOD advisory examples:
+- "The repeated edits to api.py suggest the sybil scoring weights need rebalancing — social is at 20% but the data shows 74% single-mention authors, so temporal+fuzzy should be weighted higher."
+- "You've edited bridge_cycle.py 4 times this session fixing the same chip merge logic — extract the merge threshold into a config constant."
+- "Error pattern: 3 failed exec calls with encoding errors — add sys.stdout.reconfigure(encoding='utf-8') to the entry point."
+"""
 
     return ask_claude(
         prompt,

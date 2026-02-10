@@ -55,6 +55,20 @@ def _tail_lines(path: Path, count: int) -> List[str]:
         return []
 
 
+def _maybe_rotate_exposures():
+    """Rotate exposures.jsonl when it exceeds 5MB."""
+    if not EXPOSURES_FILE.exists():
+        return
+    try:
+        if EXPOSURES_FILE.stat().st_size > 5 * 1024 * 1024:  # 5MB
+            rotated = EXPOSURES_FILE.with_suffix('.1.jsonl')
+            if rotated.exists():
+                rotated.unlink()
+            EXPOSURES_FILE.rename(rotated)
+    except Exception:
+        pass
+
+
 def record_exposures(
     source: str,
     items: Iterable[Dict],
@@ -63,6 +77,7 @@ def record_exposures(
     trace_id: Optional[str] = None
 ) -> int:
     """Append exposure entries. Returns count written."""
+    _maybe_rotate_exposures()
     rows: List[Dict] = []
     now = time.time()
     for item in items:

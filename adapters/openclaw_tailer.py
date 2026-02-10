@@ -96,9 +96,65 @@ def _truncate_content(content) -> str:
     return text
 
 
+def _should_skip_event(obj: dict) -> bool:
+    """Filter out low-value events to reduce noise in the pipeline."""
+    line_type = obj.get("type")
+    if line_type != "message":
+        return False
+    
+    msg = obj.get("message") if isinstance(obj.get("message"), dict) else None
+    if not msg:
+        return False
+    
+    role = msg.get("role")
+    content = msg.get("content", "")
+    
+    # Skip heartbeat acks
+    if role == "assistant":
+        text = ""
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    break
+        if "HEARTBEAT_OK" in text or "NO_REPLY" in text:
+            return True
+    
+    # Skip successful tool results (keep errors)
+    if role == "toolResult":
+        if not msg.get("isError", False):
+            # Keep tool results that are short (likely meaningful responses)
+            text = ""
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text += block.get("text", "")
+            # Skip large routine tool outputs (file reads, exec outputs)
+            if len(text) > 2000:
+                return True
+    
+    # Skip routine Read tool calls from assistant
+    if role == "assistant" and isinstance(content, list):
+        # If the only tool calls are Read, skip
+        tool_calls = [b for b in content if isinstance(b, dict) and b.get("type") == "toolCall"]
+        text_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        if tool_calls and not text_blocks:
+            all_reads = all(tc.get("name") == "Read" for tc in tool_calls)
+            if all_reads:
+                return True
+    
+    return False
+
+
 def parse_openclaw_line(obj: dict, session_key: str) -> list:
     """Parse one JSONL line into zero or more SparkEventV1 events."""
     events = []
+    if _should_skip_event(obj):
+        return events  # empty list, skip this event
     line_type = obj.get("type")
     ts = _parse_ts(obj.get("timestamp"))
 

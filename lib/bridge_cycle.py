@@ -303,6 +303,9 @@ def run_bridge_cycle(
             stats["errors"].append("cognitive_signals")
             log_debug("bridge_worker", "cognitive signal extraction failed", e)
 
+        # TODO: Filter chips by project context (game-dev shouldn't fire during spark-checker work)
+        # See: spark_reports/day1_fixes_plan.md for details
+        
         # --- Chip processing (uses pre-built chip_events list, capped for speed) ---
         # Cap at 30 events to keep cycle time under 30s (was 60s+ with 67 events x 13 chips)
         capped_chip_events = chip_events[-30:] if len(chip_events) > 30 else chip_events
@@ -720,6 +723,30 @@ def _append_eidos_update(update: str) -> None:
         log_debug("bridge_worker", f"Failed to append EIDOS update: {e}", None)
 
 
+_GENERIC_ADVISORY_PHRASES = [
+    "check if services are running",
+    "verify pipeline flow",
+    "review recent changes",
+    "check logs",
+    "run tests",
+    "validate integration",
+    "consider adding",
+    "monitor",
+    "insufficient data",
+]
+
+def _is_generic_advisory(text: str) -> bool:
+    """Return True if advisory is too generic to be worth pushing."""
+    t = text.lower()
+    matches = sum(1 for phrase in _GENERIC_ADVISORY_PHRASES if phrase in t)
+    # If more than half the recommendations match generic phrases, skip
+    lines = [l for l in text.strip().split('\n') if l.strip().startswith(('1.', '2.', '3.', '4.', '5.'))]
+    if not lines:
+        return matches >= 2
+    generic_lines = sum(1 for l in lines if any(p in l.lower() for p in _GENERIC_ADVISORY_PHRASES))
+    return generic_lines > len(lines) / 2
+
+
 def _maybe_notify_openclaw(stats: Dict[str, Any]) -> None:
     """Push a wake event to OpenClaw if this cycle found something significant."""
     global _last_notify_time
@@ -758,9 +785,11 @@ def _maybe_notify_openclaw(stats: Dict[str, Any]) -> None:
     if content_learned >= 3:
         findings.append(f"{content_learned} content patterns learned")
 
-    # Check LLM advisory generation
-    if stats.get("llm_advisory"):
-        findings.append("LLM advisory generated")
+    # Check LLM advisory generation (with quality gate)
+    advisory_text = str(stats.get("llm_advisory") or "")
+    if advisory_text and not _is_generic_advisory(advisory_text):
+        short = advisory_text[:300].rsplit('\n', 1)[0] if len(advisory_text) > 300 else advisory_text
+        findings.append(f"Advisory: {short}")
 
     # Check EIDOS distillation
     if stats.get("eidos_distillation"):

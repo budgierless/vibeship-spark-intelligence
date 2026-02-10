@@ -63,6 +63,25 @@ def _is_low_value(insight_text: str) -> bool:
             return True
     except Exception:
         pass
+    # Skip raw code snippets stored as insights
+    if "```" in t or "def " in t[:20] or "class " in t[:20] or "import " in t[:20]:
+        return True
+    # Skip raw JSON/data fragments
+    if t.strip().startswith("{") or t.strip().startswith("["):
+        return True
+    # Skip quality test markers
+    if "quality_test" in t or "QUALITY_TEST" in t:
+        return True
+    # Skip raw tweet/social data
+    if '"tweet_id"' in t or '"username"' in t or '"user_id"' in t:
+        return True
+    # Skip very long insights (likely raw data, not distilled wisdom)
+    if len(t) > 500:
+        return True
+    # Skip insights that are mostly code (high ratio of special chars)
+    special = sum(1 for c in t if c in '{}[]()=<>;:')
+    if len(t) > 50 and special / len(t) > 0.15:
+        return True
     if "indicates task type" in t:
         return True
     if "heavy " in t and " usage" in t:
