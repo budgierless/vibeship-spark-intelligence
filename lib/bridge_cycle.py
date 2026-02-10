@@ -83,6 +83,11 @@ def run_bridge_cycle(
     MetaRalph to avoid writing large JSON files on every individual
     insight/roast (the #1 cause of CPU/memory leakage in the loop).
     """
+    # Disable fastembed to prevent 8GB+ memory spike from ONNX model loading.
+    # Embeddings are optional; prediction/outcome matching falls back to keyword matching.
+    import os
+    os.environ.setdefault("SPARK_EMBEDDINGS", "0")
+
     stats: Dict[str, Any] = {
         "timestamp": time.time(),
         "context_updated": False,
