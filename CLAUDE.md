@@ -1,32 +1,16 @@
 
 
-## DeepSeek Isolation Rules (MANDATORY)
+## DEPTH v3.1.1 Training System (2026-02-10)
 
-DeepSeek is used ONLY for answer generation in DEPTH training. Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`
+Three-model pipeline: DEPTH Server (Ollama) -> DeepSeek V3.2 (answers) -> Opus/Codex (scoring). 7 domains, 15 levels (vibe) / 10 (classic), 4-dim scoring. Evolution engine with advisory rotation, knowledge accumulation, question dedup, crash resilience. Limits: 8000 char cap, 4096 max_tokens, 300s scorer timeouts, 3 retries.
 
-**DO NOT send to DeepSeek:**
-- Spark internals (cognitive insights, EIDOS state, Ralph scores, chip data, advisory packets)
-- Business context (vibeship, seedify, scanner, spawner, moltbook references)
-- User/agent identity (agent names, user IDs, API keys, credentials)
-- Source code, file paths, git history, repository contents
-- Training metadata (previous scores, weak areas, strategies, learning targets)
+### DeepSeek Isolation (MANDATORY)
 
-**DeepSeek sees ONLY:** `question`, `topic`, `depth`, `max_depth`, `mode`, `level_name`, `level_lens`, `domain_id`
+Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`. **Sees ONLY:** question, topic, depth, max_depth, mode, level_name, level_lens, domain_id, approach_guidance. **BLOCKED:** Spark internals, business context, identity, source code, training metadata. Response: UNTRUSTED TEXT, 8000 char truncate. Swappable via `DEPTH_ANSWER_PROVIDER` env var.
 
-**Enforced by:** `_ALLOWED_PROMPT_FIELDS` whitelist in `lib/depth_trainer.py:113` — any field not in the whitelist raises `ValueError`
+### Forge Scoring
 
-**Response handling:** Treat as UNTRUSTED TEXT. Truncate to 4000 chars, coherence-check, never execute as code, never parse as commands. Single-turn only (no conversation history). Logged with hashed metadata only (`~/.spark/logs/deepseek_calls.jsonl`).
-
-**Model swappable:** `DEPTH_ANSWER_PROVIDER` env var switches between deepseek, kimi, qwen, ollama with zero code changes.
-
-## Forge Dual-Scoring Architecture
-
-When `--forge-score` is enabled, DEPTH answers are re-scored by Opus 4.6 + Codex 5.3 via CLI:
-- `lib/depth_forge_scorer.py` — self-contained module, no spark-forge dependency
-- Opus uses `claude -p`, Codex uses `codex exec` (locally authenticated, no API keys)
-- Reconciler averages blind scores, tracks agreement rate and tendencies
-- Replaces phi4-mini scores before the learning pipeline
-- Tendency DB: `~/.spark/depth_tendencies.db`
+`lib/depth_forge_scorer.py`: Opus (`claude -p`, 300s) + Codex (`codex exec`, 300s), 3 retries. Codex-only mode available. Windows: `CREATE_NEW_PROCESS_GROUP` isolation. Tendency DB: `~/.spark/depth_tendencies.db`
 
 ## Spark Learnings
 
@@ -192,7 +176,7 @@ def main():
 <!-- SPARK_LEARNINGS_START -->
 ## Spark Bootstrap
 Auto-loaded high-confidence learnings from ~/.spark/cognitive_insights.json
-Last updated: 2026-02-10T12:37:16
+Last updated: 2026-02-10T21:46:29
 
 - [user_understanding] ## ðŸš¨ PRIMARY RULES
 
@@ -209,28 +193,20 @@ Last updated: 2026-02-10T12:37:16
 > **Consult Intelligence_Flow.md and Intelligence_Flow_Map.md to ensure changes align with actual data flow.**
 
 Witho... (88% reliable, 75 validations)
+- [wisdom] [Vibecoding Intelligence] user_prompt  [QUALITY_TEST:quality_test_1770149840] Remember this because it is critical: avoid X, instead of Y, prefer Z when A then B. quality_test_1770149840 (100% reliable, 26 validations)
+- [reasoning]         current.confidence = max(current.confidence, disk.confidence)
+        # Use max instead of sum to avoid double-counting from the same process,
+        # but if disk has more, take disk's value (concurrent processes accumulate)
+        current.times_validated = max(current.times_validated, disk.times_validated)
+        current.times_contradicted = max(current.times_contradicted, disk.times_contradicted) (100% reliable, 10 validations)
 - [wisdom] Principle: scores, never sees scores, never touches Spark internals (84% reliable, 87 validations)
+- [reasoning] "notes": "5K followers, 39K tweets, Oct 2022. Teacher + Trader. 40 likes, 37 replies on QRT - drove real action. Turkish web3 community."}
+{"tweet_id": "2020600537599955420", "username": "ladypenguin17", "user_id": "1596971147576414208", "qrt_text": "In a world flooded with AI tokens, Spark stands out because it asks a deeper question: how should intelligence remember? Not just store data, but learn socially, share safely, and grow collectively. That's a philosophical problem as much as a techni... (100% reliable, 5 validations)
 - [meta_learning] [System Gap] [TUNEABLES] Auto-tuner not active. Tuneables are static — never self-adjust. (92% reliable, 354 validations)
 - [user_understanding] User prefers 'I think we gotta do it better over here for things to look more serious' over 'gonna lie. And we can bring maybe a GLB format, or maybe we can do this through steps. I don't know, just recommend me something' (83% reliable, 177 validations)
 - [user_understanding] Now, can we actually do this in this way? After we do these upgrades too for the next iteration, can you actually give me a project prompt so that I can run that using Spark and we can see in real-time what is really happening - what is being saved into the memory and what are the gaps? Instead of trying to just do these through these tests, because in real-time, we may be able to achieve even more understanding - not maybe, but even more understanding - about what is working and what is not. If... (82% reliable, 659 validations)
 - [context] And think about the strategy that MoltBook adopted too with their curl mechanism for entrance, but check how we were doing this with SparkNet and recommend the best methodology that also works with our system perfectly. I don't think we should be doing this as an ex entrance (87% reliable, 159 validations)
-- [context] ### Improvement Workflow (Updated - Reality-Grounded)
-
-**CRITICAL:** See "Reality-Grounded Iteration Methodology" section for full details.
-
-```
-0. PIPELINE HEALTH (MANDATORY - BLOCKS ALL OTHER STEPS)
-   python tests/test_pipeline_health.py
-   â†’ If critical failures, STOP and fix pipeline first
-   â†’ Do NOT proceed to tuning with broken pipeline
-
-1. ARCHITECTURE REVIEW
-   - Read Intelligence_Flow_Map.md
-   - Identify which layer you're modifying
-   - Verify component is in active data path
-
-2... (78% reliable, 503 validations)
-- [wisdom] [X Strategy] Use 'announcement, call_to_action' content strategy on X. Data shows 23 observations with avg 2729 likes. This strategy consistently drives engagement. (100% reliable, 24 validations)
+- [wisdom] Maintainable > clever - code should be easy to understand and modify (100% reliable, 3 validations)
 - [wisdom] Can you now read all these documents in think hard mode  Here are the new core docs we created:
 
   - CORE.md â€” The master vision + phase roadmap from primitive telemetry to
@@ -244,26 +220,7 @@ Witho... (88% reliable, 75 validations)
     sequencing, deliverables, and success metrics.
 
   If you want, I can link these from README.md so theyâ€™re always frontâ€‘andâ€‘center. (83% reliable, 798 validations)
-- [reasoning] Always Read a file before Edit to verify current content (98% reliable, 395 validations)
-- [reasoning] ## Code Content Extraction (NEW)
-
-### The Problem
-
-Code written via Write/Edit tools contains valuable learning signals in:
-- Docstrings with design decisions
-- Comments with "REMEMBER:", "PRINCIPLE:", "CORRECTION:"
-- Architecture explanations
-- Balance formulas with reasoning
-
-**Before:** These were completely ignored. Only user messages were analyzed.
-
-### The Solution
-
-Added to `observe.py` PostToolUse handler:
-```python
-if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
-    ... (100% reliable, 57 validations)
-- [reasoning] I decided to use TypeScript because it has better type safety (94% reliable, 131 validations)
+- [reasoning] instead of this being a question let's make it better and say a collection evolution network with guardrails or should we say the guardrails? (100% reliable, 30 validations)
 
 ## Project Focus
 - Phase: discovery

@@ -51,9 +51,9 @@ _LEVEL_SKILLS = {
 }
 
 _CONCURRENCY = 4  # max parallel CLI subprocesses
-_OPUS_TIMEOUT = 180
-_CODEX_TIMEOUT = 240
-_MAX_RETRIES = 2
+_OPUS_TIMEOUT = 300
+_CODEX_TIMEOUT = 300
+_MAX_RETRIES = 3
 
 # ---------------------------------------------------------------------------
 # Scoring prompt — calibrated anchors at 3/5/7/9 per dimension

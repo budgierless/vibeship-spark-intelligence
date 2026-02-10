@@ -104,9 +104,17 @@ Perspective: {level_lens}
 Question:
 {question}
 {approach_guidance}
-Provide a thorough, specific, and actionable answer.
-Reference concrete examples, specific values, and real-world tradeoffs.
-IMPORTANT: Complete all code blocks fully. Never leave functions or configs half-written."""
+Provide a thorough, specific, and actionable answer. Follow ALL of these rules:
+
+1. TRADEOFFS ARE MANDATORY: For every recommendation, state what you lose and what it costs.
+   Write at least one sentence starting with "The downside is..." or "You lose..."
+2. REAL-WORLD FIT: Answer as if the team is 2-5 developers with limited budget.
+   Do NOT suggest enterprise tooling unless the question explicitly requires it.
+   Name the simplest approach that works, then mention when to upgrade.
+3. COMPLETE CODE: Finish all code blocks. Never truncate functions or configs mid-block.
+   If the answer is getting long, focus on the critical 30 lines rather than an incomplete 80 lines.
+4. SPECIFICITY: Name exact tools with versions, exact config values, exact CLI flags.
+   "Use a cache" is wrong. "Use Redis 7.2 with maxmemory-policy allkeys-lru" is right."""
 
 _DEEPSEEK_LOG_PATH = Path.home() / ".spark" / "logs" / "deepseek_calls.jsonl"
 
@@ -117,7 +125,7 @@ _ALLOWED_PROMPT_FIELDS = {
     "approach_guidance",  # Sanitized advisory hints (no Spark internals)
 }
 
-_MAX_ANSWER_LENGTH = 4000
+_MAX_ANSWER_LENGTH = 8000
 
 
 def _load_env_key(name: str) -> str:
@@ -203,7 +211,7 @@ class DepthAnswerGenerator:
 
     async def _call_api(self, prompt: str, depth: int) -> Optional[str]:
         """Call the configured provider API."""
-        timeout = 60.0 + (depth * 5.0)
+        timeout = 90.0 + (depth * 8.0)
 
         if self.provider == "ollama":
             return await self._call_ollama(prompt, timeout, depth)
@@ -220,7 +228,7 @@ class DepthAnswerGenerator:
         payload = {
             "model": self.config["model"],
             "messages": [{"role": "user", "content": prompt}],  # Single-turn only
-            "max_tokens": 2048,
+            "max_tokens": 4096,
             "temperature": 0.7,
         }
         for attempt in range(2):
@@ -254,7 +262,7 @@ class DepthAnswerGenerator:
                             "stream": False,
                             "options": {
                                 "temperature": 0.7 if depth > 4 else 0.8,
-                                "num_predict": 1024,
+                                "num_predict": 2048,
                             },
                         },
                     )
