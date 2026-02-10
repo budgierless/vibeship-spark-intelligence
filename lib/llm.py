@@ -95,19 +95,21 @@ def ask_claude(
 def _call_claude_windows(
     claude_path: str, prompt: str, system_prompt: Optional[str], timeout_s: int
 ) -> Optional[str]:
-    """Windows: write prompt to file, call claude via cmd, read response file.
+    """Windows: use PowerShell bridge script with 'start /wait /min'.
 
-    Claude CLI on Windows needs a console context for OAuth. We use
-    subprocess with shell=True and file redirection to work around this.
+    Claude CLI on Windows requires a real console/TTY for OAuth auth.
+    Python's subprocess doesn't provide one. The workaround:
+    1. Write prompt (and optional system prompt) to temp files
+    2. Launch 'start /wait /min powershell -File claude_call.ps1' which
+       creates a minimized console window — giving Claude its TTY
+    3. Read the response from the output file
     """
-    import time
-    import tempfile
-
     spark_dir = Path.home() / ".spark"
     spark_dir.mkdir(parents=True, exist_ok=True)
 
     prompt_file = spark_dir / "llm_prompt.txt"
     response_file = spark_dir / "llm_response.txt"
+    bridge_script = Path(__file__).parent.parent / "scripts" / "claude_call.ps1"
 
     # Write prompt
     prompt_file.write_text(prompt, encoding="utf-8")
@@ -116,41 +118,36 @@ def _call_claude_windows(
     if response_file.exists():
         response_file.unlink()
 
-    # Build command — use powershell to call claude with file I/O
-    cmd = f'{claude_path} -p --output-format text'
-    if system_prompt:
-        # Write system prompt to file too to avoid shell escaping issues
-        sys_file = spark_dir / "llm_system.txt"
-        sys_file.write_text(system_prompt, encoding="utf-8")
-        cmd += f' --append-system-prompt (Get-Content "{sys_file}" -Raw)'
-
-    ps_cmd = f'$p = Get-Content "{prompt_file}" -Raw; {claude_path} -p --output-format text'
+    # Build the start command
+    ps_args = f'-PromptFile "{prompt_file}" -ResponseFile "{response_file}"'
     if system_prompt:
         sys_file = spark_dir / "llm_system.txt"
         sys_file.write_text(system_prompt, encoding="utf-8")
-        sys_prompt_escaped = str(sys_file).replace("'", "''")
-        ps_cmd = f"$s = Get-Content '{sys_prompt_escaped}' -Raw; $p = Get-Content '{prompt_file}' -Raw; {claude_path} -p --output-format text --append-system-prompt $s $p"
-    else:
-        ps_cmd = f"$p = Get-Content '{prompt_file}' -Raw; {claude_path} -p --output-format text $p"
+        ps_args += f' -SystemFile "{sys_file}"'
 
-    ps_cmd += f' > "{response_file}" 2>$null'
+    cmd = (
+        f'start /wait /min powershell -NoProfile -ExecutionPolicy Bypass '
+        f'-File "{bridge_script}" {ps_args}'
+    )
 
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            cmd,
+            shell=True,
             timeout=timeout_s,
             capture_output=True,
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
+            text=True,
         )
 
         if response_file.exists():
-            response = response_file.read_text(encoding="utf-8").strip()
-            # Cleanup
-            try:
-                prompt_file.unlink(missing_ok=True)
-                response_file.unlink(missing_ok=True)
-            except Exception:
-                pass
+            # utf-8-sig handles BOM that PowerShell's Set-Content adds
+            response = response_file.read_text(encoding="utf-8-sig").strip()
+            # Cleanup temp files
+            for f in [prompt_file, response_file]:
+                try:
+                    f.unlink(missing_ok=True)
+                except Exception:
+                    pass
             return response if response else None
 
         log_debug("llm", f"No response file created (exit={result.returncode})", None)

@@ -377,13 +377,16 @@ def run_bridge_cycle(
                 cog = get_cognitive_learner()
                 recent_insights = []
                 try:
-                    for cat in CognitiveCategory:
-                        items = cog.get_insights(cat, limit=5)
-                        for item in items:
-                            if isinstance(item, dict):
-                                recent_insights.append(item.get("insight", str(item)))
-                            else:
-                                recent_insights.append(str(item))
+                    # Get top-ranked validated insights
+                    ranked = cog.get_ranked_insights(min_reliability=0.3, min_validations=0, limit=10)
+                    for ins in ranked:
+                        recent_insights.append(ins.insight if hasattr(ins, "insight") else str(ins))
+                except Exception:
+                    pass
+                # Also pull recent self-awareness insights
+                try:
+                    for ins in cog.get_self_awareness_insights()[:5]:
+                        recent_insights.append(ins.insight if hasattr(ins, "insight") else str(ins))
                 except Exception:
                     pass
 
