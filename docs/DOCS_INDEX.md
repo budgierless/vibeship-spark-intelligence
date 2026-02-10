@@ -12,7 +12,8 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 ## Integrations
 
-- `docs/OPENCLAW_INTEGRATION.md`: OpenClaw agent integration (capture, context sync, notifications, services)
+- `docs/OPENCLAW_OPERATIONS.md`: **Start here** — session startup, how Spark works in OpenClaw, services, troubleshooting
+- `docs/OPENCLAW_INTEGRATION.md`: Technical integration details (capture, context sync, notifications)
 - `docs/LLM_INTEGRATION.md`: Claude CLI LLM integration (advisory synthesis, EIDOS distillation, PowerShell bridge)
 
 ## Operator Runbooks
