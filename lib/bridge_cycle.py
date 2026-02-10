@@ -287,13 +287,15 @@ def run_bridge_cycle(
                 txt = str(payload.get("text") or "").strip()
                 if txt and len(txt) >= 10:
                     ev_trace = (ev.data or {}).get("trace_id")
-                    extract_cognitive_signals(txt, ev.session_id, trace_id=ev_trace)
+                    ev_source = (ev.data or {}).get("source", "")
+                    extract_cognitive_signals(txt, ev.session_id, trace_id=ev_trace, source=ev_source)
             for ev in edit_write_events:
                 ti = ev.tool_input or {}
                 content = ti.get("content") or ti.get("new_string") or ""
                 if content and len(content) > 50:
                     ev_trace = (ev.data or {}).get("trace_id")
-                    extract_cognitive_signals(content, ev.session_id, trace_id=ev_trace)
+                    ev_source = (ev.data or {}).get("source", "")
+                    extract_cognitive_signals(content, ev.session_id, trace_id=ev_trace, source=ev_source)
         except Exception as e:
             stats["errors"].append("cognitive_signals")
             log_debug("bridge_worker", "cognitive signal extraction failed", e)
@@ -388,7 +390,14 @@ def run_bridge_cycle(
                 )
 
                 # 2. Get filtered, relevant insights (no benchmark noise)
-                recent_insights = _get_filtered_insights()
+                # Detect dominant source from this batch of events
+                _source_counts: dict = {}
+                for ev in (user_prompt_events or []) + (edit_write_events or []):
+                    s = (ev.data or {}).get("source", "")
+                    if s:
+                        _source_counts[s] = _source_counts.get(s, 0) + 1
+                dominant_source = max(_source_counts, key=_source_counts.get) if _source_counts else ""
+                recent_insights = _get_filtered_insights(source=dominant_source)
 
                 if recent_insights or pattern_summaries:
                     advisory = synthesize_advisory(
@@ -537,11 +546,14 @@ def _is_noise_insight(text: str) -> bool:
     return False
 
 
-def _get_filtered_insights(limit: int = 10) -> list:
+def _get_filtered_insights(limit: int = 10, source: str = "") -> list:
     """Get recent cognitive insights, filtered for relevance.
 
     Excludes depth forge benchmarks, Twitter API errors, and other noise
     that produces generic/hallucinated advisories.
+
+    If source is specified, strongly prefer insights from that adapter.
+    Untagged (legacy) insights are included but ranked lower.
     """
     from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
 
@@ -557,7 +569,15 @@ def _get_filtered_insights(limit: int = 10) -> list:
     ]
 
     try:
-        ranked = cog.get_ranked_insights(min_reliability=0.5, min_validations=2, limit=30)
+        # First pass: get insights from matching source
+        ranked = cog.get_ranked_insights(min_reliability=0.5, min_validations=2, limit=30, source=source)
+        # If source filter yields too few, also get untagged insights
+        if len(ranked) < limit:
+            all_ranked = cog.get_ranked_insights(min_reliability=0.5, min_validations=2, limit=30)
+            seen = {id(i) for i in ranked}
+            for ins in all_ranked:
+                if id(ins) not in seen and not getattr(ins, "source", ""):
+                    ranked.append(ins)
         for ins in ranked:
             text = ins.insight if hasattr(ins, "insight") else str(ins)
             if _is_noise_insight(text):

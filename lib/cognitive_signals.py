@@ -136,7 +136,7 @@ COGNITIVE_PATTERNS = {
 }
 
 
-def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str] = None):
+def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str] = None, source: str = ""):
     """Extract cognitive signals from user messages and route to Meta-Ralph.
 
     Uses three scoring systems:
@@ -223,7 +223,8 @@ def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str
                     category=category,
                     insight=learning,
                     context=f"signals: {signals_found}, session: {session_id}{domain_ctx}",
-                    confidence=0.7 + (importance_score * 0.2 if importance_score else 0)
+                    confidence=0.7 + (importance_score * 0.2 if importance_score else 0),
+                    source=source,
                 )
 
                 if stored:

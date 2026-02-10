@@ -251,6 +251,7 @@ class CognitiveInsight:
     promoted: bool = False
     promoted_to: Optional[str] = None
     last_validated_at: Optional[str] = None
+    source: str = ""  # adapter that captured this: "openclaw", "cursor", "windsurf", "claude", "depth_forge", etc.
 
     @property
     def reliability(self) -> float:
@@ -277,6 +278,7 @@ class CognitiveInsight:
             "promoted": self.promoted,
             "promoted_to": self.promoted_to,
             "last_validated_at": self.last_validated_at,
+            "source": self.source,
         }
     
     @classmethod
@@ -301,6 +303,7 @@ class CognitiveInsight:
             promoted=data.get("promoted", False),
             promoted_to=data.get("promoted_to"),
             last_validated_at=data.get("last_validated_at"),
+            source=data.get("source", ""),
         )
 
 
@@ -1099,7 +1102,8 @@ class CognitiveLearner:
 
     def add_insight(self, category: CognitiveCategory, insight: str,
                     context: str = "", confidence: float = 0.7,
-                    record_exposure: bool = True) -> Optional[CognitiveInsight]:
+                    record_exposure: bool = True,
+                    source: str = "") -> Optional[CognitiveInsight]:
         """Add a generic insight directly.
 
         Boosts confidence on repeated validations.
@@ -1130,7 +1134,8 @@ class CognitiveLearner:
                 insight=insight,
                 evidence=[context[:200]] if context else [],
                 confidence=confidence,
-                context=context[:100] if context else ""
+                context=context[:100] if context else "",
+                source=source,
             )
 
         self._save_insights()
@@ -1404,13 +1409,20 @@ class CognitiveLearner:
         min_validations: int = 3,
         limit: int = 12,
         resolve_conflicts: bool = True,
+        source: str = "",
     ) -> List[CognitiveInsight]:
-        """Return insights ranked by effective reliability with decay + conflicts."""
+        """Return insights ranked by effective reliability with decay + conflicts.
+
+        If source is specified, only return insights from that adapter
+        (e.g. "openclaw", "cursor", "windsurf").
+        """
         eligible = []
         for ins in self.insights.values():
             if ins.times_validated < min_validations:
                 continue
             if self.effective_reliability(ins) < min_reliability:
+                continue
+            if source and getattr(ins, "source", "") and getattr(ins, "source", "") != source:
                 continue
             eligible.append(ins)
 
