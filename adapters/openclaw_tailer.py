@@ -7,9 +7,12 @@ emits normalized SparkEventV1 events to sparkd.
 Usage:
   python3 adapters/openclaw_tailer.py --sparkd http://127.0.0.1:8787 --agent main
 
-Notes:
+Features (Phase 2):
 - Tails the latest session file for a given agent.
-- De-dupes using a line offset persisted in ~/.spark/adapters/openclaw-<agent>.json.
+- Optionally discovers and tails subagent sessions (--include-subagents).
+- Watches a self-report directory for structured agent reports.
+- Emits session boundary events when new sessions appear.
+- De-dupes using per-file line offsets persisted in ~/.spark/adapters/.
 - Handles all OpenClaw JSONL types: session, message, model_change,
   thinking_level_change, custom.
 - Extracts tool calls from assistant content blocks AND separate toolResult messages.
@@ -29,6 +32,8 @@ DEFAULT_SPARKD = os.environ.get("SPARKD_URL") or f"http://127.0.0.1:{os.environ.
 STATE_DIR = Path.home() / ".spark" / "adapters"
 
 MAX_TOOL_RESULT_CHARS = 4000
+
+DEFAULT_REPORT_DIR = Path.home() / ".openclaw" / "workspace" / "spark_reports"
 
 
 def _post_json(url: str, payload: dict, token: str = None):
@@ -133,7 +138,6 @@ def parse_openclaw_line(obj: dict, session_key: str) -> list:
                             "name": block.get("name"),
                             "arguments": block.get("arguments"),
                         })
-                        # Harvest cwd hints
                         targs = block.get("arguments") or {}
                         wd = targs.get("workdir") or targs.get("cwd")
                         if isinstance(wd, str) and wd and "cwd" not in meta:
@@ -209,39 +213,182 @@ def parse_openclaw_line(obj: dict, session_key: str) -> list:
     return events
 
 
-def _find_latest_session(agent_dir: Path):
-    """Find the latest session file and key from sessions.json or glob fallback."""
+# ---------------------------------------------------------------------------
+# Session discovery
+# ---------------------------------------------------------------------------
+
+def _discover_sessions(agent_dir: Path, include_subagents: bool = False):
+    """Discover session files. Returns list of (session_key, Path).
+
+    When include_subagents is True, returns ALL sessions from sessions.json,
+    not just the latest one. Each entry is tagged with its session key so
+    subagent sessions carry identifiers like 'agent:main:subagent:<uuid>'.
+    """
     sessions_json = agent_dir / "sessions.json"
+    results = []
 
     if sessions_json.exists():
         try:
             sj = json.loads(sessions_json.read_text(encoding="utf-8"))
             entries = list(sj.items())
-            if entries:
-                def keyfn(item):
-                    v = item[1] or {}
-                    return float(v.get("updatedAt") or v.get("lastMessageAt") or v.get("createdAt") or 0)
-                entries.sort(key=keyfn, reverse=True)
-                session_key, info = entries[0]
+
+            if not include_subagents:
+                # Only latest session (original behaviour)
+                if entries:
+                    def keyfn(item):
+                        v = item[1] or {}
+                        return float(v.get("updatedAt") or v.get("lastMessageAt") or v.get("createdAt") or 0)
+                    entries.sort(key=keyfn, reverse=True)
+                    entries = entries[:1]
+
+            for session_key, info in entries:
+                info = info or {}
                 session_file = info.get("sessionFile") or info.get("transcript")
                 if session_file:
                     p = Path(session_file)
                     if p.exists():
-                        return session_key, p
+                        results.append((session_key, p))
+                        continue
                 # Try constructing path from key
+                # Session keys may contain colons; filename is usually the last segment or a hash
                 candidate = agent_dir / f"{session_key}.jsonl"
                 if candidate.exists():
-                    return session_key, candidate
+                    results.append((session_key, candidate))
+                    continue
+                # Try matching by UUID portion of key
+                parts = session_key.split(":")
+                if len(parts) > 1:
+                    candidate2 = agent_dir / f"{parts[-1]}.jsonl"
+                    if candidate2.exists():
+                        results.append((session_key, candidate2))
+
         except Exception:
             pass
 
-    # Fallback: glob for newest .jsonl
-    jsonl_files = sorted(agent_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if jsonl_files:
-        f = jsonl_files[0]
-        return f.stem, f
+    # Fallback: glob for newest .jsonl if nothing found
+    if not results:
+        jsonl_files = sorted(agent_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if jsonl_files:
+            f = jsonl_files[0]
+            results.append((f.stem, f))
+
+    return results
+
+
+def _find_latest_session(agent_dir: Path):
+    """Find the latest session file and key (backwards compat helper)."""
+    found = _discover_sessions(agent_dir, include_subagents=False)
+    if found:
+        return found[0]
     return None, None
 
+
+# ---------------------------------------------------------------------------
+# Self-report watcher
+# ---------------------------------------------------------------------------
+
+def _scan_reports(report_dir: Path, sparkd_url: str, token: str = None, verbose: bool = False):
+    """Scan report_dir for new self-report JSON files, ingest them, then archive."""
+    if not report_dir.exists():
+        return 0
+
+    processed_dir = report_dir / ".processed"
+    count = 0
+
+    for f in sorted(report_dir.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception as e:
+            if verbose:
+                print(f"[openclaw_tailer] bad report file {f.name}: {e}", flush=True)
+            continue
+
+        report_kind = data.pop("kind", "unknown")
+        ts = data.pop("ts", time.time())
+
+        evt = _event(
+            trace_id=_hash(f.name),
+            session_id="self_report",
+            source="openclaw",
+            kind="system",
+            ts=ts,
+            payload={
+                "type": "self_report",
+                "report_kind": report_kind,
+                **data,
+            },
+        )
+
+        try:
+            _post_json(sparkd_url.rstrip("/") + "/ingest", evt, token=token)
+        except Exception as e:
+            if verbose:
+                print(f"[openclaw_tailer] POST report error: {e}", flush=True)
+            break  # Retry next tick
+
+        # Archive the processed file
+        try:
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            f.rename(processed_dir / f.name)
+        except Exception:
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+        count += 1
+        if verbose:
+            print(f"[openclaw_tailer] ingested report {f.name} ({report_kind})", flush=True)
+
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Multi-session state manager
+# ---------------------------------------------------------------------------
+
+class SessionState:
+    """Tracks per-file offsets and detects new sessions."""
+
+    def __init__(self, state_file: Path):
+        self._path = state_file
+        self._data = {"files": {}}
+        if state_file.exists():
+            try:
+                self._data = json.loads(state_file.read_text(encoding="utf-8"))
+                if "files" not in self._data:
+                    # Migrate from Phase 1 single-session state
+                    old_file = self._data.get("sessionFile")
+                    old_offset = self._data.get("offset", 0)
+                    self._data = {"files": {}}
+                    if old_file:
+                        self._data["files"][old_file] = {"offset": old_offset}
+            except Exception:
+                self._data = {"files": {}}
+
+    def get_offset(self, file_path: str) -> int:
+        return self._data["files"].get(file_path, {}).get("offset", 0)
+
+    def set_offset(self, file_path: str, offset: int):
+        if file_path not in self._data["files"]:
+            self._data["files"][file_path] = {}
+        self._data["files"][file_path]["offset"] = offset
+
+    def is_new_file(self, file_path: str) -> bool:
+        return file_path not in self._data["files"]
+
+    def register_file(self, file_path: str, offset: int = 0):
+        if file_path not in self._data["files"]:
+            self._data["files"][file_path] = {"offset": offset}
+
+    def save(self):
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(description="OpenClaw adapter: tail session JSONL -> sparkd /ingest")
@@ -252,9 +399,18 @@ def main():
     ap.add_argument("--backfill", action="store_true", help="Backfill from the start of the transcript (default is tail-from-end)")
     ap.add_argument("--verbose", action="store_true", help="Log adapter activity")
     ap.add_argument("--token", default=None, help="sparkd auth token (or set SPARKD_TOKEN env)")
+    ap.add_argument("--include-subagents", action="store_true", default=True,
+                     help="Also tail subagent sessions (default: True)")
+    ap.add_argument("--no-subagents", action="store_true", default=False,
+                     help="Disable subagent tailing")
+    ap.add_argument("--report-dir", type=str, default=None,
+                     help="Directory to watch for self-report JSON files")
     args = ap.parse_args()
 
+    include_subagents = args.include_subagents and not args.no_subagents
     token = args.token or os.environ.get("SPARKD_TOKEN")
+
+    report_dir = Path(args.report_dir) if args.report_dir else DEFAULT_REPORT_DIR
 
     agent_dir = Path.home() / ".openclaw" / "agents" / args.agent / "sessions"
     if not agent_dir.exists():
@@ -262,110 +418,132 @@ def main():
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     state_file = STATE_DIR / f"openclaw-{args.agent}.json"
-    state = {"sessionFile": None, "offset": 0}
-    if state_file.exists():
-        try:
-            state.update(json.loads(state_file.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+    state = SessionState(state_file)
 
-    def save_state():
-        state_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    sparkd_url = args.sparkd
 
     while True:
         try:
             if args.verbose:
                 print("[openclaw_tailer] tick", flush=True)
 
-            session_key, session_file = _find_latest_session(agent_dir)
-            if not session_key or not session_file:
+            # --- Discover sessions ---
+            sessions = _discover_sessions(agent_dir, include_subagents=include_subagents)
+            if not sessions:
                 if args.verbose:
-                    print("[openclaw_tailer] no session file found", flush=True)
+                    print("[openclaw_tailer] no session files found", flush=True)
                 time.sleep(args.poll)
                 continue
 
-            if args.verbose:
-                print(f"[openclaw_tailer] using session {session_key} file={session_file}", flush=True)
+            # --- Process each session file ---
+            for session_key, session_file in sessions:
+                file_key = str(session_file)
 
-            # New session file? default to tail-from-end unless --backfill.
-            if state.get("sessionFile") != str(session_file):
-                state["sessionFile"] = str(session_file)
-                if args.backfill:
-                    state["offset"] = 0
-                else:
-                    try:
-                        state["offset"] = len(session_file.read_text(encoding="utf-8").splitlines())
-                    except Exception:
-                        state["offset"] = 0
-                save_state()
+                # Detect new session file -> emit session boundary event
+                if state.is_new_file(file_key):
+                    if args.backfill:
+                        state.register_file(file_key, 0)
+                    else:
+                        try:
+                            initial_offset = len(session_file.read_text(encoding="utf-8").splitlines())
+                        except Exception:
+                            initial_offset = 0
+                        state.register_file(file_key, initial_offset)
 
-            lines = session_file.read_text(encoding="utf-8").splitlines()
-            if args.verbose:
-                print(f"[openclaw_tailer] lines={len(lines)} offset={state.get('offset')}", flush=True)
-            off = int(state.get("offset") or 0)
-            new_lines = lines[off:]
-            if not new_lines:
-                time.sleep(args.poll)
-                continue
-
-            batch_size = max(1, int(args.max_per_tick))
-            batch = new_lines[:batch_size]
-
-            sent = 0
-            for line in batch:
-                try:
-                    obj = json.loads(line)
-                except Exception:
-                    # Unparseable line — emit as raw system event
-                    evt = _event(
-                        trace_id=_hash(line),
+                    # Emit session_start boundary event
+                    boundary_evt = _event(
+                        trace_id=_hash(f"boundary:{session_key}:{time.time()}"),
                         session_id=session_key,
                         source="openclaw",
-                        kind="system",
+                        kind="command",
                         ts=time.time(),
-                        payload={"raw": line},
+                        payload={"command": "session_start", "session_key": session_key},
                     )
                     try:
-                        _post_json(args.sparkd.rstrip("/") + "/ingest", evt, token=token)
-                    except Exception as post_err:
+                        _post_json(sparkd_url.rstrip("/") + "/ingest", boundary_evt, token=token)
                         if args.verbose:
-                            print(f"[openclaw_tailer] POST error: {post_err}", flush=True)
-                        break
-                    sent += 1
+                            print(f"[openclaw_tailer] new session detected: {session_key}", flush=True)
+                    except Exception as e:
+                        if args.verbose:
+                            print(f"[openclaw_tailer] boundary POST error: {e}", flush=True)
+
+                    state.save()
+
+                # Read and process lines
+                try:
+                    lines = session_file.read_text(encoding="utf-8").splitlines()
+                except Exception:
                     continue
 
-                events = parse_openclaw_line(obj, session_key)
-                if not events:
-                    # Unrecognized type — pass through as system event
-                    events = [_event(
-                        trace_id=_hash(json.dumps(obj, sort_keys=True)),
-                        session_id=session_key,
-                        source="openclaw",
-                        kind="system",
-                        ts=_parse_ts(obj.get("timestamp")),
-                        payload={"raw": obj},
-                    )]
+                off = state.get_offset(file_key)
+                new_lines = lines[off:]
+                if not new_lines:
+                    continue
 
-                post_ok = True
-                for evt in events:
+                batch_size = max(1, int(args.max_per_tick))
+                batch = new_lines[:batch_size]
+
+                sent = 0
+                for line in batch:
                     try:
-                        _post_json(args.sparkd.rstrip("/") + "/ingest", evt, token=token)
-                    except Exception as post_err:
-                        if args.verbose:
-                            print(f"[openclaw_tailer] POST error: {post_err}", flush=True)
-                        post_ok = False
+                        obj = json.loads(line)
+                    except Exception:
+                        evt = _event(
+                            trace_id=_hash(line),
+                            session_id=session_key,
+                            source="openclaw",
+                            kind="system",
+                            ts=time.time(),
+                            payload={"raw": line},
+                        )
+                        try:
+                            _post_json(sparkd_url.rstrip("/") + "/ingest", evt, token=token)
+                        except Exception as post_err:
+                            if args.verbose:
+                                print(f"[openclaw_tailer] POST error: {post_err}", flush=True)
+                            break
+                        sent += 1
+                        continue
+
+                    events = parse_openclaw_line(obj, session_key)
+                    if not events:
+                        events = [_event(
+                            trace_id=_hash(json.dumps(obj, sort_keys=True)),
+                            session_id=session_key,
+                            source="openclaw",
+                            kind="system",
+                            ts=_parse_ts(obj.get("timestamp")),
+                            payload={"raw": obj},
+                        )]
+
+                    post_ok = True
+                    for evt in events:
+                        try:
+                            _post_json(sparkd_url.rstrip("/") + "/ingest", evt, token=token)
+                        except Exception as post_err:
+                            if args.verbose:
+                                print(f"[openclaw_tailer] POST error: {post_err}", flush=True)
+                            post_ok = False
+                            break
+
+                    if not post_ok:
                         break
+                    sent += 1
 
-                if not post_ok:
-                    break
-                sent += 1
+                state.set_offset(file_key, off + sent)
 
-            state["offset"] = off + sent
-            save_state()
+                if args.verbose and sent:
+                    remaining = max(0, len(new_lines) - sent)
+                    print(f"[openclaw_tailer] [{session_key}] sent {sent}, remaining {remaining}", flush=True)
 
-            if args.verbose and sent:
-                remaining = max(0, len(new_lines) - sent)
-                print(f"[openclaw_tailer] sent {sent}, remaining {remaining}, offset {state['offset']}", flush=True)
+            state.save()
+
+            # --- Scan self-reports ---
+            try:
+                _scan_reports(report_dir, sparkd_url, token=token, verbose=args.verbose)
+            except Exception as e:
+                if args.verbose:
+                    print(f"[openclaw_tailer] report scan error: {e}", flush=True)
 
         except Exception as e:
             if args.verbose:
