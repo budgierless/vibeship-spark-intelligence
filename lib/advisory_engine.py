@@ -223,6 +223,13 @@ def on_pre_tool(
     start_ms = time.time() * 1000.0
     route = "live"
     packet_id = None
+    stage_ms: Dict[str, float] = {}
+
+    def _mark(stage: str, t0: float) -> None:
+        try:
+            stage_ms[stage] = round((time.time() * 1000.0) - t0, 1)
+        except Exception:
+            pass
 
     try:
         from .advisory_state import (
@@ -253,6 +260,7 @@ def on_pre_tool(
         intent_family = state.intent_family or "emergent_other"
         task_plane = state.task_plane or "build_delivery"
 
+        t_memory = time.time() * 1000.0
         memory_bundle = build_memory_bundle(
             session_id=session_id,
             intent_text=state.user_intent or "",
@@ -260,7 +268,9 @@ def on_pre_tool(
             tool_name=tool_name,
             include_mind=INCLUDE_MIND_IN_MEMORY,
         )
+        _mark("memory_bundle", t_memory)
 
+        t_lookup = time.time() * 1000.0
         packet = lookup_exact(
             project_key=project_key,
             session_context_key=session_context_key,
@@ -278,6 +288,8 @@ def on_pre_tool(
             )
             if packet:
                 route = "packet_relaxed"
+
+        _mark("packet_lookup", t_lookup)
 
         if packet:
             packet_id = str(packet.get("packet_id") or "")
@@ -304,17 +316,20 @@ def on_pre_tool(
                     "intent_family": intent_family,
                     "task_plane": task_plane,
                     "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
+                    "stage_ms": stage_ms,
                 },
             )
             return None
 
+        t_gate = time.time() * 1000.0
         gate_result = evaluate(advice_items, state, tool_name, tool_input)
+        _mark("gate", t_gate)
         if not gate_result.emitted:
             if packet_id:
                 try:
                     record_packet_usage(packet_id, emitted=False, route=route)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log_debug("advisory_engine", "AE_PKT_USAGE_NO_EMIT", e)
 
             # --- NO-EMIT FALLBACK ---
             # If the packet path failed the gate, try a bounded deterministic
@@ -342,6 +357,7 @@ def on_pre_tool(
                         "task_plane": task_plane,
                         "packet_id": packet_id,
                         "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
+                        "stage_ms": stage_ms,
                     },
                 )
                 return None
@@ -350,8 +366,8 @@ def on_pre_tool(
             try:
                 from .advisory_emitter import emit_advisory
                 emit_advisory(gate_result, fallback_text, advice_items, authority="note")
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug("advisory_engine", "AE_FALLBACK_EMIT_FAILED", e)
             save_state(state)
             _log_engine_event(
                 "fallback_emit",
@@ -359,7 +375,7 @@ def on_pre_tool(
                 len(advice_items),
                 1,
                 start_ms,
-                extra={"route": route, "intent_family": intent_family, "packet_id": packet_id},
+                extra={"route": route, "intent_family": intent_family, "packet_id": packet_id, "stage_ms": stage_ms},
             )
             return fallback_text
 
@@ -375,6 +391,7 @@ def on_pre_tool(
         elapsed_ms = (time.time() * 1000.0) - start_ms
         remaining_ms = MAX_ENGINE_MS - elapsed_ms
 
+        t_synth = time.time() * 1000.0
         synth_text = ""
         if packet and str(packet.get("advisory_text") or "").strip():
             synth_text = str(packet.get("advisory_text") or "").strip()
@@ -393,8 +410,11 @@ def on_pre_tool(
                 tool_name=tool_name,
                 force_mode="programmatic",
             )
+        _mark("synth", t_synth)
 
+        t_emit = time.time() * 1000.0
         emitted = emit_advisory(gate_result, synth_text, advice_items)
+        _mark("emit", t_emit)
         if emitted:
             shown_ids = [d.advice_id for d in gate_result.emitted]
             mark_advice_shown(state, shown_ids)
@@ -437,8 +457,8 @@ def on_pre_tool(
                     packet_id=packet_id,
                     min_interval_s=120,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug("advisory_engine", "AE_ADVICE_FEEDBACK_REQUEST_FAILED", e)
 
             state.last_advisory_packet_id = str(packet_id or "")
             state.last_advisory_route = str(route or "")
@@ -449,8 +469,8 @@ def on_pre_tool(
         if packet_id:
             try:
                 record_packet_usage(packet_id, emitted=bool(emitted), route=route)
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug("advisory_engine", "AE_PKT_USAGE_POST_EMIT_FAILED", e)
 
         save_state(state)
 
@@ -467,6 +487,7 @@ def on_pre_tool(
                 "packet_id": packet_id,
                 "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
                 "intent_confidence": float(intent_info.get("confidence", 0.0) or 0.0),
+                "stage_ms": stage_ms,
             },
         )
         return synth_text if emitted else None
@@ -527,8 +548,8 @@ def on_post_tool(
                     followed=False,  # Don't assume advice was followed; only explicit feedback should set this
                     source="implicit_post_tool",
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug("advisory_engine", "AE_PKT_FEEDBACK_POST_TOOL_FAILED", e)
 
         if tool_name in {"Edit", "Write"}:
             try:
@@ -549,8 +570,8 @@ def on_post_tool(
                         project_key=_project_key(),
                         reason=f"post_tool_{tool_name.lower()}",
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug("advisory_engine", "AE_PACKET_INVALIDATE_POST_EDIT_FAILED", e)
 
         save_state(state)
     except Exception as e:

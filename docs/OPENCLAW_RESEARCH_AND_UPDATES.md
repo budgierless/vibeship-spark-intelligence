@@ -107,6 +107,26 @@ For each change:
   - real-time impact: 2, live-use value: 2, modularity gain: 2
 - **Decision:** keep
 
+### [2026-02-11 15:37 GMT+4] P1-1 — Advisory stage timing + structured hot-path error codes
+- **Goal:** Improve observability in advisory hot path without adding heavy runtime overhead.
+- **Changes made:**
+  - `lib/advisory_engine.py`
+  - Added per-call stage timing capture for: `memory_bundle`, `packet_lookup`, `gate`, `synth`, `emit`.
+  - Included `stage_ms` in `_log_engine_event` extras for `no_advice`, `no_emit`, `fallback_emit`, and `emitted/synth_empty` events.
+  - Replaced silent `except: pass` in critical hot-path sections with structured debug codes:
+    - `AE_PKT_USAGE_NO_EMIT`
+    - `AE_FALLBACK_EMIT_FAILED`
+    - `AE_ADVICE_FEEDBACK_REQUEST_FAILED`
+    - `AE_PKT_USAGE_POST_EMIT_FAILED`
+    - `AE_PKT_FEEDBACK_POST_TOOL_FAILED`
+    - `AE_PACKET_INVALIDATE_POST_EDIT_FAILED`
+- **Validation result:** better
+  - `python -m py_compile lib/advisory_engine.py` passed
+  - `python -m pytest tests/test_advisory_dual_path_router.py -q` → `3 passed`
+- **Carmack alignment score (0-6):** 5
+  - real-time impact: 2, live-use value: 1, modularity gain: 2
+- **Decision:** keep
+
 ---
 
 ## Metrics to watch each session
