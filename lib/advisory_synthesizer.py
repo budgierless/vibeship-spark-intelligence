@@ -22,6 +22,11 @@ from typing import Dict, List, Optional, Any
 
 from .diagnostics import log_debug
 
+try:
+    import httpx as _httpx
+except Exception:
+    _httpx = None
+
 # ============= Configuration =============
 
 SYNTH_CONFIG_FILE = Path.home() / ".spark" / "tuneables.json"
@@ -319,8 +324,10 @@ def _query_ollama(prompt: str) -> Optional[str]:
     responses.  The chat API with think=False avoids this.
     """
     try:
-        import httpx
-        with httpx.Client(timeout=AI_TIMEOUT_S) as client:
+        if _httpx is None:
+            log_debug("advisory_synth", "HTTPX_MISSING_OLLAMA", None)
+            return None
+        with _httpx.Client(timeout=AI_TIMEOUT_S) as client:
             resp = client.post(
                 f"{OLLAMA_API}/api/chat",
                 json={
@@ -348,8 +355,10 @@ def _query_openai(prompt: str) -> Optional[str]:
     if not OPENAI_API_KEY:
         return None
     try:
-        import httpx
-        with httpx.Client(timeout=AI_TIMEOUT_S) as client:
+        if _httpx is None:
+            log_debug("advisory_synth", "HTTPX_MISSING_OPENAI", None)
+            return None
+        with _httpx.Client(timeout=AI_TIMEOUT_S) as client:
             resp = client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
@@ -373,8 +382,10 @@ def _query_anthropic(prompt: str) -> Optional[str]:
     if not ANTHROPIC_API_KEY:
         return None
     try:
-        import httpx
-        with httpx.Client(timeout=AI_TIMEOUT_S) as client:
+        if _httpx is None:
+            log_debug("advisory_synth", "HTTPX_MISSING_ANTHROPIC", None)
+            return None
+        with _httpx.Client(timeout=AI_TIMEOUT_S) as client:
             resp = client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -403,8 +414,10 @@ def _query_gemini(prompt: str) -> Optional[str]:
     if not GEMINI_API_KEY:
         return None
     try:
-        import httpx
-        with httpx.Client(timeout=AI_TIMEOUT_S) as client:
+        if _httpx is None:
+            log_debug("advisory_synth", "HTTPX_MISSING_GEMINI", None)
+            return None
+        with _httpx.Client(timeout=AI_TIMEOUT_S) as client:
             resp = client.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
                 json={
@@ -520,10 +533,10 @@ def check_ai_available() -> Dict[str, bool]:
 
     # Quick Ollama check
     try:
-        import httpx
-        with httpx.Client(timeout=1.5) as client:
-            resp = client.get(f"{OLLAMA_API}/api/tags")
-            available["ollama"] = resp.status_code == 200
+        if _httpx is not None:
+            with _httpx.Client(timeout=1.5) as client:
+                resp = client.get(f"{OLLAMA_API}/api/tags")
+                available["ollama"] = resp.status_code == 200
     except Exception:
         pass
 
@@ -541,6 +554,8 @@ def get_synth_status() -> Dict[str, Any]:
         "cache_ttl_s": CACHE_TTL_S,
         "max_cache_entries": MAX_CACHE_ENTRIES,
         "preferred_provider": PREFERRED_PROVIDER or "auto",
+        "httpx_available": _httpx is not None,
+        "warning": "httpx_missing" if _httpx is None else None,
         "ai_available": any_ai,
         "providers": ai,
         "tier": 2 if any_ai else 1,

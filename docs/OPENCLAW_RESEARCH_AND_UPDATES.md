@@ -159,6 +159,24 @@ For each change:
   - real-time impact: 1, live-use value: 2, modularity gain: 2
 - **Decision:** keep
 
+### [2026-02-11 15:59 GMT+4] P2-2 — Advisory synthesis dependency clarity (`httpx`)
+- **Goal:** Make synthesis provider capability explicit and reduce silent dependency drift.
+- **Changes made:**
+  - `pyproject.toml`: added core dependency `httpx>=0.27.0`.
+  - `lib/advisory_synthesizer.py`:
+    - central import guard (`_httpx`) at module load,
+    - provider calls now fail clearly when `httpx` missing with structured debug codes:
+      - `HTTPX_MISSING_OLLAMA`, `HTTPX_MISSING_OPENAI`, `HTTPX_MISSING_ANTHROPIC`, `HTTPX_MISSING_GEMINI`,
+    - `get_synth_status()` now exposes:
+      - `httpx_available`,
+      - `warning: httpx_missing` when applicable.
+- **Validation result:** better
+  - `python -m py_compile lib/advisory_synthesizer.py` passed
+  - `python -m pytest tests/test_advisory_dual_path_router.py -q` → `3 passed`
+- **Carmack alignment score (0-6):** 5
+  - real-time impact: 1, live-use value: 2, modularity gain: 2
+- **Decision:** keep
+
 ---
 
 ## Metrics to watch each session
