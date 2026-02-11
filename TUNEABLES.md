@@ -1201,3 +1201,14 @@ def _load_X_config():
 
 Most components load config once at module import. The advisory synthesizer hot-reloads when `tuneables.json` changes, and Pulse runtime apply now hot-updates `advisory_engine`, `advisory_gate`, `advisory_packet_store`, and `advisory_prefetch` without restart.
 
+### Hot-apply vs restart-required (operator quick matrix)
+
+| Area | Hot-apply | Restart required |
+|------|-----------|------------------|
+| `advisory_engine`, `advisory_gate`, `advisory_packet_store`, `advisory_prefetch` | Yes (Pulse runtime apply) | No (unless process unhealthy) |
+| `synthesizer` section | Yes (file mtime reload in synthesizer) | No |
+| Most import-time modules (`queue`, parts of `pipeline`, some EIDOS defaults) | Partial/No | Yes (restart service process) |
+| Environment variables (`SPARK_*`) | No (after process starts) | Yes |
+
+Practical rule: if unsure, apply config then restart only the affected service (`bridge_worker` first), and confirm via heartbeat + live cycle behavior.
+

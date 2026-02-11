@@ -177,6 +177,20 @@ For each change:
   - real-time impact: 1, live-use value: 2, modularity gain: 2
 - **Decision:** keep
 
+### [2026-02-11 16:13 GMT+4] P2-3 — Config lifecycle docs (hot-apply vs restart)
+- **Goal:** Remove operator ambiguity on whether config changes are live or require restart.
+- **Changes made:**
+  - `TUNEABLES.md`: added hot-apply vs restart matrix + practical operator rule.
+  - `docs/OPENCLAW_OPERATIONS.md`:
+    - updated cron schedule description to current 30-min checkpoint behavior,
+    - added config lifecycle matrix,
+    - added post-change verification loop.
+- **Validation result:** better
+  - Docs now match current operational behavior and reduce config guesswork.
+- **Carmack alignment score (0-6):** 4
+  - real-time impact: 1, live-use value: 2, modularity gain: 1
+- **Decision:** keep
+
 ---
 
 ## Metrics to watch each session

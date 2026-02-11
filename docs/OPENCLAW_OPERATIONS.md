@@ -160,7 +160,23 @@ The `advice_action_rate` metric tracks what % of advice gets acted on. Target: >
 
 | Job | Schedule | Purpose |
 |-----|----------|---------|
-| `spark-context-refresh` | Every 10 min | Tells agent to read advisories, evaluate, act, report feedback |
+| `spark-context-refresh` | Every 30 min | Checkpoint-style reminder: read Spark files, act only on relevant items, log acted/skipped outcomes |
+
+## Config Lifecycle (Hot-apply vs Restart)
+
+Use this to avoid guessing whether a change is live.
+
+| Config area | Hot-apply | Operator action |
+|-------------|-----------|-----------------|
+| Advisory runtime (`advisory_engine`, `advisory_gate`, `advisory_packet_store`, `advisory_prefetch`) | Yes | Apply and verify logs/status |
+| Synthesizer (`synthesizer` section) | Yes | Apply and verify `get_synth_status` |
+| Env vars (`SPARK_*`) | No | Restart affected process |
+| Legacy/import-time configs (many modules) | Usually no | Restart affected process |
+
+Verification loop after any config change:
+1. Check service health (`sparkd`, `bridge_worker` heartbeat, Mind health)
+2. Confirm behavior in a real active cycle (not synthetic-only)
+3. Log result in `docs/OPENCLAW_RESEARCH_AND_UPDATES.md`
 
 ---
 
