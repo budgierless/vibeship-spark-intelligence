@@ -644,7 +644,13 @@ class SparkAdvisor:
         return merged
 
     def _get_semantic_cognitive_advice(self, context: str) -> List[Advice]:
-        """Semantic retrieval for cognitive insights (if enabled)."""
+        """Hybrid + lightweight agentic retrieval for cognitive insights.
+
+        Method:
+        1) semantic retrieval on primary context,
+        2) semantic retrieval on 1-3 extracted query facets,
+        3) lexical rerank by query overlap to avoid embeddings-only misses.
+        """
         try:
             from .semantic_retriever import get_semantic_retriever
         except Exception:
@@ -654,17 +660,39 @@ class SparkAdvisor:
         if not retriever:
             return []
 
-        results = retriever.retrieve(context, self.cognitive.insights, limit=10)
+        queries = [context]
+        queries.extend(self._extract_agentic_queries(context))
+
+        merged: Dict[str, Any] = {}
+        for q in queries[:4]:
+            try:
+                for r in retriever.retrieve(q, self.cognitive.insights, limit=8):
+                    key = r.insight_key or self._generate_advice_id(r.insight_text)
+                    prev = merged.get(key)
+                    if prev is None or getattr(r, "fusion_score", 0.0) > getattr(prev, "fusion_score", 0.0):
+                        merged[key] = r
+            except Exception:
+                continue
+
+        if not merged:
+            return []
+
+        ranked = sorted(
+            merged.values(),
+            key=lambda r: (float(getattr(r, "fusion_score", 0.0)) + 0.35 * self._lexical_overlap_score(context, getattr(r, "insight_text", ""))),
+            reverse=True,
+        )
+
         advice: List[Advice] = []
-        for r in results:
+        for r in ranked[:10]:
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(r.insight_text):
                 continue
             confidence = max(0.6, r.fusion_score)
             if r.source_type == "trigger":
                 confidence = max(0.8, confidence)
             context_match = max(r.semantic_sim, r.trigger_conf, 0.7)
-            source = "trigger" if r.source_type == "trigger" else "semantic"
-            reason = r.why or "Semantic match"
+            source = "trigger" if r.source_type == "trigger" else "semantic-hybrid"
+            reason = r.why or "Hybrid semantic+lexical match"
 
             advice.append(Advice(
                 advice_id=self._generate_advice_id(r.insight_text),
@@ -677,6 +705,41 @@ class SparkAdvisor:
             ))
 
         return advice
+
+    def _extract_agentic_queries(self, context: str, limit: int = 3) -> List[str]:
+        """Extract compact facet queries from context for lightweight agentic retrieval."""
+        tokens = []
+        for raw in context.lower().replace("/", " ").replace("_", " ").split():
+            t = raw.strip(".,:;()[]{}'\"`")
+            if len(t) < 4:
+                continue
+            if t in {"with", "from", "that", "this", "into", "have", "should", "would", "could", "where", "when", "while"}:
+                continue
+            if not any(ch.isalnum() for ch in t):
+                continue
+            tokens.append(t)
+
+        seen = set()
+        facets: List[str] = []
+        for t in tokens:
+            if t in seen:
+                continue
+            seen.add(t)
+            facets.append(t)
+            if len(facets) >= limit:
+                break
+
+        return [f"{t} failure pattern and fix" for t in facets]
+
+    def _lexical_overlap_score(self, query: str, text: str) -> float:
+        """Simple lexical overlap score [0..1] for hybrid rerank."""
+        q = {t for t in query.lower().split() if len(t) >= 4}
+        d = {t for t in text.lower().split() if len(t) >= 4}
+        if not q or not d:
+            return 0.0
+        inter = len(q & d)
+        union = max(len(q | d), 1)
+        return inter / union
 
     def _get_cognitive_advice_keyword(self, tool_name: str, context: str) -> List[Advice]:
         """Get advice from cognitive insights using keyword matching."""
