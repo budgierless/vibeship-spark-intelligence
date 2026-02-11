@@ -48,6 +48,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `MoE_Plan.md`
 - `Path to AGI.md`
 - `EVOLUTION_CHIPS_RESEARCH.md`
+- `path-to-AGI/index.md` (living glossary/reports/experiments corpus)
 
 ## Archived and Historical
 

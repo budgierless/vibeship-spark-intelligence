@@ -1,0 +1,1 @@
+﻿# On the Path to AGI\n\nLiving glossary, reports, and evolution notes from Spark Intelligence work.\n\n## Structure\n- eports/ - point-in-time deep dives\n- glossary/ - durable concepts/definitions\n- experiments/ - hypotheses, runs, outcomes\n- etros/ - weekly/monthly reflections\n
