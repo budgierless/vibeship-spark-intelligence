@@ -45,12 +45,18 @@ Environment:
 - `SPARK_SYNC_TARGETS=openclaw,exports,...`
 - `SPARK_SYNC_DISABLE_TARGETS=cursor,...`
 - `SPARK_ADVISORY_PACKET_FALLBACK_EMIT=0|1`
+- `SPARK_ADVISORY_FALLBACK_RATE_GUARD=0|1`
+- `SPARK_ADVISORY_FALLBACK_RATE_MAX_RATIO=0.0..1.0`
+- `SPARK_ADVISORY_FALLBACK_RATE_WINDOW=10..500`
 
 Tuneables (`~/.spark/tuneables.json`):
 - `sync.mode`
 - `sync.adapters_enabled`
 - `sync.adapters_disabled`
 - `advisory_engine.packet_fallback_emit_enabled`
+- `advisory_engine.fallback_rate_guard_enabled`
+- `advisory_engine.fallback_rate_max_ratio`
+- `advisory_engine.fallback_rate_window`
 - `chip_merge.duplicate_churn_ratio`
 - `chip_merge.duplicate_churn_min_processed`
 - `chip_merge.duplicate_churn_cooldown_s`

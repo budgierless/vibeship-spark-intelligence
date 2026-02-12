@@ -41,6 +41,32 @@ For each change:
 
 ## 2026-02-12 Active Worklog
 
+### [2026-02-12 23:55 UTC] Advisory fallback-rate guard + watchdog core recovery guardrail
+- **Goal:** reduce fallback-heavy advisory loops and keep core recovery reliable in plugin-only mode.
+- **Changes made:**
+  - `lib/advisory_engine.py`
+    - added fallback-rate guard controls for packet no-emit fallback path:
+      - `fallback_rate_guard_enabled`
+      - `fallback_rate_max_ratio`
+      - `fallback_rate_window`
+    - on guard block, emits structured `no_emit` with:
+      - `error_code=AE_FALLBACK_RATE_LIMIT`
+      - fallback ratio/window metadata.
+  - `spark_watchdog.py`
+    - plugin-only mode now suppresses optional service restarts only (`bridge_worker`, `dashboard`, `meta_ralph`, `pulse`).
+    - `sparkd` restart/recovery remains active in plugin-only mode.
+    - watchdog single-instance detection now recognizes `scripts/watchdog.py`.
+  - `lib/service_control.py`
+    - watchdog process matching includes `scripts/watchdog.py` for status/stop parity.
+- **Validation result:** better
+  - tests passed:
+    - `tests/test_advisory_engine_evidence.py`
+    - `tests/test_advisory_dual_path_router.py`
+    - `tests/test_watchdog_plugin_only.py`
+    - `tests/test_pulse_startup.py`
+- **Decision:** keep
+- **Follow-up:** monitor next 24h fallback burden and verify no false `watchdog: STOPPED` from wrapper-launched watchdog.
+
 ### [2026-02-12 22:40 UTC] Carmack lightweight defaults hardening (core-path first)
 - **Goal:** reduce no-value noise on sync/advisory/memory/chip paths without degrading core OpenClaw flow.
 - **Changes made:**

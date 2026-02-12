@@ -118,6 +118,7 @@ Dashboards and ops:
 3) Engine attempts packet lookup first (exact, then relaxed) via lib.advisory_packet_store.
 4) On packet miss, engine falls back to live advisor retrieval, then gate + synthesis + emit.
    - packet no-emit fallback emission is opt-in (`SPARK_ADVISORY_PACKET_FALLBACK_EMIT=1` or `advisory_engine.packet_fallback_emit_enabled=true`).
+   - packet no-emit fallback is additionally rate-guarded (`fallback_rate_guard_enabled`, `fallback_rate_max_ratio`, `fallback_rate_window`) to prevent fallback-heavy advisory loops.
 5) Engine builds memory evidence bundle via lib.advisory_memory_fusion and records `memory_absent_declared` when needed.
    - memory fusion filters primitive/tool-error telemetry before ranking evidence.
 6) Engine persists baseline/live packets and enqueues background prefetch jobs from UserPromptSubmit.

@@ -1107,6 +1107,9 @@ This is the active hot-path advisory stack used by hooks:
 | `SPARK_ADVISORY_REQUIRE_ACTION` | `1` | Enforce actionable next-check text when advisory is too generic. |
 | `SPARK_ADVISORY_PREFETCH_QUEUE` | `1` | Enables enqueueing background prefetch jobs from user prompts. |
 | `SPARK_ADVISORY_PACKET_FALLBACK_EMIT` | `0` | Enables packet no-emit deterministic fallback emission. Default `0` keeps fallback output opt-in. |
+| `SPARK_ADVISORY_FALLBACK_RATE_GUARD` | `1` | Enables rate guard for packet no-emit fallback emissions. |
+| `SPARK_ADVISORY_FALLBACK_RATE_MAX_RATIO` | `0.55` | Maximum allowed fallback share in recent delivered advisories. |
+| `SPARK_ADVISORY_FALLBACK_RATE_WINDOW` | `80` | Rolling advisory event window used by fallback rate guard. |
 | `SPARK_ADVISORY_INCLUDE_MIND` | `0` | Includes Mind retrieval in memory fusion bundle when set to `1`. |
 | `SPARK_ADVISORY_EMIT` | `1` | Enables writing advisory text to stdout hook output. |
 | `SPARK_ADVISORY_MAX_CHARS` | `500` | Caps emitted advisory length. |
@@ -1159,6 +1162,9 @@ This is the active hot-path advisory stack used by hooks:
     "prefetch_inline_enabled": true,
     "prefetch_inline_max_jobs": 1,
     "packet_fallback_emit_enabled": false,
+    "fallback_rate_guard_enabled": true,
+    "fallback_rate_max_ratio": 0.55,
+    "fallback_rate_window": 80,
     "delivery_stale_s": 900,
     "advisory_text_repeat_cooldown_s": 1800,
     "actionability_enforce": true
@@ -1256,7 +1262,7 @@ Components fall back to hard-coded defaults when a key is absent.
 | `promotion` | Promoter + auto-promotion interval | `adapter_budgets`, `confidence_floor`, `min_age_hours`, `auto_interval_s` |
 | `synthesizer` | Advisory synthesizer | `mode`, `preferred_provider`, `ai_timeout_s`, `cache_ttl_s`, `max_cache_entries` |
 | `advisor` | Advisor | `min_reliability`, `min_validations_strong`, `max_items`, `max_advice_items` (compat), `cache_ttl`, `min_rank_score` |
-| `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs`, `packet_fallback_emit_enabled`, `delivery_stale_s`, `advisory_text_repeat_cooldown_s`, `actionability_enforce` |
+| `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs`, `packet_fallback_emit_enabled`, `fallback_rate_guard_enabled`, `fallback_rate_max_ratio`, `fallback_rate_window`, `delivery_stale_s`, `advisory_text_repeat_cooldown_s`, `actionability_enforce` |
 | `advisory_gate` | Advisory emission policy | `max_emit_per_call`, `tool_cooldown_s`, `advice_repeat_cooldown_s`, `warning_threshold`, `note_threshold`, `whisper_threshold` |
 | `advisory_packet_store` | Packet lifecycle + relaxed lookup weighting | `packet_ttl_s`, `max_index_packets`, `relaxed_effectiveness_weight`, `relaxed_low_effectiveness_threshold`, `relaxed_low_effectiveness_penalty` |
 | `advisory_prefetch` | Prefetch worker planning limits | `worker_enabled`, `max_jobs_per_run`, `max_tools_per_job`, `min_probability` |

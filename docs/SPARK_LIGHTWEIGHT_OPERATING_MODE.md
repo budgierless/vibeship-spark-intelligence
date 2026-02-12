@@ -62,6 +62,7 @@ Every change must improve this path, or be removed.
 - Repeat suppression remains enabled.
 - Actionability enforcement remains enabled.
 - Packet no-emit fallback emission stays disabled by default (opt-in only).
+- If packet no-emit fallback is enabled, fallback-rate guard must remain enabled (`fallback_rate_guard_enabled`) with a bounded max ratio window.
 - Sync context defaults to core adapters only (`openclaw`, `exports`).
 - Optional adapter failures must not degrade core health.
 - Memory fusion must filter primitive/tool-error telemetry before advisory ranking.
