@@ -263,8 +263,14 @@ def summarize_realism(profile_run: Dict[str, Any], meta_by_case: Dict[str, CaseM
                 theory_good_ok += 1
         elif meta.theory_quality == "bad":
             theory_bad_total += 1
-            if (not should_emit and not emitted) or forbidden_hit_rate <= 0.0:
-                theory_bad_ok += 1
+            if should_emit:
+                # Bad-theory prompts should emit corrective guidance (not silent pass-through).
+                if emitted and expected_hit_rate >= 0.5 and forbidden_hit_rate <= 0.0:
+                    theory_bad_ok += 1
+            else:
+                # Suppression-mode bad theories should stay suppressed.
+                if (not emitted) and forbidden_hit_rate <= 0.0:
+                    theory_bad_ok += 1
 
     total = max(1, len(rows))
     theory_total = theory_good_total + theory_bad_total

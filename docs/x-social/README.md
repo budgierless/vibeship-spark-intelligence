@@ -23,6 +23,12 @@ python mcp-servers/x-twitter-mcp/tweet.py "your text here"
 # Reply to someone
 python mcp-servers/x-twitter-mcp/tweet.py "reply text" --reply-to TWEET_ID
 
+# Style-aware reply (dry run + scoring)
+python scripts/x_reply.py "raw draft text" --reply-to TWEET_ID --author @target
+
+# Style-aware reply (post + like + register)
+python scripts/x_reply.py "raw draft text" --reply-to TWEET_ID --author @target --post --like-parent --register
+
 # Like a tweet
 python mcp-servers/x-twitter-mcp/tweet.py --like TWEET_ID
 
@@ -70,6 +76,7 @@ chips/
 
 scripts/
   run_research.py          CLI for research sessions
+  x_reply.py               Style-aware reply helper + one-command post flow
 
 dashboard/social_intel/
   app.py                   FastAPI backend (10 endpoints, port 8770)
@@ -80,6 +87,7 @@ tests/
 
 mcp-servers/x-twitter-mcp/
   tweet.py                 Direct posting/liking/deleting (OAuth 1.0a)
+  run_xmcp.py              XMCP launcher with local .env credential loading
   .env                     Credentials (not in repo)
 ```
 

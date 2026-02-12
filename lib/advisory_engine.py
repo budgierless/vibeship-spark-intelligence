@@ -446,6 +446,19 @@ def _diagnostics_envelope(
     return envelope
 
 
+def _advice_source_counts(advice_items: Optional[List[Any]]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for item in advice_items or []:
+        try:
+            source = str(getattr(item, "source", "") or "").strip().lower()
+        except Exception:
+            source = ""
+        if not source:
+            continue
+        counts[source] = counts.get(source, 0) + 1
+    return counts
+
+
 def _default_action_command(tool_name: str, task_plane: str) -> str:
     tool = str(tool_name or "").strip().lower()
     plane = str(task_plane or "").strip().lower()
@@ -640,6 +653,8 @@ def on_pre_tool(
     memory_bundle: Dict[str, Any] = {}
     intent_family = "emergent_other"
     task_plane = "build_delivery"
+    advice_source_counts: Dict[str, int] = {}
+    emitted_advice_source_counts: Dict[str, int] = {}
 
     def _mark(stage: str, t0: float) -> None:
         try:
@@ -739,6 +754,7 @@ def on_pre_tool(
                 trace_id=resolved_trace_id,
             )
             route = "live"
+        advice_source_counts = _advice_source_counts(advice_items)
 
         if not advice_items:
             save_state(state)
@@ -755,6 +771,7 @@ def on_pre_tool(
                     "task_plane": task_plane,
                     "stage_ms": stage_ms,
                     "delivery_mode": "none",
+                    "advice_source_counts": advice_source_counts,
                     "error_kind": "no_hit",
                     "error_code": "AE_NO_ADVICE",
                 },
@@ -799,6 +816,7 @@ def on_pre_tool(
                         "packet_id": packet_id,
                         "stage_ms": stage_ms,
                         "delivery_mode": "none",
+                        "advice_source_counts": advice_source_counts,
                         "fallback_candidate_blocked": bool(route and route.startswith("packet") and not PACKET_FALLBACK_EMIT_ENABLED),
                         "error_kind": "policy",
                         "error_code": "AE_GATE_SUPPRESSED",
@@ -826,6 +844,7 @@ def on_pre_tool(
                         "packet_id": packet_id,
                         "stage_ms": stage_ms,
                         "delivery_mode": "none",
+                        "advice_source_counts": advice_source_counts,
                         "error_kind": "policy",
                         "error_code": "AE_FALLBACK_RATE_LIMIT",
                         "fallback_guard_blocked": True,
@@ -853,6 +872,7 @@ def on_pre_tool(
                         "packet_id": packet_id,
                         "stage_ms": stage_ms,
                         "delivery_mode": "none",
+                        "advice_source_counts": advice_source_counts,
                         "error_kind": "policy",
                         "error_code": "AE_DUPLICATE_SUPPRESSED",
                         "advisory_fingerprint": repeat_meta["fingerprint"],
@@ -890,6 +910,8 @@ def on_pre_tool(
                     "packet_id": packet_id,
                     "stage_ms": stage_ms,
                     "delivery_mode": "fallback" if fallback_emitted else "none",
+                    "emitted_text_preview": fallback_text[:220],
+                    "advice_source_counts": advice_source_counts,
                     "actionability_added": bool(action_meta.get("added")),
                     "actionability_command": action_meta.get("command"),
                     **(fallback_error or {}),
@@ -905,6 +927,7 @@ def on_pre_tool(
                 continue
             item._authority = decision.authority
             emitted_advice.append(item)
+        emitted_advice_source_counts = _advice_source_counts(emitted_advice)
 
         elapsed_ms = (time.time() * 1000.0) - start_ms
         remaining_ms = MAX_ENGINE_MS - elapsed_ms
@@ -954,6 +977,7 @@ def on_pre_tool(
                     "packet_id": packet_id,
                     "stage_ms": stage_ms,
                     "delivery_mode": "none",
+                    "advice_source_counts": advice_source_counts,
                     "error_kind": "policy",
                     "error_code": "AE_DUPLICATE_SUPPRESSED",
                     "advisory_fingerprint": repeat_meta["fingerprint"],
@@ -968,6 +992,15 @@ def on_pre_tool(
         t_emit = time.time() * 1000.0
         emitted = emit_advisory(gate_result, synth_text, advice_items)
         _mark("emit", t_emit)
+        effective_text = str(synth_text or "").strip()
+        if emitted and not effective_text:
+            fragments: List[str] = []
+            for item in emitted_advice[:3]:
+                text = str(getattr(item, "text", "") or "").strip()
+                if text:
+                    fragments.append(text)
+            if fragments:
+                effective_text = " ".join(fragments)
         if emitted:
             shown_ids = [d.advice_id for d in gate_result.emitted]
             mark_advice_shown(state, shown_ids)
@@ -1046,11 +1079,13 @@ def on_pre_tool(
                 "intent_confidence": float(intent_info.get("confidence", 0.0) or 0.0),
                 "stage_ms": stage_ms,
                 "delivery_mode": "live" if emitted else "none",
+                "emitted_text_preview": effective_text[:220],
+                "advice_source_counts": emitted_advice_source_counts or advice_source_counts,
                 "actionability_added": bool(action_meta.get("added")),
                 "actionability_command": action_meta.get("command"),
             },
         )
-        return synth_text if emitted else None
+        return effective_text if emitted else None
 
     except Exception as e:
         log_debug("advisory_engine", f"on_pre_tool failed for {tool_name}", e)

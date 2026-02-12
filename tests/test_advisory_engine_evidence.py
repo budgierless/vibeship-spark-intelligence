@@ -165,3 +165,16 @@ def test_load_engine_config_reads_advisory_engine_section(tmp_path):
     cfg = advisory_engine._load_engine_config(path=cfg_path)
     assert cfg["include_mind"] is True
     assert cfg["max_ms"] == 3200
+
+
+def test_advice_source_counts_aggregates_sources():
+    items = [
+        SimpleNamespace(source="semantic"),
+        SimpleNamespace(source="semantic-agentic"),
+        SimpleNamespace(source="cognitive"),
+        SimpleNamespace(source=""),
+    ]
+    counts = advisory_engine._advice_source_counts(items)
+    assert counts["semantic"] == 1
+    assert counts["semantic-agentic"] == 1
+    assert counts["cognitive"] == 1

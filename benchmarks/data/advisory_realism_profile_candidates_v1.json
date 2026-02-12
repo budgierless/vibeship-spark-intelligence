@@ -1,0 +1,50 @@
+{
+  "strict": {
+    "advisory_engine": {"advisory_text_repeat_cooldown_s": 10800},
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 180,
+      "advice_repeat_cooldown_s": 7200,
+      "warning_threshold": 0.80,
+      "note_threshold": 0.50,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {"max_items": 4, "max_advice_items": 4, "min_rank_score": 0.55}
+  },
+  "strict_plus": {
+    "advisory_engine": {"advisory_text_repeat_cooldown_s": 10800},
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 240,
+      "advice_repeat_cooldown_s": 10800,
+      "warning_threshold": 0.88,
+      "note_threshold": 0.65,
+      "whisper_threshold": 0.58
+    },
+    "advisor": {"max_items": 3, "max_advice_items": 3, "min_rank_score": 0.62}
+  },
+  "strict_hard": {
+    "advisory_engine": {"advisory_text_repeat_cooldown_s": 14400},
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 300,
+      "advice_repeat_cooldown_s": 14400,
+      "warning_threshold": 0.90,
+      "note_threshold": 0.72,
+      "whisper_threshold": 0.66
+    },
+    "advisor": {"max_items": 2, "max_advice_items": 2, "min_rank_score": 0.70}
+  },
+  "strict_balanced_plus": {
+    "advisory_engine": {"advisory_text_repeat_cooldown_s": 12600},
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 240,
+      "advice_repeat_cooldown_s": 10800,
+      "warning_threshold": 0.86,
+      "note_threshold": 0.62,
+      "whisper_threshold": 0.54
+    },
+    "advisor": {"max_items": 3, "max_advice_items": 3, "min_rank_score": 0.60}
+  }
+}

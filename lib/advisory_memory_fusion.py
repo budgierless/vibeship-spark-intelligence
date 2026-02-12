@@ -27,6 +27,48 @@ _NOISE_PATTERNS = (
     re.compile(r"\berror_pattern:", re.I),
     re.compile(r"\brequest failed with status code\s+404\b", re.I),
 )
+_TOKEN_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "into",
+    "your",
+    "have",
+    "when",
+    "what",
+    "should",
+    "would",
+    "could",
+    "about",
+    "there",
+    "here",
+    "were",
+    "been",
+    "will",
+    "just",
+    "they",
+    "them",
+    "then",
+    "than",
+    "also",
+    "only",
+    "much",
+    "more",
+    "very",
+    "some",
+    "like",
+    "into",
+    "across",
+    "using",
+    "use",
+    "used",
+    "run",
+    "runs",
+}
 
 
 def _is_noise_evidence(text: str) -> bool:
@@ -57,6 +99,40 @@ def _tail_jsonl(path: Path, limit: int) -> List[Dict[str, Any]]:
     except Exception:
         return []
     return out
+
+
+def _tokenize_text(text: str) -> List[str]:
+    parts = re.split(r"[^a-z0-9_]+", str(text or "").lower())
+    out: List[str] = []
+    for token in parts:
+        token = token.strip()
+        if len(token) < 3:
+            continue
+        if token in _TOKEN_STOPWORDS:
+            continue
+        out.append(token)
+    return out
+
+
+def _intent_relevance_score(intent_tokens: set[str], text: str) -> float:
+    if not intent_tokens:
+        return 0.0
+    tokens = set(_tokenize_text(text))
+    if not tokens:
+        return 0.0
+    overlap = len(intent_tokens & tokens)
+    if overlap > 0:
+        return float(overlap)
+
+    weak = 0
+    for needle in intent_tokens:
+        for token in tokens:
+            if needle in token or token in needle:
+                weak += 1
+                break
+    if weak > 0:
+        return 0.2 + min(0.6, weak * 0.1)
+    return 0.0
 
 
 def _collect_cognitive(limit: int = 6) -> List[Dict[str, Any]]:
@@ -153,11 +229,49 @@ def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
     return evidence
 
 
-def _collect_outcomes(limit: int = 6) -> List[Dict[str, Any]]:
+def _collect_outcomes(intent_text: str, limit: int = 6) -> List[Dict[str, Any]]:
     cutoff = time.time() - (14 * 24 * 3600.0)
-    rows = read_outcomes(limit=limit * 4, since=cutoff)
+    rows = read_outcomes(limit=max(12, limit * 10), since=cutoff)
+    intent_tokens = set(_tokenize_text(intent_text))
+    scored_rows: List[tuple[float, float, Dict[str, Any]]] = []
+    fallback_rows: List[tuple[float, Dict[str, Any]]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("text") or row.get("result") or "").strip()
+        if not text:
+            continue
+        if _is_noise_evidence(text):
+            continue
+        created_at = float(row.get("created_at") or 0.0)
+        if not intent_tokens:
+            fallback_rows.append((created_at, row))
+            continue
+        tokens = set(_tokenize_text(text))
+        overlap = len(intent_tokens & tokens)
+        if overlap > 0:
+            scored_rows.append((float(overlap), created_at, row))
+        else:
+            # Keep lexical-near rows as weak fallback only when no direct match exists.
+            weak_overlap = 0
+            for token in intent_tokens:
+                if any(token in t or t in token for t in tokens):
+                    weak_overlap += 1
+            if weak_overlap > 0:
+                scored_rows.append((0.5 + min(0.4, weak_overlap * 0.1), created_at, row))
+            else:
+                fallback_rows.append((created_at, row))
+
+    selected_rows: List[Dict[str, Any]]
+    if scored_rows:
+        scored_rows.sort(key=lambda t: (t[0], t[1]), reverse=True)
+        selected_rows = [row for _, _, row in scored_rows[: max(1, limit)]]
+    else:
+        fallback_rows.sort(key=lambda t: t[0], reverse=True)
+        selected_rows = [row for _, row in fallback_rows[: max(1, min(limit, 2))]]
+
     evidence: List[Dict[str, Any]] = []
-    for row in rows[-limit:]:
+    for row in selected_rows:
         text = str(row.get("text") or row.get("result") or "").strip()
         if not text:
             continue
@@ -257,7 +371,7 @@ def build_memory_bundle(
         "cognitive": _collect_with_status(lambda: _collect_cognitive(limit=6)),
         "eidos": _collect_with_status(lambda: _collect_eidos(intent_text, limit=5)),
         "chips": _collect_with_status(lambda: _collect_chips(limit=6)),
-        "outcomes": _collect_with_status(lambda: _collect_outcomes(limit=6)),
+        "outcomes": _collect_with_status(lambda: _collect_outcomes(intent_text, limit=6)),
         "orchestration": _collect_with_status(lambda: _collect_orchestration(limit=5)),
     }
     if include_mind:
@@ -279,7 +393,30 @@ def build_memory_bundle(
         }
         evidence.extend(rows)
 
-    evidence.sort(key=lambda row: (float(row.get("confidence") or 0.0), float(row.get("created_at") or 0.0)), reverse=True)
+    intent_tokens = set(_tokenize_text(intent_text))
+    scored: List[tuple[float, float, float, Dict[str, Any]]] = []
+    for row in evidence:
+        text = str((row or {}).get("text") or "").strip()
+        if not text:
+            continue
+        relevance = _intent_relevance_score(intent_tokens, text)
+        scored.append(
+            (
+                relevance,
+                float(row.get("confidence") or 0.0),
+                float(row.get("created_at") or 0.0),
+                row,
+            )
+        )
+
+    if scored and intent_tokens:
+        relevant = [entry for entry in scored if entry[0] > 0.0]
+        if relevant:
+            scored = relevant
+
+    scored.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+    evidence = [row for _, _, _, row in scored]
+
     deduped: List[Dict[str, Any]] = []
     seen_text = set()
     for row in evidence:

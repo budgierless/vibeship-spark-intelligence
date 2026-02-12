@@ -60,6 +60,7 @@ class CaseResult:
     text_preview: str
     score: float
     source_counts: Dict[str, int] = field(default_factory=dict)
+    advice_source_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -137,6 +138,52 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return float(default)
+
+
+def _normalize_source_name(name: str) -> str:
+    src = str(name or "").strip().lower()
+    if not src:
+        return ""
+    if src.startswith("semantic") or src in {"trigger", "bank"}:
+        return "semantic"
+    if src in {
+        "cognitive",
+        "self_awareness",
+        "reasoning",
+        "context",
+        "wisdom",
+        "meta_learning",
+        "communication",
+        "creativity",
+    }:
+        return "cognitive"
+    if src in {"mind"}:
+        return "mind"
+    if src in {"chip", "chips"}:
+        return "chips"
+    if src in {"outcome", "outcomes"}:
+        return "outcomes"
+    if src in {"eidos"}:
+        return "eidos"
+    if src in {"orchestration"}:
+        return "orchestration"
+    return src
+
+
+def _normalize_count_map(raw: Any) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = _normalize_source_name(str(key or ""))
+        if not name:
+            continue
+        try:
+            count = max(0, int(value or 0))
+        except Exception:
+            count = 0
+        out[name] = out.get(name, 0) + count
+    return out
 
 
 def _collect_engine_rows_since(path: Path, start_ts: float) -> List[Dict[str, Any]]:
@@ -344,23 +391,21 @@ def run_profile(
                 event = str(event_row.get("event") or "unknown")
                 error_code = str(event_row.get("error_code") or "")
                 trace_bound = str(event_row.get("trace_id") or "") == trace_id
+                emitted_text = str(text or event_row.get("emitted_text_preview") or "")
 
                 expected_rate, forbidden_rate = evaluate_text_expectations(
-                    text or "",
+                    emitted_text,
                     case.expected_contains,
                     case.forbidden_contains,
                 )
-                actionable = is_actionable(text or "")
-                raw_source_counts = event_row.get("source_counts") if isinstance(event_row.get("source_counts"), dict) else {}
+                actionable = is_actionable(emitted_text)
+                memory_source_counts = _normalize_count_map(event_row.get("source_counts"))
+                advice_source_counts = _normalize_count_map(event_row.get("advice_source_counts"))
                 source_counts: Dict[str, int] = {}
-                for key, value in dict(raw_source_counts).items():
-                    name = str(key or "").strip().lower()
-                    if not name:
-                        continue
-                    try:
-                        source_counts[name] = max(0, int(value or 0))
-                    except Exception:
-                        source_counts[name] = 0
+                for key, value in memory_source_counts.items():
+                    source_counts[key] = source_counts.get(key, 0) + int(value)
+                for key, value in advice_source_counts.items():
+                    source_counts[key] = source_counts.get(key, 0) + int(value)
                 memory_utilized = any(int(source_counts.get(k, 0) or 0) > 0 for k in ("cognitive", "semantic", "mind", "outcomes", "chips", "eidos"))
                 score = score_case(
                     should_emit=case.should_emit,
@@ -371,8 +416,8 @@ def run_profile(
                     trace_bound=trace_bound,
                     memory_utilized=memory_utilized,
                 )
-                if text:
-                    emitted_texts.append(normalize_text(text))
+                if emitted_text:
+                    emitted_texts.append(normalize_text(emitted_text))
                 latencies.append(_safe_float(event_row.get("elapsed_ms"), 0.0))
                 results.append(
                     CaseResult(
@@ -388,9 +433,10 @@ def run_profile(
                         forbidden_hit_rate=round(forbidden_rate, 4),
                         actionable=actionable,
                         memory_utilized=memory_utilized,
-                        text_preview=(str(text or "").strip()[:220]),
+                        text_preview=(emitted_text.strip()[:220]),
                         score=score,
                         source_counts=source_counts,
+                        advice_source_counts=advice_source_counts,
                     )
                 )
 

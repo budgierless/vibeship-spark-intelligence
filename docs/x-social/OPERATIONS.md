@@ -14,6 +14,15 @@ python mcp-servers/x-twitter-mcp/tweet.py "your text here"
 python mcp-servers/x-twitter-mcp/tweet.py "reply text" --reply-to 2020076511085359115
 ```
 
+### Style-aware reply (recommended)
+```bash
+# Dry run: enforce Spark reply style + score draft
+python scripts/x_reply.py "raw draft text" --reply-to 2020076511085359115 --author @target
+
+# Post + like + register for evolution tracking
+python scripts/x_reply.py "raw draft text" --reply-to 2020076511085359115 --author @target --post --like-parent --register
+```
+
 ### Reply with hashtags
 ```bash
 python mcp-servers/x-twitter-mcp/tweet.py "text" --reply-to ID --tags AI Spark
@@ -181,10 +190,10 @@ curl http://localhost:8770/api/growth
 When replying to tweets:
 
 1. **Read the tweet** (MCP `get_tweet_details`)
-2. **Craft a reply** (follow voice style guide)
-3. **Post it** (`tweet.py "text" --reply-to ID`)
-4. **Like the parent** (`tweet.py --like ID`)
-5. **Register for tracking** (`register_spark_reply(new_id, parent_id, text)`)
+2. **Craft and score draft** (`python scripts/x_reply.py "draft" --reply-to ID --author @target`)
+3. **Post with one command** (`python scripts/x_reply.py "draft" --reply-to ID --author @target --post --like-parent --register`)
+4. **(Optional) Manual fallback** (`tweet.py "text" --reply-to ID`)
+5. **(Optional) Manual tracking** (`register_spark_reply(new_id, parent_id, text)`)
 6. **Check later** (evolution engine checks outcomes after 1+ hours)
 
 ## Workflow: Research + Evolution
@@ -229,6 +238,7 @@ python scripts/run_research.py --status
 |---------|----------|
 | `tweet.py` 403 error | Check `.env` credentials, run `tweet.py --test` |
 | MCP post_tweet 403 | Normal - MCP uses bearer token (read-only). Use `tweet.py` instead |
+| `x-twitter` MCP not loading | Run `python mcp-servers/x-twitter-mcp/run_xmcp.py` and confirm `.env` has all Twitter keys |
 | Research 402 error | Twitter API credits exhausted. Wait for monthly reset |
 | Dashboard won't start | Check if port 8770 is in use: `netstat -ano | findstr 8770` |
 | Ollama not available | Research falls back to keyword detection. Start Ollama: `ollama serve` |

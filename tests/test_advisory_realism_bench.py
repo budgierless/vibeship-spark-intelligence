@@ -135,3 +135,38 @@ def test_evaluate_gates_marks_pass_fail():
     }
     checks = mod.evaluate_gates(realism, mod.REALISM_GATES)
     assert all(bool(v.get("ok")) for v in checks.values())
+
+
+def test_theory_discrimination_counts_bad_theory_emit_mode():
+    mod = _load_module()
+    meta = {
+        "bad_emit_case": mod.CaseMeta(
+            case_id="bad_emit_case",
+            depth_tier="D2",
+            domain="ops",
+            systems=["advisory"],
+            importance="high",
+            theory_quality="bad",
+            expected_sources=[],
+            forbidden_sources=[],
+        )
+    }
+    run = {
+        "summary": {"score": 0.7, "trace_bound_rate": 1.0},
+        "cases": [
+            {
+                "case_id": "bad_emit_case",
+                "should_emit": True,
+                "emitted": True,
+                "actionable": True,
+                "trace_bound": True,
+                "memory_utilized": True,
+                "expected_hit_rate": 1.0,
+                "forbidden_hit_rate": 0.0,
+                "score": 0.9,
+                "source_counts": {},
+            }
+        ],
+    }
+    out = mod.summarize_realism(run, meta)
+    assert out["theory_discrimination_rate"] == 1.0

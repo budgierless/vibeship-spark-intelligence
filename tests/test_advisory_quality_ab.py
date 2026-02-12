@@ -214,3 +214,18 @@ def test_case_result_accepts_source_counts_payload():
         source_counts={"semantic": 2, "mind": 1},
     )
     assert row.source_counts["semantic"] == 2
+
+
+def test_normalize_count_map_collapses_semantic_variants():
+    mod = _load_module()
+    out = mod._normalize_count_map(
+        {
+            "semantic": 1,
+            "semantic-agentic": 2,
+            "trigger": 1,
+            "chips": 1,
+            "chip": 2,
+        }
+    )
+    assert out["semantic"] == 4
+    assert out["chips"] == 3

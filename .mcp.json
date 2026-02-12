@@ -4,6 +4,15 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "spawner-mcp-server"],
       "env": {}
+    },
+    "x-twitter": {
+      "command": "python",
+      "args": [
+        "mcp-servers/x-twitter-mcp/run_xmcp.py"
+      ],
+      "env": {
+        "X_MCP_PROFILE": "creator"
+      }
     }
   }
 }

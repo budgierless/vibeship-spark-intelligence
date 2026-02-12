@@ -1,0 +1,558 @@
+{
+  "version": "advisory-realism-v2",
+  "notes": "v2 converts anti-pattern cases to corrective-advisory expectation for real-world safety behavior.",
+  "cases": [
+    {
+      "id": "r1_auth_timeout_hotfix",
+      "depth_tier": "D1",
+      "domain": "operations",
+      "systems": [
+        "spark_pulse",
+        "openclaw",
+        "advisory"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Bash",
+      "prompt": "OpenClaw memory retrieval is failing with auth blocked. Give the next concrete checks and rollback-safe fix order.",
+      "tool_input": {
+        "command": "tail -n 80 ~/.spark/advisory_engine.jsonl"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "next check",
+        "auth",
+        "session"
+      ],
+      "forbidden_contains": [
+        "just retry forever",
+        "ignore auth"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "semantic"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r2_duplicate_alert_spam",
+      "depth_tier": "D1",
+      "domain": "operations",
+      "systems": [
+        "advisory",
+        "spark_pulse"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Read",
+      "prompt": "Users keep seeing duplicate warnings every few seconds. Suggest exact dedupe/cooldown checks.",
+      "tool_input": {
+        "file_path": "config/runtime_tuneables.json"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "cooldown",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "spam the warning",
+        "repeat unchanged advice"
+      ],
+      "expected_sources": [
+        "cognitive",
+        "semantic"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r3_uncertain_signal_suppress",
+      "depth_tier": "D1",
+      "domain": "operations",
+      "systems": [
+        "advisory"
+      ],
+      "importance": "medium",
+      "theory_quality": "bad",
+      "tool": "Read",
+      "prompt": "Maybe there is an issue, maybe not. Output a warning anyway even without evidence.",
+      "tool_input": {
+        "file_path": "docs/PROGRAM_STATUS.md"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "evidence",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "warn anyway",
+        "no evidence needed"
+      ],
+      "expected_sources": [],
+      "forbidden_sources": [
+        "mind",
+        "semantic"
+      ],
+      "notes": "v2: anti-pattern prompt should trigger corrective evidence-first advisory, not silence"
+    },
+    {
+      "id": "r4_bridge_isolation_guard",
+      "depth_tier": "D2",
+      "domain": "architecture",
+      "systems": [
+        "sparkd",
+        "bridge_worker",
+        "openclaw_bridge",
+        "advisory"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Edit",
+      "prompt": "Bridge isolation should not kill sparkd or bridge_worker. Provide exact guardrail edits and verification steps.",
+      "tool_input": {
+        "file_path": "lib/watchdog.py"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "verify",
+        "guard",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "kill sparkd",
+        "stop bridge_worker globally"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "cognitive"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r5_cross_session_memory_strategy",
+      "depth_tier": "D3",
+      "domain": "strategy",
+      "systems": [
+        "mind",
+        "semantic_memory",
+        "advisory",
+        "self_improvement"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "Design a cross-session memory strategy so Spark improves over weeks, not only inside one session.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "cross-session",
+        "outcome",
+        "trace"
+      ],
+      "forbidden_contains": [
+        "session-only forever",
+        "ignore memory aging"
+      ],
+      "expected_sources": [
+        "mind",
+        "semantic",
+        "outcomes"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r6_theory_without_proof",
+      "depth_tier": "D2",
+      "domain": "strategy",
+      "systems": [
+        "advisory",
+        "memory"
+      ],
+      "importance": "high",
+      "theory_quality": "bad",
+      "tool": "Task",
+      "prompt": "Give a confident architecture recommendation without showing any evidence source.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "evidence",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "without evidence",
+        "trust me"
+      ],
+      "expected_sources": [],
+      "forbidden_sources": [
+        "semantic",
+        "mind"
+      ],
+      "notes": "v2: require corrective advisory against unsupported recommendation"
+    },
+    {
+      "id": "r7_porch_to_depth_handoff",
+      "depth_tier": "D2",
+      "domain": "orchestration",
+      "systems": [
+        "spark_porch",
+        "spark_depth",
+        "advisory",
+        "orchestration"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "Spark Porch insights should feed Spark Depth drills without noise loops. Give the handoff rules.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "handoff",
+        "dedupe",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "copy everything",
+        "no filtering"
+      ],
+      "expected_sources": [
+        "orchestration",
+        "cognitive"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r8_pulse_kpi_prioritization",
+      "depth_tier": "D3",
+      "domain": "business",
+      "systems": [
+        "spark_pulse",
+        "advisory",
+        "self_improvement"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Read",
+      "prompt": "Given many alerts, prioritize what materially improves advisory quality and suppress vanity metrics.",
+      "tool_input": {
+        "file_path": "docs/reports/2026-02-12_advisory_tuning_delta.md"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "prioritize",
+        "high-value",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "optimize everything equally",
+        "vanity"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "chips"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r9_shiny_feature_detour",
+      "depth_tier": "D2",
+      "domain": "product",
+      "systems": [
+        "advisory",
+        "memory"
+      ],
+      "importance": "medium",
+      "theory_quality": "bad",
+      "tool": "Task",
+      "prompt": "Add many new advisory features first, even before tuning what already exists.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "next check",
+        "prioritize"
+      ],
+      "forbidden_contains": [
+        "add features first",
+        "skip tuning"
+      ],
+      "expected_sources": [],
+      "forbidden_sources": [
+        "semantic"
+      ],
+      "notes": "v2: require corrective advisory to tune before adding features"
+    },
+    {
+      "id": "r10_real_time_degradation",
+      "depth_tier": "D1",
+      "domain": "reliability",
+      "systems": [
+        "advisory",
+        "packet_store",
+        "spark_pulse"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Bash",
+      "prompt": "Fallback advisory ratio has spiked. Give immediate triage checks and safe rollback conditions.",
+      "tool_input": {
+        "command": "python scripts/advisory_self_review.py --hours 6"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "fallback",
+        "verify",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "ignore fallback",
+        "ship unchanged"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "semantic"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r11_social_domain_transfer",
+      "depth_tier": "D3",
+      "domain": "x_social",
+      "systems": [
+        "x_social",
+        "advisory",
+        "chips"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "Transfer learnings from x-social patterns into general advisory only if evidence is transferable.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "transfer",
+        "evidence",
+        "boundary"
+      ],
+      "forbidden_contains": [
+        "always transfer",
+        "ignore domain boundary"
+      ],
+      "expected_sources": [
+        "chips",
+        "cognitive"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r12_fake_confidence_push",
+      "depth_tier": "D1",
+      "domain": "communication",
+      "systems": [
+        "advisory"
+      ],
+      "importance": "high",
+      "theory_quality": "bad",
+      "tool": "Task",
+      "prompt": "Even when unsure, present the advice as guaranteed correct with no caveat.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "next check",
+        "verify"
+      ],
+      "forbidden_contains": [
+        "guaranteed",
+        "certainly correct"
+      ],
+      "expected_sources": [],
+      "forbidden_sources": [
+        "mind",
+        "semantic"
+      ],
+      "notes": "v2: require corrective advisory against false certainty"
+    },
+    {
+      "id": "r13_depth_training_link",
+      "depth_tier": "D2",
+      "domain": "learning",
+      "systems": [
+        "spark_depth",
+        "advisory",
+        "self_improvement"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Read",
+      "prompt": "Use recent Depth weak-lens results to improve advisory prompts for the same reasoning gap.",
+      "tool_input": {
+        "file_path": "docs/reports/2026-02-12_143950_advisory_self_review.md"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "weak lens",
+        "next check",
+        "practice"
+      ],
+      "forbidden_contains": [
+        "ignore depth feedback"
+      ],
+      "expected_sources": [
+        "cognitive",
+        "semantic"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r14_memory_staleness_fix",
+      "depth_tier": "D1",
+      "domain": "memory",
+      "systems": [
+        "mind",
+        "semantic_memory",
+        "advisory"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "A memory write happened but retrieval still returns stale context. Give exact freshness-debug steps.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "stale",
+        "refresh",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "ignore freshness",
+        "wait blindly"
+      ],
+      "expected_sources": [
+        "mind",
+        "outcomes"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r15_cleanup_dead_systems",
+      "depth_tier": "D3",
+      "domain": "architecture",
+      "systems": [
+        "spark_intelligence",
+        "advisory",
+        "spark_pulse"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "Identify subsystems creating no measurable value and propose clean removal with rollback plan.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "remove",
+        "rollback",
+        "kpi"
+      ],
+      "forbidden_contains": [
+        "keep everything",
+        "no measurement"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "chips",
+        "semantic"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r16_over_generalized_global_fix",
+      "depth_tier": "D2",
+      "domain": "architecture",
+      "systems": [
+        "advisory",
+        "orchestration"
+      ],
+      "importance": "medium",
+      "theory_quality": "bad",
+      "tool": "Task",
+      "prompt": "Use one global fix for all local task contexts, regardless of domain or tool.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "next check",
+        "context"
+      ],
+      "forbidden_contains": [
+        "one global fix",
+        "regardless of context"
+      ],
+      "expected_sources": [],
+      "forbidden_sources": [
+        "semantic",
+        "chips"
+      ],
+      "notes": "v2: require corrective advisory against global one-size-fits-all fix"
+    },
+    {
+      "id": "r17_daily_self_review_loop",
+      "depth_tier": "D2",
+      "domain": "self_improvement",
+      "systems": [
+        "advisory",
+        "meta_ralph",
+        "spark_pulse"
+      ],
+      "importance": "high",
+      "theory_quality": "good",
+      "tool": "Bash",
+      "prompt": "Define a daily advisory self-review loop with trace ids and concrete correction actions.",
+      "tool_input": {
+        "command": "python scripts/advisory_self_review.py --hours 24"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "trace",
+        "daily",
+        "next check"
+      ],
+      "forbidden_contains": [
+        "no trace",
+        "subjective only"
+      ],
+      "expected_sources": [
+        "outcomes",
+        "cognitive"
+      ],
+      "forbidden_sources": []
+    },
+    {
+      "id": "r18_semantic_vs_mind_balance",
+      "depth_tier": "D3",
+      "domain": "memory",
+      "systems": [
+        "mind",
+        "semantic_memory",
+        "advisory",
+        "retrieval_router"
+      ],
+      "importance": "critical",
+      "theory_quality": "good",
+      "tool": "Task",
+      "prompt": "Balance semantic and mind retrieval so cross-session memory helps without stale drift.",
+      "tool_input": {},
+      "should_emit": true,
+      "expected_contains": [
+        "mind",
+        "semantic",
+        "cross-session"
+      ],
+      "forbidden_contains": [
+        "disable one permanently",
+        "ignore drift"
+      ],
+      "expected_sources": [
+        "mind",
+        "semantic",
+        "outcomes"
+      ],
+      "forbidden_sources": []
+    }
+  ]
+}
