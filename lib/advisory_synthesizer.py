@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Any
 
 from .diagnostics import log_debug
 from .soul_upgrade import fetch_soul_state, guidance_preface, soul_kernel_pass
+from .soul_metrics import record_metric
 
 try:
     import httpx as _httpx
@@ -522,6 +523,21 @@ def synthesize(
         if len(_synth_cache) > MAX_CACHE_ENTRIES:
             oldest = min(_synth_cache, key=lambda k: _synth_cache[k][1])
             _synth_cache.pop(oldest, None)
+
+    # Soul-upgrade metrics hook (lightweight, best-effort)
+    try:
+        soul = fetch_soul_state(session_id="default") if SOUL_UPGRADE_PROMPT_ENABLED else None
+        record_metric("advisory_synthesis", {
+            "mode": mode,
+            "result_nonempty": bool(result),
+            "items": len(advice_items),
+            "tool": tool_name or "",
+            "phase": phase or "",
+            "soul_enabled": bool(SOUL_UPGRADE_PROMPT_ENABLED),
+            "soul_kernel_pass": bool(soul_kernel_pass(soul)) if soul else None,
+        })
+    except Exception:
+        pass
 
     return result
 
