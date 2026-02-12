@@ -22,6 +22,7 @@ MAX_ENGINE_MS = float(os.getenv("SPARK_ADVISORY_MAX_MS", "4000"))
 INCLUDE_MIND_IN_MEMORY = os.getenv("SPARK_ADVISORY_INCLUDE_MIND", "0") == "1"
 ENABLE_PREFETCH_QUEUE = os.getenv("SPARK_ADVISORY_PREFETCH_QUEUE", "1") != "0"
 ENABLE_INLINE_PREFETCH_WORKER = os.getenv("SPARK_ADVISORY_PREFETCH_INLINE", "1") != "0"
+PACKET_FALLBACK_EMIT_ENABLED = os.getenv("SPARK_ADVISORY_PACKET_FALLBACK_EMIT", "0") == "1"
 MEMORY_SCOPE_DEFAULT = str(os.getenv("SPARK_MEMORY_SCOPE_DEFAULT", "session") or "session").strip() or "session"
 ACTIONABILITY_ENFORCE = os.getenv("SPARK_ADVISORY_REQUIRE_ACTION", "1") != "0"
 DELIVERY_STALE_SECONDS = float(os.getenv("SPARK_ADVISORY_STALE_S", "900"))
@@ -54,6 +55,7 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global INCLUDE_MIND_IN_MEMORY
     global ENABLE_PREFETCH_QUEUE
     global ENABLE_INLINE_PREFETCH_WORKER
+    global PACKET_FALLBACK_EMIT_ENABLED
     global INLINE_PREFETCH_MAX_JOBS
     global ACTIONABILITY_ENFORCE
     global DELIVERY_STALE_SECONDS
@@ -89,6 +91,13 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             ENABLE_INLINE_PREFETCH_WORKER,
         )
         applied.append("prefetch_inline_enabled")
+
+    if "packet_fallback_emit_enabled" in cfg:
+        PACKET_FALLBACK_EMIT_ENABLED = _parse_bool(
+            cfg.get("packet_fallback_emit_enabled"),
+            PACKET_FALLBACK_EMIT_ENABLED,
+        )
+        applied.append("packet_fallback_emit_enabled")
 
     if "prefetch_inline_max_jobs" in cfg:
         try:
@@ -134,6 +143,7 @@ def get_engine_config() -> Dict[str, Any]:
         "include_mind": bool(INCLUDE_MIND_IN_MEMORY),
         "prefetch_queue_enabled": bool(ENABLE_PREFETCH_QUEUE),
         "prefetch_inline_enabled": bool(ENABLE_INLINE_PREFETCH_WORKER),
+        "packet_fallback_emit_enabled": bool(PACKET_FALLBACK_EMIT_ENABLED),
         "prefetch_inline_max_jobs": int(INLINE_PREFETCH_MAX_JOBS),
         "actionability_enforce": bool(ACTIONABILITY_ENFORCE),
         "delivery_stale_s": float(DELIVERY_STALE_SECONDS),
@@ -617,7 +627,7 @@ def on_pre_tool(
             # fallback using baseline text for this intent family, instead of
             # returning None (which wastes the entire advisory opportunity).
             fallback_text = ""
-            if route and route.startswith("packet"):
+            if PACKET_FALLBACK_EMIT_ENABLED and route and route.startswith("packet"):
                 elapsed_fb = (time.time() * 1000.0) - start_ms
                 if elapsed_fb < MAX_ENGINE_MS - 200:  # only if budget remains
                     fallback_text = _baseline_text(intent_family).strip()
@@ -640,6 +650,7 @@ def on_pre_tool(
                         "packet_id": packet_id,
                         "stage_ms": stage_ms,
                         "delivery_mode": "none",
+                        "fallback_candidate_blocked": bool(route and route.startswith("packet") and not PACKET_FALLBACK_EMIT_ENABLED),
                         "error_kind": "policy",
                         "error_code": "AE_GATE_SUPPRESSED",
                     },

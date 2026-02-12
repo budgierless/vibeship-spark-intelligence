@@ -50,6 +50,29 @@ def _allow_all_gate(advice_items, state, tool_name, tool_input=None):
     )
 
 
+def _suppress_all_gate(advice_items, state, tool_name, tool_input=None):
+    decisions = []
+    for idx, item in enumerate(advice_items[:1]):
+        aid = getattr(item, "advice_id", f"aid_{idx}")
+        decisions.append(
+            GateDecision(
+                advice_id=aid,
+                authority="silent",
+                emit=False,
+                reason="test_suppressed",
+                adjusted_score=0.1,
+                original_score=0.9,
+            )
+        )
+    return GateResult(
+        decisions=decisions,
+        emitted=[],
+        suppressed=decisions,
+        phase="implementation",
+        total_retrieved=len(advice_items),
+    )
+
+
 def test_pre_tool_uses_packet_path_when_available(monkeypatch, tmp_path):
     _patch_state_and_store(monkeypatch, tmp_path)
 
@@ -148,3 +171,43 @@ def test_on_user_prompt_creates_baseline_and_prefetch_job(monkeypatch, tmp_path)
     assert len(lines) >= 1
     row = json.loads(lines[-1])
     assert row["session_id"] == "s3"
+
+
+def test_pre_tool_packet_no_emit_does_not_fallback_when_disabled(monkeypatch, tmp_path):
+    _patch_state_and_store(monkeypatch, tmp_path)
+
+    pkt = packet_store.build_packet(
+        project_key="proj",
+        session_context_key="dummy",
+        tool_name="Edit",
+        intent_family="emergent_other",
+        task_plane="build_delivery",
+        advisory_text="Use packet guidance.",
+        source_mode="baseline",
+        advice_items=[{"advice_id": "pkt-a1", "text": "Use packet guidance."}],
+        lineage={"sources": ["baseline"], "memory_absent_declared": False},
+    )
+    packet_store.save_packet(pkt)
+
+    monkeypatch.setattr(engine, "PACKET_FALLBACK_EMIT_ENABLED", False)
+    monkeypatch.setattr("lib.advisory_gate.evaluate", _suppress_all_gate)
+    monkeypatch.setattr(
+        "lib.advisory_memory_fusion.build_memory_bundle",
+        lambda **kwargs: {
+            "memory_absent_declared": False,
+            "sources": {"cognitive": {"count": 1}},
+        },
+    )
+    monkeypatch.setattr(
+        "lib.advisory_emitter.emit_advisory",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("emit should not be called")),
+    )
+
+    text = engine.on_pre_tool("s4", "Edit", {"file_path": "x.py"})
+    assert text is None
+
+    lines = engine.ENGINE_LOG.read_text(encoding="utf-8").splitlines()
+    assert lines
+    row = json.loads(lines[-1])
+    assert row["event"] == "no_emit"
+    assert row.get("fallback_candidate_blocked") is True

@@ -100,3 +100,10 @@ def test_delivery_badge_live_and_stale_states():
     )
     assert live["state"] == "live"
     assert stale["state"] == "stale"
+
+
+def test_engine_config_exposes_packet_fallback_flag(monkeypatch):
+    monkeypatch.setattr(advisory_engine, "PACKET_FALLBACK_EMIT_ENABLED", False)
+    advisory_engine.apply_engine_config({"packet_fallback_emit_enabled": True})
+    cfg = advisory_engine.get_engine_config()
+    assert cfg["packet_fallback_emit_enabled"] is True

@@ -10,15 +10,32 @@ Phase 1 scope:
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .outcome_log import read_outcomes
+from .primitive_filter import is_primitive_text
 
 COGNITIVE_FILE = Path.home() / ".spark" / "cognitive_insights.json"
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
 ORCHESTRATION_DIR = Path.home() / ".spark" / "orchestration"
+_NOISE_PATTERNS = (
+    re.compile(r"\btool[_\s-]*\d+[_\s-]*error\b", re.I),
+    re.compile(r"\bi struggle with tool_", re.I),
+    re.compile(r"\berror_pattern:", re.I),
+    re.compile(r"\brequest failed with status code\s+404\b", re.I),
+)
+
+
+def _is_noise_evidence(text: str) -> bool:
+    sample = str(text or "").strip()
+    if not sample:
+        return True
+    if is_primitive_text(sample):
+        return True
+    return any(rx.search(sample) for rx in _NOISE_PATTERNS)
 
 
 def _tail_jsonl(path: Path, limit: int) -> List[Dict[str, Any]]:
@@ -65,6 +82,8 @@ def _collect_cognitive(limit: int = 6) -> List[Dict[str, Any]]:
         text = str(row.get("insight") or row.get("text") or "").strip()
         if not text:
             continue
+        if _is_noise_evidence(text):
+            continue
         evidence.append(
             {
                 "source": "cognitive",
@@ -93,6 +112,8 @@ def _collect_eidos(intent_text: str, limit: int = 5) -> List[Dict[str, Any]]:
         statement = str(getattr(item, "statement", "") or "").strip()
         if not statement:
             continue
+        if _is_noise_evidence(statement):
+            continue
         evidence.append(
             {
                 "source": "eidos",
@@ -114,6 +135,8 @@ def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
         for row in _tail_jsonl(fp, limit=3):
             text = str(row.get("insight") or row.get("text") or row.get("summary") or "").strip()
             if not text:
+                continue
+            if _is_noise_evidence(text):
                 continue
             evidence.append(
                 {
@@ -137,6 +160,8 @@ def _collect_outcomes(limit: int = 6) -> List[Dict[str, Any]]:
     for row in rows[-limit:]:
         text = str(row.get("text") or row.get("result") or "").strip()
         if not text:
+            continue
+        if _is_noise_evidence(text):
             continue
         polarity = str(row.get("polarity") or "neutral")
         confidence = 0.7 if polarity == "pos" else (0.45 if polarity == "neutral" else 0.8)
@@ -162,6 +187,8 @@ def _collect_orchestration(limit: int = 5) -> List[Dict[str, Any]]:
         ctx = row.get("context") or {}
         prompt = str(ctx.get("prompt") or ctx.get("task") or ctx.get("summary") or "").strip()
         if not prompt:
+            continue
+        if _is_noise_evidence(prompt):
             continue
         evidence.append(
             {
@@ -192,6 +219,8 @@ def _collect_mind(intent_text: str, limit: int = 4) -> List[Dict[str, Any]]:
             continue
         text = str(mem.get("content") or mem.get("text") or "").strip()
         if not text:
+            continue
+        if _is_noise_evidence(text):
             continue
         evidence.append(
             {
@@ -251,7 +280,20 @@ def build_memory_bundle(
         evidence.extend(rows)
 
     evidence.sort(key=lambda row: (float(row.get("confidence") or 0.0), float(row.get("created_at") or 0.0)), reverse=True)
-    evidence = evidence[:24]
+    deduped: List[Dict[str, Any]] = []
+    seen_text = set()
+    for row in evidence:
+        text = str((row or {}).get("text") or "").strip()
+        if not text or _is_noise_evidence(text):
+            continue
+        key = " ".join(text.lower().split())[:180]
+        if key in seen_text:
+            continue
+        seen_text.add(key)
+        deduped.append(row)
+        if len(deduped) >= 24:
+            break
+    evidence = deduped
 
     memory_absent = len(evidence) == 0
 
@@ -267,4 +309,3 @@ def build_memory_bundle(
         "evidence_count": len(evidence),
         "memory_absent_declared": memory_absent,
     }
-

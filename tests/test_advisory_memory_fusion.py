@@ -63,3 +63,28 @@ def test_memory_bundle_declares_absent_when_no_evidence(monkeypatch):
     assert bundle["evidence_count"] == 0
     assert bundle["memory_absent_declared"] is True
 
+
+def test_memory_bundle_filters_tool_error_noise(monkeypatch):
+    monkeypatch.setattr(
+        fusion,
+        "_collect_cognitive",
+        lambda limit=6: [
+            {"source": "cognitive", "text": "I struggle with tool_49_error tasks", "confidence": 0.9, "created_at": 2.0},
+            {"source": "cognitive", "text": "Validate contract before merge", "confidence": 0.8, "created_at": 1.0},
+        ],
+    )
+    monkeypatch.setattr(fusion, "_collect_eidos", lambda intent_text, limit=5: [])
+    monkeypatch.setattr(fusion, "_collect_chips", lambda limit=6: [])
+    monkeypatch.setattr(fusion, "_collect_outcomes", lambda limit=6: [])
+    monkeypatch.setattr(fusion, "_collect_orchestration", lambda limit=5: [])
+
+    bundle = fusion.build_memory_bundle(
+        session_id="s1",
+        intent_text="",
+        intent_family="emergent_other",
+        tool_name="Read",
+    )
+
+    texts = [row.get("text") for row in bundle["evidence"]]
+    assert "Validate contract before merge" in texts
+    assert all("tool_49_error" not in str(t) for t in texts)
