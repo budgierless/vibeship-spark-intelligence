@@ -116,6 +116,22 @@ Realism metrics add:
 - `theory_discrimination_rate`: good theories surfaced correctly, bad theories suppressed
 - depth/domain splits (`D1`/`D2`/`D3`, domain score averages)
 
+## Operating Contract (Locked)
+
+Active benchmark contract:
+- Primary cases: `benchmarks/data/advisory_realism_eval_v2.json`
+- Shadow cases: `benchmarks/data/advisory_realism_eval_v1.json`
+- Contract file: `benchmarks/data/advisory_realism_operating_contract_v1.json`
+
+Rationale:
+- `v2` is the corrective-advisory contract for real-world anti-pattern prompts.
+- `v1` remains a strict-suppress historical shadow set.
+
+Execution policy:
+1. Run primary (`v2`) and require all gates to pass.
+2. Run shadow (`v1`) as non-blocking sanity telemetry.
+3. If primary passes and shadow regresses, do not auto-rollback unless trace/source gates regress materially.
+
 ## Theory Seeding for Controlled Memory Tests
 
 Seed known-good theories into cognitive memory to validate retrieval behavior:

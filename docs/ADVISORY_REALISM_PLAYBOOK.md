@@ -77,6 +77,11 @@ python benchmarks/advisory_realism_bench.py \
   --out-prefix advisory_realism_bench
 ```
 
+Primary + shadow cadence:
+- Primary contract run: `benchmarks/data/advisory_realism_eval_v2.json` (blocking)
+- Shadow run: `benchmarks/data/advisory_realism_eval_v1.json` (non-blocking)
+- Contract reference: `benchmarks/data/advisory_realism_operating_contract_v1.json`
+
 3. Tune profile candidates with sweeper if needed:
 ```bash
 python benchmarks/advisory_profile_sweeper.py \

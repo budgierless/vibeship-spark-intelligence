@@ -179,6 +179,33 @@ Realism outputs:
 - `benchmarks/out/advisory_realism_bench_report.json`
 - `benchmarks/out/advisory_realism_bench_report.md`
 
+Operational contract (locked):
+- Primary: `benchmarks/data/advisory_realism_eval_v2.json`
+- Shadow: `benchmarks/data/advisory_realism_eval_v1.json`
+- Contract file: `benchmarks/data/advisory_realism_operating_contract_v1.json`
+
+Primary run:
+
+```bash
+python benchmarks/advisory_realism_bench.py \
+  --cases benchmarks/data/advisory_realism_eval_v2.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live \
+  --out-prefix advisory_realism_primary
+```
+
+Shadow run:
+
+```bash
+python benchmarks/advisory_realism_bench.py \
+  --cases benchmarks/data/advisory_realism_eval_v1.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live \
+  --out-prefix advisory_realism_shadow
+```
+
 ### Tune for best-vs-best comparison
 
 Use grid-search tuning to optimize each system independently, then compare

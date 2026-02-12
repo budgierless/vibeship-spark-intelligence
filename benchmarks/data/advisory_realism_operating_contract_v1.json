@@ -1,0 +1,41 @@
+{
+  "version": "advisory-realism-operating-contract-v1",
+  "effective_date": "2026-02-12",
+  "status": "active",
+  "primary_cases": "benchmarks/data/advisory_realism_eval_v2.json",
+  "shadow_cases": "benchmarks/data/advisory_realism_eval_v1.json",
+  "profiles": ["baseline", "balanced", "strict"],
+  "runtime": {
+    "force_live": true,
+    "repeats": 1
+  },
+  "gates": {
+    "high_value_rate_min": 0.55,
+    "harmful_emit_rate_max": 0.10,
+    "critical_miss_rate_max": 0.10,
+    "source_alignment_rate_min": 0.55,
+    "theory_discrimination_rate_min": 0.70,
+    "trace_bound_rate_min": 0.85
+  },
+  "decision_basis": {
+    "primary_report": "benchmarks/out/advisory_realism_baseline_v2labels_v5_report.json",
+    "shadow_report": "benchmarks/out/advisory_realism_shadow_v1_postfix_report.json",
+    "primary_winner": "baseline",
+    "shadow_winner": "baseline",
+    "delta_primary_minus_shadow": {
+      "objective": 0.1125,
+      "score": 0.0708,
+      "high_value_rate": 0.1667,
+      "harmful_emit_rate": -0.2778,
+      "critical_miss_rate": -0.0102,
+      "source_alignment_rate": 0.0,
+      "theory_discrimination_rate": 0.2222,
+      "trace_bound_rate": 0.0
+    }
+  },
+  "policy": {
+    "primary_pass_required": true,
+    "shadow_regression_allowed": true,
+    "shadow_regression_note": "v1 remains a historical strict-suppress sanity set and should not block v2 corrective-advisory policy"
+  }
+}

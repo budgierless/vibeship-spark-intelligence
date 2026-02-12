@@ -49,6 +49,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/memory-retrieval-status.md`: memory retrieval stabilization + A/B execution spec
 - `docs/reports/2026-02-12_memory_retrieval_tuned_two_system_scorecard.md`: tuned best-vs-best comparison (`embeddings_only` vs `hybrid_agentic`)
 - `docs/reports/2026-02-12_advisory_tuning_delta.md`: advisory tuneables execution report + measured pre/post deltas
+- `docs/reports/2026-02-12_advisory_realism_contract_decision.md`: locked primary/shadow advisory realism benchmark contract + gate outcomes
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log
