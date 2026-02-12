@@ -14,8 +14,12 @@ This benchmark is separate from Forge/Depth and focused only on
 ## Artifacts
 
 - Runner: `benchmarks/advisory_quality_ab.py`
+- Realism runner: `benchmarks/advisory_realism_bench.py`
 - Seed scenarios: `benchmarks/data/advisory_quality_eval_seed.json`
 - Extended scenarios: `benchmarks/data/advisory_quality_eval_extended.json`
+- Realism scenarios: `benchmarks/data/advisory_realism_eval_v1.json`
+- Theory catalog: `benchmarks/data/advisory_theory_catalog_v1.json`
+- Theory seeder: `benchmarks/seed_advisory_theories.py`
 - Real-case template: `benchmarks/data/advisory_quality_eval_real_user_template.json`
 - Log-to-cases generator: `benchmarks/build_advisory_cases_from_logs.py`
 - Profile sweeper: `benchmarks/advisory_profile_sweeper.py`
@@ -90,6 +94,52 @@ The sweeper produces:
 - objective score per candidate
 - winner profile JSON ready to apply/merge
 
+## Realism Layer (Cross-System + Theories)
+
+Use realism benchmark when the goal is production-grade advisory quality beyond coding-only tasks.
+
+Run:
+
+```bash
+python benchmarks/advisory_realism_bench.py \
+  --cases benchmarks/data/advisory_realism_eval_v1.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live
+```
+
+Realism metrics add:
+- `high_value_rate`: advice that is emitted, actionable, trace-bound, memory-backed, and source-aligned
+- `harmful_emit_rate`: advice emitted when case expects suppression
+- `critical_miss_rate`: missed emits on high/critical cases
+- `source_alignment_rate`: expected source families (`semantic`, `mind`, `outcomes`, etc.) actually used
+- `theory_discrimination_rate`: good theories surfaced correctly, bad theories suppressed
+- depth/domain splits (`D1`/`D2`/`D3`, domain score averages)
+
+## Theory Seeding for Controlled Memory Tests
+
+Seed known-good theories into cognitive memory to validate retrieval behavior:
+
+```bash
+python benchmarks/seed_advisory_theories.py \
+  --catalog benchmarks/data/advisory_theory_catalog_v1.json \
+  --quality good
+```
+
+Dry-run preview without writes:
+
+```bash
+python benchmarks/seed_advisory_theories.py \
+  --catalog benchmarks/data/advisory_theory_catalog_v1.json \
+  --quality all \
+  --dry-run
+```
+
+This enables concrete checks for:
+1. whether relevant theories are retrieved at the right time,
+2. whether source alignment is correct (memory vs semantic vs mind),
+3. whether anti-pattern theories remain suppressed.
+
 ## Iteration Loop (Recommended)
 
 1. Run benchmark on current live profile (baseline snapshot).
@@ -111,5 +161,4 @@ The sweeper produces:
 
 ## Expansion Backlog
 
-- Add scenario tags by intent-plane and compute per-plane scores.
 - Add optional automatic tuneable apply/rollback workflow after winner validation window.

@@ -147,6 +147,38 @@ python benchmarks/build_advisory_cases_from_logs.py \
   --out benchmarks/data/advisory_quality_eval_from_logs.json
 ```
 
+Seed theory examples into cognitive memory for controlled retrieval tests:
+
+```bash
+python benchmarks/seed_advisory_theories.py \
+  --catalog benchmarks/data/advisory_theory_catalog_v1.json \
+  --quality good
+```
+
+Dry-run preview:
+
+```bash
+python benchmarks/seed_advisory_theories.py \
+  --catalog benchmarks/data/advisory_theory_catalog_v1.json \
+  --quality all \
+  --dry-run
+```
+
+Run realism-grade advisory benchmark (depth tiers + cross-system + theory discrimination):
+
+```bash
+python benchmarks/advisory_realism_bench.py \
+  --cases benchmarks/data/advisory_realism_eval_v1.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live \
+  --out-prefix advisory_realism_bench
+```
+
+Realism outputs:
+- `benchmarks/out/advisory_realism_bench_report.json`
+- `benchmarks/out/advisory_realism_bench_report.md`
+
 ### Tune for best-vs-best comparison
 
 Use grid-search tuning to optimize each system independently, then compare
