@@ -18,6 +18,30 @@ param(
 $REPO = "C:\Users\USER\Desktop\vibeship-spark-intelligence"
 $PULSE_DIR = "C:\Users\USER\Desktop\vibeship-spark-pulse"
 $PID_FILE = "$REPO\scripts\.spark_pids.json"
+$DEFAULT_SPARKD_PORT = 8787
+if ($env:SPARKD_PORT -match "^\d+$") {
+    $DEFAULT_SPARKD_PORT = [int]$env:SPARKD_PORT
+}
+$DEFAULT_PULSE_PORT = 8765
+if ($env:SPARK_PULSE_PORT -match "^\d+$") {
+    $DEFAULT_PULSE_PORT = [int]$env:SPARK_PULSE_PORT
+}
+
+function Get-AvailablePort {
+    param(
+        [int]$PreferredPort,
+        [int]$MaxScan = 25
+    )
+
+    for ($offset = 0; $offset -le $MaxScan; $offset++) {
+        $candidate = $PreferredPort + $offset
+        $inUse = Get-NetTCPConnection -LocalPort $candidate -ErrorAction SilentlyContinue
+        if (-not $inUse) {
+            return $candidate
+        }
+    }
+    return $null
+}
 
 function Save-Pids($pids) {
     $pids | ConvertTo-Json | Set-Content $PID_FILE -Encoding UTF8
@@ -51,18 +75,39 @@ function Start-Spark {
     Stop-Spark -Quiet
 
     $env:SPARK_EMBED_BACKEND = "tfidf"
+    $sparkdPort = Get-AvailablePort -PreferredPort $DEFAULT_SPARKD_PORT
+    if (-not $sparkdPort) {
+        Write-Host "  [FAIL] No free sparkd port found near $DEFAULT_SPARKD_PORT" -ForegroundColor Red
+        return
+    }
+    if ($sparkdPort -ne $DEFAULT_SPARKD_PORT) {
+        Write-Host "  [!] sparkd port $DEFAULT_SPARKD_PORT busy, using $sparkdPort" -ForegroundColor Yellow
+    }
+    $pulsePort = Get-AvailablePort -PreferredPort $DEFAULT_PULSE_PORT
+    if (-not $pulsePort) {
+        Write-Host "  [FAIL] No free Pulse port found near $DEFAULT_PULSE_PORT" -ForegroundColor Red
+        return
+    }
+    if ($pulsePort -ne $DEFAULT_PULSE_PORT) {
+        Write-Host "  [!] Pulse port $DEFAULT_PULSE_PORT busy, using $pulsePort" -ForegroundColor Yellow
+    }
+    $env:SPARKD_PORT = "$sparkdPort"
+    $env:SPARKD_URL = "http://127.0.0.1:$sparkdPort"
+    $env:SPARK_PULSE_PORT = "$pulsePort"
 
     $sparkd = Start-Process python -ArgumentList "$REPO\sparkd.py" -WorkingDirectory $REPO -WindowStyle Hidden -PassThru
     Start-Sleep 1
     $bridge = Start-Process python -ArgumentList "$REPO\bridge_worker.py" -WorkingDirectory $REPO -WindowStyle Hidden -PassThru
     $tailer = Start-Process python -ArgumentList "$REPO\adapters\openclaw_tailer.py","--include-subagents" -WorkingDirectory $REPO -WindowStyle Hidden -PassThru
-    $pulse = Start-Process python -ArgumentList "-m","uvicorn","app:app","--host","127.0.0.1","--port","8765" -WorkingDirectory $PULSE_DIR -WindowStyle Hidden -PassThru
+    $pulse = Start-Process python -ArgumentList "-m","uvicorn","app:app","--host","127.0.0.1","--port","$pulsePort" -WorkingDirectory $PULSE_DIR -WindowStyle Hidden -PassThru
 
     Save-Pids @{
         sparkd = $sparkd.Id
+        sparkd_port = $sparkdPort
         bridge = $bridge.Id
         tailer = $tailer.Id
         pulse = $pulse.Id
+        pulse_port = $pulsePort
         started = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
     }
 
@@ -86,7 +131,8 @@ function Start-Spark {
     Write-Host ""
     if ($ok -eq 4) {
         Write-Host "  Spark Intelligence is LIVE! ($ok services)" -ForegroundColor Green
-        Write-Host "  Dashboard: http://localhost:8765" -ForegroundColor Cyan
+        Write-Host "  sparkd: http://127.0.0.1:$sparkdPort" -ForegroundColor Cyan
+        Write-Host "  Dashboard: http://localhost:$pulsePort" -ForegroundColor Cyan
     } else {
         Write-Host "  Spark partially started ($ok of 4 services)" -ForegroundColor Yellow
     }
@@ -118,7 +164,7 @@ function Stop-Spark {
         $_.CommandLine -like "*bridge_worker*" -or
         $_.CommandLine -like "*sparkd.py*" -or
         $_.CommandLine -like "*openclaw_tailer*" -or
-        ($_.CommandLine -like "*uvicorn*" -and $_.CommandLine -like "*8765*")
+        ($_.CommandLine -like "*uvicorn*" -and $_.CommandLine -like "*app:app*" -and $_.CommandLine -like "*vibeship-spark-pulse*")
     } | ForEach-Object {
         Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         $killed++
@@ -142,6 +188,8 @@ function Show-Status {
     Write-Host ""
     Write-Host "  SERVICES" -ForegroundColor White
     $pids = Load-Pids
+    $sparkdPort = if ($pids -and $pids.sparkd_port) { [int]$pids.sparkd_port } else { $DEFAULT_SPARKD_PORT }
+    $pulsePort = if ($pids -and $pids.pulse_port) { [int]$pids.pulse_port } else { $DEFAULT_PULSE_PORT }
     $alive = 0
     if ($pids) {
         foreach ($svc in @(
@@ -161,6 +209,8 @@ function Show-Status {
         }
         $total = [math]::Round((Get-Process python -ErrorAction SilentlyContinue | Measure-Object -Property WorkingSet64 -Sum).Sum/1MB)
         Write-Host "  Total RAM: ${total}MB" -ForegroundColor DarkGray
+        Write-Host "  sparkd URL: http://127.0.0.1:$sparkdPort/" -ForegroundColor DarkGray
+        Write-Host "  Pulse URL: http://127.0.0.1:$pulsePort/" -ForegroundColor DarkGray
     } else {
         Write-Host "  Not running. Use 'spark start'" -ForegroundColor Yellow
     }
@@ -192,13 +242,16 @@ function Show-Status {
 function Show-Health {
     Write-Host ""
     $issues = 0
+    $pids = Load-Pids
+    $sparkdPort = if ($pids -and $pids.sparkd_port) { [int]$pids.sparkd_port } else { $DEFAULT_SPARKD_PORT }
+    $pulsePort = if ($pids -and $pids.pulse_port) { [int]$pids.pulse_port } else { $DEFAULT_PULSE_PORT }
 
-    try { $null = Invoke-RestMethod http://127.0.0.1:8787/health -TimeoutSec 2; Write-Host "  [OK] sparkd :8787" -ForegroundColor Green }
-    catch { Write-Host "  [!!] sparkd :8787" -ForegroundColor Red; $issues++ }
+    try { $null = Invoke-RestMethod http://127.0.0.1:$sparkdPort/health -TimeoutSec 2; Write-Host "  [OK] sparkd :$sparkdPort" -ForegroundColor Green }
+    catch { Write-Host "  [!!] sparkd :$sparkdPort" -ForegroundColor Red; $issues++ }
 
-    $pc = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://127.0.0.1:8765/ 2>$null
-    if ($pc -eq "200") { Write-Host "  [OK] pulse  :8765" -ForegroundColor Green }
-    else { Write-Host "  [!!] pulse  :8765 (HTTP $pc)" -ForegroundColor Red; $issues++ }
+    $pc = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://127.0.0.1:$pulsePort/ 2>$null
+    if ($pc -eq "200") { Write-Host "  [OK] pulse  :$pulsePort" -ForegroundColor Green }
+    else { Write-Host "  [!!] pulse  :$pulsePort (HTTP $pc)" -ForegroundColor Red; $issues++ }
 
     $total = [math]::Round((Get-Process python -ErrorAction SilentlyContinue | Measure-Object -Property WorkingSet64 -Sum).Sum/1MB)
     if ($total -lt 500) { Write-Host "  [OK] RAM: ${total}MB" -ForegroundColor Green }
@@ -216,3 +269,4 @@ switch ($Action) {
     "restart" { Stop-Spark; Start-Sleep 2; Start-Spark }
     "health"  { Show-Health }
 }
+
