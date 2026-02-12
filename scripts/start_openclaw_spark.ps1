@@ -16,6 +16,23 @@ function Get-ProcessByPattern {
     } | Select-Object -First 1
 }
 
+function Set-DefaultEnv {
+    param([string]$Name, [string]$Value)
+    $current = (Get-Item -Path ("Env:" + $Name) -ErrorAction SilentlyContinue).Value
+    if (-not $current -or [string]::IsNullOrWhiteSpace($current)) {
+        Set-Item -Path ("Env:" + $Name) -Value $Value
+    }
+}
+
+# R3 chip profile defaults (can still be overridden by explicit env before startup).
+Set-DefaultEnv "SPARK_CHIP_REQUIRE_LEARNING_SCHEMA" "1"
+Set-DefaultEnv "SPARK_CHIP_OBSERVER_ONLY" "1"
+Set-DefaultEnv "SPARK_CHIP_MIN_LEARNING_EVIDENCE" "2"
+Set-DefaultEnv "SPARK_CHIP_MIN_CONFIDENCE" "0.65"
+Set-DefaultEnv "SPARK_CHIP_MIN_SCORE" "0.25"
+Set-DefaultEnv "SPARK_CHIP_MERGE_MIN_CONFIDENCE" "0.65"
+Set-DefaultEnv "SPARK_CHIP_MERGE_MIN_QUALITY" "0.62"
+
 Write-Host "=== Spark x OpenClaw - Starting ===" -ForegroundColor Cyan
 Write-Host "Repo: $RepoRoot"
 Write-Host "Mode: $(if ($WithCore) { 'with-core (starts missing core services)' } else { 'integration-only (tailer only)' })"

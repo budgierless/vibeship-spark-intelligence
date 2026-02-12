@@ -10,6 +10,7 @@ This benchmark is intentionally isolated from live runtime files:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -50,6 +51,12 @@ def _load_plan(path: Path) -> Dict[str, Any]:
     if not exps:
         raise ValueError(f"plan has no experiments: {path}")
     return raw
+
+
+def _stable_int_seed(*parts: Any) -> int:
+    text = "|".join(str(p) for p in parts)
+    digest = hashlib.sha1(text.encode("utf-8", errors="ignore")).hexdigest()[:8]
+    return int(digest, 16)
 
 
 def _build_event(chip_id: str, i: int, rng: random.Random) -> Dict[str, Any]:
@@ -382,7 +389,7 @@ def _run_experiment(
             chip = runtime.registry.get_chip(chip_id)
             if not chip:
                 continue
-            rng = random.Random(base_seed + hash(chip_id) % 100000 + len(exp_id) * 17)
+            rng = random.Random(_stable_int_seed(base_seed, exp_id, chip_id))
             for i in range(max(1, int(events_per_chip))):
                 event = _build_event(chip_id, i, rng)
                 out = runtime.process_event_for_chips(event, [chip])

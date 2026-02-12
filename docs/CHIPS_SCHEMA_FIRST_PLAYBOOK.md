@@ -236,12 +236,22 @@ After apply:
 
 ## Migration Plan
 
-1. Keep current default (`min_learning_evidence=1`) while upgrading observers.
-2. Raise evidence threshold to `2` only when:
-- coverage remains healthy,
-- objective improves against baseline.
-3. Phase in observer contracts on active chips first.
-4. Add CI checks for contract compliance and extraction feasibility.
+1. Promoted runtime profile (`R3` controlled rollout):
+- `SPARK_CHIP_REQUIRE_LEARNING_SCHEMA=1`
+- `SPARK_CHIP_OBSERVER_ONLY=1`
+- `SPARK_CHIP_MIN_LEARNING_EVIDENCE=2`
+- `SPARK_CHIP_MIN_CONFIDENCE=0.65`
+- `SPARK_CHIP_MIN_SCORE=0.25`
+- `SPARK_CHIP_MERGE_MIN_CONFIDENCE=0.65`
+- `SPARK_CHIP_MERGE_MIN_QUALITY=0.62`
+2. Merge tuneables for rollout window:
+- `chip_merge.min_cognitive_value=0.25`
+- `chip_merge.min_actionability=0.15`
+- `chip_merge.min_transferability=0.15`
+- `chip_merge.min_statement_len=20`
+3. Apply tuneables helper:
+- `python scripts/apply_chip_profile_r3.py`
+4. Keep observer policy trend gate active and re-check every 24h.
 
 ## What “Good” Looks Like
 

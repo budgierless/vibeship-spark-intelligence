@@ -42,6 +42,18 @@ BRIDGE_DISABLE_TIMEOUTS = os.environ.get("SPARK_BRIDGE_DISABLE_TIMEOUTS", "0").s
 }
 
 
+def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except Exception:
+        value = float(default)
+    return max(lo, min(hi, value))
+
+
+CHIP_MERGE_MIN_CONFIDENCE = _env_float("SPARK_CHIP_MERGE_MIN_CONFIDENCE", 0.55)
+CHIP_MERGE_MIN_QUALITY = _env_float("SPARK_CHIP_MERGE_MIN_QUALITY", 0.55)
+
+
 def _run_step(name: str, fn: Callable[..., Any], *args: Any, timeout_s: Optional[float] = None, **kwargs: Any) -> Tuple[bool, Any, str]:
     """
     Run a bridge sub-step with a soft timeout.
@@ -343,8 +355,8 @@ def run_bridge_cycle(
         ok, merge_stats, error = _run_step(
             "chip_merge",
             merge_chip_insights,
-            min_confidence=0.55,
-            min_quality_score=0.55,
+            min_confidence=CHIP_MERGE_MIN_CONFIDENCE,
+            min_quality_score=CHIP_MERGE_MIN_QUALITY,
             limit=20,
         )
         if ok:

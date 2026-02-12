@@ -110,3 +110,12 @@ def test_quality_effectively_empty_detects_zero_scores():
     assert mod._quality_effectively_empty({}) is True
     assert mod._quality_effectively_empty({"total": 0.0, "cognitive_value": 0.0}) is True
     assert mod._quality_effectively_empty({"total": 0.01}) is False
+
+
+def test_stable_int_seed_is_deterministic():
+    mod = _load_module()
+    a = mod._stable_int_seed(20260217, "R3", "social-convo")
+    b = mod._stable_int_seed(20260217, "R3", "social-convo")
+    c = mod._stable_int_seed(20260217, "R3", "x_social")
+    assert a == b
+    assert a != c
