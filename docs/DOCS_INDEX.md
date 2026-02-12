@@ -60,6 +60,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-13_chip_strategy_experiment_matrix_v2.md`: first full A/B/C/D chip strategy run with corrected advice-hit vs evidence-hit scoring
 - `docs/reports/2026-02-13_chip_telemetry_cleanup_and_ablation_pass_v1.md`: telemetry cleanup + intent-gated chip retrieval + randomized ablation outcome snapshot
 - `docs/reports/2026-02-13_chip_learning_diagnostics_and_distillation_pass_v1.md`: chip-to-learning yield diagnostics and indirect optimization outcomes
+- `docs/reports/2026-02-13_chip_learning_keep-vs-kill_assessment_v2.md`: keep-vs-kill decision with deep telemetry diagnostics, shipped runtime guards, and pilot chip activation policy
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log

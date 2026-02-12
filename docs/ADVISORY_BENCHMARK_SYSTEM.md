@@ -230,6 +230,9 @@ Compare:
 - `merge_eligible`
 - `statement_yield_rate`
 - `learning_quality_pass_rate`
+- `telemetry_observer_rate`
+- `missing_confidence_rate`
+- `missing_quality_rate`
 
 If these barely move under relaxed gates, the blocker is chip content quality (telemetry/noise), not tuneable strictness.
 

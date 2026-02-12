@@ -242,6 +242,13 @@ Diagnostics outputs:
 - `benchmarks/out/chip_learning_diagnostics_v1_report.json`
 - `benchmarks/out/chip_learning_diagnostics_v1_report.md`
 
+Key diagnostics to track:
+- `telemetry_rate`
+- `telemetry_observer_rate`
+- `missing_confidence_rate`
+- `missing_quality_rate`
+- `merge_eligible`
+
 Candidate profile overlay with retrieval/chip tuning:
 - `benchmarks/data/advisory_realism_profile_candidates_v2.json`
 
