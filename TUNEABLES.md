@@ -1231,6 +1231,20 @@ This is the active hot-path advisory stack used by hooks:
     "ai_timeout_s": 3.0,
     "cache_ttl_s": 120,
     "max_cache_entries": 50
+  },
+  "scheduler": {
+    "enabled": true,
+    "mention_poll_interval": 600,
+    "engagement_snapshot_interval": 1800,
+    "daily_research_interval": 86400,
+    "niche_scan_interval": 21600,
+    "advisory_review_interval": 43200,
+    "advisory_review_window_hours": 12,
+    "mention_poll_enabled": true,
+    "engagement_snapshot_enabled": true,
+    "daily_research_enabled": true,
+    "niche_scan_enabled": true,
+    "advisory_review_enabled": true
   }
 }
 ```
@@ -1280,7 +1294,7 @@ Components fall back to hard-coded defaults when a key is absent.
 | `queue` | Queue growth + read safety limits | `max_events`, `tail_chunk_bytes` |
 | `meta_ralph` | Meta-Ralph quality gate | `quality_threshold`, `needs_work_threshold`, `needs_work_close_delta`, `min_outcome_samples`, `min_tuneable_samples` |
 | `eidos` | EIDOS Budget defaults | `max_steps`, `max_time_seconds`, `max_retries_per_error`, `max_file_touches`, `no_evidence_limit` |
-| `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `*_enabled` task flags |
+| `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `advisory_review_interval`, `advisory_review_window_hours`, `*_enabled` task flags |
 
 ### Backward Compatibility
 
