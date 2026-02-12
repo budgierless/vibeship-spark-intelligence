@@ -632,6 +632,7 @@ def on_pre_tool(
         return None
 
     start_ms = time.time() * 1000.0
+    resolved_trace_id = trace_id
     route = "live"
     packet_id = None
     stage_ms: Dict[str, float] = {}
@@ -649,7 +650,7 @@ def on_pre_tool(
     def _diag(current_route: str) -> Dict[str, Any]:
         return _diagnostics_envelope(
             session_id=session_id,
-            trace_id=trace_id,
+            trace_id=resolved_trace_id,
             route=current_route,
             session_context_key=session_context_key,
             scope="session",
@@ -661,6 +662,7 @@ def on_pre_tool(
             load_state,
             mark_advice_shown,
             record_tool_call,
+            resolve_recent_trace_id,
             save_state,
             suppress_tool_advice,
         )
@@ -678,7 +680,16 @@ def on_pre_tool(
         from .advisory_emitter import emit_advisory
 
         state = load_state(session_id)
-        record_tool_call(state, tool_name, tool_input, success=None, trace_id=trace_id)
+        resolved_trace_id = trace_id or resolve_recent_trace_id(state, tool_name)
+        if not resolved_trace_id:
+            try:
+                from .exposure_tracker import infer_latest_trace_id
+
+                resolved_trace_id = infer_latest_trace_id(session_id)
+            except Exception:
+                resolved_trace_id = None
+
+        record_tool_call(state, tool_name, tool_input, success=None, trace_id=resolved_trace_id)
         intent_info = _intent_context(state, tool_name)
         project_key = _project_key()
         session_context_key = _session_context_key(state, tool_name)
@@ -725,7 +736,7 @@ def on_pre_tool(
                 tool_input or {},
                 context=state.user_intent,
                 include_mind=INCLUDE_MIND_IN_MEMORY,
-                trace_id=trace_id,
+                trace_id=resolved_trace_id,
             )
             route = "live"
 
@@ -977,14 +988,14 @@ def on_pre_tool(
                     source_mode="live_ai" if synth_text else "live_deterministic",
                     advice_items=_advice_to_rows_with_proof(
                         emitted_advice or advice_items,
-                        trace_id=trace_id,
+                        trace_id=resolved_trace_id,
                     ),
                     lineage={
                         "sources": lineage_sources,
                         "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
-                        "trace_id": trace_id,
+                        "trace_id": resolved_trace_id,
                     },
-                    trace_id=trace_id,
+                    trace_id=resolved_trace_id,
                 )
                 packet_id = save_packet(packet_payload)
 
@@ -997,7 +1008,7 @@ def on_pre_tool(
                     advice_ids=shown_ids,
                     advice_texts=[str(getattr(a, "text", "") or "") for a in emitted_advice],
                     sources=[str(getattr(a, "source", "") or "") for a in emitted_advice],
-                    trace_id=trace_id,
+                    trace_id=resolved_trace_id,
                     route=route,
                     packet_id=packet_id,
                     min_interval_s=120,

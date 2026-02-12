@@ -186,6 +186,49 @@ def test_pre_tool_live_path_propagates_include_mind_policy(monkeypatch, tmp_path
     assert capture["include_mind"] is False
 
 
+def test_pre_tool_resolves_missing_trace_id_for_engine_and_feedback(monkeypatch, tmp_path):
+    _patch_state_and_store(monkeypatch, tmp_path)
+
+    monkeypatch.setattr("lib.advisory_state.resolve_recent_trace_id", lambda _state, _tool: "trace-auto-1")
+    monkeypatch.setattr("lib.advisory_gate.evaluate", _allow_all_gate)
+    monkeypatch.setattr(
+        "lib.advisory_memory_fusion.build_memory_bundle",
+        lambda **kwargs: {
+            "memory_absent_declared": False,
+            "sources": {"cognitive": {"count": 1}},
+        },
+    )
+    monkeypatch.setattr(
+        "lib.advisor.advise_on_tool",
+        lambda *a, **k: [
+            Advice(
+                advice_id="live-a3",
+                insight_key="k3",
+                text="Trace-linked live guidance.",
+                confidence=0.8,
+                source="advisor",
+                context_match=0.8,
+                reason="test",
+            )
+        ],
+    )
+    monkeypatch.setattr("lib.advisory_synthesizer.synthesize", lambda *a, **k: "Trace linked synthesis.")
+    monkeypatch.setattr("lib.advisory_emitter.emit_advisory", lambda gate_result, synthesized_text, advice_items=None: True)
+
+    text = engine.on_pre_tool("s2c", "Read", {"file_path": "z.py"})
+    assert text.startswith("Trace linked synthesis.")
+
+    eng_rows = engine.ENGINE_LOG.read_text(encoding="utf-8").splitlines()
+    assert eng_rows
+    eng_row = json.loads(eng_rows[-1])
+    assert eng_row.get("trace_id") == "trace-auto-1"
+
+    req_rows = advice_feedback.REQUESTS_FILE.read_text(encoding="utf-8").splitlines()
+    assert req_rows
+    req_row = json.loads(req_rows[-1])
+    assert req_row.get("trace_id") == "trace-auto-1"
+
+
 def test_on_user_prompt_creates_baseline_and_prefetch_job(monkeypatch, tmp_path):
     _patch_state_and_store(monkeypatch, tmp_path)
 
