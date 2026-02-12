@@ -979,6 +979,30 @@ def _heuristic_reflection(result: "TrainingResult") -> List[str]:
 # Topic Discovery: Self-search system
 # ======================================================
 
+_WEAK_LENS_DRILL_TEMPLATES = {
+    1: "implementation drill for {topic}",
+    2: "architecture drill for {topic}",
+    3: "tradeoff drill for {topic}",
+    4: "adversarial drill for {topic}",
+    5: "profiling drill for {topic}",
+    6: "edge-case drill for {topic}",
+    7: "user-empathy drill for {topic}",
+    8: "scalability drill for {topic}",
+}
+
+
+def _build_weak_lens_drill_topic(topic: str, depth: int) -> str:
+    """Create a lens-targeted drill topic for weak depth levels."""
+    base = (topic or "").strip()
+    if not base:
+        return ""
+    template = _WEAK_LENS_DRILL_TEMPLATES.get(depth)
+    if template:
+        return template.format(topic=base)
+    lens = DEPTH_LENSES.get(depth, f"depth-{depth}").lower()
+    return f"{lens} drill for {base}"
+
+
 class TopicDiscovery:
     """Discovers what topics Spark needs to train on next.
 
@@ -1033,6 +1057,16 @@ class TopicDiscovery:
                           f"lens gaps: {t.get('weak_lenses', 'unknown')})",
                 "priority": 5,
             })
+            weak_levels = t.get("weak_level_ids") or []
+            for depth in weak_levels[:2]:
+                drill_topic = _build_weak_lens_drill_topic(t["topic"], int(depth))
+                if not drill_topic:
+                    continue
+                topics.append({
+                    "topic": drill_topic,
+                    "reason": f"targeted weak lens ({DEPTH_LENSES.get(int(depth), depth)})",
+                    "priority": 6,
+                })
 
         # Strategy 3: Deepen strong areas (push past comfort zone)
         strong = self._get_strong_topics()
@@ -1081,6 +1115,15 @@ class TopicDiscovery:
             })
 
         # Sort by priority (highest first) and take top N
+        deduped: List[Dict] = []
+        seen_topics: set = set()
+        for item in topics:
+            key = item.get("topic", "").strip().lower()
+            if not key or key in seen_topics:
+                continue
+            seen_topics.add(key)
+            deduped.append(item)
+        topics = deduped
         topics.sort(key=lambda x: -x["priority"])
         return topics[:count]
 
@@ -1094,7 +1137,7 @@ class TopicDiscovery:
 
     def _get_weak_topics(self) -> List[Dict]:
         """Find topics where scores are consistently low."""
-        history = get_training_history(limit=50)
+        history = get_training_history(limit=80)
         topic_data: Dict[str, List] = {}
         for entry in history:
             t = entry.get("topic", "")
@@ -1103,21 +1146,33 @@ class TopicDiscovery:
         weak = []
         for topic, entries in topic_data.items():
             avg = sum(e.get("total_score", 0) for e in entries) / len(entries)
-            if avg < 65:
-                all_weak = []
-                for e in entries:
-                    all_weak.extend(e.get("weak_levels", []))
-                weak_lenses = ", ".join(
-                    DEPTH_LENSES.get(d, str(d))
-                    for d in set(all_weak)
-                )
+            all_weak = []
+            weak_sessions = 0
+            for e in entries:
+                levels = e.get("weak_levels", [])
+                all_weak.extend(levels)
+                if levels:
+                    weak_sessions += 1
+            weak_ratio = weak_sessions / max(len(entries), 1)
+            if avg < 65 or weak_ratio >= 0.5:
+                level_counts: Dict[int, int] = {}
+                for d in all_weak:
+                    try:
+                        key = int(d)
+                    except Exception:
+                        continue
+                    level_counts[key] = level_counts.get(key, 0) + 1
+                ordered_levels = sorted(level_counts.keys(), key=lambda d: (-level_counts[d], d))
+                weak_lenses = ", ".join(DEPTH_LENSES.get(d, str(d)) for d in ordered_levels)
                 weak.append({
                     "topic": topic,
                     "avg_score": avg,
                     "sessions": len(entries),
                     "weak_lenses": weak_lenses,
+                    "weak_level_ids": ordered_levels,
+                    "weak_ratio": weak_ratio,
                 })
-        weak.sort(key=lambda x: x["avg_score"])
+        weak.sort(key=lambda x: (x["avg_score"], -x.get("weak_ratio", 0.0)))
         return weak
 
     def _get_strong_topics(self) -> List[Dict]:
