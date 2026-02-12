@@ -1523,25 +1523,75 @@ class SparkAdvisor:
 
         return advice
 
+    def _insight_mentions_tool(self, tool_name: str, *texts: Any) -> bool:
+        """Return True when text mentions the tool as a token, not a substring."""
+        tool = str(tool_name or "").strip().lower()
+        if not tool:
+            return False
+
+        token_pattern = re.compile(rf"(?<![a-z0-9]){re.escape(tool)}(?![a-z0-9])")
+        normalized_tool = re.sub(r"[_\-\s]+", " ", tool).strip()
+        normalized_pattern = None
+        if normalized_tool and normalized_tool != tool:
+            normalized_pattern = re.compile(
+                rf"(?<![a-z0-9]){re.escape(normalized_tool)}(?![a-z0-9])"
+            )
+
+        for raw in texts:
+            text = str(raw or "").strip().lower()
+            if not text:
+                continue
+            if token_pattern.search(text):
+                return True
+            if normalized_pattern is not None:
+                normalized_text = re.sub(r"[_\-\s]+", " ", text)
+                if normalized_pattern.search(normalized_text):
+                    return True
+        return False
+
     def _get_tool_specific_advice(self, tool_name: str) -> List[Advice]:
         """Get advice specific to a tool based on past failures."""
         advice = []
+        seen_texts = set()
 
         # Get self-awareness insights about this tool
         for insight in self.cognitive.get_self_awareness_insights():
-            if tool_name.lower() in insight.insight.lower():
-                # Task #13: Add validation count as reason
-                reason = f"Validated {insight.times_validated}x" if hasattr(insight, 'times_validated') else ""
+            insight_text = str(getattr(insight, "insight", "") or "").strip()
+            if not insight_text:
+                continue
+            if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(insight_text):
+                continue
+            reliability = float(getattr(insight, "reliability", 0.0) or 0.0)
+            if reliability < MIN_RELIABILITY_FOR_ADVICE:
+                continue
+            if not self._insight_mentions_tool(
+                tool_name,
+                insight_text,
+                getattr(insight, "context", ""),
+            ):
+                continue
 
-                advice.append(Advice(
-                    advice_id=self._generate_advice_id(insight.insight),
-                    insight_key=f"tool:{tool_name}",
-                    text=f"[Caution] {insight.insight}",
-                    confidence=insight.reliability,
-                    source="self_awareness",
-                    context_match=1.0,  # Direct tool match
-                    reason=reason,
-                ))
+            dedupe_key = re.sub(r"\s+", " ", insight_text.lower())
+            if dedupe_key in seen_texts:
+                continue
+            seen_texts.add(dedupe_key)
+
+            # Task #13: Add validation count as reason
+            reason = (
+                f"Validated {insight.times_validated}x"
+                if hasattr(insight, "times_validated")
+                else ""
+            )
+
+            advice.append(Advice(
+                advice_id=self._generate_advice_id(insight_text),
+                insight_key=f"tool:{tool_name}",
+                text=f"[Caution] {insight_text}",
+                confidence=reliability,
+                source="self_awareness",
+                context_match=1.0,  # Direct tool match
+                reason=reason,
+            ))
 
         return advice
 
@@ -2421,9 +2471,14 @@ class SparkAdvisor:
         """
         # Check self-awareness for struggles with this tool
         for insight in self.cognitive.get_self_awareness_insights():
-            if tool_name.lower() in insight.insight.lower():
-                if "struggle" in insight.insight.lower() or "fail" in insight.insight.lower():
-                    return True, insight.insight
+            insight_text = str(getattr(insight, "insight", "") or "").strip()
+            if not insight_text:
+                continue
+            if not self._insight_mentions_tool(tool_name, insight_text, getattr(insight, "context", "")):
+                continue
+            lowered = insight_text.lower()
+            if "struggle" in lowered or "fail" in lowered:
+                return True, insight_text
 
         return False, ""
 
