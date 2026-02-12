@@ -7,6 +7,7 @@ so they can be validated, promoted, and injected into context.
 """
 
 import json
+import time
 from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
@@ -19,6 +20,8 @@ from lib.chips.registry import get_registry
 
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
 MERGE_STATE_FILE = Path.home() / ".spark" / "chip_merge_state.json"
+LOW_QUALITY_COOLDOWN_S = 4 * 3600
+MAX_REJECTED_TRACKING = 2000
 
 
 # Map chip domains to cognitive categories
@@ -56,11 +59,18 @@ DOMAIN_TO_CATEGORY = {
 def _load_merge_state() -> Dict[str, Any]:
     """Load the merge state tracking which insights have been merged."""
     if not MERGE_STATE_FILE.exists():
-        return {"merged_hashes": [], "last_merge": None}
+        return {"merged_hashes": [], "last_merge": None, "rejected_low_quality": {}}
     try:
-        return json.loads(MERGE_STATE_FILE.read_text(encoding="utf-8"))
+        state = json.loads(MERGE_STATE_FILE.read_text(encoding="utf-8"))
+        if not isinstance(state, dict):
+            return {"merged_hashes": [], "last_merge": None, "rejected_low_quality": {}}
+        if not isinstance(state.get("merged_hashes"), list):
+            state["merged_hashes"] = []
+        if not isinstance(state.get("rejected_low_quality"), dict):
+            state["rejected_low_quality"] = {}
+        return state
     except Exception:
-        return {"merged_hashes": [], "last_merge": None}
+        return {"merged_hashes": [], "last_merge": None, "rejected_low_quality": {}}
 
 
 def _save_merge_state(state: Dict[str, Any]):
@@ -69,11 +79,31 @@ def _save_merge_state(state: Dict[str, Any]):
     MERGE_STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def _hash_insight(chip_id: str, content: str, timestamp: str) -> str:
-    """Create a hash for deduplication."""
+def _hash_insight(chip_id: str, content: str) -> str:
+    """Create a stable dedupe hash for chip insight content."""
     import hashlib
-    raw = f"{chip_id}|{content[:100]}|{timestamp}".encode()
+    normalized = " ".join((content or "").strip().lower().split())
+    raw = f"{chip_id.strip().lower()}|{normalized[:180]}".encode("utf-8", errors="ignore")
     return hashlib.sha1(raw).hexdigest()[:12]
+
+
+def _prune_rejected_state(entries: Dict[str, Any], now_ts: float) -> Dict[str, float]:
+    """Keep recent low-quality rejections only."""
+    kept: Dict[str, float] = {}
+    for key, value in entries.items():
+        try:
+            ts = float(value)
+        except Exception:
+            continue
+        if ts <= 0:
+            continue
+        if (now_ts - ts) <= LOW_QUALITY_COOLDOWN_S:
+            kept[key] = ts
+    if len(kept) > MAX_REJECTED_TRACKING:
+        # Keep most recent signatures only.
+        ordered = sorted(kept.items(), key=lambda kv: kv[1], reverse=True)[:MAX_REJECTED_TRACKING]
+        kept = {k: v for k, v in ordered}
+    return kept
 
 
 def _infer_category(chip_id: str, captured_data: Dict[str, Any], content: str) -> CognitiveCategory:
@@ -180,12 +210,15 @@ def merge_chip_insights(
     """
     state = _load_merge_state()
     merged_hashes = set(state.get("merged_hashes", []))
+    now_ts = time.time()
+    rejected_low_quality = _prune_rejected_state(state.get("rejected_low_quality", {}), now_ts)
 
     stats = {
         "processed": 0,
         "merged": 0,
         "skipped_low_confidence": 0,
         "skipped_low_quality": 0,
+        "skipped_low_quality_cooldown": 0,
         "skipped_duplicate": 0,
         "by_chip": {},
     }
@@ -200,25 +233,30 @@ def merge_chip_insights(
         chip_id = chip_insight.get("chip_id", "unknown")
         content = chip_insight.get("content", "")
         confidence = chip_insight.get("confidence", 0.5)
-        timestamp = chip_insight.get("timestamp", "")
         captured_data = chip_insight.get("captured_data", {})
+        insight_hash = _hash_insight(chip_id, content)
 
         # Skip low confidence
         if confidence < min_confidence:
             stats["skipped_low_confidence"] += 1
             continue
 
-        quality = (captured_data.get("quality_score") or {})
-        quality_total = float(quality.get("total", confidence) or confidence)
-        if quality_total < min_quality_score:
-            stats["skipped_low_quality"] += 1
-            continue
-
-        # Skip already merged
-        insight_hash = _hash_insight(chip_id, content, timestamp)
+        # Skip already merged (stable hash ignores timestamp churn)
         if insight_hash in merged_hashes:
             stats["skipped_duplicate"] += 1
             continue
+
+        quality = (captured_data.get("quality_score") or {})
+        quality_total = float(quality.get("total", confidence) or confidence)
+        if quality_total < min_quality_score:
+            previous = float(rejected_low_quality.get(insight_hash, 0.0) or 0.0)
+            if previous > 0 and (now_ts - previous) < LOW_QUALITY_COOLDOWN_S:
+                stats["skipped_low_quality_cooldown"] += 1
+            else:
+                stats["skipped_low_quality"] += 1
+                rejected_low_quality[insight_hash] = now_ts
+            continue
+        rejected_low_quality.pop(insight_hash, None)
 
         # Determine category with fallback inference.
         category = _infer_category(chip_id, captured_data, content)
@@ -270,6 +308,7 @@ def merge_chip_insights(
     # Save state
     if not dry_run:
         state["merged_hashes"] = list(merged_hashes)[-1000:]  # Keep last 1000
+        state["rejected_low_quality"] = _prune_rejected_state(rejected_low_quality, now_ts)
         state["last_merge"] = datetime.now().isoformat()
         state["last_stats"] = stats
         _save_merge_state(state)

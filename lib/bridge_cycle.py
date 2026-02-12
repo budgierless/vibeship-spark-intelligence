@@ -334,8 +334,8 @@ def run_bridge_cycle(
         ok, merge_stats, error = _run_step(
             "chip_merge",
             merge_chip_insights,
-            min_confidence=0.5,
-            min_quality_score=0.4,
+            min_confidence=0.55,
+            min_quality_score=0.55,
             limit=20,
         )
         if ok:
@@ -343,6 +343,7 @@ def run_bridge_cycle(
                 "processed": merge_stats.get("processed", 0),
                 "merged": merge_stats.get("merged", 0),
                 "skipped_low_quality": merge_stats.get("skipped_low_quality", 0),
+                "skipped_low_quality_cooldown": merge_stats.get("skipped_low_quality_cooldown", 0),
                 "by_chip": merge_stats.get("by_chip", {}),
             }
         else:
