@@ -345,6 +345,76 @@ class TestAutoTuner:
         for change in report.changes:
             assert abs(change.delta) <= tuner.max_change + 0.001  # float tolerance
 
+    def test_apply_recommendations_skips_noop_changes(self, tmp_path):
+        from lib.auto_tuner import AutoTuner, TuneRecommendation, _write_json_atomic
+
+        tuneables = {
+            "auto_tuner": {
+                "enabled": True,
+                "max_change_per_run": 0.15,
+                "source_boosts": {},
+                "source_effectiveness": {},
+                "tuning_log": [],
+            },
+            "advisor": {
+                "min_rank_score": 0.25,
+            },
+        }
+        tp = tmp_path / "tuneables.json"
+        _write_json_atomic(tp, tuneables)
+        before = tp.read_text(encoding="utf-8")
+
+        rec = TuneRecommendation(
+            section="advisor",
+            key="min_rank_score",
+            current_value=0.25,
+            recommended_value=0.25,
+            reason="already set",
+            confidence=0.9,
+            impact="low",
+        )
+
+        tuner = AutoTuner(tp)
+        applied = tuner.apply_recommendations([rec], mode="aggressive")
+
+        assert applied == []
+        assert tp.read_text(encoding="utf-8") == before
+
+    def test_apply_changes_skips_noop_boost_updates(self, tmp_path):
+        from lib.auto_tuner import AutoTuner, BoostChange, _write_json_atomic
+
+        tuneables = {
+            "auto_tuner": {
+                "enabled": True,
+                "max_change_per_run": 0.15,
+                "source_boosts": {"cognitive": 1.0},
+                "source_effectiveness": {},
+                "tuning_log": [],
+            }
+        }
+        tp = tmp_path / "tuneables.json"
+        _write_json_atomic(tp, tuneables)
+        before = tp.read_text(encoding="utf-8")
+
+        tuner = AutoTuner(tp)
+        tuner._apply_changes(
+            changes=[
+                BoostChange(
+                    source="cognitive",
+                    old_boost=1.0,
+                    new_boost=1.0,
+                    effectiveness=0.5,
+                    sample_count=30,
+                    reason="no-op",
+                )
+            ],
+            new_effectiveness={"cognitive": 0.5},
+            timestamp="2026-02-12T12:00:00+00:00",
+            data_basis="test",
+        )
+
+        assert tp.read_text(encoding="utf-8") == before
+
 
 # ===== Anti-Pattern Fix Tests =====
 

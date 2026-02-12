@@ -107,6 +107,16 @@ class TuneRecommendation:
     impact: str = "medium"
 
 
+def _values_equal(left: Any, right: Any) -> bool:
+    """Best-effort equality for tune values with float tolerance."""
+    try:
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            return abs(float(left) - float(right)) < 1e-9
+    except Exception:
+        pass
+    return left == right
+
+
 def _read_json(path: Path) -> dict:
     """Read a JSON file, returning empty dict on error."""
     try:
@@ -338,15 +348,33 @@ class AutoTuner:
         max_changes = int(self._config.get("max_changes_per_cycle", 3))
 
         if mode == "suggest":
-            applied: List[TuneRecommendation] = []
+            selected: List[TuneRecommendation] = []
         elif mode == "conservative":
-            applied = [r for r in recs if r.confidence > 0.8 and r.impact == "low"]
+            selected = [r for r in recs if r.confidence > 0.8 and r.impact == "low"]
         elif mode == "moderate":
-            applied = [r for r in recs if r.confidence > 0.5]
+            selected = [r for r in recs if r.confidence > 0.5]
         else:  # aggressive
-            applied = list(recs)
+            selected = list(recs)
 
-        applied = applied[:max_changes]
+        selected = selected[:max_changes]
+        tuneables = _read_json(self.tuneables_path)
+        applied: List[TuneRecommendation] = []
+        for rec in selected:
+            section = tuneables.setdefault(rec.section, {})
+            current_value = section.get(rec.key, rec.current_value)
+            if _values_equal(current_value, rec.recommended_value):
+                continue
+            applied.append(
+                TuneRecommendation(
+                    section=rec.section,
+                    key=rec.key,
+                    current_value=current_value,
+                    recommended_value=rec.recommended_value,
+                    reason=rec.reason,
+                    confidence=rec.confidence,
+                    impact=rec.impact,
+                )
+            )
 
         if applied:
             # Snapshot current tuneables for rollback
@@ -354,7 +382,7 @@ class AutoTuner:
                 TUNEABLE_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
                 ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
                 snapshot_path = TUNEABLE_HISTORY_DIR / f"tuneables_{ts}.json"
-                current = _read_json(self.tuneables_path)
+                current = dict(tuneables)
                 snapshot_path.write_text(
                     json.dumps(current, indent=2), encoding="utf-8"
                 )
@@ -369,7 +397,6 @@ class AutoTuner:
                 pass
 
             # Apply changes
-            tuneables = _read_json(self.tuneables_path)
             for rec in applied:
                 section = tuneables.setdefault(rec.section, {})
                 section[rec.key] = rec.recommended_value
@@ -470,6 +497,8 @@ class AutoTuner:
             capped_delta = max(-self.max_change, min(self.max_change, delta))
             new_boost = round(current + capped_delta, 3)
             new_boost = max(self.BOOST_MIN, min(self.BOOST_MAX, new_boost))
+            if _values_equal(new_boost, current):
+                continue
 
             # Determine reason
             if effectiveness > global_avg:
@@ -510,12 +539,16 @@ class AutoTuner:
         data_basis: str,
     ):
         """Write boost changes to tuneables.json atomically."""
+        effective_changes = [c for c in changes if not _values_equal(c.old_boost, c.new_boost)]
+        if not effective_changes:
+            return
+
         tuneables = _read_json(self.tuneables_path)
         auto_tuner = tuneables.setdefault("auto_tuner", {})
 
         # Update boosts
         boosts = auto_tuner.setdefault("source_boosts", {})
-        for c in changes:
+        for c in effective_changes:
             boosts[c.source] = c.new_boost
 
         # Update effectiveness snapshot
@@ -533,7 +566,7 @@ class AutoTuner:
             "action": "auto_tune",
             "changes": {
                 c.source: f"{c.old_boost} -> {c.new_boost} ({c.effectiveness:.1%} effective, {c.sample_count} samples)"
-                for c in changes
+                for c in effective_changes
             },
             "data_basis": data_basis,
         })
