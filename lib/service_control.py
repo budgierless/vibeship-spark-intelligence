@@ -450,7 +450,7 @@ def service_status(bridge_stale_s: int = 90, include_pulse_probe: bool = True) -
     meta_keys = [["meta_ralph_dashboard.py"]]
     bridge_keys = [["-m bridge_worker"], ["bridge_worker.py"]]
     scheduler_keys = [["spark_scheduler.py"]]
-    watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"]]
+    watchdog_keys = [["-m spark_watchdog"], ["spark_watchdog.py"], ["scripts/watchdog.py"]]
 
     sparkd_running = (
         sparkd_ok
@@ -615,7 +615,7 @@ def stop_services() -> dict[str, str]:
             "dashboard": [["-m dashboard"], ["dashboard.py"]],
             "pulse": _pulse_process_patterns(),
             "meta_ralph": [["meta_ralph_dashboard.py"]],
-            "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"]],
+            "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"], ["scripts/watchdog.py"]],
         }.get(name, [])
 
         matched_pids = _find_pids_by_patterns(patterns, snapshot)

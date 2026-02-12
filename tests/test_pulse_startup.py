@@ -126,3 +126,19 @@ def test_service_status_detects_pulse_using_absolute_app_path(monkeypatch, tmp_p
     status = service_control.service_status()
     assert status["pulse"]["running"] is True
     assert status["pulse"]["healthy"] is False
+
+
+def test_service_status_detects_watchdog_wrapper_command(monkeypatch):
+    monkeypatch.setattr(service_control, "_http_ok", lambda *a, **k: False)
+    monkeypatch.setattr(service_control, "_pulse_ok", lambda: False)
+    monkeypatch.setattr(service_control, "_bridge_heartbeat_age", lambda: None)
+    monkeypatch.setattr(service_control, "_scheduler_heartbeat_age", lambda: None)
+    monkeypatch.setattr(service_control, "_read_pid", lambda name: None)
+    monkeypatch.setattr(
+        service_control,
+        "_process_snapshot",
+        lambda: [(45678, "python scripts/watchdog.py --interval 60")],
+    )
+
+    status = service_control.service_status()
+    assert status["watchdog"]["running"] is True

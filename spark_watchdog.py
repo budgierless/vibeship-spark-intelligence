@@ -28,6 +28,7 @@ LOG_DIR = Path.home() / ".spark" / "logs"
 STATE_FILE = Path.home() / ".spark" / "watchdog_state.json"
 PID_FILE = Path.home() / ".spark" / "pids" / "watchdog.pid"
 PLUGIN_ONLY_SENTINEL = Path.home() / ".spark" / "plugin_only_mode"
+PLUGIN_ONLY_SKIP_RESTARTS = {"bridge_worker", "dashboard", "meta_ralph", "pulse"}
 
 LOG_MAX_BYTES = int(os.environ.get("SPARK_LOG_MAX_BYTES", "10485760"))
 LOG_BACKUPS = int(os.environ.get("SPARK_LOG_BACKUPS", "5"))
@@ -42,7 +43,11 @@ def _check_single_instance() -> bool:
         for spid, cmd in snapshot:
             if spid != pid:
                 continue
-            if "-m spark_watchdog" in cmd or "spark_watchdog.py" in cmd:
+            if (
+                "-m spark_watchdog" in cmd
+                or "spark_watchdog.py" in cmd
+                or "scripts/watchdog.py" in cmd
+            ):
                 return True
         return False
 
@@ -380,6 +385,12 @@ def _plugin_only_mode_enabled() -> bool:
     return PLUGIN_ONLY_SENTINEL.exists()
 
 
+def _restart_allowed(service: str, plugin_only_mode: bool) -> bool:
+    if not plugin_only_mode:
+        return True
+    return service not in PLUGIN_ONLY_SKIP_RESTARTS
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--interval", type=int, default=60, help="seconds between checks")
@@ -406,7 +417,8 @@ def main() -> None:
 
     _log("watchdog started")
     if plugin_only_mode:
-        _log("plugin-only mode enabled: skipping sparkd/pulse/bridge_worker restarts")
+        blocked = ", ".join(sorted(PLUGIN_ONLY_SKIP_RESTARTS))
+        _log(f"plugin-only mode enabled: suppressing restarts for {blocked}")
 
     # Grace period: wait for other services to fully start before checking
     # This prevents race condition where watchdog starts spawning services
@@ -444,9 +456,10 @@ def main() -> None:
             return failures.get(name, 0)
 
         # sparkd
+        manage_sparkd = _restart_allowed("sparkd", plugin_only_mode)
         sparkd_ok = _http_ok(SPARKD_HEALTH_URL)
-        sparkd_fail = _bump_fail("sparkd", sparkd_ok)
-        if (not plugin_only_mode) and (not sparkd_ok):
+        sparkd_fail = _bump_fail("sparkd", sparkd_ok or not manage_sparkd)
+        if manage_sparkd and (not sparkd_ok):
             # Match either invocation style:
             # - python -m sparkd
             # - python sparkd.py
@@ -464,9 +477,10 @@ def main() -> None:
                     failures["sparkd"] = 0
 
         # dashboard
+        manage_dashboard = _restart_allowed("dashboard", plugin_only_mode)
         dash_ok = _http_ok(DASHBOARD_STATUS_URL)
-        dash_fail = _bump_fail("dashboard", dash_ok)
-        if not dash_ok:
+        dash_fail = _bump_fail("dashboard", dash_ok or not manage_dashboard)
+        if manage_dashboard and (not dash_ok):
             dash_pids = _find_pids_by_any_keywords(
                 [["dashboard.py"], ["-m dashboard"]],
                 snapshot,
@@ -481,9 +495,10 @@ def main() -> None:
                     failures["dashboard"] = 0
 
         # spark pulse -- unified startup via service_control
+        manage_pulse = _restart_allowed("pulse", plugin_only_mode)
         pulse_ok = _http_ok(PULSE_DOCS_URL, timeout=2.0) and _http_ok(PULSE_UI_URL, timeout=2.0)
-        pulse_fail = _bump_fail("pulse", pulse_ok)
-        if (not plugin_only_mode) and (not pulse_ok):
+        pulse_fail = _bump_fail("pulse", pulse_ok or not manage_pulse)
+        if manage_pulse and (not pulse_ok):
             # Check PID file first (covers external pulse started by service_control)
             try:
                 from lib.service_control import _read_pid, _pid_alive, _get_pulse_command
@@ -518,9 +533,10 @@ def main() -> None:
                     failures["pulse"] = 0
 
         # meta-ralph dashboard
+        manage_meta = _restart_allowed("meta_ralph", plugin_only_mode)
         meta_ok = _http_ok(META_RALPH_HEALTH_URL)
-        meta_fail = _bump_fail("meta_ralph", meta_ok)
-        if not meta_ok:
+        meta_fail = _bump_fail("meta_ralph", meta_ok or not manage_meta)
+        if manage_meta and (not meta_ok):
             meta_pids = _find_pids_by_keywords(["meta_ralph_dashboard.py"], snapshot)
             if meta_pids and meta_fail < args.fail_threshold:
                 _log(f"meta_ralph unhealthy (fail {meta_fail}/{args.fail_threshold}) but process exists")
@@ -532,10 +548,11 @@ def main() -> None:
                     failures["meta_ralph"] = 0
 
         # bridge_worker
+        manage_bridge = _restart_allowed("bridge_worker", plugin_only_mode)
         hb_age = _bridge_heartbeat_age()
         bridge_ok = hb_age is not None and hb_age <= args.bridge_stale_s
-        bridge_fail = _bump_fail("bridge_worker", bridge_ok)
-        if (not plugin_only_mode) and (not bridge_ok):
+        bridge_fail = _bump_fail("bridge_worker", bridge_ok or not manage_bridge)
+        if manage_bridge and (not bridge_ok):
             bridge_pids = _find_pids_by_any_keywords(
                 [["bridge_worker.py"], ["-m bridge_worker"]],
                 snapshot,
