@@ -47,6 +47,22 @@ except Exception:
     INLINE_PREFETCH_MAX_JOBS = 1
 
 
+def _load_engine_config(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load advisory engine tuneables from ~/.spark/tuneables.json."""
+    tuneables = path or (Path.home() / ".spark" / "tuneables.json")
+    if not tuneables.exists():
+        return {}
+    try:
+        data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
+    except Exception:
+        try:
+            data = json.loads(tuneables.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    cfg = data.get("advisory_engine") or {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
 def _parse_bool(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -191,6 +207,11 @@ def get_engine_config() -> Dict[str, Any]:
         "delivery_stale_s": float(DELIVERY_STALE_SECONDS),
         "advisory_text_repeat_cooldown_s": float(ADVISORY_TEXT_REPEAT_COOLDOWN_S),
     }
+
+
+_BOOT_ENGINE_CFG = _load_engine_config()
+if _BOOT_ENGINE_CFG:
+    apply_engine_config(_BOOT_ENGINE_CFG)
 
 
 def _project_key() -> str:

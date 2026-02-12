@@ -146,3 +146,22 @@ def test_fallback_rate_guard_blocks_when_recent_ratio_exceeded(monkeypatch, tmp_
     assert out["allowed"] is False
     assert out["reason"] == "ratio_exceeded"
     assert round(float(out["ratio"] or 0.0), 3) == 0.75
+
+
+def test_load_engine_config_reads_advisory_engine_section(tmp_path):
+    cfg_path = tmp_path / "tuneables.json"
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "advisory_engine": {
+                    "include_mind": True,
+                    "max_ms": 3200,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = advisory_engine._load_engine_config(path=cfg_path)
+    assert cfg["include_mind"] is True
+    assert cfg["max_ms"] == 3200
