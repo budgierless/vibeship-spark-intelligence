@@ -201,12 +201,21 @@ python scripts/run_advisory_chip_experiments.py \
   --profiles baseline \
   --repeats 1 \
   --no-force-live \
+  --chip-ablation \
+  --random-seed 20260213 \
+  --sample-ratio 0.5 \
   --out-prefix advisory_chip_experiments_v2
 ```
 
 Chip experiment outputs:
 - `benchmarks/out/advisory_chip_experiments_v2_report.json`
 - `benchmarks/out/advisory_chip_experiments_v2_report.md`
+
+Chip experiment report now includes ablation fields:
+- `ablation_objective`, `ablation_high_value_rate`, `ablation_harmful_emit_rate`
+- `chip_lift_objective`, `chip_lift_high_value_rate`, `chip_lift_harmful_emit_rate`
+
+This prevents false positives by explicitly measuring whether chips improve outcomes vs a chips-disabled pass.
 
 Candidate profile overlay with retrieval/chip tuning:
 - `benchmarks/data/advisory_realism_profile_candidates_v2.json`

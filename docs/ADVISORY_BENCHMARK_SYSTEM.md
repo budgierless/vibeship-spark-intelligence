@@ -181,12 +181,24 @@ python scripts/run_advisory_chip_experiments.py \
   --profiles baseline \
   --repeats 1 \
   --no-force-live \
+  --chip-ablation \
+  --random-seed 20260213 \
+  --sample-ratio 0.5 \
   --out-prefix advisory_chip_experiments_v2
 ```
 
 Chip matrix outputs:
 - `benchmarks/out/advisory_chip_experiments_v2_report.json`
 - `benchmarks/out/advisory_chip_experiments_v2_report.md`
+
+Anti-gaming safeguards in chip runner:
+- randomized case order (`--random-seed`)
+- randomized subset stress runs (`--sample-ratio`)
+- chips-disabled ablation pass (`--chip-ablation`)
+
+Promotion rule:
+- do not treat chip tuning as successful unless `chip_lift_objective > 0`
+  and safety metrics (`harmful_emit_rate`, `critical_miss_rate`) do not regress.
 
 ## Theory Seeding for Controlled Memory Tests
 

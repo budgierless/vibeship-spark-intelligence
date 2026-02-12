@@ -107,6 +107,9 @@ python scripts/run_advisory_chip_experiments.py \
   --profiles baseline \
   --repeats 1 \
   --no-force-live \
+  --chip-ablation \
+  --random-seed 20260213 \
+  --sample-ratio 0.5 \
   --out-prefix advisory_chip_experiments_v2
 ```
 

@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
+import os
+import random
 import re
 import sys
 import tempfile
@@ -108,6 +111,79 @@ def _merge_profiles(profile_file: str) -> Dict[str, Dict[str, Any]]:
     return profiles
 
 
+def _stable_int_seed(*parts: Any) -> int:
+    joined = "|".join(str(p) for p in parts)
+    digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
+def _maybe_shuffle_and_sample(
+    rows: List[Dict[str, Any]],
+    *,
+    shuffle_seed: int,
+    sample_ratio: float,
+) -> List[Dict[str, Any]]:
+    items = list(rows or [])
+    if not items:
+        return items
+    if shuffle_seed >= 0:
+        rng = random.Random(shuffle_seed)
+        rng.shuffle(items)
+    ratio = max(0.05, min(1.0, float(sample_ratio)))
+    if ratio >= 1.0:
+        return items
+    keep = max(1, int(round(len(items) * ratio)))
+    return items[:keep]
+
+
+def _chip_ablation_profiles(profiles: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    out = copy.deepcopy(profiles)
+    for _, cfg in out.items():
+        advisor_cfg = dict(cfg.get("advisor") or {})
+        advisor_cfg.update(
+            {
+                "chip_advice_limit": 1,
+                "chip_advice_min_score": 0.99,
+                "chip_advice_max_files": 1,
+                "chip_advice_file_tail": 8,
+                "chip_source_boost": 0.6,
+            }
+        )
+        cfg["advisor"] = advisor_cfg
+    return out
+
+
+def _run_realism_with_chip_mode(
+    *,
+    cases_path: Path,
+    profiles: Dict[str, Dict[str, Any]],
+    profile_names: List[str],
+    repeats: int,
+    force_live: bool,
+    disable_chips: bool,
+) -> Dict[str, Any]:
+    env_key = "SPARK_ADVISORY_DISABLE_CHIPS"
+    previous = os.environ.get(env_key)
+    try:
+        if disable_chips:
+            os.environ[env_key] = "1"
+        else:
+            os.environ.pop(env_key, None)
+        return arb.run_realism_benchmark(
+            cases_path=cases_path,
+            profiles=profiles,
+            profile_names=profile_names,
+            repeats=max(1, int(repeats)),
+            force_live=bool(force_live),
+            gates=arb.REALISM_GATES,
+        )
+    finally:
+        if previous is None:
+            os.environ.pop(env_key, None)
+        else:
+            os.environ[env_key] = previous
+
+
 def _winner_source_hit_rates(winner: Dict[str, Any]) -> Dict[str, float]:
     cases = list(winner.get("cases") or [])
     if not cases:
@@ -179,16 +255,19 @@ def _report_markdown(report: Dict[str, Any]) -> str:
     lines.append(f"- Profiles: `{', '.join(report.get('profiles') or [])}`")
     lines.append(f"- Repeats: `{report.get('repeats', 1)}`")
     lines.append(f"- Force live: `{bool(report.get('force_live', True))}`")
+    lines.append(f"- Random seed: `{report.get('random_seed', -1)}`")
+    lines.append(f"- Sample ratio: `{float(report.get('sample_ratio', 1.0)):.2f}`")
+    lines.append(f"- Chip ablation: `{bool(report.get('chip_ablation', True))}`")
     lines.append("")
-    lines.append("| Rank | Experiment | Cases | Objective | High-Value | Harmful | Unsolicited | Chip Advice Hit | Mind Advice Hit | Semantic Advice Hit | Delta Obj |")
+    lines.append("| Rank | Experiment | Cases | Objective | Ablation Obj | Chip Lift Obj | High-Value | Harmful | Unsolicited | Chip Advice Hit | Delta Obj |")
     lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for idx, row in enumerate(report.get("ranked_experiments") or [], start=1):
         lines.append(
             f"| {idx} | `{row.get('id','')}` | {int(row.get('case_count',0))} | "
-            f"{float(row.get('objective',0.0)):.4f} | {float(row.get('high_value_rate',0.0)):.2%} | "
+            f"{float(row.get('objective',0.0)):.4f} | {float(row.get('ablation_objective',0.0)):.4f} | "
+            f"{float(row.get('chip_lift_objective',0.0)):+.4f} | {float(row.get('high_value_rate',0.0)):.2%} | "
             f"{float(row.get('harmful_emit_rate',0.0)):.2%} | {float(row.get('unsolicited_emit_rate',0.0)):.2%} | "
-            f"{float(row.get('chip_hit_case_rate',0.0)):.2%} | {float(row.get('mind_hit_case_rate',0.0)):.2%} | "
-            f"{float(row.get('semantic_hit_case_rate',0.0)):.2%} | {float(row.get('delta_objective_vs_control',0.0)):+.4f} |"
+            f"{float(row.get('chip_hit_case_rate',0.0)):.2%} | {float(row.get('delta_objective_vs_control',0.0)):+.4f} |"
         )
     lines.append("")
     lines.append("## Experiment Notes")
@@ -198,8 +277,14 @@ def _report_markdown(report: Dict[str, Any]) -> str:
         lines.append(f"- Description: {row.get('description','')}")
         lines.append(f"- Domains: `{', '.join(row.get('domains') or [])}`")
         lines.append(f"- Objective: `{float(row.get('objective',0.0)):.4f}`")
+        lines.append(f"- Ablation objective (chips disabled): `{float(row.get('ablation_objective',0.0)):.4f}`")
+        lines.append(f"- Chip lift objective: `{float(row.get('chip_lift_objective',0.0)):+.4f}`")
         lines.append(f"- High-value: `{float(row.get('high_value_rate',0.0)):.2%}`")
+        lines.append(f"- Ablation high-value: `{float(row.get('ablation_high_value_rate',0.0)):.2%}`")
+        lines.append(f"- Chip lift high-value: `{float(row.get('chip_lift_high_value_rate',0.0)):+.2%}`")
         lines.append(f"- Harmful: `{float(row.get('harmful_emit_rate',0.0)):.2%}`")
+        lines.append(f"- Ablation harmful: `{float(row.get('ablation_harmful_emit_rate',0.0)):.2%}`")
+        lines.append(f"- Chip lift harmful (positive is safer): `{float(row.get('chip_lift_harmful_emit_rate',0.0)):+.2%}`")
         lines.append(f"- Unsolicited: `{float(row.get('unsolicited_emit_rate',0.0)):.2%}`")
         lines.append(f"- Chip advice hit: `{float(row.get('chip_hit_case_rate',0.0)):.2%}`")
         lines.append(f"- Chip evidence hit: `{float(row.get('chip_evidence_case_rate',0.0)):.2%}`")
@@ -220,6 +305,14 @@ def main() -> int:
     ap.add_argument("--experiments", default="", help="Run only these experiment ids (comma-separated)")
     ap.add_argument("--repeats", type=int, default=1, help="Repeats per case")
     ap.add_argument("--force-live", action=argparse.BooleanOptionalAction, default=True, help="Force live retrieval path")
+    ap.add_argument("--random-seed", type=int, default=-1, help="Shuffle seed for case order per segment (-1 disables shuffle)")
+    ap.add_argument("--sample-ratio", type=float, default=1.0, help="Random sample ratio per segment (0.05..1.0)")
+    ap.add_argument(
+        "--chip-ablation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run chips-disabled ablation pass for each segment and report chip lift",
+    )
     ap.add_argument(
         "--save-segment-reports",
         action=argparse.BooleanOptionalAction,
@@ -284,6 +377,15 @@ def main() -> int:
                             seen_case_ids.add(cid)
                         segment_cases.append(row)
                         used_domains.add(dom)
+                segment_cases = _maybe_shuffle_and_sample(
+                    segment_cases,
+                    shuffle_seed=(
+                        _stable_int_seed(args.random_seed, exp_id, idx)
+                        if int(args.random_seed) >= 0
+                        else -1
+                    ),
+                    sample_ratio=float(args.sample_ratio),
+                )
                 if not segment_cases:
                     continue
 
@@ -298,23 +400,44 @@ def main() -> int:
                     json.dumps({"version": str(cases_payload.get("version") or "cases"), "notes": f"{exp_id}-segment-{idx}", "cases": segment_cases}, indent=2),
                     encoding="utf-8",
                 )
-                report = arb.run_realism_benchmark(
+                report = _run_realism_with_chip_mode(
                     cases_path=subset_path,
                     profiles=profiles,
                     profile_names=seg_profile_names,
                     repeats=max(1, int(args.repeats)),
                     force_live=bool(args.force_live),
-                    gates=arb.REALISM_GATES,
+                    disable_chips=False,
                 )
+                ablation_report: Dict[str, Any] = {}
+                if bool(args.chip_ablation):
+                    ablation_report = _run_realism_with_chip_mode(
+                        cases_path=subset_path,
+                        profiles=_chip_ablation_profiles(profiles),
+                        profile_names=seg_profile_names,
+                        repeats=max(1, int(args.repeats)),
+                        force_live=bool(args.force_live),
+                        disable_chips=True,
+                    )
                 if bool(args.save_segment_reports):
                     exp_dir = segment_out_dir / _slug(exp_id)
                     exp_dir.mkdir(parents=True, exist_ok=True)
                     (exp_dir / f"segment_{idx}_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
                     (exp_dir / f"segment_{idx}_report.md").write_text(arb._report_markdown(report), encoding="utf-8")
+                    if ablation_report:
+                        (exp_dir / f"segment_{idx}_ablation_report.json").write_text(
+                            json.dumps(ablation_report, indent=2),
+                            encoding="utf-8",
+                        )
+                        (exp_dir / f"segment_{idx}_ablation_report.md").write_text(
+                            arb._report_markdown(ablation_report),
+                            encoding="utf-8",
+                        )
 
                 winner = dict(report.get("winner") or {})
                 realism = dict(winner.get("realism") or {})
                 source_hits = _winner_source_hit_rates(winner)
+                ablation_winner = dict((ablation_report or {}).get("winner") or {})
+                ablation_realism = dict(ablation_winner.get("realism") or {})
                 seg_rows.append(
                     {
                         "segment_index": idx,
@@ -331,6 +454,9 @@ def main() -> int:
                         "source_alignment_rate": _safe_float(realism.get("source_alignment_rate"), 0.0),
                         "theory_discrimination_rate": _safe_float(realism.get("theory_discrimination_rate"), 0.0),
                         "trace_bound_rate": _safe_float(realism.get("trace_bound_rate"), 0.0),
+                        "ablation_objective": _safe_float(ablation_winner.get("objective"), 0.0),
+                        "ablation_high_value_rate": _safe_float(ablation_realism.get("high_value_rate"), 0.0),
+                        "ablation_harmful_emit_rate": _safe_float(ablation_realism.get("harmful_emit_rate"), 0.0),
                         **source_hits,
                     }
                 )
@@ -354,6 +480,9 @@ def main() -> int:
                 "source_alignment_rate": _weighted(seg_rows, "source_alignment_rate"),
                 "theory_discrimination_rate": _weighted(seg_rows, "theory_discrimination_rate"),
                 "trace_bound_rate": _weighted(seg_rows, "trace_bound_rate"),
+                "ablation_objective": _weighted(seg_rows, "ablation_objective"),
+                "ablation_high_value_rate": _weighted(seg_rows, "ablation_high_value_rate"),
+                "ablation_harmful_emit_rate": _weighted(seg_rows, "ablation_harmful_emit_rate"),
                 "chip_hit_case_rate": _weighted(seg_rows, "chip_hit_case_rate"),
                 "mind_hit_case_rate": _weighted(seg_rows, "mind_hit_case_rate"),
                 "semantic_hit_case_rate": _weighted(seg_rows, "semantic_hit_case_rate"),
@@ -361,6 +490,22 @@ def main() -> int:
                 "mind_evidence_case_rate": _weighted(seg_rows, "mind_evidence_case_rate"),
                 "semantic_evidence_case_rate": _weighted(seg_rows, "semantic_evidence_case_rate"),
             }
+            aggregated["chip_lift_objective"] = round(
+                _safe_float(aggregated.get("objective"), 0.0)
+                - _safe_float(aggregated.get("ablation_objective"), 0.0),
+                4,
+            )
+            aggregated["chip_lift_high_value_rate"] = round(
+                _safe_float(aggregated.get("high_value_rate"), 0.0)
+                - _safe_float(aggregated.get("ablation_high_value_rate"), 0.0),
+                4,
+            )
+            # Positive means chips reduced harmful emission.
+            aggregated["chip_lift_harmful_emit_rate"] = round(
+                _safe_float(aggregated.get("ablation_harmful_emit_rate"), 0.0)
+                - _safe_float(aggregated.get("harmful_emit_rate"), 0.0),
+                4,
+            )
             results.append(aggregated)
 
     if not results:
@@ -389,6 +534,9 @@ def main() -> int:
         "profiles": profile_names,
         "repeats": int(args.repeats),
         "force_live": bool(args.force_live),
+        "random_seed": int(args.random_seed),
+        "sample_ratio": float(args.sample_ratio),
+        "chip_ablation": bool(args.chip_ablation),
         "control_experiment_id": str(control.get("id")),
         "experiments": results,
         "ranked_experiments": ranked,
@@ -407,6 +555,8 @@ def main() -> int:
         "Winner="
         f"{winner.get('id','n/a')} "
         f"objective={_safe_float(winner.get('objective'), 0.0):.4f} "
+        f"ablation={_safe_float(winner.get('ablation_objective'), 0.0):.4f} "
+        f"chip_lift={_safe_float(winner.get('chip_lift_objective'), 0.0):+.4f} "
         f"high_value={_safe_float(winner.get('high_value_rate'), 0.0):.2%} "
         f"chip_hit={_safe_float(winner.get('chip_hit_case_rate'), 0.0):.2%}"
     )

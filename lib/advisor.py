@@ -56,6 +56,17 @@ CHIP_ADVICE_FILE_TAIL = 40
 CHIP_ADVICE_MAX_FILES = 6
 CHIP_ADVICE_LIMIT = 4
 CHIP_ADVICE_MIN_SCORE = 0.7
+CHIP_TELEMETRY_BLOCKLIST = {"spark-core", "bench_core"}
+CHIP_TELEMETRY_MARKERS = (
+    "post_tool",
+    "pre_tool",
+    "tool_name:",
+    "file_path:",
+    "event_type:",
+    "user_prompt_signal",
+    "status: success",
+    "cwd:",
+)
 RECENT_OUTCOMES_MAX = 5000
 
 # Thresholds (Improvement #8: Advisor Integration tuneables)
@@ -224,6 +235,15 @@ def _parse_iso_ts(value: Any) -> Optional[float]:
         return float(datetime.fromisoformat(text).timestamp())
     except Exception:
         return None
+
+
+def _chips_disabled() -> bool:
+    return str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _load_advisor_config() -> None:
@@ -1692,6 +1712,8 @@ class SparkAdvisor:
     def _get_chip_advice(self, context: str) -> List[Advice]:
         """Get advice from recent high-quality chip insights."""
         advice: List[Advice] = []
+        if _chips_disabled():
+            return advice
         if not CHIP_INSIGHTS_DIR.exists():
             return advice
 
@@ -1722,14 +1744,19 @@ class SparkAdvisor:
                 ).strip()
                 if not text:
                     continue
+                chip_id = str(row.get("chip_id") or file_path.stem).strip()
+                if self._is_telemetry_chip_row(chip_id, text):
+                    continue
                 if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(text):
                     continue
                 if self._is_metadata_pattern(text):
                     continue
                 context_match = self._calculate_context_match(text, context)
+                domain_bonus = self._chip_domain_bonus(chip_id, context)
+                if context_match < 0.08 and domain_bonus < 0.05:
+                    continue
                 if context_match < 0.05 and score < (CHIP_ADVICE_MIN_SCORE + 0.1):
                     continue
-                chip_id = str(row.get("chip_id") or file_path.stem).strip()
                 candidates.append(
                     {
                         "chip_id": chip_id,
@@ -1738,7 +1765,7 @@ class SparkAdvisor:
                         "score": score,
                         "confidence": conf,
                         "context_match": context_match,
-                        "rank": (0.45 * score) + (0.35 * conf) + (0.20 * context_match) + self._chip_domain_bonus(chip_id, context),
+                        "rank": (0.45 * score) + (0.35 * conf) + (0.20 * context_match) + domain_bonus,
                     }
                 )
 
@@ -1768,6 +1795,17 @@ class SparkAdvisor:
 
         return advice
 
+    def _is_telemetry_chip_row(self, chip_id: str, text: str) -> bool:
+        chip = str(chip_id or "").strip().lower()
+        if chip in CHIP_TELEMETRY_BLOCKLIST:
+            return True
+        payload = str(text or "").strip().lower()
+        if not payload:
+            return True
+        if any(marker in payload for marker in CHIP_TELEMETRY_MARKERS):
+            return True
+        return False
+
     def _chip_domain_bonus(self, chip_id: str, context: str) -> float:
         chip = str(chip_id or "").strip().lower()
         text = str(context or "").strip().lower()
@@ -1780,7 +1818,7 @@ class SparkAdvisor:
         memory_query = any(t in text for t in ("memory", "retrieval", "cross-session", "stale", "distillation"))
 
         social_chip = any(t in chip for t in ("social", "x_", "x-", "engagement"))
-        coding_chip = any(t in chip for t in ("spark-core", "vibecoding", "bench_core", "api-design"))
+        coding_chip = any(t in chip for t in ("vibecoding", "api-design", "game_dev"))
         marketing_chip = any(t in chip for t in ("marketing", "market-intel", "biz-ops"))
 
         bonus = 0.0

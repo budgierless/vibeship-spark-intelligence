@@ -472,3 +472,52 @@ def test_chip_advice_uses_quality_as_confidence_fallback(monkeypatch, tmp_path):
     out = advisor._get_chip_advice("marketing campaign conversion tuning")
     assert out
     assert out[0].source == "chip"
+
+
+def test_chip_advice_blocks_telemetry_chips(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(advisor_mod, "CHIP_INSIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(advisor_mod, "CHIP_ADVICE_MIN_SCORE", 0.35)
+
+    telemetry = {
+        "chip_id": "spark-core",
+        "observer_name": "post_tool",
+        "content": "[Spark Core Intelligence] user_prompt_signal: event_type: post_tool",
+        "confidence": 1.0,
+        "captured_data": {"quality_score": {"total": 0.92}},
+    }
+    actionable = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Prioritize conversion quality before scaling campaign spend.",
+        "confidence": 0.88,
+        "captured_data": {"quality_score": {"total": 0.72}},
+    }
+    (tmp_path / "spark-core.jsonl").write_text(json.dumps(telemetry) + "\n", encoding="utf-8")
+    (tmp_path / "marketing.jsonl").write_text(json.dumps(actionable) + "\n", encoding="utf-8")
+
+    advisor = advisor_mod.SparkAdvisor()
+    out = advisor._get_chip_advice("marketing campaign conversion tuning")
+    assert out
+    joined = " | ".join(a.text.lower() for a in out)
+    assert "spark core intelligence" not in joined
+    assert "conversion quality" in joined
+
+
+def test_chip_advice_can_be_disabled_by_env(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+    monkeypatch.setenv("SPARK_ADVISORY_DISABLE_CHIPS", "1")
+    monkeypatch.setattr(advisor_mod, "CHIP_INSIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(advisor_mod, "CHIP_ADVICE_MIN_SCORE", 0.35)
+    row = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Prioritize conversion quality before scaling campaign spend.",
+        "confidence": 0.9,
+        "captured_data": {"quality_score": {"total": 0.8}},
+    }
+    (tmp_path / "marketing.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    advisor = advisor_mod.SparkAdvisor()
+    out = advisor._get_chip_advice("marketing campaign conversion tuning")
+    assert out == []

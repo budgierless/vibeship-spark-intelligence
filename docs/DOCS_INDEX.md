@@ -57,6 +57,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-12_advisory_multidomain_tuning_pass_v2.md`: multidomain tuning pass v2 with baseline/candidate deltas and residual gaps
 - `docs/reports/2026-02-12_chips_advisory_memory_benchmark_plan.md`: chip utilization benchmark strategy, A/B plan, and promotion criteria
 - `docs/reports/2026-02-13_chip_strategy_experiment_matrix_v2.md`: first full A/B/C/D chip strategy run with corrected advice-hit vs evidence-hit scoring
+- `docs/reports/2026-02-13_chip_telemetry_cleanup_and_ablation_pass_v1.md`: telemetry cleanup + intent-gated chip retrieval + randomized ablation outcome snapshot
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log

@@ -148,3 +148,49 @@ def test_collect_chips_parses_modern_content_schema(monkeypatch, tmp_path):
     assert out
     assert out[0]["source"] == "chips"
     assert "conversion quality" in str(out[0]["text"]).lower()
+
+
+def test_collect_chips_filters_telemetry_and_prefers_intent(monkeypatch, tmp_path):
+    monkeypatch.setattr(fusion, "CHIP_INSIGHTS_DIR", tmp_path)
+    telemetry = {
+        "chip_id": "spark-core",
+        "observer_name": "post_tool",
+        "content": "[Spark Core Intelligence] user_prompt_signal: event_type: post_tool",
+        "timestamp": "2026-02-12T23:00:00+00:00",
+        "captured_data": {"quality_score": {"total": 0.9}},
+    }
+    marketing = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Increase conversion quality before scaling ad spend.",
+        "timestamp": "2026-02-12T23:00:01+00:00",
+        "captured_data": {"quality_score": {"total": 0.6}},
+    }
+    (tmp_path / "spark-core.jsonl").write_text(json.dumps(telemetry) + "\n", encoding="utf-8")
+    (tmp_path / "marketing.jsonl").write_text(json.dumps(marketing) + "\n", encoding="utf-8")
+
+    out = fusion._collect_chips(
+        limit=3,
+        intent_text="marketing campaign conversion",
+        intent_family="growth_marketing",
+        tool_name="Task",
+    )
+    assert out
+    joined = " | ".join(str(r.get("text") or "").lower() for r in out)
+    assert "spark core intelligence" not in joined
+    assert "conversion quality" in joined
+
+
+def test_collect_chips_can_be_disabled_by_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPARK_ADVISORY_DISABLE_CHIPS", "1")
+    monkeypatch.setattr(fusion, "CHIP_INSIGHTS_DIR", tmp_path)
+    row = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Increase conversion quality before scaling ad spend.",
+        "timestamp": "2026-02-12T23:00:01+00:00",
+        "captured_data": {"quality_score": {"total": 0.6}},
+    }
+    (tmp_path / "marketing.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    out = fusion._collect_chips(limit=3, intent_text="marketing conversion", intent_family="growth", tool_name="Task")
+    assert out == []

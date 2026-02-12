@@ -10,6 +10,7 @@ Phase 1 scope:
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from datetime import datetime
@@ -21,6 +22,17 @@ from .primitive_filter import is_primitive_text
 
 COGNITIVE_FILE = Path.home() / ".spark" / "cognitive_insights.json"
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
+CHIP_TELEMETRY_BLOCKLIST = {"spark-core", "bench_core"}
+CHIP_TELEMETRY_MARKERS = (
+    "post_tool",
+    "pre_tool",
+    "tool_name:",
+    "file_path:",
+    "event_type:",
+    "user_prompt_signal",
+    "status: success",
+    "cwd:",
+)
 ORCHESTRATION_DIR = Path.home() / ".spark" / "orchestration"
 _NOISE_PATTERNS = (
     re.compile(r"\btool[_\s-]*\d+[_\s-]*error\b", re.I),
@@ -117,6 +129,57 @@ def _coerce_ts(value: Any, default: float = 0.0) -> float:
             return float(value)
         except Exception:
             return float(default)
+
+
+def _chips_disabled() -> bool:
+    return str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _chip_domain_match(chip_id: str, intent_text: str, intent_family: str, tool_name: str) -> float:
+    chip = str(chip_id or "").strip().lower()
+    text = f"{intent_text} {intent_family} {tool_name}".strip().lower()
+    if not chip or not text:
+        return 0.0
+
+    social_query = any(t in text for t in ("social", "x ", "twitter", "engagement", "tweet"))
+    coding_query = any(t in text for t in ("code", "python", "debug", "test", "refactor", "repo"))
+    marketing_query = any(t in text for t in ("marketing", "campaign", "conversion", "audience", "brand"))
+    memory_query = any(t in text for t in ("memory", "retrieval", "cross-session", "stale", "distillation"))
+
+    social_chip = any(t in chip for t in ("social", "x_", "x-", "engagement"))
+    coding_chip = any(t in chip for t in ("vibecoding", "api-design", "game_dev"))
+    marketing_chip = any(t in chip for t in ("marketing", "market-intel", "biz-ops"))
+    memory_chip = any(t in chip for t in ("vibecoding", "api-design"))
+
+    score = 0.0
+    if social_query and social_chip:
+        score += 0.45
+    if coding_query and coding_chip:
+        score += 0.35
+    if marketing_query and marketing_chip:
+        score += 0.35
+    if memory_query and memory_chip:
+        score += 0.25
+    if (not social_query) and social_chip:
+        score -= 0.15
+    return max(-0.25, min(1.0, score))
+
+
+def _is_telemetry_chip_row(chip_id: str, text: str) -> bool:
+    chip = str(chip_id or "").strip().lower()
+    if chip in CHIP_TELEMETRY_BLOCKLIST:
+        return True
+    payload = str(text or "").strip().lower()
+    if not payload:
+        return True
+    if any(marker in payload for marker in CHIP_TELEMETRY_MARKERS):
+        return True
+    return False
 
 
 def _tokenize_text(text: str) -> List[str]:
@@ -220,15 +283,22 @@ def _collect_eidos(intent_text: str, limit: int = 5) -> List[Dict[str, Any]]:
     return evidence
 
 
-def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
-    if not CHIP_INSIGHTS_DIR.exists():
+def _collect_chips(
+    limit: int = 6,
+    *,
+    intent_text: str = "",
+    intent_family: str = "",
+    tool_name: str = "",
+) -> List[Dict[str, Any]]:
+    if _chips_disabled() or (not CHIP_INSIGHTS_DIR.exists()):
         return []
-    files = sorted(CHIP_INSIGHTS_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:4]
-    evidence: List[Dict[str, Any]] = []
+    files = sorted(CHIP_INSIGHTS_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:6]
     min_quality = 0.30
     min_confidence = 0.45
+    intent_tokens = set(_tokenize_text(intent_text))
+    scored: List[tuple[float, float, float, Dict[str, Any]]] = []
     for fp in files:
-        for row in _tail_jsonl(fp, limit=max(24, limit * 8)):
+        for row in _tail_jsonl(fp, limit=max(24, limit * 12)):
             captured = row.get("captured_data") or {}
             quality = (captured.get("quality_score") or {}) if isinstance(captured, dict) else {}
             quality_total = float(quality.get("total", 0.0) or 0.0)
@@ -250,31 +320,62 @@ def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
                         break
             if not text:
                 continue
+            chip_id = str(row.get("chip_id") or fp.stem).strip()
+            if _is_telemetry_chip_row(chip_id, text):
+                continue
             if _is_noise_evidence(text):
                 continue
-            evidence.append(
-                {
-                    "source": "chips",
-                    "id": str(
-                        row.get("insight_key")
-                        or row.get("id")
-                        or row.get("chip_id")
-                        or f"{fp.stem}:{len(evidence)}"
-                    ),
-                    "text": text,
-                    "confidence": max(conf, quality_total),
-                    "created_at": _coerce_ts(row.get("ts") or row.get("timestamp") or row.get("created_at") or 0.0),
-                    "meta": {
-                        "file": fp.name,
-                        "chip_id": row.get("chip_id") or fp.stem,
-                        "observer": row.get("observer") or row.get("observer_name"),
-                        "quality_total": quality_total,
-                    },
-                }
+            relevance = _intent_relevance_score(intent_tokens, text) if intent_tokens else 0.0
+            domain_match = _chip_domain_match(chip_id, intent_text, intent_family, tool_name)
+            if intent_tokens and relevance <= 0.0 and domain_match < 0.20:
+                continue
+            if domain_match < -0.05 and relevance < 0.10:
+                continue
+            effective_conf = max(
+                quality_total,
+                min(1.0, (0.55 * conf) + (0.30 * quality_total) + (0.15 * max(relevance, 0.0))),
             )
-            if len(evidence) >= limit:
-                return evidence
-    return evidence
+            rank = (0.50 * max(relevance, 0.0)) + (0.30 * max(domain_match, 0.0)) + (0.20 * effective_conf)
+            scored.append(
+                (
+                    rank,
+                    effective_conf,
+                    _coerce_ts(row.get("ts") or row.get("timestamp") or row.get("created_at") or 0.0),
+                    {
+                        "source": "chips",
+                        "id": str(
+                            row.get("insight_key")
+                            or row.get("id")
+                            or chip_id
+                            or f"{fp.stem}:{len(scored)}"
+                        ),
+                        "text": text,
+                        "confidence": effective_conf,
+                        "created_at": _coerce_ts(row.get("ts") or row.get("timestamp") or row.get("created_at") or 0.0),
+                        "meta": {
+                            "file": fp.name,
+                            "chip_id": chip_id,
+                            "observer": row.get("observer") or row.get("observer_name"),
+                            "quality_total": quality_total,
+                            "intent_relevance": round(float(relevance), 4),
+                            "domain_match": round(float(domain_match), 4),
+                        },
+                    },
+                )
+            )
+
+    scored.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+    deduped: List[Dict[str, Any]] = []
+    seen = set()
+    for _, _, _, row in scored:
+        text_key = str(row.get("text") or "")[:180].strip().lower()
+        if text_key in seen:
+            continue
+        seen.add(text_key)
+        deduped.append(row)
+        if len(deduped) >= limit:
+            break
+    return deduped
 
 
 def _collect_outcomes(intent_text: str, limit: int = 6) -> List[Dict[str, Any]]:
@@ -404,6 +505,25 @@ def _collect_with_status(fetcher: Callable[[], List[Dict[str, Any]]]) -> Dict[st
         return {"available": False, "rows": [], "error": str(exc)}
 
 
+def _collect_chips_for_intent(
+    *,
+    limit: int,
+    intent_text: str,
+    intent_family: str,
+    tool_name: str,
+) -> List[Dict[str, Any]]:
+    """Compat wrapper so tests monkeypatching old _collect_chips(limit=...) keep working."""
+    try:
+        return _collect_chips(
+            limit=limit,
+            intent_text=intent_text,
+            intent_family=intent_family,
+            tool_name=tool_name,
+        )
+    except TypeError:
+        return _collect_chips(limit=limit)
+
+
 def build_memory_bundle(
     *,
     session_id: str,
@@ -418,7 +538,14 @@ def build_memory_bundle(
     source_results = {
         "cognitive": _collect_with_status(lambda: _collect_cognitive(limit=6)),
         "eidos": _collect_with_status(lambda: _collect_eidos(intent_text, limit=5)),
-        "chips": _collect_with_status(lambda: _collect_chips(limit=6)),
+        "chips": _collect_with_status(
+            lambda: _collect_chips_for_intent(
+                limit=6,
+                intent_text=intent_text,
+                intent_family=intent_family,
+                tool_name=tool_name,
+            )
+        ),
         "outcomes": _collect_with_status(lambda: _collect_outcomes(intent_text, limit=6)),
         "orchestration": _collect_with_status(lambda: _collect_orchestration(limit=5)),
     }
