@@ -59,6 +59,7 @@ class CaseResult:
     memory_utilized: bool
     text_preview: str
     score: float
+    source_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -350,7 +351,16 @@ def run_profile(
                     case.forbidden_contains,
                 )
                 actionable = is_actionable(text or "")
-                source_counts = event_row.get("source_counts") if isinstance(event_row.get("source_counts"), dict) else {}
+                raw_source_counts = event_row.get("source_counts") if isinstance(event_row.get("source_counts"), dict) else {}
+                source_counts: Dict[str, int] = {}
+                for key, value in dict(raw_source_counts).items():
+                    name = str(key or "").strip().lower()
+                    if not name:
+                        continue
+                    try:
+                        source_counts[name] = max(0, int(value or 0))
+                    except Exception:
+                        source_counts[name] = 0
                 memory_utilized = any(int(source_counts.get(k, 0) or 0) > 0 for k in ("cognitive", "semantic", "mind", "outcomes", "chips", "eidos"))
                 score = score_case(
                     should_emit=case.should_emit,
@@ -380,6 +390,7 @@ def run_profile(
                         memory_utilized=memory_utilized,
                         text_preview=(str(text or "").strip()[:220]),
                         score=score,
+                        source_counts=source_counts,
                     )
                 )
 

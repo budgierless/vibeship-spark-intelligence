@@ -1,0 +1,114 @@
+{
+  "version": "theory-catalog-v1",
+  "description": "Good and bad advisory theories for realism calibration and memory-seeding tests.",
+  "theories": [
+    {
+      "id": "good_trace_binding",
+      "quality": "good",
+      "category": "reasoning",
+      "systems": ["advisory", "meta_ralph"],
+      "insight": "Tie advice usefulness to trace-bound outcomes so ranking learns from real success/failure.",
+      "context": "Advisory quality depends on attribution discipline.",
+      "confidence": 0.82
+    },
+    {
+      "id": "good_cooldown_before_features",
+      "quality": "good",
+      "category": "wisdom",
+      "systems": ["advisory", "spark_pulse"],
+      "insight": "Reduce duplicate advisory first with cooldown and dedupe before introducing new advisory features.",
+      "context": "Noise reduction should precede feature expansion.",
+      "confidence": 0.8
+    },
+    {
+      "id": "good_critical_first",
+      "quality": "good",
+      "category": "context",
+      "systems": ["advisory", "operations"],
+      "insight": "Critical-risk cases should receive concrete next checks before medium-priority recommendations.",
+      "context": "Prioritization by risk and impact.",
+      "confidence": 0.79
+    },
+    {
+      "id": "good_cross_session_memory",
+      "quality": "good",
+      "category": "reasoning",
+      "systems": ["mind", "semantic_memory", "advisory"],
+      "insight": "Cross-session memory should be used when it improves decision quality and passes freshness checks.",
+      "context": "Memory retrieval must be useful and fresh.",
+      "confidence": 0.83
+    },
+    {
+      "id": "good_source_transparency",
+      "quality": "good",
+      "category": "communication",
+      "systems": ["advisory"],
+      "insight": "Advisory should indicate why a recommendation was surfaced and which source family contributed.",
+      "context": "Explainability improves trust and debugging speed.",
+      "confidence": 0.77
+    },
+    {
+      "id": "good_fallback_guard",
+      "quality": "good",
+      "category": "meta_learning",
+      "systems": ["advisory", "packet_store"],
+      "insight": "If fallback share spikes, tighten gate policy and inspect no-emit reasons before changing prompts.",
+      "context": "Fallback-heavy periods usually hide routing or gate drift.",
+      "confidence": 0.81
+    },
+    {
+      "id": "good_boundaries_for_transfer",
+      "quality": "good",
+      "category": "context",
+      "systems": ["x_social", "advisory"],
+      "insight": "Transfer insights across domains only when assumptions match and evidence is comparable.",
+      "context": "Avoid over-generalization from one subsystem.",
+      "confidence": 0.78
+    },
+    {
+      "id": "good_remove_dead_systems",
+      "quality": "good",
+      "category": "wisdom",
+      "systems": ["spark_intelligence"],
+      "insight": "Retire systems with no measurable outcome lift to reduce cognitive and operational overhead.",
+      "context": "Lightweight architecture increases execution quality.",
+      "confidence": 0.8
+    },
+    {
+      "id": "bad_warn_without_evidence",
+      "quality": "bad",
+      "category": "reasoning",
+      "systems": ["advisory"],
+      "insight": "Warn users even when there is no concrete evidence because it feels safer.",
+      "context": "Noise-first advisory anti-pattern.",
+      "confidence": 0.2
+    },
+    {
+      "id": "bad_repeat_until_ack",
+      "quality": "bad",
+      "category": "communication",
+      "systems": ["advisory"],
+      "insight": "Repeat the same warning every tool step until the user responds.",
+      "context": "Creates alert fatigue and erodes trust.",
+      "confidence": 0.2
+    },
+    {
+      "id": "bad_global_fix",
+      "quality": "bad",
+      "category": "context",
+      "systems": ["advisory"],
+      "insight": "Apply one global recommendation regardless of tool, domain, or session context.",
+      "context": "Context-insensitive decision policy.",
+      "confidence": 0.18
+    },
+    {
+      "id": "bad_skip_trace",
+      "quality": "bad",
+      "category": "meta_learning",
+      "systems": ["meta_ralph", "advisory"],
+      "insight": "Skip trace binding to move faster and trust intuition for outcome attribution.",
+      "context": "Breaks accountability and learning quality.",
+      "confidence": 0.15
+    }
+  ]
+}
