@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -56,10 +57,13 @@ DEFAULT_CONFIG = {
     "engagement_snapshot_interval": 1800,
     "daily_research_interval": 86400,
     "niche_scan_interval": 21600,
+    "advisory_review_interval": 43200,
     "mention_poll_enabled": True,
     "engagement_snapshot_enabled": True,
     "daily_research_enabled": True,
     "niche_scan_enabled": True,
+    "advisory_review_enabled": True,
+    "advisory_review_window_hours": 12,
 }
 
 
@@ -411,6 +415,39 @@ def task_niche_scan(state: Dict[str, Any]) -> Dict[str, Any]:
     return {"accounts_updated": updated, "total_tracked": stats.get("tracked_accounts", 0)}
 
 
+def task_advisory_review(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate a trace-backed advisory self-review report."""
+    del state  # State not required for this task.
+    script = Path(__file__).resolve().parent / "scripts" / "advisory_self_review.py"
+    if not script.exists():
+        return {"error": f"missing script: {script}"}
+
+    cfg = load_scheduler_config()
+    window_h = int(cfg.get("advisory_review_window_hours", 12) or 12)
+    cmd = [
+        sys.executable,
+        str(script),
+        "--window-hours",
+        str(max(1, window_h)),
+    ]
+    proc = subprocess.run(
+        cmd,
+        cwd=str(Path(__file__).resolve().parent),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        return {"error": f"self_review_failed: {stderr[:300]}"}
+
+    line = (proc.stdout or "").strip().splitlines()
+    msg = line[-1] if line else ""
+    logger.info("advisory_review: %s", msg or "ok")
+    return {"status": "ok", "message": msg}
+
+
 # ---------------------------------------------------------------------------
 # Task registry
 # ---------------------------------------------------------------------------
@@ -435,6 +472,11 @@ TASKS = {
         "fn": task_niche_scan,
         "config_key_interval": "niche_scan_interval",
         "config_key_enabled": "niche_scan_enabled",
+    },
+    "advisory_review": {
+        "fn": task_advisory_review,
+        "config_key_interval": "advisory_review_interval",
+        "config_key_enabled": "advisory_review_enabled",
     },
 }
 

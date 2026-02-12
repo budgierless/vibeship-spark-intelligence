@@ -29,6 +29,9 @@ class TestLoadConfig(unittest.TestCase):
         self.assertEqual(cfg["engagement_snapshot_interval"], 1800)
         self.assertEqual(cfg["daily_research_interval"], 86400)
         self.assertEqual(cfg["niche_scan_interval"], 21600)
+        self.assertEqual(cfg["advisory_review_interval"], 43200)
+        self.assertTrue(cfg["advisory_review_enabled"])
+        self.assertEqual(cfg["advisory_review_window_hours"], 12)
 
     def test_overrides_from_file(self, tmp_path=None):
         import tempfile
@@ -198,10 +201,13 @@ class TestRunDueTasks(unittest.TestCase):
             "engagement_snapshot_interval": 1800,
             "daily_research_interval": 86400,
             "niche_scan_interval": 21600,
+            "advisory_review_interval": 43200,
             "mention_poll_enabled": True,
             "engagement_snapshot_enabled": True,
             "daily_research_enabled": True,
             "niche_scan_enabled": True,
+            "advisory_review_enabled": True,
+            "advisory_review_window_hours": 12,
         }
 
     def test_task_runs_when_due(self):
@@ -383,6 +389,21 @@ class TestRunDueTasks(unittest.TestCase):
 
         self.assertIn("error:", saved_state["last_result_mention_poll"])
 
+
+class TestAdvisoryReviewTask(unittest.TestCase):
+    """Advisory self-review scheduler task behavior."""
+
+    def test_advisory_review_task_success(self):
+        with patch.object(sched, "load_scheduler_config", return_value={"advisory_review_window_hours": 12}), \
+             patch("spark_scheduler.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="Advisory self-review written: docs/reports/x.md\n",
+                stderr="",
+            )
+            out = sched.task_advisory_review({})
+        self.assertEqual(out["status"], "ok")
+        self.assertIn("Advisory self-review written", out["message"])
 
 if __name__ == "__main__":
     unittest.main()
