@@ -20,6 +20,7 @@ from lib.chips.registry import get_registry
 
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
 MERGE_STATE_FILE = Path.home() / ".spark" / "chip_merge_state.json"
+TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
 LOW_QUALITY_COOLDOWN_S = 4 * 3600
 MAX_REJECTED_TRACKING = 2000
 DUPLICATE_CHURN_RATIO = 0.8
@@ -126,6 +127,40 @@ def _prune_rejected_state(entries: Dict[str, Any], now_ts: float) -> Dict[str, f
         ordered = sorted(kept.items(), key=lambda kv: kv[1], reverse=True)[:MAX_REJECTED_TRACKING]
         kept = {k: v for k, v in ordered}
     return kept
+
+
+def _load_merge_tuneables() -> Dict[str, float]:
+    cfg: Dict[str, Any] = {}
+    try:
+        if TUNEABLES_FILE.exists():
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            section = data.get("chip_merge") or {}
+            if isinstance(section, dict):
+                cfg = section
+    except Exception:
+        cfg = {}
+
+    ratio = DUPLICATE_CHURN_RATIO
+    min_processed = DUPLICATE_CHURN_MIN_PROCESSED
+    cooldown_s = DUPLICATE_CHURN_COOLDOWN_S
+
+    try:
+        ratio = max(0.5, min(1.0, float(cfg.get("duplicate_churn_ratio", ratio))))
+    except Exception:
+        pass
+    try:
+        min_processed = max(5, min(1000, int(cfg.get("duplicate_churn_min_processed", min_processed))))
+    except Exception:
+        pass
+    try:
+        cooldown_s = max(60, min(24 * 3600, int(cfg.get("duplicate_churn_cooldown_s", cooldown_s))))
+    except Exception:
+        pass
+    return {
+        "duplicate_churn_ratio": float(ratio),
+        "duplicate_churn_min_processed": int(min_processed),
+        "duplicate_churn_cooldown_s": int(cooldown_s),
+    }
 
 
 def _infer_category(chip_id: str, captured_data: Dict[str, Any], content: str) -> CognitiveCategory:
@@ -248,6 +283,10 @@ def merge_chip_insights(
         "throttle_active": False,
         "by_chip": {},
     }
+    limits = _load_merge_tuneables()
+    duplicate_churn_ratio = float(limits["duplicate_churn_ratio"])
+    duplicate_churn_min_processed = int(limits["duplicate_churn_min_processed"])
+    duplicate_churn_cooldown_s = int(limits["duplicate_churn_cooldown_s"])
     churn_until = float(state.get("duplicate_churn_until", 0.0) or 0.0)
     if not dry_run and churn_until > now_ts:
         stats["throttled_duplicate_churn"] = 1
@@ -343,11 +382,11 @@ def merge_chip_insights(
         duplicate_ratio = stats["skipped_duplicate"] / max(stats["processed"], 1)
         stats["duplicate_ratio"] = round(float(duplicate_ratio), 3)
         if (
-            stats["processed"] >= DUPLICATE_CHURN_MIN_PROCESSED
+            stats["processed"] >= duplicate_churn_min_processed
             and stats["merged"] == 0
-            and duplicate_ratio >= DUPLICATE_CHURN_RATIO
+            and duplicate_ratio >= duplicate_churn_ratio
         ):
-            state["duplicate_churn_until"] = now_ts + DUPLICATE_CHURN_COOLDOWN_S
+            state["duplicate_churn_until"] = now_ts + duplicate_churn_cooldown_s
             stats["throttle_active"] = True
         elif churn_until <= now_ts:
             state["duplicate_churn_until"] = 0.0

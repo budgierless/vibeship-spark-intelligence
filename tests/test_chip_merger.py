@@ -126,3 +126,25 @@ def test_duplicate_churn_throttle_skips_repeated_cycles(tmp_path, monkeypatch):
     assert first["throttle_active"] is True
     assert second["throttled_duplicate_churn"] == 1
     assert second["processed"] == 0
+
+
+def test_chip_merge_loads_duplicate_churn_tuneables(tmp_path, monkeypatch):
+    tuneables = tmp_path / "tuneables.json"
+    tuneables.write_text(
+        json.dumps(
+            {
+                "chip_merge": {
+                    "duplicate_churn_ratio": 0.9,
+                    "duplicate_churn_min_processed": 25,
+                    "duplicate_churn_cooldown_s": 900,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cm, "TUNEABLES_FILE", tuneables)
+
+    loaded = cm._load_merge_tuneables()
+    assert loaded["duplicate_churn_ratio"] == 0.9
+    assert loaded["duplicate_churn_min_processed"] == 25
+    assert loaded["duplicate_churn_cooldown_s"] == 900
