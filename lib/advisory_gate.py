@@ -14,9 +14,11 @@ Principles:
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .diagnostics import log_debug
@@ -43,13 +45,13 @@ AUTHORITY_THRESHOLDS = {
 # ============= Gate Configuration =============
 
 # Max advice items to emit per tool call (prevent flooding)
-MAX_EMIT_PER_CALL = 3
+MAX_EMIT_PER_CALL = 1
 
 # Cooldown: don't emit for same tool within N seconds
-TOOL_COOLDOWN_S = 30
+TOOL_COOLDOWN_S = 90
 
 # Don't repeat the same advice within N seconds
-ADVICE_REPEAT_COOLDOWN_S = 600  # 10 minutes
+ADVICE_REPEAT_COOLDOWN_S = 1800  # 30 minutes
 
 # Phase-based relevance boosts
 PHASE_RELEVANCE = {
@@ -194,6 +196,26 @@ def get_gate_config() -> Dict[str, Any]:
 
 def get_tool_cooldown_s() -> int:
     return max(1, int(TOOL_COOLDOWN_S))
+
+
+def _load_gate_config(path: Optional[Path] = None) -> Dict[str, Any]:
+    tuneables = path or (Path.home() / ".spark" / "tuneables.json")
+    if not tuneables.exists():
+        return {}
+    try:
+        data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
+    except Exception:
+        try:
+            data = json.loads(tuneables.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    cfg = data.get("advisory_gate") or {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+_BOOT_GATE_CFG = _load_gate_config()
+if _BOOT_GATE_CFG:
+    apply_gate_config(_BOOT_GATE_CFG)
 
 
 @dataclass
