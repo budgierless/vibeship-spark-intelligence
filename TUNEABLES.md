@@ -1106,10 +1106,19 @@ This is the active hot-path advisory stack used by hooks:
 | `SPARK_ADVISORY_TEXT_REPEAT_COOLDOWN_S` | `1800` | Suppress re-emitting same advisory text during cooldown window. |
 | `SPARK_ADVISORY_REQUIRE_ACTION` | `1` | Enforce actionable next-check text when advisory is too generic. |
 | `SPARK_ADVISORY_PREFETCH_QUEUE` | `1` | Enables enqueueing background prefetch jobs from user prompts. |
+| `SPARK_ADVISORY_PACKET_FALLBACK_EMIT` | `0` | Enables packet no-emit deterministic fallback emission. Default `0` keeps fallback output opt-in. |
 | `SPARK_ADVISORY_INCLUDE_MIND` | `0` | Includes Mind retrieval in memory fusion bundle when set to `1`. |
 | `SPARK_ADVISORY_EMIT` | `1` | Enables writing advisory text to stdout hook output. |
 | `SPARK_ADVISORY_MAX_CHARS` | `500` | Caps emitted advisory length. |
 | `SPARK_ADVISORY_FORMAT` | `inline` | Advisory formatting style (`inline` or `block`). |
+
+### Context Sync Target Policy (env)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `SPARK_SYNC_MODE` | `core` | Sync adapter mode: `core` writes only `openclaw` + `exports`; `all` enables all adapters. |
+| `SPARK_SYNC_TARGETS` | _(unset)_ | Explicit comma-list of enabled adapters (overrides mode). |
+| `SPARK_SYNC_DISABLE_TARGETS` | _(unset)_ | Comma-list of adapters to force-disable after mode/list resolution. |
 
 ### Synthesis Route Knobs (env + tuneables)
 
@@ -1149,6 +1158,7 @@ This is the active hot-path advisory stack used by hooks:
     "prefetch_queue_enabled": true,
     "prefetch_inline_enabled": true,
     "prefetch_inline_max_jobs": 1,
+    "packet_fallback_emit_enabled": false,
     "delivery_stale_s": 900,
     "advisory_text_repeat_cooldown_s": 1800,
     "actionability_enforce": true
@@ -1178,6 +1188,16 @@ This is the active hot-path advisory stack used by hooks:
     "max_changes_per_cycle": 2,
     "run_interval_s": 86400,
     "max_change_per_run": 0.15
+  },
+  "sync": {
+    "mode": "core",
+    "adapters_enabled": ["openclaw", "exports"],
+    "adapters_disabled": ["claude_code", "cursor", "windsurf", "clawdbot"]
+  },
+  "chip_merge": {
+    "duplicate_churn_ratio": 0.8,
+    "duplicate_churn_min_processed": 10,
+    "duplicate_churn_cooldown_s": 1800
   },
   "request_tracker": {
     "max_pending": 50,
@@ -1236,10 +1256,12 @@ Components fall back to hard-coded defaults when a key is absent.
 | `promotion` | Promoter + auto-promotion interval | `adapter_budgets`, `confidence_floor`, `min_age_hours`, `auto_interval_s` |
 | `synthesizer` | Advisory synthesizer | `mode`, `preferred_provider`, `ai_timeout_s`, `cache_ttl_s`, `max_cache_entries` |
 | `advisor` | Advisor | `min_reliability`, `min_validations_strong`, `max_items`, `max_advice_items` (compat), `cache_ttl`, `min_rank_score` |
-| `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs`, `delivery_stale_s`, `advisory_text_repeat_cooldown_s`, `actionability_enforce` |
+| `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs`, `packet_fallback_emit_enabled`, `delivery_stale_s`, `advisory_text_repeat_cooldown_s`, `actionability_enforce` |
 | `advisory_gate` | Advisory emission policy | `max_emit_per_call`, `tool_cooldown_s`, `advice_repeat_cooldown_s`, `warning_threshold`, `note_threshold`, `whisper_threshold` |
 | `advisory_packet_store` | Packet lifecycle + relaxed lookup weighting | `packet_ttl_s`, `max_index_packets`, `relaxed_effectiveness_weight`, `relaxed_low_effectiveness_threshold`, `relaxed_low_effectiveness_penalty` |
 | `advisory_prefetch` | Prefetch worker planning limits | `worker_enabled`, `max_jobs_per_run`, `max_tools_per_job`, `min_probability` |
+| `sync` | Context sync output targets | `mode`, `adapters_enabled`, `adapters_disabled` |
+| `chip_merge` | Chip merge duplicate churn control | `duplicate_churn_ratio`, `duplicate_churn_min_processed`, `duplicate_churn_cooldown_s` |
 | `auto_tuner` | Feedback-driven tune recommendations and bounded apply | `enabled`, `mode`, `max_changes_per_cycle`, `run_interval_s`, `max_change_per_run`, `source_boosts` |
 | `request_tracker` | EIDOS request envelope retention + timeout policy | `max_pending`, `max_completed`, `max_age_seconds` |
 | `memory_capture` | Conversational memory auto-save/suggestion policy | `auto_save_threshold`, `suggest_threshold`, `max_capture_chars` |

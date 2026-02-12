@@ -61,9 +61,13 @@ Every change must improve this path, or be removed.
 - Packet-first advisory stays primary.
 - Repeat suppression remains enabled.
 - Actionability enforcement remains enabled.
+- Packet no-emit fallback emission stays disabled by default (opt-in only).
+- Sync context defaults to core adapters only (`openclaw`, `exports`).
 - Optional adapter failures must not degrade core health.
+- Memory fusion must filter primitive/tool-error telemetry before advisory ranking.
 - Sync-heavy exposure sources stay deduped/capped.
 - Chip merge low-quality cooldown suppression stays enabled.
+- Chip merge duplicate-churn throttle stays enabled.
 - Auto-tuner remains conservative (`suggest` by default, then `conservative` when stable).
 
 ## What Gets Removed or Downgraded
@@ -101,6 +105,7 @@ Use this checklist whenever lightweight policy changes:
 2. Update runtime/tuneables behavior:
    - `Intelligence_Flow.md`
    - `TUNEABLES.md`
+   - `docs/SPARK_CARMACK_OPTIMIZATION_IMPLEMENTATION.md`
 3. Update operator runbook:
    - `docs/OPENCLAW_OPERATIONS.md`
 4. Update navigation hubs:

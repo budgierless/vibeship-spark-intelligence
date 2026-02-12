@@ -72,7 +72,9 @@ Dashboards and ops:
 
 ### 2.3 Context sync + promotion (live vs durable)
 1) lib.bridge.update_spark_context builds a live context pack (insights, warnings, advice, skills, taste, outcomes) and writes SPARK_CONTEXT.md.
-2) lib.context_sync selects high-confidence insights and writes live context to output adapters (clawdbot, cursor, windsurf, claude_code).
+2) lib.context_sync selects high-confidence insights and writes live context to output adapters.
+   - default sync mode is `core`, which writes only `openclaw` + `exports`.
+   - optional adapters (`claude_code`, `cursor`, `windsurf`, `clawdbot`) are opt-in and can be disabled without affecting core health.
    - context_sync can include promoted lines already present in CLAUDE.md / AGENTS.md / TOOLS.md / SOUL.md.
    - context_sync also injects recent high-quality chip highlights from ~/.spark/chip_insights.
    - context_sync does not sync to Mind (see 2.8).
@@ -115,7 +117,9 @@ Dashboards and ops:
 2) Advisory engine resolves intent and task plane via lib.advisory_intent_taxonomy.
 3) Engine attempts packet lookup first (exact, then relaxed) via lib.advisory_packet_store.
 4) On packet miss, engine falls back to live advisor retrieval, then gate + synthesis + emit.
+   - packet no-emit fallback emission is opt-in (`SPARK_ADVISORY_PACKET_FALLBACK_EMIT=1` or `advisory_engine.packet_fallback_emit_enabled=true`).
 5) Engine builds memory evidence bundle via lib.advisory_memory_fusion and records `memory_absent_declared` when needed.
+   - memory fusion filters primitive/tool-error telemetry before ranking evidence.
 6) Engine persists baseline/live packets and enqueues background prefetch jobs from UserPromptSubmit.
 7) PostToolUse/PostToolUseFailure call advisory_engine.on_post_tool for implicit feedback and packet invalidation on Edit/Write.
 8) Advisor still logs retrievals/outcomes and Meta-Ralph updates quality via outcome-linked feedback.
@@ -165,6 +169,7 @@ Dashboards and ops:
    - unknown chip IDs use domain/content fallback category inference
    - merge dedupe uses stable content hash (timestamp-independent) to suppress repeat churn
    - low-quality repeats are suppressed with cooldown tracking before recounting skip noise
+   - duplicate-only churn now enters throttle cooldown to avoid repeated no-yield merge cycles
 
 ### 2.8 Mind retrieval + manual sync
 1) lib.mind_bridge retrieves from mind_server.py (keyword + optional FTS, RRF + salience).

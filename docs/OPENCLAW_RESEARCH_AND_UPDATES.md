@@ -41,6 +41,33 @@ For each change:
 
 ## 2026-02-12 Active Worklog
 
+### [2026-02-12 22:40 UTC] Carmack lightweight defaults hardening (core-path first)
+- **Goal:** reduce no-value noise on sync/advisory/memory/chip paths without degrading core OpenClaw flow.
+- **Changes made:**
+  - `lib/context_sync.py`
+    - default sync mode switched to `core` (`openclaw`, `exports`)
+    - optional adapters (`claude_code`, `cursor`, `windsurf`, `clawdbot`) moved to opt-in policy
+    - added runtime controls: `SPARK_SYNC_MODE`, `SPARK_SYNC_TARGETS`, `SPARK_SYNC_DISABLE_TARGETS`
+    - added tuneables section support: `sync.mode`, `sync.adapters_enabled`, `sync.adapters_disabled`
+  - `lib/advisory_engine.py`
+    - packet no-emit fallback is now opt-in (`SPARK_ADVISORY_PACKET_FALLBACK_EMIT`, `advisory_engine.packet_fallback_emit_enabled`)
+    - no-emit diagnostics now mark when fallback candidate was blocked by policy
+  - `lib/advisory_memory_fusion.py`, `lib/primitive_filter.py`
+    - filtered tool-error/primitive telemetry from advisory memory evidence
+    - deduped memory evidence before final ranking slice
+  - `lib/chip_merger.py`
+    - added duplicate-churn throttle cooldown for repeated no-yield merge cycles
+    - added tuneables: `chip_merge.duplicate_churn_ratio`, `chip_merge.duplicate_churn_min_processed`, `chip_merge.duplicate_churn_cooldown_s`
+- **Validation result:** better
+  - test slices passed:
+    - `tests/test_context_sync_policy.py`
+    - `tests/test_advisory_memory_fusion.py`
+    - `tests/test_advisory_engine_evidence.py`
+    - `tests/test_advisory_dual_path_router.py`
+    - `tests/test_chip_merger.py`
+- **Decision:** keep
+- **Follow-up:** run 48h telemetry check on fallback ratio, optional adapter error rate, and chip duplicate throttle hit rate.
+
 ### [2026-02-12 13:05 UTC] P0 - Advisory delivery status visibility (`live|fallback|blocked|stale`)
 - **Goal:** make advisory runtime state explicit across operator surfaces to reduce "auth blocked/unavailable" ambiguity.
 - **Changes made:**
