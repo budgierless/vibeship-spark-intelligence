@@ -130,3 +130,65 @@ def test_summarize_profile_repetition_penalty_applies():
     )
     assert repeated.repetition_penalty_rate > no_repeat.repetition_penalty_rate
     assert repeated.score < no_repeat.score
+
+
+def test_summarize_profile_tracks_no_emit_error_codes():
+    mod = _load_module()
+    results = [
+        mod.CaseResult(
+            case_id="a",
+            tool="Read",
+            should_emit=True,
+            emitted=False,
+            route="live",
+            event="no_emit",
+            error_code="AE_GATE_SUPPRESSED",
+            trace_bound=True,
+            expected_hit_rate=0.0,
+            forbidden_hit_rate=0.0,
+            actionable=False,
+            memory_utilized=True,
+            text_preview="",
+            score=0.5,
+        ),
+        mod.CaseResult(
+            case_id="b",
+            tool="Read",
+            should_emit=True,
+            emitted=False,
+            route="live",
+            event="no_emit",
+            error_code="AE_GATE_SUPPRESSED",
+            trace_bound=True,
+            expected_hit_rate=0.0,
+            forbidden_hit_rate=0.0,
+            actionable=False,
+            memory_utilized=True,
+            text_preview="",
+            score=0.5,
+        ),
+        mod.CaseResult(
+            case_id="c",
+            tool="Read",
+            should_emit=True,
+            emitted=False,
+            route="live",
+            event="no_emit",
+            error_code="AE_DUPLICATE_SUPPRESSED",
+            trace_bound=True,
+            expected_hit_rate=0.0,
+            forbidden_hit_rate=0.0,
+            actionable=False,
+            memory_utilized=True,
+            text_preview="",
+            score=0.5,
+        ),
+    ]
+    summary = mod.summarize_profile(
+        profile_name="p1",
+        case_results=results,
+        latencies=[100, 110, 120],
+        emitted_texts=[],
+    )
+    assert summary.no_emit_error_codes[0][0] == "AE_GATE_SUPPRESSED"
+    assert summary.no_emit_error_codes[0][1] == 2

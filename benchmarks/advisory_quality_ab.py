@@ -79,6 +79,7 @@ class ProfileSummary:
     p50_latency_ms: float
     p95_latency_ms: float
     top_error_codes: List[Tuple[str, int]]
+    no_emit_error_codes: List[Tuple[str, int]]
     route_counts: Dict[str, int]
 
 
@@ -429,6 +430,7 @@ def summarize_profile(
             p50_latency_ms=0.0,
             p95_latency_ms=0.0,
             top_error_codes=[],
+            no_emit_error_codes=[],
             route_counts={},
         )
 
@@ -444,11 +446,14 @@ def summarize_profile(
 
     route_counts: Dict[str, int] = {}
     error_counts: Dict[str, int] = {}
+    no_emit_error_counts: Dict[str, int] = {}
     fallback_count = 0
     for r in case_results:
         route_counts[r.route] = route_counts.get(r.route, 0) + 1
         if r.error_code:
             error_counts[r.error_code] = error_counts.get(r.error_code, 0) + 1
+            if not r.emitted:
+                no_emit_error_counts[r.error_code] = no_emit_error_counts.get(r.error_code, 0) + 1
         if r.event == "fallback_emit":
             fallback_count += 1
 
@@ -470,6 +475,7 @@ def summarize_profile(
     p95 = ls[min(len(ls) - 1, int(len(ls) * 0.95))] if ls else 0.0
 
     top_error_codes = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    no_emit_error_codes = sorted(no_emit_error_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     return ProfileSummary(
         profile=profile_name,
         case_count=int(total),
@@ -487,6 +493,7 @@ def summarize_profile(
         p50_latency_ms=round(p50, 2),
         p95_latency_ms=round(p95, 2),
         top_error_codes=top_error_codes,
+        no_emit_error_codes=no_emit_error_codes,
         route_counts=route_counts,
     )
 
@@ -517,6 +524,14 @@ def _report_markdown(report: Dict[str, Any]) -> str:
             f"{float(s.get('trace_bound_rate', 0.0)):.2%} | {float(s.get('memory_utilization_rate', 0.0)):.2%} | "
             f"{float(s.get('repetition_penalty_rate', 0.0)):.2%} |"
         )
+    lines.append("")
+    lines.append("## No-Emit Reasons")
+    lines.append("")
+    for run in report.get("ranked_profiles", []):
+        s = run.get("summary") or {}
+        reasons = s.get("no_emit_error_codes") or []
+        reason_text = ", ".join([f"{code}:{count}" for code, count in reasons]) if reasons else "none"
+        lines.append(f"- `{run.get('profile','')}`: {reason_text}")
     lines.append("")
     winner = report.get("winner") or {}
     lines.append(f"## Winner: `{winner.get('profile', 'n/a')}`")

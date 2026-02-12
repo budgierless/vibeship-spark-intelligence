@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "id": "replace_me_case_001",
+      "tool": "Read",
+      "prompt": "Paste a real prompt/task from your recent workflow here.",
+      "tool_input": {
+        "file_path": "path/to/file"
+      },
+      "should_emit": true,
+      "expected_contains": [
+        "next check"
+      ],
+      "forbidden_contains": [
+        "put known noisy phrase here"
+      ],
+      "notes": "origin=session_id_or_ticket, intent_plane=build_delivery"
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "cases": [
+    {
+      "id": "read_alignment_core",
+      "tool": "Read",
+      "prompt": "Need to align with existing architecture before any changes to advisory engine core.",
+      "tool_input": { "file_path": "lib/advisory_engine.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted", "money printer"],
+      "notes": "build_delivery"
+    },
+    {
+      "id": "read_docs_crosscheck",
+      "tool": "Read",
+      "prompt": "Cross-check tuneables docs against runtime gate defaults and startup loading behavior.",
+      "tool_input": { "file_path": "TUNEABLES.md" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "knowledge_alignment"
+    },
+    {
+      "id": "read_trace_gap",
+      "tool": "Read",
+      "prompt": "Investigate why advisory events are missing trace_id in telemetry and map likely causes.",
+      "tool_input": { "file_path": "lib/advisory_engine.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "quality_assurance"
+    },
+    {
+      "id": "edit_minimal_fix",
+      "tool": "Edit",
+      "prompt": "Apply a minimal bug fix and avoid broad refactors; verify with focused tests immediately.",
+      "tool_input": { "file_path": "lib/advisor.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "build_delivery"
+    },
+    {
+      "id": "edit_guardrails",
+      "tool": "Edit",
+      "prompt": "Patch gate logic safely and ensure rollback path remains available if tests fail.",
+      "tool_input": { "file_path": "lib/advisory_gate.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "quality_assurance"
+    },
+    {
+      "id": "edit_trace_binding",
+      "tool": "Edit",
+      "prompt": "Refine trace propagation and verify no regressions in advisory dual-path tests.",
+      "tool_input": { "file_path": "lib/advisory_engine.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["webfetch fails with other tasks"],
+      "notes": "quality_assurance"
+    },
+    {
+      "id": "task_plan_root_cause",
+      "tool": "Task",
+      "prompt": "Plan root-cause analysis for no-emit spikes and define one measurable experiment.",
+      "tool_input": { "description": "Root-cause no-emit" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["recovered", "webfetch_error tasks"],
+      "notes": "orchestration"
+    },
+    {
+      "id": "task_sequence_commits",
+      "tool": "Task",
+      "prompt": "Sequence advisory fixes into small commits with test checkpoints after each change.",
+      "tool_input": { "description": "Execution plan" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "orchestration"
+    },
+    {
+      "id": "task_memory_usage",
+      "tool": "Task",
+      "prompt": "Define how to increase memory-derived advisory usefulness without adding feature bloat.",
+      "tool_input": { "description": "Memory utilization tuning" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "memory_strategy"
+    },
+    {
+      "id": "webfetch_timeout_debug",
+      "tool": "WebFetch",
+      "prompt": "WebFetch timeout path is failing. Need one concrete diagnostic step and deterministic fallback.",
+      "tool_input": { "url": "https://example.org/slow" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "incident_response"
+    },
+    {
+      "id": "webfetch_auth_fail",
+      "tool": "WebFetch",
+      "prompt": "WebFetch returns auth blocked. Need exact classification and first command to verify.",
+      "tool_input": { "url": "https://example.org/auth" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "incident_response"
+    },
+    {
+      "id": "webfetch_noise_control",
+      "tool": "WebFetch",
+      "prompt": "Too many repetitive WebFetch cautions. Need a concise one-shot actionable advisory.",
+      "tool_input": { "url": "https://example.org/noise" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["webfetch fails with other tasks", "recovered"],
+      "notes": "noise_reduction"
+    },
+    {
+      "id": "read_history_report",
+      "tool": "Read",
+      "prompt": "Review last advisory tuning delta report and suggest one precise follow-up validation step.",
+      "tool_input": { "file_path": "docs/reports/2026-02-12_advisory_tuning_delta.md" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer", "multiplier granted"],
+      "notes": "retro"
+    },
+    {
+      "id": "read_benchmark_contract",
+      "tool": "Read",
+      "prompt": "Verify benchmark contract ensures trace binding and no-emit reason observability.",
+      "tool_input": { "file_path": "docs/ADVISORY_BENCHMARK_SYSTEM.md" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "benchmarking"
+    },
+    {
+      "id": "task_should_suppress_social",
+      "tool": "Task",
+      "prompt": "Write one-line placeholder note and stop. No strategic advice needed.",
+      "tool_input": { "description": "tiny placeholder" },
+      "should_emit": false,
+      "expected_contains": [],
+      "forbidden_contains": ["next check", "money printer", "multiplier granted"],
+      "notes": "suppression_case"
+    },
+    {
+      "id": "read_should_suppress_trivial",
+      "tool": "Read",
+      "prompt": "Open one tiny file and return immediately, no additional guidance required.",
+      "tool_input": { "file_path": "README.md" },
+      "should_emit": false,
+      "expected_contains": [],
+      "forbidden_contains": ["next check", "multiplier granted"],
+      "notes": "suppression_case"
+    },
+    {
+      "id": "edit_should_suppress_minor",
+      "tool": "Edit",
+      "prompt": "Minor punctuation tweak only. Keep silence unless critical risk exists.",
+      "tool_input": { "file_path": "docs/DOCS_INDEX.md" },
+      "should_emit": false,
+      "expected_contains": [],
+      "forbidden_contains": ["next check", "money printer"],
+      "notes": "suppression_case"
+    },
+    {
+      "id": "task_trace_audit",
+      "tool": "Task",
+      "prompt": "Audit trace coverage and ensure all actionable advisories are trace-bound.",
+      "tool_input": { "description": "Trace audit" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "trace_discipline"
+    },
+    {
+      "id": "webfetch_policy_block",
+      "tool": "WebFetch",
+      "prompt": "Policy-blocked network path: provide one concrete workaround check and classify error clearly.",
+      "tool_input": { "url": "https://example.org/policy" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "policy_failure"
+    },
+    {
+      "id": "read_memory_fusion",
+      "tool": "Read",
+      "prompt": "Inspect memory fusion sources and verify why certain sources are missing from advisory decisions.",
+      "tool_input": { "file_path": "lib/advisory_memory_fusion.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "memory_strategy"
+    },
+    {
+      "id": "edit_dedupe_control",
+      "tool": "Edit",
+      "prompt": "Add dedupe control in advisory path to stop repeated near-identical warnings.",
+      "tool_input": { "file_path": "lib/advisory_engine.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["recovered", "webfetch fails with other tasks"],
+      "notes": "noise_reduction"
+    },
+    {
+      "id": "task_evidence_first",
+      "tool": "Task",
+      "prompt": "Design evidence-first advisory requirements for each warning with proof references.",
+      "tool_input": { "description": "Evidence-first advisory contract" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer"],
+      "notes": "evidence_quality"
+    },
+    {
+      "id": "read_gate_thresholds",
+      "tool": "Read",
+      "prompt": "Review warning/note/whisper thresholds and check if policy ordering is sane.",
+      "tool_input": { "file_path": "lib/advisory_gate.py" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["multiplier granted"],
+      "notes": "gate_policy"
+    },
+    {
+      "id": "webfetch_retry_budget",
+      "tool": "WebFetch",
+      "prompt": "Tune retry budget for flaky endpoints while preventing alert fatigue.",
+      "tool_input": { "url": "https://example.org/flaky" },
+      "should_emit": true,
+      "expected_contains": ["next check"],
+      "forbidden_contains": ["money printer", "multiplier granted"],
+      "notes": "stability"
+    }
+  ]
+}
