@@ -25,6 +25,7 @@ from lib.chips import process_chip_events
 from lib.chip_merger import merge_chip_insights
 from lib.context_sync import sync_context
 from lib.diagnostics import log_debug
+from lib.runtime_hygiene import cleanup_runtime_artifacts
 
 
 BRIDGE_HEARTBEAT_FILE = Path.home() / ".spark" / "bridge_worker_heartbeat.json"
@@ -329,6 +330,14 @@ def run_bridge_cycle(
             stats["engagement_pulse"] = pulse_stats or {}
         else:
             stats["errors"].append("engagement_pulse")
+
+        # --- Runtime hygiene ---
+        ok, hygiene_stats, error = _run_step("runtime_hygiene", cleanup_runtime_artifacts)
+        if ok:
+            stats["runtime_hygiene"] = hygiene_stats or {}
+        else:
+            stats["errors"].append("runtime_hygiene")
+            log_debug("bridge_worker", f"runtime hygiene failed ({error})", None)
 
         # --- Chip merger ---
         ok, merge_stats, error = _run_step(
