@@ -61,6 +61,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-13_chip_telemetry_cleanup_and_ablation_pass_v1.md`: telemetry cleanup + intent-gated chip retrieval + randomized ablation outcome snapshot
 - `docs/reports/2026-02-13_chip_learning_diagnostics_and_distillation_pass_v1.md`: chip-to-learning yield diagnostics and indirect optimization outcomes
 - `docs/reports/2026-02-13_chip_learning_keep-vs-kill_assessment_v2.md`: keep-vs-kill decision with deep telemetry diagnostics, shipped runtime guards, and pilot chip activation policy
+- `docs/reports/2026-02-13_chip_learning_methodology_upgrade_v3.md`: schema-first observer learning pass (runtime payload enforcement, schema-priority distillation, and schema diagnostics KPIs)
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log

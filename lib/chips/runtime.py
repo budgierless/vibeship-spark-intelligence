@@ -44,6 +44,21 @@ TELEMETRY_OBSERVER_BLOCKLIST = {
     "user_prompt_signal",
     "user_prompt",
 }
+SCHEMA_TELEMETRY_FIELD_KEYS = {
+    "tool_name",
+    "tool",
+    "command",
+    "cwd",
+    "file_path",
+    "event_type",
+    "status",
+    "success",
+    "duration_ms",
+    "session_id",
+    "project",
+    "chip",
+    "trigger",
+}
 
 
 @dataclass
@@ -83,6 +98,11 @@ class ChipRuntime:
             self.min_insight_confidence = 0.7
         self.min_insight_confidence = max(0.0, min(1.0, self.min_insight_confidence))
         self.gate_mode = str(os.getenv("SPARK_CHIP_GATE_MODE", "balanced")).strip().lower()
+        self.require_learning_schema = self._env_flag("SPARK_CHIP_REQUIRE_LEARNING_SCHEMA", True)
+        try:
+            self.min_learning_evidence = max(1, int(os.getenv("SPARK_CHIP_MIN_LEARNING_EVIDENCE", "1") or 1))
+        except Exception:
+            self.min_learning_evidence = 1
         raw_blocked = str(os.getenv("SPARK_CHIP_BLOCKED_IDS", "")).strip()
         self.blocked_chip_ids = {
             token.strip().lower().replace("_", "-")
@@ -291,6 +311,13 @@ class ChipRuntime:
             return False
 
         captured = insight.captured_data or {}
+        payload = captured.get("learning_payload") if isinstance(captured, dict) else None
+        payload_valid = self._is_learning_payload_valid(payload)
+        if isinstance(captured, dict):
+            captured["learning_payload_valid"] = payload_valid
+        if self.require_learning_schema and not payload_valid:
+            return False
+
         fields = captured.get("fields") or {}
         has_evidence = bool(
             fields
@@ -301,8 +328,8 @@ class ChipRuntime:
         )
         has_outcome = float(getattr(score, "outcome_linkage", 0.0) or 0.0) > 0
 
-        # Balanced filter benchmark: evidence OR outcome + conf gate.
-        if not (has_evidence or has_outcome):
+        # Balanced filter benchmark: schema payload (preferred) or evidence/outcome + conf gate.
+        if not (payload_valid or has_evidence or has_outcome):
             return False
 
         return True
@@ -377,6 +404,10 @@ class ChipRuntime:
             if not content:
                 return None
 
+            learning_payload = self._build_learning_payload(match, captured, content)
+            if learning_payload:
+                captured["learning_payload"] = learning_payload
+
             # Drop weak chip-level fallbacks that lack observer structure or evidence.
             if (
                 not match.observer
@@ -403,6 +434,107 @@ class ChipRuntime:
         except Exception as e:
             log.warning(f"Failed to execute observer: {e}")
             return None
+
+    def _is_noise_field(self, key: str, value: Any) -> bool:
+        k = str(key or "").strip().lower()
+        if not k:
+            return True
+        if k in SCHEMA_TELEMETRY_FIELD_KEYS:
+            return True
+        text = str(value or "").strip().lower()
+        if not text:
+            return True
+        if len(text) <= 1:
+            return True
+        return False
+
+    def _compact_value(self, value: Any, limit: int = 120) -> str:
+        text = str(value or "").strip()
+        if len(text) <= limit:
+            return text
+        return text[: limit - 3].rstrip() + "..."
+
+    def _build_learning_payload(self, match: TriggerMatch, captured: Dict[str, Any], insight_content: str) -> Dict[str, Any]:
+        """Create a canonical learning payload for downstream distillation."""
+        fields = captured.get("fields") or {}
+        evidence: List[str] = []
+
+        if isinstance(fields, dict):
+            for key, value in fields.items():
+                if self._is_noise_field(key, value):
+                    continue
+                evidence.append(f"{key}={self._compact_value(value)}")
+                if len(evidence) >= 4:
+                    break
+
+        for key in ("change_summary", "content_summary", "error"):
+            value = captured.get(key)
+            if value and len(evidence) < 4:
+                evidence.append(f"{key}={self._compact_value(value)}")
+
+        if len(evidence) < self.min_learning_evidence:
+            return {}
+
+        observer_name = match.observer.name if match.observer else "chip_level"
+        status = str(captured.get("status") or "").strip().lower()
+        success = captured.get("success")
+
+        if status == "failure" or success is False:
+            decision = f"Avoid repeating the failed {observer_name} pattern without a pre-check."
+            expected = "Reduce repeat failures on similar actions."
+        elif status == "success" or success is True:
+            decision = f"Prefer the {observer_name} pattern when similar evidence appears."
+            expected = "Improve success rate for similar actions."
+        else:
+            decision = f"Use {observer_name} evidence to prioritize the next action."
+            expected = "Improve next-step selection with domain evidence."
+
+        rationale = (
+            f"Because {match.chip.name} observed {', '.join(evidence[:2])} "
+            f"during trigger '{match.trigger}'."
+        )
+        if insight_content:
+            rationale += f" Insight: {self._compact_value(insight_content, 140)}"
+
+        payload = {
+            "schema_version": "v1",
+            "decision": decision,
+            "rationale": rationale,
+            "evidence": evidence[:4],
+            "expected_outcome": expected,
+        }
+        if self._is_learning_payload_valid(payload):
+            return payload
+        return {}
+
+    def _is_learning_payload_valid(self, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+
+        decision = str(payload.get("decision") or "").strip()
+        rationale = str(payload.get("rationale") or "").strip()
+        expected = str(payload.get("expected_outcome") or "").strip()
+        evidence = payload.get("evidence")
+        if not isinstance(evidence, list):
+            return False
+
+        filtered_evidence = []
+        for item in evidence:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            if len(text) < 6:
+                continue
+            lowered = text.lower()
+            if any(marker in lowered for marker in ("tool_name:", "event_type:", "cwd:", "file_path:")):
+                continue
+            filtered_evidence.append(text)
+
+        if len(filtered_evidence) < self.min_learning_evidence:
+            return False
+        if len(decision) < 16 or len(rationale) < 20 or len(expected) < 12:
+            return False
+        return True
 
     def _capture_data(self, match: TriggerMatch, event: Dict[str, Any]) -> Dict[str, Any]:
         """Capture relevant data based on observer definition."""

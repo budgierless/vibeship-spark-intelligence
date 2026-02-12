@@ -80,15 +80,18 @@ def _md(report: Dict[str, Any]) -> str:
     lines.append(f"- Learning-quality pass rate: `{float(report.get('learning_quality_pass_rate', 0.0)):.2%}`")
     lines.append(f"- Missing confidence rate: `{float(report.get('missing_confidence_rate', 0.0)):.2%}`")
     lines.append(f"- Missing quality-score rate: `{float(report.get('missing_quality_rate', 0.0)):.2%}`")
+    lines.append(f"- Schema payload rate: `{float(report.get('schema_payload_rate', 0.0)):.2%}`")
+    lines.append(f"- Schema statement yield: `{float(report.get('schema_statement_rate', 0.0)):.2%}`")
     lines.append(f"- Min total quality score: `{float(report.get('min_total_score', 0.55)):.2f}`")
     lines.append("")
-    lines.append("| Chip | Rows | Telemetry | Telemetry Obs | Missing Conf | Missing Quality | Statements | Quality Pass | Merge Eligible |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append("| Chip | Rows | Telemetry | Telemetry Obs | Missing Conf | Missing Quality | Schema Payload | Schema Statement | Statements | Quality Pass | Merge Eligible |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in report.get("chips", []):
         lines.append(
             f"| `{row.get('chip_id','')}` | {int(row.get('rows',0))} | "
             f"{float(row.get('telemetry_rate',0.0)):.2%} | {float(row.get('telemetry_observer_rate',0.0)):.2%} | "
             f"{float(row.get('missing_confidence_rate',0.0)):.2%} | {float(row.get('missing_quality_rate',0.0)):.2%} | "
+            f"{float(row.get('schema_payload_rate',0.0)):.2%} | {float(row.get('schema_statement_rate',0.0)):.2%} | "
             f"{float(row.get('statement_yield_rate',0.0)):.2%} | {float(row.get('learning_quality_pass_rate',0.0)):.2%} | "
             f"{int(row.get('merge_eligible',0))} |"
         )
@@ -133,6 +136,8 @@ def main() -> int:
     total_missing_confidence = 0
     total_missing_quality = 0
     total_telemetry_observer = 0
+    total_schema_payload = 0
+    total_schema_statement = 0
     chips: List[Dict[str, Any]] = []
 
     for fp in files:
@@ -148,6 +153,8 @@ def main() -> int:
         missing_confidence = 0
         missing_quality = 0
         telemetry_observer = 0
+        schema_payload = 0
+        schema_statement = 0
         sample_statements: List[str] = []
         seen = set()
 
@@ -168,6 +175,15 @@ def main() -> int:
 
             if cm._looks_like_telemetry(chip_id, content):
                 telemetry += 1
+
+            if isinstance(captured.get("learning_payload"), dict):
+                schema_payload += 1
+                payload_statement = cm._payload_based_learning_statement(
+                    captured_data=captured,
+                    min_len=int(limits.get("min_statement_len", 28)),
+                )
+                if payload_statement:
+                    schema_statement += 1
 
             statement = cm._distill_learning_statement(
                 chip_id=chip_id,
@@ -198,6 +214,8 @@ def main() -> int:
         total_missing_confidence += missing_confidence
         total_missing_quality += missing_quality
         total_telemetry_observer += telemetry_observer
+        total_schema_payload += schema_payload
+        total_schema_statement += schema_statement
         chips.append(
             {
                 "chip_id": fp.stem,
@@ -215,6 +233,10 @@ def main() -> int:
                 "missing_quality_rate": round(missing_quality / max(1, c_rows), 4),
                 "telemetry_observer_count": telemetry_observer,
                 "telemetry_observer_rate": round(telemetry_observer / max(1, c_rows), 4),
+                "schema_payload_count": schema_payload,
+                "schema_payload_rate": round(schema_payload / max(1, c_rows), 4),
+                "schema_statement_count": schema_statement,
+                "schema_statement_rate": round(schema_statement / max(1, c_rows), 4),
                 "sample_statements": sample_statements,
             }
         )
@@ -232,6 +254,8 @@ def main() -> int:
         "learning_quality_pass_rate": round(total_quality_pass / max(1, rows_analyzed), 4),
         "missing_confidence_rate": round(total_missing_confidence / max(1, rows_analyzed), 4),
         "missing_quality_rate": round(total_missing_quality / max(1, rows_analyzed), 4),
+        "schema_payload_rate": round(total_schema_payload / max(1, rows_analyzed), 4),
+        "schema_statement_rate": round(total_schema_statement / max(1, rows_analyzed), 4),
         "min_total_score": min_total_score,
         "chips": chips,
     }

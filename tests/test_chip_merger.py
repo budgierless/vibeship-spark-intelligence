@@ -252,3 +252,24 @@ def test_distill_skips_telemetry_observer_rows():
         observer_name="post_tool_use",
     )
     assert out == ""
+
+
+def test_distill_prefers_valid_learning_payload():
+    out = cm._distill_learning_statement(
+        chip_id="social-convo",
+        content="[Social] tool_name: Read, event_type: post_tool",
+        captured_data={
+            "learning_payload": {
+                "schema_version": "v1",
+                "decision": "Prefer conversation hooks with observed reciprocity signals.",
+                "rationale": "Because multi-turn threads with reciprocity and low barrier produced better engagement.",
+                "evidence": ["reciprocity_signal=high", "barrier_level=low", "turn_taking=balanced"],
+                "expected_outcome": "Increase reply quality and sustained conversations.",
+            }
+        },
+        min_len=24,
+        observer_name="conversation_psychology",
+    )
+    assert "Prefer conversation hooks" in out
+    assert "Expected outcome:" in out
+    assert "reciprocity_signal=high" in out

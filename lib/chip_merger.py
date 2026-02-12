@@ -55,6 +55,21 @@ TELEMETRY_OBSERVER_BLOCKLIST = {
     "user_prompt",
     "chip_level",
 }
+SCHEMA_TELEMETRY_FIELD_KEYS = {
+    "tool_name",
+    "tool",
+    "command",
+    "cwd",
+    "file_path",
+    "event_type",
+    "status",
+    "success",
+    "duration_ms",
+    "session_id",
+    "project",
+    "chip",
+    "trigger",
+}
 ACTIONABLE_MARKERS = (
     "should",
     "avoid",
@@ -330,6 +345,49 @@ def _field_based_learning_statement(chip_id: str, captured_data: Dict[str, Any])
     return ""
 
 
+def _payload_based_learning_statement(captured_data: Dict[str, Any], min_len: int) -> str:
+    payload = (captured_data or {}).get("learning_payload") or {}
+    if not isinstance(payload, dict):
+        return ""
+
+    decision = _norm_whitespace(payload.get("decision") or "")
+    rationale = _norm_whitespace(payload.get("rationale") or "")
+    expected = _norm_whitespace(payload.get("expected_outcome") or "")
+    evidence_raw = payload.get("evidence") or []
+    if not isinstance(evidence_raw, list):
+        return ""
+
+    evidence = []
+    for item in evidence_raw:
+        text = _norm_whitespace(item)
+        if not text or len(text) < 6:
+            continue
+        lowered = text.lower()
+        key = lowered.split("=", 1)[0].strip()
+        if key in SCHEMA_TELEMETRY_FIELD_KEYS:
+            continue
+        if any(marker in lowered for marker in ("tool_name:", "event_type:", "cwd:", "file_path:")):
+            continue
+        evidence.append(text)
+        if len(evidence) >= 3:
+            break
+
+    if len(decision) < 16 or len(rationale) < 20 or len(expected) < 12:
+        return ""
+    if not evidence:
+        return ""
+
+    text = (
+        f"{decision} because {rationale} "
+        f"Evidence ({', '.join(evidence)}). "
+        f"Expected outcome: {expected}."
+    )
+    text = _norm_whitespace(text)
+    if len(text) < int(min_len):
+        return ""
+    return text[:320]
+
+
 def _distill_learning_statement(
     chip_id: str,
     content: str,
@@ -339,6 +397,10 @@ def _distill_learning_statement(
 ) -> str:
     if _is_telemetry_observer(observer_name):
         return ""
+
+    payload_statement = _payload_based_learning_statement(captured_data, min_len=min_len)
+    if payload_statement:
+        return payload_statement
 
     text = _strip_chip_prefix(content)
     if _looks_like_telemetry(chip_id, text):
