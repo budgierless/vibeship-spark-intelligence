@@ -25,6 +25,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/ADVISORY_BENCHMARK_SYSTEM.md`: advisory-quality benchmark design, scoring model, and iteration loop
 - `docs/ADVISORY_REALISM_PLAYBOOK.md`: cross-system advisory realism loop (depth tiers, theory seeding, source-alignment gates)
 - `scripts/run_advisory_realism_domain_matrix.py`: multi-domain advisory realism matrix runner (10+ domain slices per run)
+- `scripts/run_advisory_chip_experiments.py`: chip strategy experiment runner (A/B/C/D off/on/targeted segment plans)
 - `docs/OPENCLAW_RESEARCH_AND_UPDATES.md`: experiment log for OpenClaw tuning changes, outcomes, and keep/rollback decisions
 - `docs/reports/2026-02-12_openclaw_memory_advisory_concrete_plan_and_live_baseline.md`: concrete memory/advisory fix plan + live baseline + execution updates
 - `docs/reports/2026-02-12_spark_intelligence_2day_comprehensive_honest_assessment.md`: two-day system scorecard and integrated closure plan
@@ -55,6 +56,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-12_advisory_multidomain_matrix_baseline.md`: multidomain advisory matrix baseline (11 domains, weighted metrics, gap order)
 - `docs/reports/2026-02-12_advisory_multidomain_tuning_pass_v2.md`: multidomain tuning pass v2 with baseline/candidate deltas and residual gaps
 - `docs/reports/2026-02-12_chips_advisory_memory_benchmark_plan.md`: chip utilization benchmark strategy, A/B plan, and promotion criteria
+- `docs/reports/2026-02-13_chip_strategy_experiment_matrix_v2.md`: first full A/B/C/D chip strategy run with corrected advice-hit vs evidence-hit scoring
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log

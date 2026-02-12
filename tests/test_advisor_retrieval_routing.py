@@ -431,6 +431,15 @@ def test_advise_level_domain_filter_blocks_x_social_noise_across_sources(monkeyp
         ),
         advisor_mod.Advice(
             advice_id="a2",
+            insight_key="chip:social-proof",
+            text="Ensure cryptographic proof of AI identity in social networks before replies.",
+            confidence=0.9,
+            source="chip",
+            context_match=0.9,
+            reason="noise2",
+        ),
+        advisor_mod.Advice(
+            advice_id="a3",
             insight_key="cognitive:y",
             text="Check auth session bindings before retrieval.",
             confidence=0.8,
@@ -443,3 +452,23 @@ def test_advise_level_domain_filter_blocks_x_social_noise_across_sources(monkeyp
     filtered = advisor._filter_cross_domain_advice(rows, "diagnose auth retrieval timeout in production")
     assert len(filtered) == 1
     assert filtered[0].insight_key == "cognitive:y"
+
+
+def test_chip_advice_uses_quality_as_confidence_fallback(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(advisor_mod, "CHIP_INSIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(advisor_mod, "CHIP_ADVICE_MIN_SCORE", 0.35)
+    chip_file = tmp_path / "marketing.jsonl"
+    chip_row = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Focus on conversion quality before scaling spend.",
+        "captured_data": {"quality_score": {"total": 0.62}},
+        # confidence intentionally omitted to validate score fallback.
+    }
+    chip_file.write_text(json.dumps(chip_row) + "\n", encoding="utf-8")
+
+    advisor = advisor_mod.SparkAdvisor()
+    out = advisor._get_chip_advice("marketing campaign conversion tuning")
+    assert out
+    assert out[0].source == "chip"

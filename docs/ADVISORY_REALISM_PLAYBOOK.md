@@ -21,6 +21,7 @@ This playbook turns advisory tuning into a measurable operating cycle.
 - `benchmarks/data/advisory_theory_catalog_v1.json`
 - `benchmarks/seed_advisory_theories.py`
 - `scripts/run_advisory_realism_domain_matrix.py`
+- `scripts/run_advisory_chip_experiments.py`
 
 Supporting extension:
 - `benchmarks/advisory_quality_ab.py` now includes per-case `source_counts` in output.
@@ -97,6 +98,16 @@ python scripts/run_advisory_realism_domain_matrix.py \
   --cases benchmarks/data/advisory_realism_eval_multidomain_v1.json \
   --force-live \
   --save-domain-reports
+```
+
+Chip strategy cadence (global on/off + targeted C/D segmentation):
+```bash
+python scripts/run_advisory_chip_experiments.py \
+  --plan benchmarks/data/advisory_chip_experiment_plan_v1.json \
+  --profiles baseline \
+  --repeats 1 \
+  --no-force-live \
+  --out-prefix advisory_chip_experiments_v2
 ```
 
 3. Tune profile candidates with sweeper if needed:

@@ -1,0 +1,62 @@
+{
+  "baseline": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 5,
+      "chip_advice_min_score": 0.45,
+      "chip_advice_max_files": 6,
+      "chip_advice_file_tail": 60,
+      "chip_source_boost": 1.22
+    }
+  },
+  "balanced": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 5,
+      "chip_advice_min_score": 0.45,
+      "chip_advice_max_files": 6,
+      "chip_advice_file_tail": 60,
+      "chip_source_boost": 1.22
+    }
+  },
+  "strict": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 5,
+      "chip_advice_min_score": 0.45,
+      "chip_advice_max_files": 6,
+      "chip_advice_file_tail": 60,
+      "chip_source_boost": 1.22
+    }
+  }
+}

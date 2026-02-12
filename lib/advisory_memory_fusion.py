@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -99,6 +100,23 @@ def _tail_jsonl(path: Path, limit: int) -> List[Dict[str, Any]]:
     except Exception:
         return []
     return out
+
+
+def _coerce_ts(value: Any, default: float = 0.0) -> float:
+    try:
+        if isinstance(value, (int, float)):
+            return float(value)
+        text = str(value or "").strip()
+        if not text:
+            return float(default)
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        return float(datetime.fromisoformat(text).timestamp())
+    except Exception:
+        try:
+            return float(value)
+        except Exception:
+            return float(default)
 
 
 def _tokenize_text(text: str) -> List[str]:
@@ -205,11 +223,31 @@ def _collect_eidos(intent_text: str, limit: int = 5) -> List[Dict[str, Any]]:
 def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
     if not CHIP_INSIGHTS_DIR.exists():
         return []
-    files = sorted(CHIP_INSIGHTS_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:3]
+    files = sorted(CHIP_INSIGHTS_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:4]
     evidence: List[Dict[str, Any]] = []
+    min_quality = 0.30
+    min_confidence = 0.45
     for fp in files:
-        for row in _tail_jsonl(fp, limit=3):
-            text = str(row.get("insight") or row.get("text") or row.get("summary") or "").strip()
+        for row in _tail_jsonl(fp, limit=max(24, limit * 8)):
+            captured = row.get("captured_data") or {}
+            quality = (captured.get("quality_score") or {}) if isinstance(captured, dict) else {}
+            quality_total = float(quality.get("total", 0.0) or 0.0)
+            conf = float(row.get("confidence") or row.get("score") or quality_total or 0.0)
+            if quality_total < min_quality and conf < min_confidence:
+                continue
+            text = str(
+                row.get("insight")
+                or row.get("text")
+                or row.get("summary")
+                or row.get("content")
+                or (captured.get("summary") if isinstance(captured, dict) else "")
+                or ""
+            ).strip()
+            if (not text) and isinstance(captured, dict):
+                for key in ("signal", "trend", "pattern", "topic"):
+                    if captured.get(key):
+                        text = f"{key}: {captured.get(key)}"
+                        break
             if not text:
                 continue
             if _is_noise_evidence(text):
@@ -217,11 +255,21 @@ def _collect_chips(limit: int = 6) -> List[Dict[str, Any]]:
             evidence.append(
                 {
                     "source": "chips",
-                    "id": str(row.get("insight_key") or row.get("id") or f"{fp.stem}:{len(evidence)}"),
+                    "id": str(
+                        row.get("insight_key")
+                        or row.get("id")
+                        or row.get("chip_id")
+                        or f"{fp.stem}:{len(evidence)}"
+                    ),
                     "text": text,
-                    "confidence": float(row.get("score") or row.get("confidence") or 0.55),
-                    "created_at": float(row.get("ts") or row.get("created_at") or 0.0),
-                    "meta": {"file": fp.name},
+                    "confidence": max(conf, quality_total),
+                    "created_at": _coerce_ts(row.get("ts") or row.get("timestamp") or row.get("created_at") or 0.0),
+                    "meta": {
+                        "file": fp.name,
+                        "chip_id": row.get("chip_id") or fp.stem,
+                        "observer": row.get("observer") or row.get("observer_name"),
+                        "quality_total": quality_total,
+                    },
                 }
             )
             if len(evidence) >= limit:

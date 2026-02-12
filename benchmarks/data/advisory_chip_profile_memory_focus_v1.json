@@ -1,0 +1,77 @@
+{
+  "baseline": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 6,
+      "chip_advice_min_score": 0.4,
+      "chip_advice_max_files": 8,
+      "chip_advice_file_tail": 80,
+      "chip_source_boost": 1.28,
+      "retrieval_policy": {
+        "semantic_context_min": 0.14,
+        "semantic_lexical_min": 0.02,
+        "semantic_strong_override": 0.9
+      }
+    }
+  },
+  "balanced": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 6,
+      "chip_advice_min_score": 0.4,
+      "chip_advice_max_files": 8,
+      "chip_advice_file_tail": 80,
+      "chip_source_boost": 1.28,
+      "retrieval_policy": {
+        "semantic_context_min": 0.14,
+        "semantic_lexical_min": 0.02,
+        "semantic_strong_override": 0.9
+      }
+    }
+  },
+  "strict": {
+    "advisory_engine": {
+      "advisory_text_repeat_cooldown_s": 7200
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600
+    },
+    "advisor": {
+      "max_items": 4,
+      "max_advice_items": 4,
+      "min_rank_score": 0.5,
+      "chip_advice_limit": 6,
+      "chip_advice_min_score": 0.4,
+      "chip_advice_max_files": 8,
+      "chip_advice_file_tail": 80,
+      "chip_source_boost": 1.28,
+      "retrieval_policy": {
+        "semantic_context_min": 0.14,
+        "semantic_lexical_min": 0.02,
+        "semantic_strong_override": 0.9
+      }
+    }
+  }
+}

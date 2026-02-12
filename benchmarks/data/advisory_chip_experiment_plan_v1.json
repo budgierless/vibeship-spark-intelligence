@@ -1,0 +1,56 @@
+{
+  "version": "advisory-chip-experiment-plan-v1",
+  "cases": "benchmarks/data/advisory_realism_eval_multidomain_v1.json",
+  "profiles": "baseline",
+  "control_experiment_id": "A_chip_off_global",
+  "experiments": [
+    {
+      "id": "A_chip_off_global",
+      "description": "Control: chips mostly suppressed globally.",
+      "segments": [
+        {
+          "domains": "*",
+          "profile_file": "benchmarks/data/advisory_chip_profile_off_v1.json"
+        }
+      ]
+    },
+    {
+      "id": "B_chip_on_global",
+      "description": "Global chip-on treatment across all domains.",
+      "segments": [
+        {
+          "domains": "*",
+          "profile_file": "benchmarks/data/advisory_chip_profile_on_v1.json"
+        }
+      ]
+    },
+    {
+      "id": "C_chip_targeted_business_social",
+      "description": "Targeted chip-on for business/social/strategy domains, chip-off elsewhere.",
+      "segments": [
+        {
+          "domains": "marketing,social,ui_design,strategy,prompting,research",
+          "profile_file": "benchmarks/data/advisory_chip_profile_targeted_v1.json"
+        },
+        {
+          "domains": "coding,debugging,testing,conversation,memory",
+          "profile_file": "benchmarks/data/advisory_chip_profile_off_v1.json"
+        }
+      ]
+    },
+    {
+      "id": "D_chip_memory_research_focus",
+      "description": "Chip-on for memory/research/conversation, chip-off elsewhere.",
+      "segments": [
+        {
+          "domains": "memory,research,conversation",
+          "profile_file": "benchmarks/data/advisory_chip_profile_memory_focus_v1.json"
+        },
+        {
+          "domains": "coding,debugging,testing,marketing,social,ui_design,strategy,prompting",
+          "profile_file": "benchmarks/data/advisory_chip_profile_off_v1.json"
+        }
+      ]
+    }
+  ]
+}

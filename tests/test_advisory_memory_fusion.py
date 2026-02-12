@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from lib import advisory_memory_fusion as fusion
 
 
@@ -129,3 +131,20 @@ def test_memory_bundle_prefers_intent_relevant_evidence(monkeypatch):
     joined = " | ".join(texts).lower()
     assert "auth token session mismatch" in joined
     assert "multiplier granted formatting pattern" not in joined
+
+
+def test_collect_chips_parses_modern_content_schema(monkeypatch, tmp_path):
+    monkeypatch.setattr(fusion, "CHIP_INSIGHTS_DIR", tmp_path)
+    row = {
+        "chip_id": "marketing",
+        "observer_name": "campaign_observer",
+        "content": "Improve conversion quality before increasing ad spend.",
+        "timestamp": "2026-02-12T23:00:00+00:00",
+        "captured_data": {"quality_score": {"total": 0.55}},
+    }
+    (tmp_path / "marketing.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    out = fusion._collect_chips(limit=3)
+    assert out
+    assert out[0]["source"] == "chips"
+    assert "conversion quality" in str(out[0]["text"]).lower()

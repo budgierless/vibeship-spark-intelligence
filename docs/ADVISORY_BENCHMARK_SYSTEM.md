@@ -26,6 +26,9 @@ This benchmark is separate from Forge/Depth and focused only on
 - Profile sweeper: `benchmarks/advisory_profile_sweeper.py`
 - Contract runner: `scripts/run_advisory_realism_contract.py`
 - Domain matrix runner: `scripts/run_advisory_realism_domain_matrix.py`
+- Chip experiment runner: `scripts/run_advisory_chip_experiments.py`
+- Chip plan: `benchmarks/data/advisory_chip_experiment_plan_v1.json`
+- Chip profiles: `benchmarks/data/advisory_chip_profile_*.json`
 - Output JSON: `benchmarks/out/advisory_quality_ab_report.json`
 - Output Markdown: `benchmarks/out/advisory_quality_ab_report.md`
 
@@ -169,6 +172,21 @@ Profile overlays can now tune deeper advisor behavior in benchmark runs:
 - `advisor.retrieval_policy.*` (semantic/lexical routing thresholds)
 - `chip_advice_limit`, `chip_advice_min_score`, `chip_advice_max_files`, `chip_advice_file_tail`
 - `chip_source_boost`
+
+Chip strategy matrix (A/B/C/D patterns: off, on, targeted segments):
+
+```bash
+python scripts/run_advisory_chip_experiments.py \
+  --plan benchmarks/data/advisory_chip_experiment_plan_v1.json \
+  --profiles baseline \
+  --repeats 1 \
+  --no-force-live \
+  --out-prefix advisory_chip_experiments_v2
+```
+
+Chip matrix outputs:
+- `benchmarks/out/advisory_chip_experiments_v2_report.json`
+- `benchmarks/out/advisory_chip_experiments_v2_report.md`
 
 ## Theory Seeding for Controlled Memory Tests
 

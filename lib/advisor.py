@@ -192,6 +192,14 @@ X_SOCIAL_MARKERS = (
     "multiplier granted",
     "fomo",
     "wallet",
+    "social network",
+    "social networks",
+    "cryptographic proof",
+    "ai identity",
+    "human larping",
+    "engagement bait",
+    "tao subnet",
+    "mac mini + ai",
 )
 
 
@@ -1702,35 +1710,47 @@ class SparkAdvisor:
                     continue
                 quality = (row.get("captured_data") or {}).get("quality_score") or {}
                 score = float(quality.get("total", 0.0) or 0.0)
-                conf = float(row.get("confidence", 0.0) or 0.0)
-                if score < CHIP_ADVICE_MIN_SCORE or conf < MIN_RELIABILITY_FOR_ADVICE:
+                conf = float(row.get("confidence") or score or 0.0)
+                if score < CHIP_ADVICE_MIN_SCORE and conf < MIN_RELIABILITY_FOR_ADVICE:
                     continue
-                text = str(row.get("content") or "").strip()
+                text = str(
+                    row.get("content")
+                    or row.get("insight")
+                    or row.get("text")
+                    or row.get("summary")
+                    or ""
+                ).strip()
                 if not text:
                     continue
                 if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(text):
                     continue
                 if self._is_metadata_pattern(text):
                     continue
+                context_match = self._calculate_context_match(text, context)
+                if context_match < 0.05 and score < (CHIP_ADVICE_MIN_SCORE + 0.1):
+                    continue
+                chip_id = str(row.get("chip_id") or file_path.stem).strip()
                 candidates.append(
                     {
-                        "chip_id": row.get("chip_id") or file_path.stem,
+                        "chip_id": chip_id,
                         "observer": row.get("observer_name") or "observer",
                         "text": text,
                         "score": score,
                         "confidence": conf,
+                        "context_match": context_match,
+                        "rank": (0.45 * score) + (0.35 * conf) + (0.20 * context_match) + self._chip_domain_bonus(chip_id, context),
                     }
                 )
 
         # Rank and dedupe.
         seen = set()
-        candidates.sort(key=lambda x: (x["score"], x["confidence"]), reverse=True)
+        candidates.sort(key=lambda x: (x["rank"], x["score"], x["confidence"]), reverse=True)
         for item in candidates:
             key = item["text"][:180].strip().lower()
             if key in seen:
                 continue
             seen.add(key)
-            context_match = self._calculate_context_match(item["text"], context)
+            context_match = float(item.get("context_match") or 0.0)
             reason = f"{item['chip_id']}/{item['observer']} quality={item['score']:.2f}"
             advice.append(
                 Advice(
@@ -1747,6 +1767,35 @@ class SparkAdvisor:
                 break
 
         return advice
+
+    def _chip_domain_bonus(self, chip_id: str, context: str) -> float:
+        chip = str(chip_id or "").strip().lower()
+        text = str(context or "").strip().lower()
+        if not chip or not text:
+            return 0.0
+
+        social_query = self._is_x_social_query(text)
+        coding_query = any(t in text for t in ("code", "refactor", "test", "debug", "python", "module"))
+        marketing_query = any(t in text for t in ("marketing", "campaign", "conversion", "audience", "brand"))
+        memory_query = any(t in text for t in ("memory", "retrieval", "cross-session", "stale", "distillation"))
+
+        social_chip = any(t in chip for t in ("social", "x_", "x-", "engagement"))
+        coding_chip = any(t in chip for t in ("spark-core", "vibecoding", "bench_core", "api-design"))
+        marketing_chip = any(t in chip for t in ("marketing", "market-intel", "biz-ops"))
+
+        bonus = 0.0
+        if social_query and social_chip:
+            bonus += 0.15
+        if coding_query and coding_chip:
+            bonus += 0.12
+        if marketing_query and marketing_chip:
+            bonus += 0.12
+        if memory_query and coding_chip:
+            bonus += 0.06
+
+        if not social_query and social_chip:
+            bonus -= 0.08
+        return bonus
 
     def _get_surprise_advice(self, tool_name: str, context: str) -> List[Advice]:
         """Get advice from past surprises (unexpected failures)."""

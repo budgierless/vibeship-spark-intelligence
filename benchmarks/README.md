@@ -193,6 +193,21 @@ Matrix outputs:
 - `benchmarks/out/advisory_realism_domain_matrix_report.md`
 - `benchmarks/out/advisory_realism_domain_matrix_domains/*.json|.md` (when `--save-domain-reports`)
 
+Run chip strategy experiments beyond simple on/off (A/B/C/D segmented plans):
+
+```bash
+python scripts/run_advisory_chip_experiments.py \
+  --plan benchmarks/data/advisory_chip_experiment_plan_v1.json \
+  --profiles baseline \
+  --repeats 1 \
+  --no-force-live \
+  --out-prefix advisory_chip_experiments_v2
+```
+
+Chip experiment outputs:
+- `benchmarks/out/advisory_chip_experiments_v2_report.json`
+- `benchmarks/out/advisory_chip_experiments_v2_report.md`
+
 Candidate profile overlay with retrieval/chip tuning:
 - `benchmarks/data/advisory_realism_profile_candidates_v2.json`
 
