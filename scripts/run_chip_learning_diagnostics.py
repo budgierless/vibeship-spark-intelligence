@@ -75,17 +75,22 @@ def _md(report: Dict[str, Any]) -> str:
     lines.append(f"- Rows analyzed: `{int(report.get('rows_analyzed', 0))}`")
     lines.append(f"- Merge-eligible candidates: `{int(report.get('merge_eligible', 0))}`")
     lines.append(f"- Telemetry rate: `{float(report.get('telemetry_rate', 0.0)):.2%}`")
+    lines.append(f"- Telemetry observer rate: `{float(report.get('telemetry_observer_rate', 0.0)):.2%}`")
     lines.append(f"- Statement yield: `{float(report.get('statement_yield_rate', 0.0)):.2%}`")
     lines.append(f"- Learning-quality pass rate: `{float(report.get('learning_quality_pass_rate', 0.0)):.2%}`")
+    lines.append(f"- Missing confidence rate: `{float(report.get('missing_confidence_rate', 0.0)):.2%}`")
+    lines.append(f"- Missing quality-score rate: `{float(report.get('missing_quality_rate', 0.0)):.2%}`")
     lines.append(f"- Min total quality score: `{float(report.get('min_total_score', 0.55)):.2f}`")
     lines.append("")
-    lines.append("| Chip | Rows | Telemetry | Statements | Quality Pass | Merge Eligible |")
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| Chip | Rows | Telemetry | Telemetry Obs | Missing Conf | Missing Quality | Statements | Quality Pass | Merge Eligible |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     for row in report.get("chips", []):
         lines.append(
             f"| `{row.get('chip_id','')}` | {int(row.get('rows',0))} | "
-            f"{float(row.get('telemetry_rate',0.0)):.2%} | {float(row.get('statement_yield_rate',0.0)):.2%} | "
-            f"{float(row.get('learning_quality_pass_rate',0.0)):.2%} | {int(row.get('merge_eligible',0))} |"
+            f"{float(row.get('telemetry_rate',0.0)):.2%} | {float(row.get('telemetry_observer_rate',0.0)):.2%} | "
+            f"{float(row.get('missing_confidence_rate',0.0)):.2%} | {float(row.get('missing_quality_rate',0.0)):.2%} | "
+            f"{float(row.get('statement_yield_rate',0.0)):.2%} | {float(row.get('learning_quality_pass_rate',0.0)):.2%} | "
+            f"{int(row.get('merge_eligible',0))} |"
         )
     lines.append("")
     lines.append("## Top Examples")
@@ -125,6 +130,9 @@ def main() -> int:
     total_statement = 0
     total_quality_pass = 0
     total_merge_eligible = 0
+    total_missing_confidence = 0
+    total_missing_quality = 0
+    total_telemetry_observer = 0
     chips: List[Dict[str, Any]] = []
 
     for fp in files:
@@ -137,6 +145,9 @@ def main() -> int:
         statements = 0
         quality_pass = 0
         merge_eligible = 0
+        missing_confidence = 0
+        missing_quality = 0
+        telemetry_observer = 0
         sample_statements: List[str] = []
         seen = set()
 
@@ -146,6 +157,14 @@ def main() -> int:
             captured = row.get("captured_data") or {}
             quality = (captured.get("quality_score") or {}) if isinstance(captured, dict) else {}
             total = _safe_float(quality.get("total"), _safe_float(row.get("confidence"), 0.0))
+            observer_name = str(row.get("observer_name") or "")
+
+            if row.get("confidence") is None:
+                missing_confidence += 1
+            if not isinstance(quality, dict) or not quality:
+                missing_quality += 1
+            if cm._is_telemetry_observer(observer_name):
+                telemetry_observer += 1
 
             if cm._looks_like_telemetry(chip_id, content):
                 telemetry += 1
@@ -155,6 +174,7 @@ def main() -> int:
                 content=content,
                 captured_data=captured,
                 min_len=int(limits.get("min_statement_len", 28)),
+                observer_name=observer_name,
             )
             if statement:
                 statements += 1
@@ -175,6 +195,9 @@ def main() -> int:
         total_statement += statements
         total_quality_pass += quality_pass
         total_merge_eligible += merge_eligible
+        total_missing_confidence += missing_confidence
+        total_missing_quality += missing_quality
+        total_telemetry_observer += telemetry_observer
         chips.append(
             {
                 "chip_id": fp.stem,
@@ -186,6 +209,12 @@ def main() -> int:
                 "learning_quality_pass_count": quality_pass,
                 "learning_quality_pass_rate": round(quality_pass / max(1, c_rows), 4),
                 "merge_eligible": merge_eligible,
+                "missing_confidence_count": missing_confidence,
+                "missing_confidence_rate": round(missing_confidence / max(1, c_rows), 4),
+                "missing_quality_count": missing_quality,
+                "missing_quality_rate": round(missing_quality / max(1, c_rows), 4),
+                "telemetry_observer_count": telemetry_observer,
+                "telemetry_observer_rate": round(telemetry_observer / max(1, c_rows), 4),
                 "sample_statements": sample_statements,
             }
         )
@@ -198,8 +227,11 @@ def main() -> int:
         "rows_analyzed": rows_analyzed,
         "merge_eligible": total_merge_eligible,
         "telemetry_rate": round(total_telemetry / max(1, rows_analyzed), 4),
+        "telemetry_observer_rate": round(total_telemetry_observer / max(1, rows_analyzed), 4),
         "statement_yield_rate": round(total_statement / max(1, rows_analyzed), 4),
         "learning_quality_pass_rate": round(total_quality_pass / max(1, rows_analyzed), 4),
+        "missing_confidence_rate": round(total_missing_confidence / max(1, rows_analyzed), 4),
+        "missing_quality_rate": round(total_missing_quality / max(1, rows_analyzed), 4),
         "min_total_score": min_total_score,
         "chips": chips,
     }

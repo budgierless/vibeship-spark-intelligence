@@ -241,3 +241,14 @@ def test_merge_distills_from_structured_fields(tmp_path, monkeypatch):
     assert "engagement evidence" in merged_text
     assert "agent payments" in merged_text
     assert "source" in cog.calls[0]
+
+
+def test_distill_skips_telemetry_observer_rows():
+    out = cm._distill_learning_statement(
+        chip_id="vibecoding",
+        content="Use tests before deploy",
+        captured_data={},
+        min_len=20,
+        observer_name="post_tool_use",
+    )
+    assert out == ""

@@ -32,6 +32,18 @@ log = logging.getLogger("spark.chips")
 
 # Storage for chip insights
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
+TELEMETRY_OBSERVER_BLOCKLIST = {
+    "tool_event",
+    "pre_tool_event",
+    "post_tool_event",
+    "tool_cycle",
+    "tool_failure",
+    "pre_tool_use",
+    "post_tool_use",
+    "post_tool_use_failure",
+    "user_prompt_signal",
+    "user_prompt",
+}
 
 
 @dataclass
@@ -59,6 +71,7 @@ class ChipRuntime:
     def __init__(self):
         self.registry = ChipRegistry()
         self.router = ChipRouter()
+        self.observer_only_mode = self._env_flag("SPARK_CHIP_OBSERVER_ONLY", True)
         try:
             self.min_insight_score = float(os.getenv("SPARK_CHIP_MIN_SCORE", "0.35"))
         except Exception:
@@ -70,6 +83,21 @@ class ChipRuntime:
             self.min_insight_confidence = 0.7
         self.min_insight_confidence = max(0.0, min(1.0, self.min_insight_confidence))
         self.gate_mode = str(os.getenv("SPARK_CHIP_GATE_MODE", "balanced")).strip().lower()
+        raw_blocked = str(os.getenv("SPARK_CHIP_BLOCKED_IDS", "")).strip()
+        self.blocked_chip_ids = {
+            token.strip().lower().replace("_", "-")
+            for token in raw_blocked.split(",")
+            if token.strip()
+        }
+        raw_observer_blocklist = str(os.getenv("SPARK_CHIP_TELEMETRY_OBSERVERS", "")).strip()
+        if raw_observer_blocklist:
+            self.telemetry_observer_blocklist = {
+                token.strip().lower()
+                for token in raw_observer_blocklist.split(",")
+                if token.strip()
+            }
+        else:
+            self.telemetry_observer_blocklist = set(TELEMETRY_OBSERVER_BLOCKLIST)
         try:
             self.max_active_chips_per_event = max(1, int(os.getenv("SPARK_CHIP_EVENT_ACTIVE_LIMIT", "6") or 6))
         except Exception:
@@ -87,6 +115,35 @@ class ChipRuntime:
         )
         self.evolution = get_evolution()
         self._ensure_storage()
+
+    def _env_flag(self, name: str, default: bool) -> bool:
+        raw = os.getenv(name)
+        if raw is None:
+            return bool(default)
+        text = str(raw).strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+        return bool(default)
+
+    def _is_chip_blocked(self, chip_id: str) -> bool:
+        cid = str(chip_id or "").strip().lower().replace("_", "-")
+        return bool(cid and cid in self.blocked_chip_ids)
+
+    def _is_telemetry_observer(self, observer_name: str) -> bool:
+        name = str(observer_name or "").strip().lower()
+        return bool(name and name in self.telemetry_observer_blocklist)
+
+    def _filter_runtime_chips(self, chips: List[Chip]) -> List[Chip]:
+        if not chips:
+            return []
+        out: List[Chip] = []
+        for chip in chips:
+            if self._is_chip_blocked(getattr(chip, "id", "")):
+                continue
+            out.append(chip)
+        return out
 
     def _ensure_storage(self):
         """Ensure chip insights directory exists."""
@@ -106,6 +163,10 @@ class ChipRuntime:
             self.registry.auto_activate_for_content(content, project_path)
 
         active_chips = self.registry.get_active_chips(project_path)
+        if not active_chips:
+            return insights
+
+        active_chips = self._filter_runtime_chips(active_chips)
         if not active_chips:
             return insights
 
@@ -153,6 +214,9 @@ class ChipRuntime:
         """Process an event for a specific list of chips (no activation changes)."""
         if not chips:
             return []
+        chips = self._filter_runtime_chips(chips)
+        if not chips:
+            return []
         matches = self.router.route_event(event, chips)
         if not matches:
             return []
@@ -165,7 +229,11 @@ class ChipRuntime:
         chips_with_observer = {m.chip.id for m in matches if m.observer is not None}
 
         for match in matches:
+            if self.observer_only_mode and match.observer is None:
+                continue
             if match.observer is None and match.chip.id in chips_with_observer:
+                continue
+            if match.observer is not None and self._is_telemetry_observer(match.observer.name):
                 continue
             insight = self._execute_observer(match, event)
             if insight:
@@ -885,7 +953,7 @@ def process_chip_events(events: List[Dict[str, Any]], project_path: str = None) 
     if chips_used:
         stats['chips_activated'] = sorted(chips_used)
     else:
-        active = runtime.registry.get_active_chips(project_path)
+        active = runtime._filter_runtime_chips(runtime.registry.get_active_chips(project_path))
         stats['chips_activated'] = [c.id for c in active[: runtime.max_active_chips_per_event]]
 
     return stats

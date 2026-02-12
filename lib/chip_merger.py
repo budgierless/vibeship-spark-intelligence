@@ -42,6 +42,19 @@ TELEMETRY_MARKERS = (
     "tool_cycle",
     "command:",
 )
+TELEMETRY_OBSERVER_BLOCKLIST = {
+    "tool_event",
+    "pre_tool_event",
+    "post_tool_event",
+    "tool_cycle",
+    "tool_failure",
+    "pre_tool_use",
+    "post_tool_use",
+    "post_tool_use_failure",
+    "user_prompt_signal",
+    "user_prompt",
+    "chip_level",
+}
 ACTIONABLE_MARKERS = (
     "should",
     "avoid",
@@ -250,6 +263,11 @@ def _looks_like_telemetry(chip_id: str, text: str) -> bool:
     return False
 
 
+def _is_telemetry_observer(observer_name: str) -> bool:
+    name = str(observer_name or "").strip().lower()
+    return bool(name and name in TELEMETRY_OBSERVER_BLOCKLIST)
+
+
 def _format_value(value: Any, max_len: int = 84) -> str:
     text = _norm_whitespace(str(value or ""))
     if len(text) <= max_len:
@@ -312,7 +330,16 @@ def _field_based_learning_statement(chip_id: str, captured_data: Dict[str, Any])
     return ""
 
 
-def _distill_learning_statement(chip_id: str, content: str, captured_data: Dict[str, Any], min_len: int) -> str:
+def _distill_learning_statement(
+    chip_id: str,
+    content: str,
+    captured_data: Dict[str, Any],
+    min_len: int,
+    observer_name: str = "",
+) -> str:
+    if _is_telemetry_observer(observer_name):
+        return ""
+
     text = _strip_chip_prefix(content)
     if _looks_like_telemetry(chip_id, text):
         text = ""
@@ -529,6 +556,7 @@ def merge_chip_insights(
             content=content,
             captured_data=captured_data,
             min_len=int(limits.get("min_statement_len", 28)),
+            observer_name=str(chip_insight.get("observer_name") or ""),
         )
         if not learning_statement:
             stats["skipped_non_learning"] += 1
