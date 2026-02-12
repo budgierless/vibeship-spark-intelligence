@@ -49,6 +49,73 @@ Outputs:
 Logs:
 - `benchmarks/logs/*.jsonl` (live runs)
 
+## Memory Retrieval A/B
+
+Compare retrieval systems on the same query set:
+
+```bash
+python benchmarks/memory_retrieval_ab.py --cases benchmarks/data/memory_retrieval_eval_seed.json
+```
+
+Strict labeled run:
+
+```bash
+python benchmarks/memory_retrieval_ab.py \
+  --cases benchmarks/data/memory_retrieval_eval_seed.json \
+  --systems embeddings_only,hybrid,hybrid_agentic \
+  --top-k 5 \
+  --strict-labels
+```
+
+If strict semantic gates produce mostly empty results in your environment,
+run with relaxed gates for comparison-only analysis:
+
+```bash
+python benchmarks/memory_retrieval_ab.py \
+  --cases benchmarks/data/memory_retrieval_eval_seed.json \
+  --systems embeddings_only,hybrid,hybrid_agentic \
+  --top-k 5 \
+  --strict-labels \
+  --min-similarity 0.0 \
+  --min-fusion-score 0.0
+```
+
+Outputs:
+- `benchmarks/out/memory_retrieval_ab_report.json`
+- `benchmarks/out/memory_retrieval_ab_report.md`
+
+### Tune for best-vs-best comparison
+
+Use grid-search tuning to optimize each system independently, then compare
+their best configurations on train/dev/full splits:
+
+```bash
+python benchmarks/tune_memory_retrieval_ab.py \
+  --cases benchmarks/data/memory_retrieval_eval_real_user_2026_02_12.json \
+  --systems embeddings_only,hybrid_agentic \
+  --backend tfidf \
+  --candidate-grid 20,40 \
+  --lexical-grid 0.1,0.3,0.5 \
+  --min-similarity-grid 0.0,0.25,0.5 \
+  --min-fusion-grid 0.0,0.25,0.45 \
+  --out benchmarks/out/memory_retrieval_ab_tuning_tfidf.json
+```
+
+```bash
+python benchmarks/tune_memory_retrieval_ab.py \
+  --cases benchmarks/data/memory_retrieval_eval_real_user_2026_02_12.json \
+  --systems embeddings_only,hybrid_agentic \
+  --backend fastembed \
+  --candidate-grid 40 \
+  --lexical-grid 0.0,0.1,0.3 \
+  --min-similarity-grid 0.0,0.25 \
+  --min-fusion-grid 0.0,0.25 \
+  --out benchmarks/out/memory_retrieval_ab_tuning_fastembed_quick.json
+```
+
+Output:
+- `benchmarks/out/memory_retrieval_ab_tuning_*.json`
+
 ## Local Model Stress Suite (Ollama)
 
 Stress-test local models across multiple methodologies (advisory, retrieval conflict resolution,

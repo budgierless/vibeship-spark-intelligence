@@ -39,7 +39,7 @@ function Get-AvailablePort {
 
     for ($offset = 0; $offset -le $MaxScan; $offset++) {
         $candidate = $PreferredPort + $offset
-        $inUse = Get-NetTCPConnection -LocalPort $candidate -ErrorAction SilentlyContinue
+        $inUse = Get-NetTCPConnection -State Listen -LocalPort $candidate -ErrorAction SilentlyContinue
         if (-not $inUse) {
             return $candidate
         }
@@ -89,7 +89,7 @@ function Start-Spark {
     }
     if ($STRICT_PULSE_PORT) {
         $pulsePort = $DEFAULT_PULSE_PORT
-        $pulseInUse = Get-NetTCPConnection -LocalPort $pulsePort -ErrorAction SilentlyContinue
+        $pulseInUse = Get-NetTCPConnection -State Listen -LocalPort $pulsePort -ErrorAction SilentlyContinue
         if ($pulseInUse) {
             Write-Host "  [FAIL] Pulse port $DEFAULT_PULSE_PORT is busy. Cleanup legacy listeners and retry." -ForegroundColor Red
             Write-Host "  [HINT] Set SPARK_PULSE_STRICT_PORT=0 to allow automatic fallback." -ForegroundColor Yellow
