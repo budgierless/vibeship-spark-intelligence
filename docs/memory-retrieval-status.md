@@ -8,9 +8,32 @@ Stabilize memory retrieval reliability and produce a strict A/B decision on retr
 
 ## Current Snapshot
 - Progress system integration: high confidence.
-- Memory retrieval reliability: medium-low confidence.
+- Memory retrieval reliability: improving (core routing now deterministic and instrumented).
 - Main risk: auth/session/transport/policy failures are conflated into generic "auth blocked" messaging.
-- Benchmark status: harness now available; labeled evaluation set still needs expansion.
+- Benchmark status: harness executed with tuned runs on 20-case real-user set.
+
+## Implementation Update (2026-02-12)
+- Implemented Carmack-style retrieval controls in advisor routing:
+  - embeddings-first fast path
+  - minimal escalation gate in `auto` mode (weak count, weak top score, high-risk)
+  - hard agentic deadline (`agentic_deadline_ms`)
+  - windowed agentic rate cap (`agentic_rate_limit`)
+  - insight prefilter cap (`prefilter_max_insights`)
+  - route log: `~/.spark/advisor/retrieval_router.jsonl`
+- Added/validated unit tests for:
+  - rate-cap behavior
+  - deadline cut-off behavior
+  - prefilter cap behavior
+- Tuned A/B rerun outputs:
+  - `benchmarks/out/memory_retrieval_ab_tuning_fastembed_bm25_2026_02_12.json`
+  - `benchmarks/out/memory_retrieval_ab_tuning_tfidf_bm25_2026_02_12.json`
+- Observed benchmark highlights:
+  - fastembed:
+    - embeddings_only: MRR 0.635, top1 0.55, p95 198ms
+    - hybrid_agentic: MRR 0.6542, top1 0.60, p95 623ms
+  - tfidf:
+    - embeddings_only: MRR 0.0917, top1 0.05, p95 75ms
+    - hybrid_agentic: MRR 0.3958, top1 0.25, p95 217ms
 
 ## Priority Workboard
 | Priority | Work Item | Owner | Due Date | Acceptance Criteria |

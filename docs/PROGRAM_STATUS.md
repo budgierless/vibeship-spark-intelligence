@@ -1,6 +1,6 @@
 # Program Status
 
-Updated: 2026-02-06
+Updated: 2026-02-12
 Navigation hub: `docs/GLOSSARY.md`
 
 This file consolidates status from older roadmap and integration plan docs.
@@ -10,6 +10,11 @@ This file consolidates status from older roadmap and integration plan docs.
 - Queue and bridge pipelines are active and optimized for lower write-amplification.
 - Cognitive and Meta-Ralph persistence now support deferred batch flush in bridge cycles.
 - Advisor retrieval includes semantic-first behavior with guarded fallback paths.
+- Advisor retrieval now uses Carmack-style routing controls:
+  - embeddings-first fast path
+  - minimal escalation gate (weak_count/weak_score/high_risk)
+  - agentic deadline and rate cap
+  - insight prefilter and route telemetry
 - Chips runtime/store now include rotation safeguards to contain file growth.
 - Chips now support single/multifile/hybrid loading with event normalization and pre-store quality gating.
 - Mind bridge retrieval/sync paths include bounded timeouts and health backoff behavior.
@@ -40,9 +45,9 @@ This file consolidates status from older roadmap and integration plan docs.
 ## Active Priorities
 
 1. Improve outcome attribution analytics (source -> action -> outcome quality).
-2. Add structured JSON logging on critical ingest/bridge paths.
-3. Expand EIDOS unit coverage for persistence/distillation edge cases.
-4. Add scheduled telemetry hygiene loops (counter repair, chip compaction, outcome retention).
+2. Add memory diagnostics endpoints (`/api/memory/health`, `/api/memory/diag`) with strict error taxonomy.
+3. Standardize retrieval identity envelope across direct/bridge paths (`session_id`, `actor_id`, `scope`, `memory_tier`, `trace_id`).
+4. Expand EIDOS unit coverage for persistence/distillation edge cases.
 5. Keep docs and flow references synchronized with runtime behavior.
 
 ## Canonical References

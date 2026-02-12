@@ -9,13 +9,16 @@ This defines a 3-level operating model for Spark/OpenClaw memory retrieval with 
 Advisor now routes retrieval like this:
 - Start with primary semantic retrieval (embeddings path).
 - In `auto` mode, escalate to hybrid-agentic only when needed:
-  - query complexity is high,
   - high-risk terms appear (`auth`, `token`, `prod`, `session`, `bridge`, etc.),
-  - trigger signal appears,
   - or primary retrieval is weak (low count/low top score).
 - Hybrid rerank now uses a blended lexical score:
   - normalized BM25 (default 75%)
   - token overlap (default 25%)
+- Carmack-style controls are built in:
+  - minimal gate strategy (`weak_count | weak_score | high_risk`)
+  - agentic rate cap (`agentic_rate_limit`)
+  - agentic hard deadline (`agentic_deadline_ms`)
+  - insight prefilter (`prefilter_max_insights`)
 - Route decisions are logged to `~/.spark/advisor/retrieval_router.jsonl`.
 
 Controls:
@@ -41,9 +44,12 @@ Suggested config:
     "level": "1",
     "overrides": {
       "mode": "auto",
+      "gate_strategy": "minimal",
       "max_queries": 2,
       "agentic_query_limit": 2,
-      "complexity_threshold": 3
+      "agentic_deadline_ms": 500,
+      "agentic_rate_limit": 0.10,
+      "prefilter_max_insights": 300
     }
   }
 }
@@ -66,8 +72,13 @@ Suggested config:
     "level": "2",
     "overrides": {
       "mode": "auto",
+      "gate_strategy": "minimal",
       "max_queries": 3,
       "agentic_query_limit": 3,
+      "agentic_deadline_ms": 700,
+      "agentic_rate_limit": 0.20,
+      "fast_path_budget_ms": 250,
+      "prefilter_max_insights": 500,
       "bm25_k1": 1.2,
       "bm25_b": 0.75,
       "bm25_mix": 0.75,
@@ -94,8 +105,11 @@ Suggested config:
     "level": "3",
     "overrides": {
       "mode": "hybrid_agentic",
+      "gate_strategy": "extended",
       "max_queries": 4,
       "agentic_query_limit": 4,
+      "agentic_deadline_ms": 1400,
+      "agentic_rate_limit": 1.0,
       "complexity_threshold": 1
     }
   }

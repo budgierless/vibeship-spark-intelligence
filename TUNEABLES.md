@@ -6,6 +6,49 @@ Navigation hub: `docs/GLOSSARY.md`
 
 ---
 
+## 0. Advisor Retrieval Router (Carmack Path)
+
+**File:** `lib/advisor.py`
+
+This controls when advisor stays on fast embeddings retrieval versus escalating to hybrid-agentic retrieval.
+
+### Core Strategy
+
+- Fast path first: semantic retrieval on primary query.
+- `auto` mode default gate (minimal):
+  - escalate on weak primary count
+  - escalate on weak primary top score
+  - escalate on high-risk query terms
+- Bounded escalation:
+  - rate cap (`agentic_rate_limit`)
+  - hard deadline (`agentic_deadline_ms`)
+
+### Parameters
+
+| Parameter | Default (Level 2) | Description |
+|-----------|-------------------|-------------|
+| `retrieval.level` | `"2"` | Profile baseline (`1` local-free, `2` balanced, `3` quality-max). |
+| `mode` | `auto` | `auto`, `embeddings_only`, or `hybrid_agentic`. |
+| `gate_strategy` | `minimal` | `minimal` uses weak_count/weak_score/high_risk; `extended` also uses complexity+trigger gates. |
+| `min_results_no_escalation` | `4` | If primary result count is below this, escalate. |
+| `min_top_score_no_escalation` | `0.72` | If primary top fusion score is below this, escalate. |
+| `escalate_on_high_risk` | `true` | Escalate when high-risk terms are present. |
+| `escalate_on_trigger` | `false` (L2) | Trigger-based escalation (mostly for extended/high-quality profiles). |
+| `agentic_rate_limit` | `0.20` | Max fraction of recent queries allowed to escalate agentically. |
+| `agentic_rate_window` | `80` | Rolling window size for rate cap. |
+| `agentic_deadline_ms` | `700` | Deadline for agentic facet fanout; stop on timeout. |
+| `fast_path_budget_ms` | `250` | Target budget marker for primary retrieval path telemetry. |
+| `prefilter_enabled` | `true` | Enables metadata/token prefilter before semantic retrieval. |
+| `prefilter_max_insights` | `500` | Max candidate insights after prefilter. |
+| `semantic_limit` | `10` | Number of semantic candidates returned from each retrieval call. |
+| `max_queries` | `3` | Max total retrieval queries (primary + facets). |
+| `agentic_query_limit` | `3` | Max extracted facet queries before clipping by `max_queries`. |
+| `lexical_weight` | `0.30` | Weight applied to lexical blend during rerank. |
+| `bm25_k1` | `1.2` | BM25 TF saturation parameter. |
+| `bm25_b` | `0.75` | BM25 length normalization parameter. |
+| `bm25_mix` | `0.75` | Blend ratio: BM25 vs overlap lexical signal. |
+
+---
 ## 1. Memory Gate (Pattern → EIDOS)
 
 **File:** `lib/pattern_detection/memory_gate.py`

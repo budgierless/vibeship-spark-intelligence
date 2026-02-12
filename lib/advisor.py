@@ -72,41 +72,62 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
     "1": {
         "profile": "local_free",
         "mode": "auto",  # auto | embeddings_only | hybrid_agentic
+        "gate_strategy": "minimal",  # minimal | extended
         "semantic_limit": 8,
         "max_queries": 2,
         "agentic_query_limit": 2,
+        "agentic_deadline_ms": 500,
+        "agentic_rate_limit": 0.10,
+        "agentic_rate_window": 50,
+        "fast_path_budget_ms": 250,
+        "prefilter_enabled": True,
+        "prefilter_max_insights": 300,
         "lexical_weight": 0.25,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
         "bm25_mix": 0.75,  # blend: bm25 vs overlap
-        "complexity_threshold": 3,
+        "complexity_threshold": 3,  # used only by extended gate
         "min_results_no_escalation": 3,
         "min_top_score_no_escalation": 0.68,
         "escalate_on_high_risk": True,
-        "escalate_on_trigger": True,
+        "escalate_on_trigger": False,  # ignored by minimal gate
     },
     "2": {
         "profile": "balanced_spend",
         "mode": "auto",
+        "gate_strategy": "minimal",
         "semantic_limit": 10,
         "max_queries": 3,
         "agentic_query_limit": 3,
+        "agentic_deadline_ms": 700,
+        "agentic_rate_limit": 0.20,
+        "agentic_rate_window": 80,
+        "fast_path_budget_ms": 250,
+        "prefilter_enabled": True,
+        "prefilter_max_insights": 500,
         "lexical_weight": 0.30,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
         "bm25_mix": 0.75,
-        "complexity_threshold": 2,
+        "complexity_threshold": 2,  # used only by extended gate
         "min_results_no_escalation": 4,
         "min_top_score_no_escalation": 0.72,
         "escalate_on_high_risk": True,
-        "escalate_on_trigger": True,
+        "escalate_on_trigger": False,
     },
     "3": {
         "profile": "quality_max",
         "mode": "hybrid_agentic",
+        "gate_strategy": "extended",
         "semantic_limit": 12,
         "max_queries": 4,
         "agentic_query_limit": 4,
+        "agentic_deadline_ms": 1400,
+        "agentic_rate_limit": 1.0,
+        "agentic_rate_window": 80,
+        "fast_path_budget_ms": 350,
+        "prefilter_enabled": True,
+        "prefilter_max_insights": 800,
         "lexical_weight": 0.35,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
@@ -278,6 +299,7 @@ class SparkAdvisor:
         self.effectiveness = self._load_effectiveness()
         self._cache: Dict[str, Tuple[List[Advice], float]] = {}
         self.retrieval_policy = self._load_retrieval_policy()
+        self._agentic_route_history: List[bool] = []
 
     def _load_effectiveness(self) -> Dict[str, Any]:
         """Load effectiveness tracking data."""
@@ -630,9 +652,16 @@ class SparkAdvisor:
                     # Flat top-level retrieval keys are also treated as overrides.
                     for key in (
                         "mode",
+                        "gate_strategy",
                         "semantic_limit",
                         "max_queries",
                         "agentic_query_limit",
+                        "agentic_deadline_ms",
+                        "agentic_rate_limit",
+                        "agentic_rate_window",
+                        "fast_path_budget_ms",
+                        "prefilter_enabled",
+                        "prefilter_max_insights",
                         "lexical_weight",
                         "bm25_k1",
                         "bm25_b",
@@ -656,9 +685,28 @@ class SparkAdvisor:
         policy["mode"] = str(policy.get("mode") or "auto").strip().lower()
         if policy["mode"] not in {"auto", "embeddings_only", "hybrid_agentic"}:
             policy["mode"] = "auto"
+        policy["gate_strategy"] = str(policy.get("gate_strategy") or "minimal").strip().lower()
+        if policy["gate_strategy"] not in {"minimal", "extended"}:
+            policy["gate_strategy"] = "minimal"
         policy["semantic_limit"] = max(4, int(policy.get("semantic_limit", 8) or 8))
         policy["max_queries"] = max(1, int(policy.get("max_queries", 2) or 2))
         policy["agentic_query_limit"] = max(1, int(policy.get("agentic_query_limit", 2) or 2))
+        deadline_raw = policy.get("agentic_deadline_ms", 700)
+        if deadline_raw is None:
+            deadline_raw = 700
+        policy["agentic_deadline_ms"] = max(0, int(deadline_raw))
+
+        rate_raw = policy.get("agentic_rate_limit", 0.2)
+        if rate_raw is None:
+            rate_raw = 0.2
+        policy["agentic_rate_limit"] = max(0.0, min(1.0, float(rate_raw)))
+        policy["agentic_rate_window"] = max(10, int(policy.get("agentic_rate_window", 80) or 80))
+        policy["fast_path_budget_ms"] = max(50, int(policy.get("fast_path_budget_ms", 250) or 250))
+        policy["prefilter_enabled"] = bool(policy.get("prefilter_enabled", True))
+        prefilter_raw = policy.get("prefilter_max_insights", 500)
+        if prefilter_raw is None:
+            prefilter_raw = 500
+        policy["prefilter_max_insights"] = max(20, int(prefilter_raw))
         policy["lexical_weight"] = max(0.0, min(1.0, float(policy.get("lexical_weight", 0.25) or 0.25)))
         policy["bm25_k1"] = max(0.1, float(policy.get("bm25_k1", 1.2) or 1.2))
         policy["bm25_b"] = max(0.0, min(1.0, float(policy.get("bm25_b", 0.75) or 0.75)))
@@ -717,6 +765,75 @@ class SparkAdvisor:
         payload = dict(entry or {})
         payload["ts"] = time.time()
         _append_jsonl_capped(RETRIEVAL_ROUTE_LOG, payload, RETRIEVAL_ROUTE_LOG_MAX)
+
+    def _record_agentic_route(self, used_agentic: bool, window: int) -> None:
+        self._agentic_route_history.append(bool(used_agentic))
+        max_window = max(10, int(window or 80))
+        if len(self._agentic_route_history) > max_window:
+            self._agentic_route_history = self._agentic_route_history[-max_window:]
+
+    def _agentic_recent_rate(self, window: int) -> float:
+        max_window = max(10, int(window or 80))
+        if not self._agentic_route_history:
+            return 0.0
+        sample = self._agentic_route_history[-max_window:]
+        return sum(1 for x in sample if x) / max(1, len(sample))
+
+    def _allow_agentic_escalation(self, rate_limit: float, window: int) -> bool:
+        if rate_limit >= 1.0:
+            return True
+        return self._agentic_recent_rate(window) < max(0.0, float(rate_limit))
+
+    def _insight_blob(self, key: str, insight: Any) -> str:
+        parts = [str(key or "")]
+        for attr in ("insight", "context", "category", "project", "tool", "source", "scope"):
+            val = getattr(insight, attr, None)
+            if val:
+                parts.append(str(val))
+        if isinstance(insight, dict):
+            for field in ("insight", "context", "category", "project", "tool", "source", "scope"):
+                val = insight.get(field)
+                if val:
+                    parts.append(str(val))
+        return " ".join(parts).lower()
+
+    def _prefilter_insights_for_retrieval(
+        self,
+        insights: Dict[str, Any],
+        tool_name: str,
+        context: str,
+        max_items: int,
+    ) -> Dict[str, Any]:
+        if not insights:
+            return insights
+        limit = max(20, int(max_items or 500))
+        if len(insights) <= limit:
+            return insights
+
+        query_tokens = {t for t in re.findall(r"[a-z0-9_]+", (context or "").lower()) if len(t) >= 3}
+        tool = str(tool_name or "").strip().lower()
+        scored: List[Tuple[float, str, Any]] = []
+        fallback: List[Tuple[float, str, Any]] = []
+        for key, insight in insights.items():
+            blob = self._insight_blob(str(key), insight)
+            blob_tokens = {t for t in re.findall(r"[a-z0-9_]+", blob) if len(t) >= 3}
+            overlap = len(query_tokens & blob_tokens) if query_tokens else 0
+            metadata_boost = 2.0 if tool and tool in blob else 0.0
+            reliability = float(getattr(insight, "reliability", 0.5) or 0.5)
+            score = (overlap * 3.0) + metadata_boost + reliability
+            if overlap > 0 or metadata_boost > 0:
+                scored.append((score, key, insight))
+            else:
+                fallback.append((reliability, key, insight))
+
+        ranked: List[Tuple[float, str, Any]] = sorted(scored, key=lambda row: row[0], reverse=True)
+        if len(ranked) < limit:
+            ranked.extend(sorted(fallback, key=lambda row: row[0], reverse=True)[: max(0, limit - len(ranked))])
+
+        selected = ranked[:limit]
+        if not selected:
+            return insights
+        return {key: insight for _, key, insight in selected}
 
     # ============= Core Advice Generation =============
 
@@ -883,30 +1000,53 @@ class SparkAdvisor:
         if not insights:
             return []
 
+        route_start = time.perf_counter()
         policy = dict(self.retrieval_policy or {})
         mode = str(policy.get("mode") or "auto").strip().lower()
+        gate_strategy = str(policy.get("gate_strategy") or "minimal").strip().lower()
         semantic_limit = int(policy.get("semantic_limit", 8) or 8)
         max_queries = int(policy.get("max_queries", 2) or 2)
         agentic_query_limit = int(policy.get("agentic_query_limit", 2) or 2)
+        agentic_deadline_ms = int(policy.get("agentic_deadline_ms", 700))
+        agentic_rate_limit = float(policy.get("agentic_rate_limit", 0.2))
+        agentic_rate_window = int(policy.get("agentic_rate_window", 80) or 80)
+        fast_path_budget_ms = int(policy.get("fast_path_budget_ms", 250) or 250)
+        prefilter_enabled = bool(policy.get("prefilter_enabled", True))
+        prefilter_max_insights = int(policy.get("prefilter_max_insights", 500))
         lexical_weight = float(policy.get("lexical_weight", 0.25) or 0.25)
         bm25_k1 = float(policy.get("bm25_k1", 1.2) or 1.2)
         bm25_b = float(policy.get("bm25_b", 0.75) or 0.75)
         bm25_mix = float(policy.get("bm25_mix", 0.75) or 0.75)
 
         analysis = self._analyze_query_complexity(tool_name, context)
+        high_risk_hits = list(analysis.get("high_risk_hits") or [])
+        high_risk = bool(high_risk_hits)
+        active_insights = insights
+        if prefilter_enabled:
+            active_insights = self._prefilter_insights_for_retrieval(
+                insights,
+                tool_name=tool_name,
+                context=context,
+                max_items=prefilter_max_insights,
+            )
 
+        should_escalate = False
+        escalate_reasons: List[str] = []
         primary_results: List[Any] = []
+        primary_start = time.perf_counter()
         try:
-            primary_results = list(retriever.retrieve(context, insights, limit=semantic_limit))
+            primary_results = list(retriever.retrieve(context, active_insights, limit=semantic_limit))
         except Exception:
             primary_results = []
+        primary_elapsed_ms = int((time.perf_counter() - primary_start) * 1000)
+        primary_over_budget = primary_elapsed_ms > fast_path_budget_ms
+        if primary_over_budget:
+            escalate_reasons.append("fast_path_budget_exceeded")
 
         primary_count = len(primary_results)
         primary_top_score = max((float(getattr(r, "fusion_score", 0.0) or 0.0) for r in primary_results), default=0.0)
         primary_trigger_hit = any(str(getattr(r, "source_type", "") or "") == "trigger" for r in primary_results)
 
-        should_escalate = False
-        escalate_reasons: List[str] = []
         if mode == "hybrid_agentic":
             should_escalate = True
             escalate_reasons.append("forced_hybrid_agentic_mode")
@@ -914,15 +1054,9 @@ class SparkAdvisor:
             should_escalate = False
             escalate_reasons.append("forced_embeddings_only_mode")
         else:
-            if analysis.get("requires_agentic"):
-                should_escalate = True
-                escalate_reasons.append("query_complexity")
-            if bool(policy.get("escalate_on_high_risk", True)) and analysis.get("high_risk_hits"):
+            if bool(policy.get("escalate_on_high_risk", True)) and high_risk:
                 should_escalate = True
                 escalate_reasons.append("high_risk_terms")
-            if bool(policy.get("escalate_on_trigger", True)) and primary_trigger_hit:
-                should_escalate = True
-                escalate_reasons.append("trigger_signal")
             if primary_count < int(policy.get("min_results_no_escalation", 3) or 3):
                 should_escalate = True
                 escalate_reasons.append("weak_primary_count")
@@ -932,11 +1066,26 @@ class SparkAdvisor:
             if not primary_results:
                 should_escalate = True
                 escalate_reasons.append("empty_primary")
+            if gate_strategy == "extended":
+                if analysis.get("requires_agentic"):
+                    should_escalate = True
+                    escalate_reasons.append("query_complexity")
+                if bool(policy.get("escalate_on_trigger", True)) and primary_trigger_hit:
+                    should_escalate = True
+                    escalate_reasons.append("trigger_signal")
+
+        if should_escalate and mode == "auto":
+            if not self._allow_agentic_escalation(rate_limit=agentic_rate_limit, window=agentic_rate_window):
+                should_escalate = False
+                escalate_reasons.append("agentic_rate_cap")
 
         facet_queries: List[str] = []
+        facet_queries_executed: List[str] = []
+        agentic_timed_out = False
         if should_escalate and mode != "embeddings_only":
             facet_queries = self._extract_agentic_queries(context, limit=agentic_query_limit)
             facet_queries = facet_queries[: max(0, max_queries - 1)]
+        deadline_ts = (time.perf_counter() + (agentic_deadline_ms / 1000.0)) if should_escalate and agentic_deadline_ms > 0 else None
 
         merged: Dict[str, Any] = {}
         for r in primary_results:
@@ -946,8 +1095,13 @@ class SparkAdvisor:
                 merged[key] = r
 
         for q in facet_queries:
+            if deadline_ts is not None and time.perf_counter() >= deadline_ts:
+                agentic_timed_out = True
+                escalate_reasons.append("agentic_deadline")
+                break
             try:
-                query_results = retriever.retrieve(q, insights, limit=semantic_limit)
+                query_results = retriever.retrieve(q, active_insights, limit=semantic_limit)
+                facet_queries_executed.append(q)
             except Exception:
                 continue
             for r in query_results:
@@ -967,15 +1121,24 @@ class SparkAdvisor:
                     "escalated": should_escalate,
                     "primary_count": primary_count,
                     "primary_top_score": round(primary_top_score, 4),
-                    "facets_used": len(facet_queries),
+                    "facets_used": len(facet_queries_executed),
+                    "facets_planned": len(facet_queries),
+                    "agentic_timed_out": agentic_timed_out,
+                    "active_insights": len(active_insights),
+                    "fast_path_budget_ms": fast_path_budget_ms,
+                    "fast_path_elapsed_ms": primary_elapsed_ms,
+                    "fast_path_over_budget": primary_over_budget,
                     "complexity_score": analysis.get("score"),
                     "complexity_threshold": analysis.get("threshold"),
                     "reasons": escalate_reasons[:6],
+                    "route_elapsed_ms": int((time.perf_counter() - route_start) * 1000),
                 }
             )
+            self._record_agentic_route(False, agentic_rate_window)
             return []
 
-        semantic_source = "semantic-agentic" if should_escalate else "semantic"
+        used_agentic = bool(facet_queries_executed)
+        semantic_source = "semantic-agentic" if used_agentic else "semantic"
         merged_values = list(merged.values())
         lexical_scores = self._hybrid_lexical_scores(
             query=context,
@@ -996,7 +1159,7 @@ class SparkAdvisor:
         )
         ranked_rows = [row for row, _ in ranked]
 
-        route_reason = " + ".join(escalate_reasons[:3]) if should_escalate else "primary_semantic_only"
+        route_reason = " + ".join(escalate_reasons[:3]) if used_agentic else "primary_semantic_only"
         advice: List[Advice] = []
         for r in ranked_rows[:semantic_limit]:
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(r.insight_text):
@@ -1013,7 +1176,7 @@ class SparkAdvisor:
             base_reason = str(getattr(r, "why", "") or "").strip()
             if source == "trigger":
                 reason = base_reason or "Trigger match"
-            elif should_escalate:
+            elif used_agentic:
                 reason = base_reason or f"Hybrid-agentic route: {route_reason}"
             else:
                 reason = base_reason or "Semantic route (embeddings primary)"
@@ -1036,23 +1199,34 @@ class SparkAdvisor:
                 "profile_level": policy.get("level"),
                 "profile_name": policy.get("profile"),
                 "mode": mode,
+                "gate_strategy": gate_strategy,
                 "route": semantic_source,
-                "escalated": should_escalate,
+                "escalated": used_agentic,
                 "primary_count": primary_count,
                 "primary_top_score": round(primary_top_score, 4),
                 "returned_count": len(advice),
-                "facets_used": len(facet_queries),
+                "facets_used": len(facet_queries_executed),
+                "facets_planned": len(facet_queries),
+                "agentic_timed_out": agentic_timed_out,
+                "agentic_rate_limit": agentic_rate_limit,
+                "agentic_recent_rate": round(self._agentic_recent_rate(agentic_rate_window), 4),
+                "active_insights": len(active_insights),
                 "lexical_weight": lexical_weight,
                 "bm25_k1": bm25_k1,
                 "bm25_b": bm25_b,
                 "bm25_mix": bm25_mix,
+                "fast_path_budget_ms": fast_path_budget_ms,
+                "fast_path_elapsed_ms": primary_elapsed_ms,
+                "fast_path_over_budget": primary_over_budget,
                 "complexity_score": analysis.get("score"),
                 "complexity_threshold": analysis.get("threshold"),
                 "complexity_hits": analysis.get("complexity_hits") or [],
                 "high_risk_hits": analysis.get("high_risk_hits") or [],
                 "reasons": escalate_reasons[:6],
+                "route_elapsed_ms": int((time.perf_counter() - route_start) * 1000),
             }
         )
+        self._record_agentic_route(used_agentic, agentic_rate_window)
         return advice
 
     def _extract_agentic_queries(self, context: str, limit: int = 3) -> List[str]:

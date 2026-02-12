@@ -129,6 +129,18 @@ Dashboards and ops:
    - intent = semantic_retriever._extract_intent(context)
    - triggers (optional) + semantic search (embeddings) + fusion scoring + dedupe + MMR + category caps
    - retrieval log: ~/.spark/logs/semantic_retrieval.jsonl (intent, candidates, triggers, top-N scores)
+13) Advisor retrieval router (Carmack-style, retrieval section in tuneables):
+   - default strategy: embeddings-first fast path, then selective agentic fanout
+   - minimal escalation gate in auto mode:
+     - weak primary count
+     - weak primary top score
+     - high-risk terms
+   - hard controls:
+     - agentic deadline (`agentic_deadline_ms`)
+     - agentic rate cap (`agentic_rate_limit`, windowed)
+     - prefilter cap (`prefilter_max_insights`) before semantic retrieval
+   - route telemetry:
+     - ~/.spark/advisor/retrieval_router.jsonl with route, reasons, elapsed, budget/cap flags
 
 ### 2.6.2 Learning usage in real work (semantic first)
 1) Advisor is called before actions, so learnings can change the next decision (not just be stored).
@@ -209,6 +221,8 @@ Semantic retrieval:
 - ~/.spark/logs/semantic_retrieval.jsonl
 Advisor metrics:
 - ~/.spark/advisor/metrics.json
+Advisor routing diagnostics:
+- ~/.spark/advisor/retrieval_router.jsonl
 Advisory foundation:
 - ~/.spark/advisory_engine.jsonl
 - ~/.spark/advisory_emit.jsonl
@@ -317,6 +331,17 @@ Cognitive learning and promotion:
 - promoter DEFAULT_PROMOTION_THRESHOLD=0.7, DEFAULT_MIN_VALIDATIONS=3, DEFAULT_CONFIDENCE_FLOOR=0.90
 - context_sync DEFAULT_MIN_RELIABILITY=0.7, DEFAULT_MIN_VALIDATIONS=3, DEFAULT_MAX_ITEMS=12, DEFAULT_MAX_PROMOTED=6
   - context_sync also injects recent high-quality chip highlights
+
+Advisor retrieval router:
+- ~/.spark/tuneables.json -> retrieval:
+  - level, mode, gate_strategy
+  - semantic_limit, max_queries, agentic_query_limit
+  - agentic_deadline_ms, agentic_rate_limit, agentic_rate_window
+  - fast_path_budget_ms
+  - prefilter_enabled, prefilter_max_insights
+  - lexical_weight, bm25_k1, bm25_b, bm25_mix
+  - min_results_no_escalation, min_top_score_no_escalation
+  - escalate_on_high_risk, escalate_on_trigger
 
 Advisor / skills:
 - advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120

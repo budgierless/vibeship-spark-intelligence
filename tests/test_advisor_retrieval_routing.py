@@ -231,3 +231,122 @@ def test_bm25_rerank_prefers_term_dense_candidate(monkeypatch, tmp_path):
 
     assert advice
     assert advice[0].insight_key == "dense-b"
+
+
+def test_auto_mode_respects_agentic_rate_cap(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+    fake = _FakeRetriever(primary_count=3, primary_score=0.85)
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: fake)
+
+    advisor = advisor_mod.SparkAdvisor()
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        mode="auto",
+        gate_strategy="minimal",
+        agentic_rate_limit=0.0,
+        agentic_rate_window=20,
+        max_queries=4,
+        agentic_query_limit=3,
+        min_results_no_escalation=10,
+        min_top_score_no_escalation=0.95,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Bash", "auth token session retrieval failure in production")
+    route = _load_last_route(tmp_path / "retrieval_router.jsonl")
+
+    assert advice
+    assert len(fake.calls) == 1  # primary only; no facet queries
+    assert route["escalated"] is False
+    assert "agentic_rate_cap" in (route.get("reasons") or [])
+
+
+def test_agentic_deadline_prevents_facet_fanout(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _SlowFacetRetriever:
+        def __init__(self):
+            self.calls = []
+
+        def retrieve(self, query: str, _insights, limit: int = 8):
+            self.calls.append(query)
+            if "failure pattern and fix" in query:
+                # Simulate expensive facet retrieval call.
+                import time as _time
+                _time.sleep(0.03)
+            return [
+                SimpleNamespace(
+                    insight_key=f"row:{len(self.calls)}",
+                    insight_text=f"result {len(self.calls)}",
+                    semantic_sim=0.8,
+                    trigger_conf=0.0,
+                    fusion_score=0.8,
+                    source_type="semantic",
+                    why="retrieval",
+                )
+            ][:limit]
+
+    slow = _SlowFacetRetriever()
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: slow)
+
+    advisor = advisor_mod.SparkAdvisor()
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        mode="auto",
+        gate_strategy="minimal",
+        agentic_deadline_ms=10,
+        max_queries=4,
+        agentic_query_limit=3,
+        min_results_no_escalation=10,
+        min_top_score_no_escalation=0.95,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Edit", "auth token session retrieval issue in production")
+    route = _load_last_route(tmp_path / "retrieval_router.jsonl")
+
+    assert advice
+    assert route["facets_planned"] >= 1
+    assert route["facets_used"] <= 1
+    assert route["agentic_timed_out"] is True
+
+
+def test_prefilter_limits_active_insight_set(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _InspectingRetriever:
+        def __init__(self):
+            self.insight_sizes = []
+
+        def retrieve(self, _query: str, insights, limit: int = 8):
+            self.insight_sizes.append(len(insights))
+            return [
+                SimpleNamespace(
+                    insight_key="focus-key",
+                    insight_text="auth memory retrieval fix",
+                    semantic_sim=0.9,
+                    trigger_conf=0.0,
+                    fusion_score=0.9,
+                    source_type="semantic",
+                    why="prefilter test",
+                )
+            ][:limit]
+
+    fake = _InspectingRetriever()
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: fake)
+
+    advisor = advisor_mod.SparkAdvisor()
+    large = {}
+    for i in range(120):
+        txt = "auth token session retrieval fix" if i < 5 else f"misc note {i}"
+        large[f"k{i}"] = SimpleNamespace(insight=txt, reliability=0.5, context="ctx")
+    advisor.cognitive.insights = large
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        prefilter_enabled=True,
+        prefilter_max_insights=30,
+        mode="embeddings_only",
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Read", "auth token retrieval")
+    assert advice
+    assert fake.insight_sizes
+    assert fake.insight_sizes[0] <= 30
