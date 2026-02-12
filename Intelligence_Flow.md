@@ -60,7 +60,8 @@ Dashboards and ops:
 3) bridge_cycle enables deferred/batch writes for cognitive learner and Meta-Ralph to avoid repeated large JSON rewrites per event.
 4) bridge_cycle classifies events in one pass and reuses those buckets for tastebank, content learning, cognitive signal extraction, and chips.
 5) bridge_cycle now runs both prompt-based validation and outcome-linked validation each cycle.
-5) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
+6) bridge_cycle runs runtime hygiene cleanup each cycle (stale heartbeat files, stale PID state, stale tmp artifacts).
+7) A heartbeat is written to ~/.spark/bridge_worker_heartbeat.json.
 
 ### 2.2.1 Trace context propagation (v1)
 - trace_id is attached at ingest (hooks/observe.py, sparkd.py, lib.queue.quick_capture).
@@ -107,6 +108,7 @@ Dashboards and ops:
 3) lib.validation_loop updates reliability based on outcomes.
 4) lib.aha_tracker captures surprises for learning.
 5) lib.exposure_tracker records exposure timing for prediction evaluation.
+   - sync-heavy sources are deduped/capped (`sync_context`, `sync_context:project`, `chip_merge`) to reduce noise/churn.
 
 ### 2.6.1 Advisory engine + packetized feedback loop
 1) PreToolUse: hooks/observe.py calls lib.advisory_engine.on_pre_tool.
@@ -149,6 +151,8 @@ Dashboards and ops:
 5) lib.chips.evolution records trigger quality and can deprecate/add triggers or suggest provisional chips.
 6) lib.chip_merger merges accepted chip insights into cognitive categories.
    - unknown chip IDs use domain/content fallback category inference
+   - merge dedupe uses stable content hash (timestamp-independent) to suppress repeat churn
+   - low-quality repeats are suppressed with cooldown tracking before recounting skip noise
 
 ### 2.8 Mind retrieval + manual sync
 1) lib.mind_bridge retrieves from mind_server.py (keyword + optional FTS, RRF + salience).
@@ -355,9 +359,11 @@ Chips:
 - runtime quality gate: SPARK_CHIP_MIN_SCORE (default 0.35)
 - runtime confidence gate: SPARK_CHIP_MIN_CONFIDENCE (default 0.7)
 - runtime gate mode: SPARK_CHIP_GATE_MODE (default balanced)
-- runtime/store rotate JSONL files at size thresholds (runtime 10MB cap, observations 5MB cap)
+- runtime/store rotate JSONL files at size thresholds (runtime 2MB cap, observations 5MB cap)
 - loader env SPARK_CHIP_SCHEMA_VALIDATION=warn|block
 - loader preference env SPARK_CHIP_PREFERRED_FORMAT=single|multifile|hybrid (default multifile)
+Auto-tuner hygiene:
+- auto_tuner only writes tuneables when values actually change (no-op recommendation/boost writes are skipped)
 
 Outcomes + prediction:
 - prediction_loop: prediction max age 6h, project prediction max age 14 days, match sim threshold 0.72

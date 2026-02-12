@@ -284,18 +284,31 @@ Primary KPI targets:
 - advisory duplicate rate < 8%
 
 ## Track B (Broader Spark cleanup + lightweighting)
-- B1: Auto-tuner no-op churn cleanup (only write when values actually change)
-- B2: Exposure stream volume reduction (sampling/dedup for sync-heavy noise)
-- B3: Chip activation relevance tightening (reduce low-quality merge skip churn)
-- B4: Sync target downgrade policy (optional target failures should not degrade core signal)
-- B5: Artifact hygiene and stale operational state cleanup
-- B6: DEPTH process-quality uplift (focus on process weakness in recent slices)
+- B1: Auto-tuner no-op churn cleanup (only write when values actually change) - DONE
+- B2: Exposure stream volume reduction (sampling/dedup for sync-heavy noise) - DONE
+- B3: Chip activation relevance tightening (reduce low-quality merge skip churn) - DONE
+- B4: Sync target downgrade policy (optional target failures should not degrade core signal) - DONE
+- B5: Artifact hygiene and stale operational state cleanup - DONE
+- B6: DEPTH process-quality uplift (focus on process weakness in recent slices) - DONE
 
 Primary KPI targets:
 - no-op tune writes near zero
 - lower exposures/minute with no recall regression
 - lower `skipped_low_quality` rate in chip merge cycles
 - optional adapter failures isolated from core health status
+
+Track B completion update (2026-02-12):
+- B1 shipped in `lib/auto_tuner.py`: recommendation and boost writes now skip no-op changes.
+- B2 shipped in `lib/exposure_tracker.py`: source-scoped dedupe/caps for `sync_context`, `sync_context:project`, `chip_merge`.
+- B3 shipped in `lib/chip_merger.py` + `lib/bridge_cycle.py`: stable dedupe hash, low-quality cooldown suppression, tighter merge thresholds.
+- B5 shipped in `lib/runtime_hygiene.py` + bridge cycle integration: stale runtime artifacts and stale PID state are cleaned automatically.
+- B6 shipped in `lib/depth_trainer.py`: weak-lens IDs are tracked and topic discovery now emits targeted lens drill topics.
+- Validation tests added:
+  - `tests/test_eidos.py` (auto-tuner no-op guards)
+  - `tests/test_exposure_tracker.py`
+  - `tests/test_chip_merger.py`
+  - `tests/test_runtime_hygiene.py`
+  - `tests/test_depth_topic_discovery.py`
 
 ## Dedup matrix (shared work applied once)
 

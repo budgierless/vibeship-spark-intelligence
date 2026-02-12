@@ -148,10 +148,10 @@ Net: the loop is operational and improving, but quality reliability is constrain
 5. A5: Live/fallback/blocked/stale status visibility in operator surface
 
 ## Track B (Broader Spark cleanup/lightweighting)
-1. B1: Noise suppression in chip/exposure flow
-2. B2: Optional adapter downgrade policy and clearer health split
-3. B3: Artifact hygiene and compaction cadence
-4. B4: DEPTH weak-lens targeted uplift
+1. B1: Noise suppression in chip/exposure flow (done)
+2. B2: Optional adapter downgrade policy and clearer health split (done)
+3. B3: Artifact hygiene and compaction cadence (done)
+4. B4: DEPTH weak-lens targeted uplift (done)
 
 ## Shared items (run once)
 1. `core.error_taxonomy`
@@ -225,6 +225,29 @@ Net: the loop is operational and improving, but quality reliability is constrain
 16. Extended delivery badge visibility into Pulse/OpenClaw surfaces:
 - external `vibeship-spark-pulse` now normalizes and exposes advisory delivery in `/api/status` and `/api/advisory`.
 - Pulse advisory UI now renders delivery state (`live|fallback|blocked|stale`) with reason/age/event/mode.
+
+17. Added auto-tuner no-op churn cleanup:
+- `lib/auto_tuner.py` now skips recommendation and boost writes when values do not change.
+
+18. Added exposure write-volume reduction for sync-heavy paths:
+- `lib/exposure_tracker.py` now dedupes/caps `sync_context`, `sync_context:project`, and `chip_merge` writes.
+
+19. Tightened chip merge relevance and skip-noise suppression:
+- `lib/chip_merger.py` now uses timestamp-independent content hashes and low-quality cooldown suppression.
+- `lib/bridge_cycle.py` now runs stricter chip merge confidence/quality thresholds and surfaces cooldown skip stats.
+
+20. Added runtime artifact hygiene in bridge cycle:
+- new `lib/runtime_hygiene.py` removes stale heartbeat files, stale PID state, and stale temp artifacts.
+- bridge cycle now runs this hygiene step each loop.
+
+21. Added DEPTH weak-lens targeting upgrades:
+- `lib/depth_trainer.py` now tracks ordered weak lens IDs and generates targeted drill topics for weak slices.
+
+22. Added validation tests for Track B upgrades:
+- `tests/test_exposure_tracker.py`
+- `tests/test_chip_merger.py`
+- `tests/test_runtime_hygiene.py`
+- `tests/test_depth_topic_discovery.py`
 
 ## 10) Decision summary
 
