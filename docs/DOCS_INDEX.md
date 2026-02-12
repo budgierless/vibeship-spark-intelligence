@@ -22,6 +22,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`: lightweight optimization policy (why, KPI gate, delete-pass rules, docs integration checklist)
 - `docs/SPARK_CARMACK_OPTIMIZATION_IMPLEMENTATION.md`: implemented Carmack optimization changes (core-only sync, advisory fallback policy, memory/chip noise controls)
 - `docs/RETRIEVAL_LEVELS.md`: 3-level memory retrieval operating model (local-free, balanced, quality-max) + auto-router controls
+- `docs/ADVISORY_BENCHMARK_SYSTEM.md`: advisory-quality benchmark design, scoring model, and iteration loop
 - `docs/OPENCLAW_RESEARCH_AND_UPDATES.md`: experiment log for OpenClaw tuning changes, outcomes, and keep/rollback decisions
 - `docs/reports/2026-02-12_openclaw_memory_advisory_concrete_plan_and_live_baseline.md`: concrete memory/advisory fix plan + live baseline + execution updates
 - `docs/reports/2026-02-12_spark_intelligence_2day_comprehensive_honest_assessment.md`: two-day system scorecard and integrated closure plan
@@ -46,6 +47,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/PROGRAM_STATUS.md`: consolidated implementation status and priorities
 - `docs/memory-retrieval-status.md`: memory retrieval stabilization + A/B execution spec
 - `docs/reports/2026-02-12_memory_retrieval_tuned_two_system_scorecard.md`: tuned best-vs-best comparison (`embeddings_only` vs `hybrid_agentic`)
+- `docs/reports/2026-02-12_advisory_tuning_delta.md`: advisory tuneables execution report + measured pre/post deltas
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log

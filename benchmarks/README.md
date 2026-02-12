@@ -84,6 +84,33 @@ Outputs:
 - `benchmarks/out/memory_retrieval_ab_report.json`
 - `benchmarks/out/memory_retrieval_ab_report.md`
 
+## Advisory Quality A/B
+
+Benchmark advisory usefulness directly (not just retrieval quality):
+
+```bash
+python benchmarks/advisory_quality_ab.py \
+  --cases benchmarks/data/advisory_quality_eval_seed.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live \
+  --out-prefix advisory_quality_ab
+```
+
+This writes:
+- `benchmarks/out/advisory_quality_ab_report.json`
+- `benchmarks/out/advisory_quality_ab_report.md`
+
+Scoring dimensions:
+- emit correctness (`should_emit` vs actual emit)
+- expected/forbidden content checks
+- actionability (`Next check` / command-level guidance)
+- trace-bound decision coverage
+- memory-source utilization
+- repetition penalty across emitted texts
+
+Use `--profile-file` to test custom profile variants layered over defaults.
+
 ### Tune for best-vs-best comparison
 
 Use grid-search tuning to optimize each system independently, then compare
