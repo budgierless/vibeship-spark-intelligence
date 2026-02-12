@@ -5,7 +5,11 @@ from lib import chip_merger as cm
 
 
 class _DummyCog:
+    def __init__(self):
+        self.calls = []
+
     def add_insight(self, **_kwargs):
+        self.calls.append(dict(_kwargs))
         return {"ok": True}
 
     def _generate_key(self, category, text):
@@ -30,27 +34,42 @@ def test_merge_skips_duplicate_content_in_same_run(tmp_path, monkeypatch):
     state_file = tmp_path / "chip_merge_state.json"
     monkeypatch.setattr(cm, "CHIP_INSIGHTS_DIR", chip_dir)
     monkeypatch.setattr(cm, "MERGE_STATE_FILE", state_file)
-    monkeypatch.setattr(cm, "get_cognitive_learner", lambda: _DummyCog())
+    cog = _DummyCog()
+    monkeypatch.setattr(cm, "get_cognitive_learner", lambda: cog)
     monkeypatch.setattr(cm, "record_exposures", lambda *args, **kwargs: 0)
 
     now = datetime.now(timezone.utc)
     rows = [
         {
-            "chip_id": "bench_core",
-            "content": "Use contract tests before broad refactors",
-            "confidence": 0.9,
-            "timestamp": (now - timedelta(seconds=1)).isoformat(),
-            "captured_data": {"quality_score": {"total": 0.95}},
-        },
-        {
-            "chip_id": "bench_core",
-            "content": "Use contract tests before broad refactors",
-            "confidence": 0.92,
-            "timestamp": now.isoformat(),
-            "captured_data": {"quality_score": {"total": 0.96}},
-        },
+                "chip_id": "marketing",
+                "content": "Use contract tests before broad refactors",
+                "confidence": 0.9,
+                "timestamp": (now - timedelta(seconds=1)).isoformat(),
+                "captured_data": {
+                    "quality_score": {
+                        "total": 0.95,
+                        "cognitive_value": 0.7,
+                        "actionability": 0.7,
+                        "transferability": 0.6,
+                    }
+                },
+            },
+            {
+                "chip_id": "marketing",
+                "content": "Use contract tests before broad refactors",
+                "confidence": 0.92,
+                "timestamp": now.isoformat(),
+                "captured_data": {
+                    "quality_score": {
+                        "total": 0.96,
+                        "cognitive_value": 0.72,
+                        "actionability": 0.7,
+                        "transferability": 0.6,
+                    }
+                },
+            },
     ]
-    _write_rows(chip_dir / "bench_core.jsonl", rows)
+    _write_rows(chip_dir / "marketing.jsonl", rows)
 
     stats = cm.merge_chip_insights(limit=20, dry_run=False)
 
@@ -92,7 +111,7 @@ def test_duplicate_churn_throttle_skips_repeated_cycles(tmp_path, monkeypatch):
     monkeypatch.setattr(cm, "record_exposures", lambda *args, **kwargs: 0)
 
     text = "Use contract tests before broad refactors"
-    sig = cm._hash_insight("bench_core", text)
+    sig = cm._hash_insight("marketing", text)
     state_file.write_text(
         json.dumps(
             {
@@ -108,15 +127,22 @@ def test_duplicate_churn_throttle_skips_repeated_cycles(tmp_path, monkeypatch):
     now = datetime.now(timezone.utc)
     for i in range(12):
         rows.append(
-            {
-                "chip_id": "bench_core",
-                "content": text,
-                "confidence": 0.95,
-                "timestamp": (now - timedelta(seconds=i)).isoformat(),
-                "captured_data": {"quality_score": {"total": 0.95}},
-            }
-        )
-    _write_rows(chip_dir / "bench_core.jsonl", rows)
+                {
+                    "chip_id": "marketing",
+                    "content": text,
+                    "confidence": 0.95,
+                    "timestamp": (now - timedelta(seconds=i)).isoformat(),
+                    "captured_data": {
+                        "quality_score": {
+                            "total": 0.95,
+                            "cognitive_value": 0.7,
+                            "actionability": 0.7,
+                            "transferability": 0.6,
+                        }
+                    },
+                }
+            )
+    _write_rows(chip_dir / "marketing.jsonl", rows)
 
     first = cm.merge_chip_insights(limit=20, dry_run=False)
     second = cm.merge_chip_insights(limit=20, dry_run=False)
@@ -148,3 +174,62 @@ def test_chip_merge_loads_duplicate_churn_tuneables(tmp_path, monkeypatch):
     assert loaded["duplicate_churn_ratio"] == 0.9
     assert loaded["duplicate_churn_min_processed"] == 25
     assert loaded["duplicate_churn_cooldown_s"] == 900
+
+
+def test_merge_skips_telemetry_non_learning_rows(tmp_path, monkeypatch):
+    chip_dir = tmp_path / "chip_insights"
+    state_file = tmp_path / "chip_merge_state.json"
+    learning_file = tmp_path / "chip_learning_distillations.jsonl"
+    cog = _DummyCog()
+    monkeypatch.setattr(cm, "CHIP_INSIGHTS_DIR", chip_dir)
+    monkeypatch.setattr(cm, "MERGE_STATE_FILE", state_file)
+    monkeypatch.setattr(cm, "LEARNING_DISTILLATIONS_FILE", learning_file)
+    monkeypatch.setattr(cm, "get_cognitive_learner", lambda: cog)
+    monkeypatch.setattr(cm, "record_exposures", lambda *args, **kwargs: 0)
+
+    row = {
+        "chip_id": "spark-core",
+        "content": "[Spark Core Intelligence] post_tool: tool_name: Read, event_type: post_tool",
+        "confidence": 0.95,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "captured_data": {"quality_score": {"total": 0.9, "cognitive_value": 0.7, "actionability": 0.6, "transferability": 0.6}},
+    }
+    _write_rows(chip_dir / "spark-core.jsonl", [row])
+
+    stats = cm.merge_chip_insights(min_confidence=0.5, min_quality_score=0.5, limit=5, dry_run=False)
+    assert stats["merged"] == 0
+    assert stats["skipped_non_learning"] >= 1
+    assert cog.calls == []
+
+
+def test_merge_distills_from_structured_fields(tmp_path, monkeypatch):
+    chip_dir = tmp_path / "chip_insights"
+    state_file = tmp_path / "chip_merge_state.json"
+    learning_file = tmp_path / "chip_learning_distillations.jsonl"
+    cog = _DummyCog()
+    monkeypatch.setattr(cm, "CHIP_INSIGHTS_DIR", chip_dir)
+    monkeypatch.setattr(cm, "MERGE_STATE_FILE", state_file)
+    monkeypatch.setattr(cm, "LEARNING_DISTILLATIONS_FILE", learning_file)
+    monkeypatch.setattr(cm, "get_cognitive_learner", lambda: cog)
+    monkeypatch.setattr(cm, "record_exposures", lambda *args, **kwargs: 0)
+
+    row = {
+        "chip_id": "engagement-pulse",
+        "content": "",
+        "confidence": 0.92,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "captured_data": {
+            "fields": {"topic": "agent payments", "likes": 31, "replies": 4, "retweets": 6},
+            "quality_score": {"total": 0.81, "cognitive_value": 0.7, "actionability": 0.6, "transferability": 0.5},
+        },
+    }
+    _write_rows(chip_dir / "engagement-pulse.jsonl", [row])
+
+    stats = cm.merge_chip_insights(min_confidence=0.5, min_quality_score=0.5, limit=5, dry_run=False)
+    assert stats["merged"] == 1
+    assert stats["merged_distilled"] == 1
+    assert len(cog.calls) == 1
+    merged_text = str(cog.calls[0].get("insight") or "").lower()
+    assert "engagement evidence" in merged_text
+    assert "agent payments" in merged_text
+    assert "source" in cog.calls[0]

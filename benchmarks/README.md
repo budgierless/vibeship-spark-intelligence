@@ -217,6 +217,18 @@ Chip experiment report now includes ablation fields:
 
 This prevents false positives by explicitly measuring whether chips improve outcomes vs a chips-disabled pass.
 
+Chip learning diagnostics (indirect path: chips -> distillation -> cognitive memory):
+
+```bash
+python scripts/run_chip_learning_diagnostics.py \
+  --limit-per-chip 400 \
+  --out-prefix chip_learning_diagnostics_v1
+```
+
+Diagnostics outputs:
+- `benchmarks/out/chip_learning_diagnostics_v1_report.json`
+- `benchmarks/out/chip_learning_diagnostics_v1_report.md`
+
 Candidate profile overlay with retrieval/chip tuning:
 - `benchmarks/data/advisory_realism_profile_candidates_v2.json`
 

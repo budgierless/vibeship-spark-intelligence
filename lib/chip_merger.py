@@ -7,6 +7,7 @@ so they can be validated, promoted, and injected into context.
 """
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Any
@@ -26,6 +27,40 @@ MAX_REJECTED_TRACKING = 2000
 DUPLICATE_CHURN_RATIO = 0.8
 DUPLICATE_CHURN_MIN_PROCESSED = 10
 DUPLICATE_CHURN_COOLDOWN_S = 30 * 60
+LEARNING_DISTILLATIONS_FILE = Path.home() / ".spark" / "chip_learning_distillations.jsonl"
+
+CHIP_TELEMETRY_BLOCKLIST = {"spark-core", "bench_core", "bench-core"}
+TELEMETRY_MARKERS = (
+    "post_tool",
+    "pre_tool",
+    "tool_name:",
+    "event_type:",
+    "status:",
+    "cwd:",
+    "file_path:",
+    "user_prompt_signal",
+    "tool_cycle",
+    "command:",
+)
+ACTIONABLE_MARKERS = (
+    "should",
+    "avoid",
+    "prefer",
+    "because",
+    "works better",
+    "caused by",
+    "due to",
+    "next time",
+    "use ",
+    "do not ",
+    "never ",
+    "always ",
+)
+NON_LEARNING_PATTERNS = (
+    re.compile(r"^[\[\(]?[a-z0-9 _-]+[\]\)]?\s*(post_tool|pre_tool|tool_failure|tool_event|user_prompt)\b", re.I),
+    re.compile(r"(?i)\b(?:invoke-webrequest|get-process|start-sleep|\$erroractionpreference)\b"),
+    re.compile(r"(?i)\b(?:c:\\\\users\\\\|/users/|/tmp/|\\.jsonl|\\.py|\\.md)\b"),
+)
 
 
 # Map chip domains to cognitive categories
@@ -156,11 +191,173 @@ def _load_merge_tuneables() -> Dict[str, float]:
         cooldown_s = max(60, min(24 * 3600, int(cfg.get("duplicate_churn_cooldown_s", cooldown_s))))
     except Exception:
         pass
+    min_cognitive_value = 0.35
+    min_actionability = 0.25
+    min_transferability = 0.2
+    min_statement_len = 28
+    try:
+        min_cognitive_value = max(0.0, min(1.0, float(cfg.get("min_cognitive_value", min_cognitive_value))))
+    except Exception:
+        pass
+    try:
+        min_actionability = max(0.0, min(1.0, float(cfg.get("min_actionability", min_actionability))))
+    except Exception:
+        pass
+    try:
+        min_transferability = max(0.0, min(1.0, float(cfg.get("min_transferability", min_transferability))))
+    except Exception:
+        pass
+    try:
+        min_statement_len = max(12, min(240, int(cfg.get("min_statement_len", min_statement_len))))
+    except Exception:
+        pass
+
     return {
         "duplicate_churn_ratio": float(ratio),
         "duplicate_churn_min_processed": int(min_processed),
         "duplicate_churn_cooldown_s": int(cooldown_s),
+        "min_cognitive_value": float(min_cognitive_value),
+        "min_actionability": float(min_actionability),
+        "min_transferability": float(min_transferability),
+        "min_statement_len": int(min_statement_len),
     }
+
+
+def _norm_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _strip_chip_prefix(text: str) -> str:
+    out = str(text or "").strip()
+    # Remove common chip label prefixes: [X Intelligence], [Chip:*], etc.
+    out = re.sub(r"^\[[^\]]{2,80}\]\s*", "", out)
+    out = re.sub(r"^\[[^\]]{2,80}\]\s*", "", out)  # second pass for stacked tags
+    return _norm_whitespace(out)
+
+
+def _looks_like_telemetry(chip_id: str, text: str) -> bool:
+    cid = str(chip_id or "").strip().lower()
+    if cid in CHIP_TELEMETRY_BLOCKLIST:
+        return True
+    body = str(text or "").strip().lower()
+    if not body:
+        return True
+    if any(marker in body for marker in TELEMETRY_MARKERS):
+        return True
+    for pattern in NON_LEARNING_PATTERNS:
+        if pattern.search(body):
+            return True
+    return False
+
+
+def _format_value(value: Any, max_len: int = 84) -> str:
+    text = _norm_whitespace(str(value or ""))
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3].rstrip() + "..."
+
+
+def _field_based_learning_statement(chip_id: str, captured_data: Dict[str, Any]) -> str:
+    fields = (captured_data or {}).get("fields") or {}
+    if not isinstance(fields, dict) or not fields:
+        return ""
+
+    cid = str(chip_id or "").strip().lower().replace("_", "-")
+    if cid in {"engagement-pulse", "x-social", "x_social"}:
+        topic = _format_value(fields.get("topic") or fields.get("category") or "")
+        likes = _format_value(fields.get("likes") or "")
+        replies = _format_value(fields.get("replies") or "")
+        retweets = _format_value(fields.get("retweets") or "")
+        parts = []
+        if topic:
+            parts.append(f"topic={topic}")
+        if likes:
+            parts.append(f"likes={likes}")
+        if replies:
+            parts.append(f"replies={replies}")
+        if retweets:
+            parts.append(f"retweets={retweets}")
+        if parts:
+            return f"Use social engagement evidence ({', '.join(parts)}) to prioritize messaging experiments."
+
+    if cid in {"social-convo", "social-conversation"}:
+        ranking = _format_value(fields.get("trigger_ranking") or "")
+        q_vs_s = _format_value(fields.get("question_vs_statement") or "")
+        topics = _format_value(fields.get("top_topics") or "")
+        parts = []
+        if ranking:
+            parts.append(f"trigger_ranking={ranking}")
+        if q_vs_s:
+            parts.append(f"question_vs_statement={q_vs_s}")
+        if topics:
+            parts.append(f"top_topics={topics}")
+        if parts:
+            return f"Prefer conversation patterns backed by observed evidence ({', '.join(parts)})."
+
+    # Generic fallback for structured fields that are not raw telemetry.
+    ignore_keys = {"tool_name", "command", "status", "event_type", "cwd", "file_path", "success", "text", "tweet_text", "content"}
+    keyvals = []
+    for key, value in fields.items():
+        k = str(key or "").strip().lower()
+        if not k or k in ignore_keys:
+            continue
+        v = _format_value(value)
+        if not v:
+            continue
+        keyvals.append(f"{k}={v}")
+        if len(keyvals) >= 3:
+            break
+    if keyvals:
+        return f"Use observed domain signals ({', '.join(keyvals)}) when deciding next actions."
+    return ""
+
+
+def _distill_learning_statement(chip_id: str, content: str, captured_data: Dict[str, Any], min_len: int) -> str:
+    text = _strip_chip_prefix(content)
+    if _looks_like_telemetry(chip_id, text):
+        text = ""
+
+    if text:
+        # Reduce noisy metadata clauses while preserving learnable core.
+        text = re.sub(r"\b(?:tool_name|event_type|status|cwd|file_path|command)\s*:\s*[^,;]+", "", text, flags=re.I)
+        text = _norm_whitespace(text.strip(" ,;|"))
+
+    if not text or len(text) < int(min_len):
+        text = _field_based_learning_statement(chip_id, captured_data)
+
+    text = _norm_whitespace(text)
+    if len(text) < int(min_len):
+        return ""
+
+    lower = text.lower()
+    if _looks_like_telemetry(chip_id, lower):
+        return ""
+    if not any(marker in lower for marker in ACTIONABLE_MARKERS):
+        # Allow strong evidence-style distilled statements.
+        if "evidence (" not in lower and "observed" not in lower:
+            return ""
+    return text[:320]
+
+
+def _is_learning_quality_ok(quality: Dict[str, Any], limits: Dict[str, float]) -> bool:
+    try:
+        cognitive_value = float(quality.get("cognitive_value", 0.0) or 0.0)
+    except Exception:
+        cognitive_value = 0.0
+    try:
+        actionability = float(quality.get("actionability", 0.0) or 0.0)
+    except Exception:
+        actionability = 0.0
+    try:
+        transferability = float(quality.get("transferability", 0.0) or 0.0)
+    except Exception:
+        transferability = 0.0
+
+    return (
+        cognitive_value >= float(limits.get("min_cognitive_value", 0.35))
+        and actionability >= float(limits.get("min_actionability", 0.25))
+        and transferability >= float(limits.get("min_transferability", 0.2))
+    )
 
 
 def _infer_category(chip_id: str, captured_data: Dict[str, Any], content: str) -> CognitiveCategory:
@@ -273,9 +470,11 @@ def merge_chip_insights(
     stats = {
         "processed": 0,
         "merged": 0,
+        "merged_distilled": 0,
         "skipped_low_confidence": 0,
         "skipped_low_quality": 0,
         "skipped_low_quality_cooldown": 0,
+        "skipped_non_learning": 0,
         "skipped_duplicate": 0,
         "duplicate_ratio": 0.0,
         "throttled_duplicate_churn": 0,
@@ -306,64 +505,114 @@ def merge_chip_insights(
         content = chip_insight.get("content", "")
         confidence = chip_insight.get("confidence", 0.5)
         captured_data = chip_insight.get("captured_data", {})
-        insight_hash = _hash_insight(chip_id, content)
 
         # Skip low confidence
         if confidence < min_confidence:
             stats["skipped_low_confidence"] += 1
             continue
 
+        quality = (captured_data.get("quality_score") or {})
+        quality_total = float(quality.get("total", confidence) or confidence)
+        if quality_total < min_quality_score:
+            raw_hash = _hash_insight(chip_id, content)
+            previous = float(rejected_low_quality.get(raw_hash, 0.0) or 0.0)
+            if previous > 0 and (now_ts - previous) < LOW_QUALITY_COOLDOWN_S:
+                stats["skipped_low_quality_cooldown"] += 1
+            else:
+                stats["skipped_low_quality"] += 1
+                rejected_low_quality[raw_hash] = now_ts
+            continue
+
+        # Distill chip row into learnable statement before merge.
+        learning_statement = _distill_learning_statement(
+            chip_id=chip_id,
+            content=content,
+            captured_data=captured_data,
+            min_len=int(limits.get("min_statement_len", 28)),
+        )
+        if not learning_statement:
+            stats["skipped_non_learning"] += 1
+            continue
+        if not _is_learning_quality_ok(quality, limits):
+            distilled_hash = _hash_insight(chip_id, learning_statement)
+            previous = float(rejected_low_quality.get(distilled_hash, 0.0) or 0.0)
+            if previous > 0 and (now_ts - previous) < LOW_QUALITY_COOLDOWN_S:
+                stats["skipped_low_quality_cooldown"] += 1
+            else:
+                stats["skipped_low_quality"] += 1
+                rejected_low_quality[distilled_hash] = now_ts
+            continue
+        rejected_low_quality.pop(_hash_insight(chip_id, learning_statement), None)
+
+        insight_hash = _hash_insight(chip_id, learning_statement)
         # Skip already merged (stable hash ignores timestamp churn)
         if insight_hash in merged_hashes:
             stats["skipped_duplicate"] += 1
             continue
 
-        quality = (captured_data.get("quality_score") or {})
-        quality_total = float(quality.get("total", confidence) or confidence)
-        if quality_total < min_quality_score:
-            previous = float(rejected_low_quality.get(insight_hash, 0.0) or 0.0)
-            if previous > 0 and (now_ts - previous) < LOW_QUALITY_COOLDOWN_S:
-                stats["skipped_low_quality_cooldown"] += 1
-            else:
-                stats["skipped_low_quality"] += 1
-                rejected_low_quality[insight_hash] = now_ts
-            continue
+        rejected_low_quality.pop(_hash_insight(chip_id, content), None)
         rejected_low_quality.pop(insight_hash, None)
 
         # Determine category with fallback inference.
-        category = _infer_category(chip_id, captured_data, content)
+        category = _infer_category(chip_id, captured_data, learning_statement)
 
         # Build context from captured data
-        context_parts = []
+        context_parts = [f"Chip: {chip_id}"]
         if captured_data.get("file_path"):
             context_parts.append(f"File: {captured_data['file_path']}")
         if captured_data.get("tool"):
             context_parts.append(f"Tool: {captured_data['tool']}")
         if captured_data.get("change_summary"):
             context_parts.append(captured_data["change_summary"])
-        context = " | ".join(context_parts) if context_parts else f"From {chip_id} chip"
+        try:
+            context_parts.append(f"quality={quality_total:.2f}")
+        except Exception:
+            pass
+        context = " | ".join([p for p in context_parts if str(p).strip()])
 
         if not dry_run:
-            # Add to cognitive system (but don't double-record exposure)
-            cog.add_insight(
+            # Add distilled statement to cognitive system.
+            added = cog.add_insight(
                 category=category,
-                insight=content,
+                insight=learning_statement,
                 context=context,
-                confidence=confidence,
-                record_exposure=False  # We'll batch record below
+                confidence=max(float(confidence or 0.0), float(quality_total or 0.0)),
+                record_exposure=False,  # We'll batch record below
+                source=f"chip:{chip_id}:distilled",
             )
+            if not added:
+                stats["skipped_non_learning"] += 1
+                continue
 
             # Track for exposure recording
-            key = cog._generate_key(category, content[:40].replace(" ", "_").lower())
+            key = cog._generate_key(category, learning_statement[:40].replace(" ", "_").lower())
             exposures_to_record.append({
                 "insight_key": key,
                 "category": category.value,
-                "text": content,
+                "text": learning_statement,
             })
+
+            # Append distillation audit trail.
+            LEARNING_DISTILLATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with LEARNING_DISTILLATIONS_FILE.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": datetime.now().isoformat(),
+                            "chip_id": chip_id,
+                            "category": category.value,
+                            "learning_statement": learning_statement,
+                            "source_content": content[:240],
+                            "quality_score": quality,
+                        }
+                    )
+                    + "\n"
+                )
 
             merged_hashes.add(insight_hash)
 
         stats["merged"] += 1
+        stats["merged_distilled"] += 1
         stats["by_chip"][chip_id] = stats["by_chip"].get(chip_id, 0) + 1
 
     # Batch record exposures
@@ -411,10 +660,12 @@ def get_merge_stats() -> Dict[str, Any]:
                 chip_counts[f.stem] = _count_jsonl_lines(f)
             except Exception:
                 continue
+    learning_distillations = _count_jsonl_lines(LEARNING_DISTILLATIONS_FILE)
 
     return {
         "total_merged": len(state.get("merged_hashes", [])),
         "last_merge": state.get("last_merge"),
         "last_stats": state.get("last_stats"),
         "chip_insight_counts": chip_counts,
+        "learning_distillation_count": learning_distillations,
     }
