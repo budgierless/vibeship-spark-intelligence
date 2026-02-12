@@ -4,6 +4,9 @@
 
 Every time you start a new OpenClaw session, do this:
 
+Operating policy reference:
+- `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`
+
 ### 1. Start Spark Services
 
 ```powershell

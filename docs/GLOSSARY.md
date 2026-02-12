@@ -17,6 +17,7 @@ Use this file to find terms, systems, and the correct source-of-truth doc.
 - Runtime architecture and stores: `Intelligence_Flow.md`
 - Runtime component map: `Intelligence_Flow_Map.md`
 - Tuneables and thresholds: `TUNEABLES.md`
+- Lightweight operating policy: `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`
 - EIDOS loop and control plane: `EIDOS_GUIDE.md`
 - Quality gate and outcomes feedback: `META_RALPH.md`
 - Semantic retrieval behavior: `SEMANTIC_ADVISOR_DESIGN.md`
@@ -45,6 +46,7 @@ Use this file to find terms, systems, and the correct source-of-truth doc.
 - SPARK_CONTEXT: Runtime context artifact produced from selected learnings. Docs: `Intelligence_Flow.md`.
 - Trace ID: Cross-stage linking key for ingest, steps, outcomes, and dashboards. Docs: `Intelligence_Flow.md`.
 - Tuneables: Configurable thresholds and weights across the runtime. Docs: `TUNEABLES.md`.
+- Lightweight mode: Policy for minimizing runtime/system complexity while maximizing measured outcome lift on the retrieval->advisory->outcome path. Docs: `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`.
 
 ## Active Documentation Tree
 
@@ -56,6 +58,7 @@ Canonical and active docs:
 - `Intelligence_Flow.md`
 - `Intelligence_Flow_Map.md`
 - `TUNEABLES.md`
+- `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`
 - `EIDOS_GUIDE.md`
 - `EIDOS_QUICKSTART.md`
 - `META_RALPH.md`
