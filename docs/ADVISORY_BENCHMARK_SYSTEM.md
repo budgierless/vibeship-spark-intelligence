@@ -15,6 +15,10 @@ This benchmark is separate from Forge/Depth and focused only on
 
 - Runner: `benchmarks/advisory_quality_ab.py`
 - Seed scenarios: `benchmarks/data/advisory_quality_eval_seed.json`
+- Extended scenarios: `benchmarks/data/advisory_quality_eval_extended.json`
+- Real-case template: `benchmarks/data/advisory_quality_eval_real_user_template.json`
+- Log-to-cases generator: `benchmarks/build_advisory_cases_from_logs.py`
+- Profile sweeper: `benchmarks/advisory_profile_sweeper.py`
 - Output JSON: `benchmarks/out/advisory_quality_ab_report.json`
 - Output Markdown: `benchmarks/out/advisory_quality_ab_report.md`
 
@@ -56,6 +60,36 @@ python benchmarks/advisory_quality_ab.py \
 `--force-live` is important when comparing advisory quality itself, because
 packet paths can mask live retrieval/gating behavior.
 
+## No-Emit Optimization Loop
+
+`advisory_quality_ab` now records no-emit reason histograms (`error_code`) per profile.
+Use those as the primary tuning signal:
+
+1. Run benchmark on candidate profiles.
+2. Inspect `no_emit_error_codes` for each profile.
+3. Tune based on dominant reason:
+   - `AE_DUPLICATE_SUPPRESSED`: reduce repeat cooldown or improve text diversity.
+   - `AE_GATE_SUPPRESSED`: adjust gate thresholds or increase relevance quality.
+   - `AE_FALLBACK_RATE_LIMIT`: tune fallback guard policy.
+4. Re-run benchmark and compare objective score + no-emit distribution shift.
+
+## Auto Sweeper
+
+Use bounded candidate search to choose winner profile without manual guesswork:
+
+```bash
+python benchmarks/advisory_profile_sweeper.py \
+  --cases benchmarks/data/advisory_quality_eval_extended.json \
+  --repeats 1 \
+  --force-live \
+  --max-candidates 12
+```
+
+The sweeper produces:
+- ranked candidate report
+- objective score per candidate
+- winner profile JSON ready to apply/merge
+
 ## Iteration Loop (Recommended)
 
 1. Run benchmark on current live profile (baseline snapshot).
@@ -66,7 +100,7 @@ packet paths can mask live retrieval/gating behavior.
    - repetition penalty does not worsen.
 4. Keep winner live for a real workload window.
 5. Run `scripts/advisory_self_review.py` for 12h/24h reality check.
-6. Update scenario set with new failure modes.
+6. Update scenario set with new failure modes (or generate from logs and curate).
 
 ## Anti-Gaming Guardrails
 
@@ -77,6 +111,5 @@ packet paths can mask live retrieval/gating behavior.
 
 ## Expansion Backlog
 
-- Add explicit no-emit reason histogram (`error_code`) to benchmark report ranking.
 - Add scenario tags by intent-plane and compute per-plane scores.
-- Add auto profile sweeper for bounded grid search, then publish top-N candidates.
+- Add optional automatic tuneable apply/rollback workflow after winner validation window.

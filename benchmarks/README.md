@@ -111,6 +111,42 @@ Scoring dimensions:
 
 Use `--profile-file` to test custom profile variants layered over defaults.
 
+Extended scenario set:
+
+```bash
+python benchmarks/advisory_quality_ab.py \
+  --cases benchmarks/data/advisory_quality_eval_extended.json \
+  --profiles baseline,balanced,strict \
+  --repeats 1 \
+  --force-live \
+  --out-prefix advisory_quality_extended
+```
+
+Auto profile sweeper (bounded search over tuneable grids):
+
+```bash
+python benchmarks/advisory_profile_sweeper.py \
+  --cases benchmarks/data/advisory_quality_eval_extended.json \
+  --repeats 1 \
+  --force-live \
+  --max-candidates 12 \
+  --out-prefix advisory_profile_sweeper
+```
+
+Outputs:
+- `benchmarks/out/advisory_profile_sweeper_report.json`
+- `benchmarks/out/advisory_profile_sweeper_report.md`
+- `benchmarks/out/advisory_profile_sweeper_winner_profile.json`
+
+Generate draft real-world advisory cases from recent runtime logs:
+
+```bash
+python benchmarks/build_advisory_cases_from_logs.py \
+  --lookback-hours 24 \
+  --limit 20 \
+  --out benchmarks/data/advisory_quality_eval_from_logs.json
+```
+
 ### Tune for best-vs-best comparison
 
 Use grid-search tuning to optimize each system independently, then compare
