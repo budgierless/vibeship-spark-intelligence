@@ -16,7 +16,7 @@ from typing import Optional
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import threading
 import webbrowser
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Callable
 from urllib import request
 from urllib.parse import urlparse, parse_qs
 
@@ -115,6 +115,118 @@ ORCH_DIR = SPARK_DIR / "orchestration"
 ORCH_AGENTS_FILE = ORCH_DIR / "agents.json"
 ORCH_HANDOFFS_FILE = ORCH_DIR / "handoffs.jsonl"
 LOGO_FILE = Path(__file__).parent / "logo.png"
+
+
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _to_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _build_advisory_status_block(engine_status: Dict[str, Any], now_ts: Optional[float] = None) -> Dict[str, Any]:
+    """Compact advisory-engine status for dashboard/operator surfaces."""
+    status = engine_status if isinstance(engine_status, dict) else {}
+    now = _to_float(now_ts, time.time()) if now_ts is not None else time.time()
+
+    badge_raw = status.get("delivery_badge") if isinstance(status.get("delivery_badge"), dict) else {}
+    state = str(badge_raw.get("state") or "blocked").strip().lower()
+    if state not in {"live", "fallback", "blocked", "stale"}:
+        state = "blocked"
+    delivery_badge = {
+        "state": state,
+        "reason": str(badge_raw.get("reason") or ""),
+        "age_s": _to_float(badge_raw.get("age_s"), 0.0) if badge_raw.get("age_s") is not None else None,
+        "event": str(badge_raw.get("event") or ""),
+        "delivery_mode": str(badge_raw.get("delivery_mode") or ""),
+    }
+
+    recent_events = status.get("recent_events")
+    latest_event = None
+    if isinstance(recent_events, list) and recent_events:
+        last = recent_events[-1] if isinstance(recent_events[-1], dict) else {}
+        ts = _to_float(last.get("ts"), 0.0)
+        latest_event = {
+            "event": str(last.get("event") or ""),
+            "route": str(last.get("route") or ""),
+            "tool": str(last.get("tool") or ""),
+            "age_s": round(max(0.0, now - ts), 1) if ts > 0 else None,
+        }
+
+    packet = status.get("packet_store") if isinstance(status.get("packet_store"), dict) else {}
+    worker = status.get("prefetch_worker") if isinstance(status.get("prefetch_worker"), dict) else {}
+    synth = status.get("synthesizer") if isinstance(status.get("synthesizer"), dict) else {}
+
+    return {
+        "available": True,
+        "enabled": bool(status.get("enabled")),
+        "delivery_badge": delivery_badge,
+        "emission_rate": _to_float(status.get("emission_rate"), 0.0),
+        "total_events": _to_int(status.get("total_events"), 0),
+        "latest_event": latest_event,
+        "packet_store": {
+            "queue_depth": _to_int(packet.get("queue_depth"), 0),
+            "hit_rate": _to_float(packet.get("hit_rate"), 0.0),
+            "active_packets": _to_int(packet.get("active_packets"), 0),
+            "fresh_packets": _to_int(packet.get("fresh_packets"), 0),
+        },
+        "prefetch_worker": {
+            "pending_jobs": _to_int(worker.get("pending_jobs"), 0),
+            "paused": bool(worker.get("paused")),
+        },
+        "synthesizer": {
+            "tier_label": str(synth.get("tier_label") or ""),
+            "provider": str(synth.get("preferred_provider") or ""),
+        },
+    }
+
+
+def _advisory_status_unavailable(error: str = "") -> Dict[str, Any]:
+    return {
+        "available": False,
+        "enabled": False,
+        "delivery_badge": {
+            "state": "blocked",
+            "reason": "status_unavailable",
+            "age_s": None,
+            "event": "",
+            "delivery_mode": "",
+        },
+        "emission_rate": 0.0,
+        "total_events": 0,
+        "latest_event": None,
+        "packet_store": {
+            "queue_depth": 0,
+            "hit_rate": 0.0,
+            "active_packets": 0,
+            "fresh_packets": 0,
+        },
+        "prefetch_worker": {
+            "pending_jobs": 0,
+            "paused": False,
+        },
+        "synthesizer": {
+            "tier_label": "",
+            "provider": "",
+        },
+        "error": error,
+    }
+
+
+def _get_advisory_status_block(fetch_status: Optional[Callable[[], Dict[str, Any]]] = None) -> Dict[str, Any]:
+    try:
+        if fetch_status is None:
+            from lib.advisory_engine import get_engine_status as fetch_status
+        return _build_advisory_status_block(fetch_status())
+    except Exception as e:
+        return _advisory_status_unavailable(str(e))
 
 
 def _get_process_memory_mb() -> Optional[float]:
@@ -267,6 +379,7 @@ def get_dashboard_data():
             "stats": __import__("lib.tastebank", fromlist=["stats"]).stats(),
             "recent": __import__("lib.tastebank", fromlist=["recent"]).recent(limit=5),
         },
+        "advisory": _get_advisory_status_block(),
         "eidos": get_eidos_status(),
         "systems": {
             "mind": {"ok": mind_stats["mind_available"], "label": "Mind API"},
@@ -485,6 +598,7 @@ def generate_system_badges(data: Dict) -> str:
     badges = []
     systems = data.get("systems", {})
     eidos = data.get("eidos", {})
+    advisory = data.get("advisory", {})
 
     # Core systems
     for key, info in systems.items():
@@ -512,6 +626,17 @@ def generate_system_badges(data: Dict) -> str:
             badges.append(
                 f'<span class="system-badge error">'
                 f'<span class="system-dot"></span>{eidos["alerts"]} Alerts</span>'
+            )
+
+    # Advisory delivery badge
+    if isinstance(advisory, dict):
+        delivery = advisory.get("delivery_badge") if isinstance(advisory.get("delivery_badge"), dict) else {}
+        state = str(delivery.get("state") or "").strip().lower()
+        if state:
+            status_class = "ok" if state in {"live", "fallback"} else "error"
+            badges.append(
+                f'<span class="system-badge {status_class}">'
+                f'<span class="system-dot"></span>Advisory {state}</span>'
             )
 
     return " ".join(badges)
@@ -625,6 +750,7 @@ def get_ops_data() -> Dict:
         "recent_handoffs": recent_handoffs,
         "best_pairs": best_pairs[:6],
         "risky_pairs": risky_pairs[:6],
+        "advisory": _get_advisory_status_block(),
     }
 
 
@@ -1013,6 +1139,7 @@ def get_mission_control_data() -> Dict[str, Any]:
         "funnel": funnel,
         "services": services,
         "process_memory_mb": mem_mb,
+        "advisory": _get_advisory_status_block(),
         "queue": queue_health,
         "bridge": bridge_health,
         "eidos": eidos_block,
@@ -2719,6 +2846,11 @@ def generate_html():
               badges += `<span class="system-badge error"><span class="system-dot"></span>${{data.eidos.alerts}} Alerts</span> `;
             }}
           }}
+          const advState = String(data.advisory?.delivery_badge?.state || '').toLowerCase();
+          if (advState) {{
+            const advCls = advState === 'live' || advState === 'fallback' ? 'ok' : 'error';
+            badges += `<span class="system-badge ${{advCls}}"><span class="system-dot"></span>Advisory ${{advState}}</span> `;
+          }}
           footerSys.innerHTML = badges;
         }}
       }}
@@ -2833,6 +2965,15 @@ def generate_ops_html():
     most_used = data.get("most_used", [])
     no_signal_skills = data.get("no_signal_skills", [])
     no_signal_count = data.get("no_signal_count", 0)
+    advisory = data.get("advisory", {}) if isinstance(data.get("advisory"), dict) else {}
+    advisory_badge = advisory.get("delivery_badge", {}) if isinstance(advisory.get("delivery_badge"), dict) else {}
+    advisory_state = str(advisory_badge.get("state") or "blocked").lower()
+    advisory_class = "good" if advisory_state in {"live", "fallback"} else "bad"
+    advisory_reason = str(advisory_badge.get("reason") or "--")
+    advisory_event = str(advisory_badge.get("event") or "--")
+    advisory_age = "--"
+    if advisory_badge.get("age_s") is not None:
+        advisory_age = f'{round(_to_float(advisory_badge.get("age_s"), 0.0))}s'
 
     idx_raw = (data.get("index_generated_at") or "").strip()
     idx_label = "unknown"
@@ -3341,6 +3482,20 @@ def generate_ops_html():
         }).join('');
       }
 
+      function renderAdvisory(advisory) {
+        const adv = advisory || {};
+        const badge = adv.delivery_badge || {};
+        const packet = adv.packet_store || {};
+        const worker = adv.prefetch_worker || {};
+        const age = badge.age_s == null ? '--' : `${Math.round(Number(badge.age_s) || 0)}s`;
+        const emission = `${Math.round((Number(adv.emission_rate) || 0) * 100)}%`;
+        return [
+          `<div class="ops-row"><span class="ops-name">Reason</span><span class="ops-meta">${esc(badge.reason || '--')}</span><span class="pill">${esc(badge.event || '--')}</span></div>`,
+          `<div class="ops-row"><span class="ops-name">Age</span><span class="ops-meta">${age}</span><span class="pill">${emission}</span></div>`,
+          `<div class="ops-row"><span class="ops-name">Packet Queue</span><span class="ops-meta">${packet.queue_depth ?? 0}</span><span class="pill">${worker.pending_jobs ?? 0} pending</span></div>`,
+        ].join('');
+      }
+
       function formatIndexLabel(raw) {
         if (!raw) return 'unknown';
         try {
@@ -3371,6 +3526,15 @@ def generate_ops_html():
         setHTML('ops-risky', renderPairs(data.risky_pairs, 'bad'));
         setHTML('ops-agents', renderAgents(data.agents));
         setHTML('ops-recent', renderRecent(data.recent_handoffs));
+        setHTML('ops-advisory', renderAdvisory(data.advisory));
+
+        const advPill = $('ops-advisory-state');
+        if (advPill) {
+          const state = String(data.advisory?.delivery_badge?.state || 'blocked').toLowerCase();
+          const klass = state === 'live' || state === 'fallback' ? 'good' : 'bad';
+          advPill.className = `pill ${klass}`;
+          advPill.textContent = state;
+        }
       }
 
       async function tickOps() {
@@ -3528,6 +3692,30 @@ def generate_ops_html():
                 </div>
                 <div class="card-body" id="ops-agents">
                     {agents_html}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Advisory Delivery</span>
+                    <span class="pill {advisory_class}" id="ops-advisory-state">{advisory_state}</span>
+                </div>
+                <div class="card-body" id="ops-advisory">
+                    <div class="ops-row">
+                        <span class="ops-name">Reason</span>
+                        <span class="ops-meta">{advisory_reason}</span>
+                        <span class="pill">{advisory_event}</span>
+                    </div>
+                    <div class="ops-row">
+                        <span class="ops-name">Age</span>
+                        <span class="ops-meta">{advisory_age}</span>
+                        <span class="pill">{int(_to_float(advisory.get("emission_rate"), 0.0) * 100)}%</span>
+                    </div>
+                    <div class="ops-row">
+                        <span class="ops-name">Packet Queue</span>
+                        <span class="ops-meta">{_to_int((advisory.get("packet_store") or {}).get("queue_depth"), 0)}</span>
+                        <span class="pill">{_to_int((advisory.get("prefetch_worker") or {}).get("pending_jobs"), 0)} pending</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3884,6 +4072,10 @@ def generate_mission_html() -> str:
         <div class="card-header"><span class="card-title">System Mode</span><span class="pill" id="mode-status"></span></div>
         <div class="list" id="mode-details"></div>
       </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Advisory Delivery</span><span class="pill" id="advisory-state"></span></div>
+        <div class="list" id="advisory-details"></div>
+      </div>
     </section>
     <section class="grid">
       <div class="card">
@@ -4097,6 +4289,25 @@ def generate_mission_html() -> str:
         `<div class="row"><span>edits allowed</span><span class="mono">${mode.edits_allowed ? "yes" : "no"}</span></div>`
       ];
       renderList("mode-details", modeItems, (x) => x);
+
+      const advisory = data.advisory || {};
+      const delivery = advisory.delivery_badge || {};
+      const advisoryState = String(delivery.state || "blocked").toLowerCase();
+      const advisoryClass = advisoryState === "live" ? "ok" : advisoryState === "fallback" ? "warn" : "danger";
+      const advisoryPill = document.getElementById("advisory-state");
+      if (advisoryPill) {
+        advisoryPill.className = `pill ${advisoryClass}`;
+        advisoryPill.textContent = advisoryState;
+      }
+      const advisoryItems = [
+        `<div class="row"><span>reason</span><span class="mono">${delivery.reason || "--"}</span></div>`,
+        `<div class="row"><span>event</span><span class="mono">${delivery.event || "--"}</span></div>`,
+        `<div class="row"><span>age</span><span class="mono">${delivery.age_s == null ? "--" : Math.round(Number(delivery.age_s) || 0) + "s"}</span></div>`,
+        `<div class="row"><span>emission rate</span><span class="mono">${Math.round((Number(advisory.emission_rate) || 0) * 100)}%</span></div>`,
+        `<div class="row"><span>packet queue</span><span class="mono">${advisory.packet_store?.queue_depth ?? 0}</span></div>`,
+        `<div class="row"><span>prefetch pending</span><span class="mono">${advisory.prefetch_worker?.pending_jobs ?? 0}</span></div>`
+      ];
+      renderList("advisory-details", advisoryItems, (x) => x);
 
       renderList("watchers-feed", data.watchers || [], (w) => `
         <div class="row">

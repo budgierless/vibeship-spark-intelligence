@@ -205,6 +205,9 @@ Status update (executed now):
 - `on_user_prompt` now logs `user_prompt_prefetch` with envelope metadata.
 - engine status now exposes a delivery badge:
   - `live | fallback | blocked | stale` (derived from recent engine events with staleness window).
+- dashboard/operator surfaces now expose advisory delivery status:
+  - mission and ops API payloads include compact advisory status + `delivery_badge`.
+  - mission and ops UI cards now render badge state, reason, age, and queue/prefetch context.
 
 ---
 

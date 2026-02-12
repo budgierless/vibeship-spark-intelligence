@@ -215,6 +215,13 @@ Net: the loop is operational and improving, but quality reliability is constrain
 - `benchmarks/out/memory_retrieval_ab_real_user_2026_02_12_relaxed_live_refresh_report.md`
 - `benchmarks/out/memory_retrieval_ab_real_user_2026_02_12_default_after_rescue_report.md`
 
+14. Wired advisory delivery visibility into operator surfaces:
+- `dashboard.py` mission and ops payloads now include compact advisory status with `delivery_badge`.
+- mission and ops UI now render explicit advisory delivery state, reason, age, and queue/prefetch context.
+
+15. Added dashboard advisory status tests:
+- `tests/test_dashboard_advisory_status.py`
+
 ## 10) Decision summary
 
 1. Keep and invest:
