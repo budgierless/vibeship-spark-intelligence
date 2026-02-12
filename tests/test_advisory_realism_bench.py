@@ -170,3 +170,38 @@ def test_theory_discrimination_counts_bad_theory_emit_mode():
     }
     out = mod.summarize_realism(run, meta)
     assert out["theory_discrimination_rate"] == 1.0
+
+
+def test_theory_discrimination_accepts_actionable_corrective_emit_without_phrase_hit():
+    mod = _load_module()
+    meta = {
+        "good_emit_case": mod.CaseMeta(
+            case_id="good_emit_case",
+            depth_tier="D2",
+            domain="ops",
+            systems=["advisory"],
+            importance="high",
+            theory_quality="good",
+            expected_sources=[],
+            forbidden_sources=[],
+        )
+    }
+    run = {
+        "summary": {"score": 0.7, "trace_bound_rate": 1.0},
+        "cases": [
+            {
+                "case_id": "good_emit_case",
+                "should_emit": True,
+                "emitted": True,
+                "actionable": True,
+                "trace_bound": True,
+                "memory_utilized": True,
+                "expected_hit_rate": 0.0,
+                "forbidden_hit_rate": 0.0,
+                "score": 0.8,
+                "source_counts": {},
+            }
+        ],
+    }
+    out = mod.summarize_realism(run, meta)
+    assert out["theory_discrimination_rate"] == 1.0

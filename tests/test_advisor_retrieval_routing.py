@@ -350,3 +350,67 @@ def test_prefilter_limits_active_insight_set(monkeypatch, tmp_path):
     assert advice
     assert fake.insight_sizes
     assert fake.insight_sizes[0] <= 30
+
+
+def test_semantic_route_filters_low_match_irrelevant_rows(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _LowMatchRetriever:
+        def retrieve(self, _query: str, _insights, limit: int = 8):
+            return [
+                SimpleNamespace(
+                    insight_key="low-match",
+                    insight_text="multiplier granted standalone formatting for social reply cadence",
+                    semantic_sim=0.12,
+                    trigger_conf=0.0,
+                    fusion_score=0.88,
+                    source_type="semantic",
+                    why="semantic baseline",
+                )
+            ][:limit]
+
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: _LowMatchRetriever())
+
+    advisor = advisor_mod.SparkAdvisor()
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        mode="embeddings_only",
+        semantic_context_min=0.2,
+        semantic_lexical_min=0.05,
+        semantic_strong_override=0.95,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Read", "auth token session retrieval failure in production")
+    assert advice == []
+
+
+def test_semantic_route_filters_x_social_insight_for_non_social_query(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _DomainMismatchRetriever:
+        def retrieve(self, _query: str, _insights, limit: int = 8):
+            return [
+                SimpleNamespace(
+                    insight_key="x-social-1",
+                    insight_text="ALWAYS put multiplier granted on its own line in tweet replies",
+                    semantic_sim=0.97,
+                    trigger_conf=0.0,
+                    fusion_score=0.97,
+                    source_type="semantic",
+                    why="semantic baseline",
+                )
+            ][:limit]
+
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: _DomainMismatchRetriever())
+
+    advisor = advisor_mod.SparkAdvisor()
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        mode="embeddings_only",
+        semantic_context_min=0.1,
+        semantic_lexical_min=0.0,
+        semantic_strong_override=0.5,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Read", "auth token session retrieval failure in production")
+    assert advice == []

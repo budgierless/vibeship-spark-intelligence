@@ -86,6 +86,9 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "prefilter_enabled": True,
         "prefilter_max_insights": 300,
         "lexical_weight": 0.25,
+        "semantic_context_min": 0.15,
+        "semantic_lexical_min": 0.03,
+        "semantic_strong_override": 0.90,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
         "bm25_mix": 0.75,  # blend: bm25 vs overlap
@@ -109,6 +112,9 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "prefilter_enabled": True,
         "prefilter_max_insights": 500,
         "lexical_weight": 0.30,
+        "semantic_context_min": 0.15,
+        "semantic_lexical_min": 0.03,
+        "semantic_strong_override": 0.90,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
         "bm25_mix": 0.75,
@@ -132,6 +138,9 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "prefilter_enabled": True,
         "prefilter_max_insights": 800,
         "lexical_weight": 0.35,
+        "semantic_context_min": 0.12,
+        "semantic_lexical_min": 0.02,
+        "semantic_strong_override": 0.88,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
         "bm25_mix": 0.75,
@@ -170,6 +179,19 @@ DEFAULT_HIGH_RISK_HINTS = (
     "bridge",
     "session",
     "memory retrieval",
+)
+X_SOCIAL_MARKERS = (
+    "x_social",
+    "x-social",
+    "twitter",
+    "tweet",
+    "retweet",
+    "quote tweet",
+    "timeline",
+    "engagement",
+    "multiplier granted",
+    "fomo",
+    "wallet",
 )
 
 
@@ -695,6 +717,9 @@ class SparkAdvisor:
                         "mode",
                         "gate_strategy",
                         "semantic_limit",
+                        "semantic_context_min",
+                        "semantic_lexical_min",
+                        "semantic_strong_override",
                         "max_queries",
                         "agentic_query_limit",
                         "agentic_deadline_ms",
@@ -730,6 +755,15 @@ class SparkAdvisor:
         if policy["gate_strategy"] not in {"minimal", "extended"}:
             policy["gate_strategy"] = "minimal"
         policy["semantic_limit"] = max(4, int(policy.get("semantic_limit", 8) or 8))
+        policy["semantic_context_min"] = max(
+            0.0, min(1.0, float(policy.get("semantic_context_min", 0.15) or 0.15))
+        )
+        policy["semantic_lexical_min"] = max(
+            0.0, min(1.0, float(policy.get("semantic_lexical_min", 0.03) or 0.03))
+        )
+        policy["semantic_strong_override"] = max(
+            0.0, min(1.0, float(policy.get("semantic_strong_override", 0.90) or 0.90))
+        )
         policy["max_queries"] = max(1, int(policy.get("max_queries", 2) or 2))
         policy["agentic_query_limit"] = max(1, int(policy.get("agentic_query_limit", 2) or 2))
         deadline_raw = policy.get("agentic_deadline_ms", 700)
@@ -1080,6 +1114,9 @@ class SparkAdvisor:
         prefilter_enabled = bool(policy.get("prefilter_enabled", True))
         prefilter_max_insights = int(policy.get("prefilter_max_insights", 500))
         lexical_weight = float(policy.get("lexical_weight", 0.25) or 0.25)
+        semantic_context_min = float(policy.get("semantic_context_min", 0.15) or 0.15)
+        semantic_lexical_min = float(policy.get("semantic_lexical_min", 0.03) or 0.03)
+        semantic_strong_override = float(policy.get("semantic_strong_override", 0.90) or 0.90)
         bm25_k1 = float(policy.get("bm25_k1", 1.2) or 1.2)
         bm25_b = float(policy.get("bm25_b", 0.75) or 0.75)
         bm25_mix = float(policy.get("bm25_mix", 0.75) or 0.75)
@@ -1227,18 +1264,32 @@ class SparkAdvisor:
 
         route_reason = " + ".join(escalate_reasons[:3]) if used_agentic else "primary_semantic_only"
         advice: List[Advice] = []
+        filtered_low_match = 0
+        filtered_domain_mismatch = 0
+        social_query = self._is_x_social_query(context)
         for r in ranked_rows[:semantic_limit]:
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(r.insight_text):
                 continue
             confidence = max(0.6, float(getattr(r, "fusion_score", 0.0) or 0.0))
             if str(getattr(r, "source_type", "") or "") == "trigger":
                 confidence = max(0.8, confidence)
-            context_match = max(
-                float(getattr(r, "semantic_sim", 0.0) or 0.0),
-                float(getattr(r, "trigger_conf", 0.0) or 0.0),
-                0.7,
-            )
             source = "trigger" if str(getattr(r, "source_type", "") or "") == "trigger" else semantic_source
+            if (not social_query) and self._is_x_social_insight(str(getattr(r, "insight_text", "") or "")):
+                filtered_domain_mismatch += 1
+                continue
+            semantic_sim = float(getattr(r, "semantic_sim", 0.0) or 0.0)
+            trigger_conf = float(getattr(r, "trigger_conf", 0.0) or 0.0)
+            lexical_match = self._lexical_overlap_score(context, str(getattr(r, "insight_text", "") or ""))
+            if source != "trigger":
+                has_context_match = semantic_sim >= semantic_context_min
+                has_lexical_match = lexical_match >= semantic_lexical_min
+                strong_override = semantic_sim >= semantic_strong_override
+                if not (has_context_match or has_lexical_match or strong_override):
+                    filtered_low_match += 1
+                    continue
+            context_match = max(semantic_sim, lexical_match, trigger_conf)
+            if source == "trigger":
+                context_match = max(0.7, context_match)
             base_reason = str(getattr(r, "why", "") or "").strip()
             if source == "trigger":
                 reason = base_reason or "Trigger match"
@@ -1278,6 +1329,11 @@ class SparkAdvisor:
                 "agentic_recent_rate": round(self._agentic_recent_rate(agentic_rate_window), 4),
                 "active_insights": len(active_insights),
                 "lexical_weight": lexical_weight,
+                "semantic_context_min": semantic_context_min,
+                "semantic_lexical_min": semantic_lexical_min,
+                "semantic_strong_override": semantic_strong_override,
+                "filtered_low_match": filtered_low_match,
+                "filtered_domain_mismatch": filtered_domain_mismatch,
                 "bm25_k1": bm25_k1,
                 "bm25_b": bm25_b,
                 "bm25_mix": bm25_mix,
@@ -1319,6 +1375,18 @@ class SparkAdvisor:
                 break
 
         return [f"{t} failure pattern and fix" for t in facets]
+
+    def _is_x_social_query(self, text: str) -> bool:
+        body = str(text or "").strip().lower()
+        if not body:
+            return False
+        return any(marker in body for marker in X_SOCIAL_MARKERS)
+
+    def _is_x_social_insight(self, text: str) -> bool:
+        body = str(text or "").strip().lower()
+        if not body:
+            return False
+        return any(marker in body for marker in X_SOCIAL_MARKERS)
 
     def _lexical_overlap_score(self, query: str, text: str) -> float:
         """Simple lexical overlap score [0..1] for hybrid rerank."""

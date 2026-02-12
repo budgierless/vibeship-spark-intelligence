@@ -228,6 +228,14 @@ def summarize_realism(profile_run: Dict[str, Any], meta_by_case: Dict[str, CaseM
         forbidden_hit_rate = _safe_float(row.get("forbidden_hit_rate"), 0.0)
         score = _safe_float(row.get("score"), 0.0)
         source_counts = row.get("source_counts") if isinstance(row.get("source_counts"), dict) else {}
+        corrective_emit_ok = (
+            emitted
+            and forbidden_hit_rate <= 0.0
+            and (
+                expected_hit_rate >= 0.5
+                or (actionable and trace_bound and memory_utilized)
+            )
+        )
 
         align = _source_alignment(meta, source_counts)
         source_alignment_scores.append(align)
@@ -259,13 +267,13 @@ def summarize_realism(profile_run: Dict[str, Any], meta_by_case: Dict[str, CaseM
 
         if meta.theory_quality == "good":
             theory_good_total += 1
-            if should_emit and emitted and expected_hit_rate >= 0.5 and forbidden_hit_rate <= 0.0:
+            if should_emit and corrective_emit_ok:
                 theory_good_ok += 1
         elif meta.theory_quality == "bad":
             theory_bad_total += 1
             if should_emit:
                 # Bad-theory prompts should emit corrective guidance (not silent pass-through).
-                if emitted and expected_hit_rate >= 0.5 and forbidden_hit_rate <= 0.0:
+                if corrective_emit_ok:
                     theory_bad_ok += 1
             else:
                 # Suppression-mode bad theories should stay suppressed.
