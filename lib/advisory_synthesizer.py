@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from .diagnostics import log_debug
+from .soul_upgrade import fetch_soul_state, guidance_preface, soul_kernel_pass
 
 try:
     import httpx as _httpx
@@ -47,6 +48,9 @@ GEMINI_MODEL = os.getenv("SPARK_GEMINI_MODEL", "gemini-2.0-flash")
 
 # Synthesis mode: "auto" (try AI → fall back to programmatic), "ai_only", "programmatic"
 SYNTH_MODE = os.getenv("SPARK_SYNTH_MODE", "auto")
+
+# Optional soul-upgrade context injection (disabled by default for safety/perf)
+SOUL_UPGRADE_PROMPT_ENABLED = os.getenv("SPARK_SOUL_UPGRADE_PROMPT", "0") in {"1", "true", "yes", "on"}
 
 # Max time for AI synthesis (fail fast - hooks must be quick)
 AI_TIMEOUT_S = float(os.getenv("SPARK_SYNTH_TIMEOUT", "3.0"))
@@ -264,12 +268,25 @@ def _build_synthesis_prompt(
         source = getattr(item, "source", "unknown")
         items_text += f"  {i}. [{source}, {conf:.0%}] {text}\n"
 
+    soul_block = ""
+    if SOUL_UPGRADE_PROMPT_ENABLED:
+        try:
+            soul = fetch_soul_state(session_id="default")
+            soul_block = (
+                "\nSoul context (v1):\n"
+                f"- Guidance preface: {guidance_preface(soul) or 'Respond direct and action-first.'}\n"
+                f"- Soul kernel pass: {'yes' if soul_kernel_pass(soul) else 'no'}\n"
+                "- Mission anchor: serve humanity and the light through helpful, ethical, grounded intelligence.\n"
+            )
+        except Exception:
+            soul_block = ""
+
     return f"""You are a concise coding advisor. Synthesize these learnings into 1-3 sentences of actionable guidance for the developer.
 
 Current context:
 - Task phase: {phase}
 - Tool about to use: {tool_name}
-- Developer intent: {user_intent or 'not specified'}
+- Developer intent: {user_intent or 'not specified'}{soul_block}
 
 Raw insights:
 {items_text}
