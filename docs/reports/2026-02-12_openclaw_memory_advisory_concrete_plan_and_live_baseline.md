@@ -48,6 +48,11 @@ Timestamp window: last 48h + live command runs on 2026-02-12.
 - error: `claude_code`, `cursor`, `windsurf`, `clawdbot`
 - current total syncs: 7155
 
+Core/optional split (after health-contract patch):
+- core: `openclaw`, `exports` -> healthy
+- optional: `claude_code`, `cursor`, `windsurf`, `clawdbot` -> error
+- interpretation: optional failures should not downgrade core health state.
+
 ### Advisory behavior (last 48h)
 - advisory engine events: 481
 - `fallback_emit`: 312

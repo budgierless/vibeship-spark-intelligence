@@ -120,7 +120,8 @@ Pipeline: ingest -> classify/learn -> retrieve -> advise -> emit -> feedback -> 
 - Remaining issue is signal/noise ratio, not basic throughput.
 
 2. Retrieve:
-- Architecturally strong but default gate config is currently over-restrictive for hybrid modes.
+- Architecturally strong; strict-collapse rescue is in place.
+- Remaining work is calibration of rescue thresholds to keep quality high as recall increases.
 
 3. Advise:
 - Engine works, emits guidance, and now has better structured events.
@@ -181,19 +182,24 @@ Net: the loop is operational and improving, but quality reliability is constrain
 6. Added evidence-first advisory payload fields:
 - `lib/advisory_engine.py` now writes `proof_refs` + `evidence_hash` into packet `advice_items`.
 
-7. Added taxonomy + dedupe/retrieval/evidence tests:
+7. Added sync health contract split for core vs optional adapters:
+- `lib/sync_tracker.py` now emits `core_ok/core_error/optional_error/core_healthy`.
+
+8. Added taxonomy + dedupe/retrieval/evidence/ops tests:
 - `tests/test_error_taxonomy.py`
 - `tests/test_semantic_retriever.py`
 - `tests/test_advisory_engine_dedupe.py`
 - `tests/test_advisory_engine_evidence.py`
+- `tests/test_sync_tracker_tiers.py`
 
-8. Validation runs:
+9. Validation runs:
 - `python -m pytest tests/test_semantic_retriever.py tests/test_memory_retrieval_ab.py -q`
 - `python -m pytest tests/test_advisory_engine_dedupe.py tests/test_advisor_effectiveness.py tests/test_advisory_packet_store.py tests/test_error_taxonomy.py tests/test_memory_retrieval_ab.py tests/test_semantic_retriever.py -q`
 - `python -m pytest tests/test_advisory_engine_evidence.py tests/test_advisory_engine_dedupe.py tests/test_advisory_packet_store.py tests/test_advisor_effectiveness.py -q`
-- Result: `21 passed` on latest advisory/evidence run (known Windows pytest atexit temp-permission warning remains after success).
+- `python -m pytest tests/test_sync_tracker_tiers.py tests/test_advisory_engine_evidence.py tests/test_advisory_engine_dedupe.py tests/test_semantic_retriever.py -q`
+- Result: all listed targeted runs passed (known Windows pytest atexit temp-permission warning remains after success).
 
-9. Live retrieval rerun artifacts:
+10. Live retrieval rerun artifacts:
 - `benchmarks/out/memory_retrieval_ab_real_user_2026_02_12_default_live_refresh_report.md`
 - `benchmarks/out/memory_retrieval_ab_real_user_2026_02_12_relaxed_live_refresh_report.md`
 - `benchmarks/out/memory_retrieval_ab_real_user_2026_02_12_default_after_rescue_report.md`

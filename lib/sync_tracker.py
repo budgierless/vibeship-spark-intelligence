@@ -24,6 +24,7 @@ SYNC_STATS_FILE = Path.home() / ".spark" / "sync_stats.json"
 class AdapterStatus:
     """Status of a single adapter."""
     name: str
+    tier: str = "optional"  # core | optional
     last_sync: Optional[str] = None
     status: str = "never"  # never, success, error, skipped
     items_synced: int = 0
@@ -41,11 +42,12 @@ class SyncTracker:
 
     # Define known adapters
     KNOWN_ADAPTERS = {
-        "claude_code": {"name": "CLAUDE.md", "file": "CLAUDE.md"},
-        "cursor": {"name": "Cursor Rules", "file": ".cursorrules"},
-        "windsurf": {"name": "Windsurf Rules", "file": ".windsurfrules"},
-        "clawdbot": {"name": "Clawdbot", "file": "~/.clawdbot/"},
-        "exports": {"name": "Exports", "file": "~/.spark/exports/"},
+        "claude_code": {"name": "CLAUDE.md", "file": "CLAUDE.md", "tier": "optional"},
+        "cursor": {"name": "Cursor Rules", "file": ".cursorrules", "tier": "optional"},
+        "windsurf": {"name": "Windsurf Rules", "file": ".windsurfrules", "tier": "optional"},
+        "clawdbot": {"name": "Clawdbot", "file": "~/.clawdbot/", "tier": "optional"},
+        "exports": {"name": "Exports", "file": "~/.spark/exports/", "tier": "core"},
+        "openclaw": {"name": "OpenClaw", "file": "~/.openclaw/workspace/", "tier": "core"},
     }
 
     def __post_init__(self):
@@ -54,15 +56,24 @@ class SyncTracker:
             if key not in self.adapters:
                 self.adapters[key] = AdapterStatus(
                     name=info["name"],
+                    tier=str(info.get("tier") or "optional"),
                     file_path=info["file"],
                 )
+
+    def _tier_for(self, adapter_key: str) -> str:
+        info = self.KNOWN_ADAPTERS.get(adapter_key, {})
+        tier = str(info.get("tier") or "optional").strip().lower()
+        return "core" if tier == "core" else "optional"
 
     def record_sync(self, adapter_key: str, status: str, items: int = 0, error: str = None):
         """Record a sync attempt."""
         now = datetime.now().isoformat(timespec="seconds")
 
         if adapter_key not in self.adapters:
-            self.adapters[adapter_key] = AdapterStatus(name=adapter_key)
+            self.adapters[adapter_key] = AdapterStatus(
+                name=adapter_key,
+                tier=self._tier_for(adapter_key),
+            )
 
         adapter = self.adapters[adapter_key]
         adapter.last_sync = now
@@ -81,9 +92,13 @@ class SyncTracker:
 
         for adapter_key, status in results.items():
             if adapter_key not in self.adapters:
-                info = self.KNOWN_ADAPTERS.get(adapter_key, {"name": adapter_key, "file": None})
+                info = self.KNOWN_ADAPTERS.get(
+                    adapter_key,
+                    {"name": adapter_key, "file": None, "tier": self._tier_for(adapter_key)},
+                )
                 self.adapters[adapter_key] = AdapterStatus(
                     name=info["name"],
+                    tier=str(info.get("tier") or "optional"),
                     file_path=info.get("file"),
                 )
 
@@ -101,12 +116,34 @@ class SyncTracker:
         successful = sum(1 for a in self.adapters.values() if a.status == "success")
         failed = sum(1 for a in self.adapters.values() if a.status == "error")
         never = sum(1 for a in self.adapters.values() if a.status == "never")
+        core_ok = 0
+        core_error = 0
+        core_never = 0
+        optional_ok = 0
+        optional_error = 0
+        optional_never = 0
 
         adapter_list = []
         for key, adapter in self.adapters.items():
+            tier = str(adapter.tier or self._tier_for(key)).lower()
+            if tier == "core":
+                if adapter.status == "success":
+                    core_ok += 1
+                elif adapter.status == "error":
+                    core_error += 1
+                elif adapter.status == "never":
+                    core_never += 1
+            else:
+                if adapter.status == "success":
+                    optional_ok += 1
+                elif adapter.status == "error":
+                    optional_error += 1
+                elif adapter.status == "never":
+                    optional_never += 1
             adapter_list.append({
                 "key": key,
                 "name": adapter.name,
+                "tier": tier,
                 "status": adapter.status,
                 "last_sync": adapter.last_sync,
                 "items": adapter.items_synced,
@@ -119,6 +156,13 @@ class SyncTracker:
             "adapters_ok": successful,
             "adapters_error": failed,
             "adapters_never": never,
+            "core_ok": core_ok,
+            "core_error": core_error,
+            "core_never": core_never,
+            "optional_ok": optional_ok,
+            "optional_error": optional_error,
+            "optional_never": optional_never,
+            "core_healthy": core_error == 0,
             "adapters": adapter_list,
         }
 
@@ -131,6 +175,7 @@ class SyncTracker:
             "adapters": {
                 k: {
                     "name": v.name,
+                    "tier": v.tier,
                     "last_sync": v.last_sync,
                     "status": v.status,
                     "items_synced": v.items_synced,
@@ -154,8 +199,10 @@ class SyncTracker:
                 tracker.total_syncs = data.get("total_syncs", 0)
 
                 for key, info in data.get("adapters", {}).items():
+                    known = tracker.KNOWN_ADAPTERS.get(key, {})
                     tracker.adapters[key] = AdapterStatus(
                         name=info.get("name", key),
+                        tier=str(info.get("tier") or known.get("tier") or "optional"),
                         last_sync=info.get("last_sync"),
                         status=info.get("status", "never"),
                         items_synced=info.get("items_synced", 0),
