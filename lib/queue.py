@@ -749,9 +749,9 @@ class _queue_lock:
             if self.fd is not None:
                 os.close(self.fd)
                 self.fd = None
-                # Only delete the lock file if WE acquired it.
-                if LOCK_FILE.exists():
-                    LOCK_FILE.unlink()
+            # Only delete the lock file if WE acquired it.
+            if self.acquired and LOCK_FILE.exists():
+                LOCK_FILE.unlink()
         except Exception as e:
             log_debug("queue", "lock release failed", e)
         self.acquired = False
