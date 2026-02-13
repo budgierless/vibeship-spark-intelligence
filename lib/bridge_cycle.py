@@ -44,6 +44,17 @@ BRIDGE_DISABLE_TIMEOUTS = os.environ.get("SPARK_BRIDGE_DISABLE_TIMEOUTS", "0").s
     "1", "true", "yes", "on"
 }
 
+# GC is a safety valve, but doing a full collection every cycle is often
+# unnecessary overhead once obvious references are cleared.
+# Default: collect every 3 cycles. Set SPARK_BRIDGE_GC_EVERY=1 to restore
+# previous behavior.
+try:
+    _BRIDGE_GC_EVERY = int(os.environ.get("SPARK_BRIDGE_GC_EVERY", "3"))
+except Exception:
+    _BRIDGE_GC_EVERY = 3
+_BRIDGE_GC_EVERY = max(1, min(100, _BRIDGE_GC_EVERY))
+_BRIDGE_GC_COUNTER = 0
+
 
 def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
     try:
@@ -593,7 +604,10 @@ def run_bridge_cycle(
         except Exception:
             pass
         import gc
-        gc.collect()
+        global _BRIDGE_GC_COUNTER
+        _BRIDGE_GC_COUNTER += 1
+        if _BRIDGE_GC_EVERY <= 1 or (_BRIDGE_GC_COUNTER % _BRIDGE_GC_EVERY) == 0:
+            gc.collect()
 
     # --- OpenClaw notification (event-driven push) ---
     if SPARK_OPENCLAW_NOTIFY:
