@@ -2,6 +2,29 @@
 
 This file is the **post-optimization validation playbook**.
 
+---
+
+## Shipped optimization changelog (rollback map)
+
+These optimizations were shipped as isolated commits so we can `git revert <sha>` one-at-a-time.
+
+### Current optimization batch (2026-02-14)
+
+1) `e4c1473` — Bound semantic retrieval log growth (rotation)
+2) `f094b59` — Avoid rewrite-on-append in capped advisor logs
+3) `437b383` — Fix queue lock release to not unlink when unacquired
+4) `2ad3d28` — Stream queue reads to avoid full-file loads
+5) `63729d7` — Reuse shared executor for bridge steps
+6) `e687f8a` — Reduce bridge cycle GC frequency (configurable)
+7) `2c4a31f` — Cache advisor prefilter tokenization
+8) `cca5c76` — Add sampling knob for semantic retrieval logging
+9) `7340030` — Add optimization checker playbook
+
+Notes:
+- Prefer `git revert <sha>` (keeps history) instead of reset.
+- For GC behavior specifically, you can override without rollback: `SPARK_BRIDGE_GC_EVERY=1`.
+
+
 Goal: after each performance/correctness optimization, we run a tight set of checks to confirm:
 - services are still healthy
 - learning/advisory loops still function
