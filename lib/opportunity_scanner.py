@@ -40,6 +40,7 @@ USER_SCAN_ENABLED = str(os.getenv("SPARK_OPPORTUNITY_USER_SCAN", "0")).strip().l
     "yes",
     "on",
 }
+SCAN_EVENT_LIMIT = max(0, int(os.getenv("SPARK_OPPORTUNITY_SCAN_EVENT_LIMIT", "120") or 120))
 
 OPPORTUNITY_DIR = Path.home() / ".spark" / "opportunity_scanner"
 SELF_FILE = OPPORTUNITY_DIR / "self_opportunities.jsonl"
@@ -468,7 +469,11 @@ def _generate_llm_self_candidates(
         pass
 
     try:
-        from . import advisory_synthesizer as synth
+        # Use import_module so tests can monkeypatch sys.modules["lib.advisory_synthesizer"]
+        # even if the real module was imported earlier in the process.
+        import importlib
+
+        synth = importlib.import_module("lib.advisory_synthesizer")
     except Exception as e:
         meta["error"] = f"import_failed:{type(e).__name__}"
         return [], meta
@@ -523,8 +528,35 @@ def _generate_llm_self_candidates(
             parsed = _extract_json_candidate(raw)
             rows = _sanitize_llm_self_rows(parsed)
             if not rows:
-                last_error = f"{provider}:unparseable_or_empty"
-                continue
+                # MiniMax sometimes spends the whole token budget in <think>. One retry with a
+                # shorter prompt is cheap insurance.
+                if str(provider or "").strip().lower() == "minimax":
+                    retry_prompt = (
+                        "Return ONLY JSON. No markdown.\n"
+                        'Output: {"opportunities":[{"category":"...","priority":"high|medium|low","confidence":0.72,'
+                        '"question":"...","next_step":"...","rationale":"..."}]}.\n'
+                        "Max 2 opportunities.\n"
+                        "Rules: no telemetry; meaningful improvements; self-directed; actionable.\n"
+                        f"Context: {context_text[:360]}"
+                    )
+                    try:
+                        raw2 = synth._query_provider(provider, retry_prompt)
+                    except Exception:
+                        raw2 = None
+                    if raw2:
+                        parsed2 = _extract_json_candidate(raw2)
+                        rows2 = _sanitize_llm_self_rows(parsed2)
+                        if rows2:
+                            rows = rows2
+                        else:
+                            last_error = f"{provider}:unparseable_or_empty"
+                            continue
+                    else:
+                        last_error = f"{provider}:unparseable_or_empty"
+                        continue
+                else:
+                    last_error = f"{provider}:unparseable_or_empty"
+                    continue
             meta["used"] = True
             meta["provider"] = provider
             meta["candidates"] = len(rows)
@@ -986,6 +1018,16 @@ def scan_runtime_opportunities(
     }
     if not SCANNER_ENABLED:
         return base
+
+    # Keep runtime cost bounded even if the pipeline hands us a large backlog.
+    if SCAN_EVENT_LIMIT > 0:
+        try:
+            if isinstance(events, list):
+                events = events[-SCAN_EVENT_LIMIT:]
+            else:
+                events = list(events or [])[-SCAN_EVENT_LIMIT:]
+        except Exception:
+            events = list(events or [])[-SCAN_EVENT_LIMIT:]
 
     spark_stats = stats if isinstance(stats, dict) else {}
     prompts: List[str] = []
