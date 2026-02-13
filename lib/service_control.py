@@ -511,18 +511,21 @@ def service_status(bridge_stale_s: int = 90, include_pulse_probe: bool = True) -
         or _any_process_matches(meta_keys, snapshot)
         or _pid_alive_fallback(meta_pid, snapshot)
     )
-    bridge_running = (
-        (hb_age is not None and hb_age <= bridge_stale_s)
-        or _pid_matches(bridge_pid, bridge_keys, snapshot)
+    bridge_process_running = (
+        _pid_matches(bridge_pid, bridge_keys, snapshot)
         or _any_process_matches(bridge_keys, snapshot)
         or _pid_alive_fallback(bridge_pid, snapshot)
     )
-    scheduler_running = (
-        (sched_hb_age is not None and sched_hb_age <= bridge_stale_s * 2)
-        or _pid_matches(scheduler_pid, scheduler_keys, snapshot)
+    bridge_heartbeat_fresh = (hb_age is not None and hb_age <= bridge_stale_s)
+    bridge_running = bridge_process_running or bridge_heartbeat_fresh
+
+    scheduler_process_running = (
+        _pid_matches(scheduler_pid, scheduler_keys, snapshot)
         or _any_process_matches(scheduler_keys, snapshot)
         or _pid_alive_fallback(scheduler_pid, snapshot)
     )
+    scheduler_heartbeat_fresh = (sched_hb_age is not None and sched_hb_age <= bridge_stale_s * 2)
+    scheduler_running = scheduler_process_running or scheduler_heartbeat_fresh
     watchdog_running = (
         _pid_matches(watchdog_pid, watchdog_keys, snapshot)
         or _any_process_matches(watchdog_keys, snapshot)
@@ -554,11 +557,17 @@ def service_status(bridge_stale_s: int = 90, include_pulse_probe: bool = True) -
             "running": bridge_running,
             "heartbeat_age_s": hb_age,
             "pid": bridge_pid,
+            # Heartbeat can remain fresh briefly after a crash; do not use it as the sole
+            # indicator for whether we should (re)start the worker.
+            "process_running": bridge_process_running,
+            "heartbeat_fresh": bridge_heartbeat_fresh,
         },
         "scheduler": {
             "running": scheduler_running,
             "heartbeat_age_s": sched_hb_age,
             "pid": scheduler_pid,
+            "process_running": scheduler_process_running,
+            "heartbeat_fresh": scheduler_heartbeat_fresh,
         },
         "watchdog": {
             "running": watchdog_running,
@@ -599,7 +608,14 @@ def start_services(
 
     for name in order:
         current = statuses.get(name, {})
-        if current.get("running"):
+        # For background loops, a fresh heartbeat file alone is not strong enough to
+        # prove a live process (it can be stale-but-recent after a crash). Prefer
+        # process detection to avoid skipping restarts.
+        if name in {"bridge_worker", "scheduler"}:
+            if current.get("process_running"):
+                results[name] = "already_running"
+                continue
+        elif current.get("running"):
             results[name] = "already_running"
             continue
         cmd = cmds.get(name)
@@ -641,7 +657,6 @@ def ensure_services(
 
 def stop_services() -> dict[str, str]:
     results: dict[str, str] = {}
-    snapshot = _process_snapshot()
     for name in ["watchdog", "meta_ralph", "pulse", "dashboard", "scheduler", "bridge_worker", "sparkd"]:
         pid = _read_pid(name)
         patterns = {
@@ -654,14 +669,27 @@ def stop_services() -> dict[str, str]:
             "watchdog": [["-m spark_watchdog"], ["spark_watchdog.py"], ["scripts/watchdog.py"]],
         }.get(name, [])
 
-        matched_pids = _find_pids_by_patterns(patterns, snapshot)
         killed_any = False
+        # Processes can be restarted by a surviving watchdog while we're stopping.
+        # Re-snapshot a few times to aggressively converge to "stopped".
+        for _ in range(3):
+            snapshot = _process_snapshot()
+            matched_pids = _find_pids_by_patterns(patterns, snapshot)
+            if matched_pids:
+                for mpid in matched_pids:
+                    if _terminate_pid(mpid):
+                        killed_any = True
+                time.sleep(0.15)
+                continue
+            break
 
+        snapshot = _process_snapshot()
+        matched_pids = _find_pids_by_patterns(patterns, snapshot)
         if matched_pids:
-            for mpid in matched_pids:
-                if _terminate_pid(mpid):
-                    killed_any = True
             results[name] = "stopped" if killed_any else "failed"
+        elif killed_any:
+            # We successfully terminated something earlier and nothing matches now.
+            results[name] = "stopped"
         elif pid and _pid_matches(pid, patterns, snapshot):
             if _pid_alive(pid):
                 ok = _terminate_pid(pid)
@@ -676,6 +704,19 @@ def stop_services() -> dict[str, str]:
             _pid_file(name).unlink(missing_ok=True)
         except Exception:
             pass
+
+        # Remove heartbeat sentinels so future status checks don't treat a recent file
+        # as evidence of a running background loop.
+        if name == "bridge_worker":
+            try:
+                (Path.home() / ".spark" / "bridge_worker_heartbeat.json").unlink(missing_ok=True)
+            except Exception:
+                pass
+        if name == "scheduler":
+            try:
+                (Path.home() / ".spark" / "scheduler_heartbeat.json").unlink(missing_ok=True)
+            except Exception:
+                pass
     return results
 
 

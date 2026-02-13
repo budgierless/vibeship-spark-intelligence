@@ -343,6 +343,29 @@ def read_recent_events(count: int = 50) -> List[SparkEvent]:
         return []
 
 
+def read_recent_events_raw(count: int = 50) -> List[SparkEvent]:
+    """Read the most recent events, ignoring queue head_bytes.
+
+    This is a fallback for downstream consumers (e.g., opportunity scanner)
+    when the pipeline advanced head_bytes but didn't surface processed_events.
+    """
+    if not EVENTS_FILE.exists():
+        return []
+    try:
+        lines = _tail_lines(EVENTS_FILE, count, start_offset_bytes=0)
+        events: List[SparkEvent] = []
+        for line in lines:
+            try:
+                data = json.loads(line.strip())
+                events.append(SparkEvent.from_dict(data))
+            except Exception:
+                continue
+        return events
+    except Exception as e:
+        log_debug("queue", "read_recent_events_raw failed", e)
+        return []
+
+
 def count_events(use_cache: bool = True) -> int:
     """Count total events in queue."""
     if not EVENTS_FILE.exists():

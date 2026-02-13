@@ -38,6 +38,23 @@ def _check_single_instance() -> bool:
     """Ensure only one watchdog runs. Returns True if we can proceed, False if another is running."""
     PID_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    # Fast path: if *any* other watchdog process is already present, exit.
+    # Relying only on PID_FILE is racy (simultaneous startups can both proceed).
+    try:
+        snapshot = _process_snapshot()
+        for pid, cmd in snapshot:
+            if pid == os.getpid():
+                continue
+            if (
+                "-m spark_watchdog" in cmd
+                or "spark_watchdog.py" in cmd
+                or "scripts/watchdog.py" in cmd
+            ):
+                return False
+    except Exception:
+        # Fall back to PID file heuristics below.
+        pass
+
     def _pid_is_watchdog(pid: int) -> bool:
         snapshot = _process_snapshot()
         for spid, cmd in snapshot:
@@ -85,6 +102,15 @@ def _cleanup_pid_file() -> None:
     """Remove PID file on exit."""
     try:
         PID_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _rewrite_pid_file() -> None:
+    """Best-effort PID refresh so operators don't get stuck with stale PIDs after a crash/duplicate exit."""
+    try:
+        PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PID_FILE.write_text(str(os.getpid()))
     except Exception:
         pass
 
@@ -468,6 +494,7 @@ def main() -> None:
         pass
 
     while not stop_event.is_set():
+        _rewrite_pid_file()
         snapshot = _process_snapshot()
 
         def _bump_fail(name: str, ok: bool) -> int:
@@ -568,6 +595,16 @@ def main() -> None:
                 if _start_process("meta_ralph", [sys.executable, str(SPARK_DIR / "meta_ralph_dashboard.py")]):
                     _record_restart(state, "meta_ralph")
                     failures["meta_ralph"] = 0
+        else:
+            # Keep the surface single-instance even when healthy (multiple concurrent dashboards cause
+            # confusing state and can thrash CPU/memory).
+            meta_pids = _find_pids_by_keywords(["meta_ralph_dashboard.py"], snapshot)
+            if len(meta_pids) > 1 and not args.no_restart:
+                keep = meta_pids[0]
+                extras = [p for p in meta_pids[1:] if p != keep]
+                if extras:
+                    _terminate_pids(extras)
+                    _log(f"meta_ralph multiple instances detected; terminated extras: {extras}")
 
         # bridge_worker
         manage_bridge = _restart_allowed("bridge_worker", plugin_only_mode) and not _env_disabled("bridge_worker")

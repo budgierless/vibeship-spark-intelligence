@@ -189,6 +189,14 @@ def run_bridge_cycle(
             pipeline_metrics.processed_events = []
         else:
             events = read_recent_events(40)
+            # Fallback: if the queue head advanced to EOF (no active bytes) but the
+            # pipeline didn't surface processed_events, downstream systems lose context.
+            if not events:
+                try:
+                    from lib.queue import read_recent_events_raw
+                    events = read_recent_events_raw(40)
+                except Exception:
+                    pass
 
         # --- Single-pass event classification ---
         # Instead of iterating events 5+ separate times, classify once
@@ -338,6 +346,9 @@ def run_bridge_cycle(
             stats["opportunity_scanner"] = opportunity_stats or {}
         else:
             stats["errors"].append("opportunity_scanner")
+            # Preserve the error string in heartbeat so operators can trace failures without
+            # enabling SPARK_DEBUG (stderr logs aren't always available on Windows services).
+            stats["opportunity_scanner"] = {"enabled": True, "error": str(error or "")}
             log_debug("bridge_worker", f"opportunity scanner failed ({error})", None)
 
         # TODO: Filter chips by project context (game-dev shouldn't fire during spark-checker work)
