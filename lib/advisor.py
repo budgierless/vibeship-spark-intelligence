@@ -347,15 +347,42 @@ def _tail_jsonl(path: Path, count: int) -> List[str]:
         return []
 
 
+# Avoid doing a read+rewrite of the entire bounded file on every append.
+# We compact at most once per TTL per path.
+_COMPACT_TTL_S = 30.0
+_LAST_COMPACT_TS: Dict[str, float] = {}
+
+
 def _append_jsonl_capped(path: Path, entry: Dict[str, Any], max_lines: int) -> None:
-    """Append JSONL entry and keep file bounded."""
+    """Append JSONL entry and keep file bounded.
+
+    Optimized for the hot path:
+    - Always append-only
+    - Only compact (rewrite to last N lines) when needed AND rate-limited
+    """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
-        lines = _tail_jsonl(path, max_lines)
-        if lines:
-            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        if max_lines <= 0:
+            return
+
+        now = time.time()
+        key = str(path)
+        last = float(_LAST_COMPACT_TS.get(key, 0.0) or 0.0)
+        if (now - last) < _COMPACT_TTL_S:
+            return
+
+        # Only compact when we likely exceeded the cap.
+        probe = _tail_jsonl(path, max_lines + 1)
+        if len(probe) <= max_lines:
+            _LAST_COMPACT_TS[key] = now
+            return
+
+        # Rewrite to the last max_lines.
+        path.write_text("\n".join(probe[-max_lines:]) + "\n", encoding="utf-8")
+        _LAST_COMPACT_TS[key] = now
     except Exception:
         pass
 
