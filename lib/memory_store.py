@@ -760,17 +760,20 @@ def retrieve(
 
         items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
 
+        def _dedupe_parent(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            deduped: List[Dict[str, Any]] = []
+            seen_parent: set[str] = set()
+            for it in rows or []:
+                parent_key = str(it.get("parent_id") or it.get("entry_id") or "").strip()
+                if parent_key and parent_key in seen_parent:
+                    continue
+                if parent_key:
+                    seen_parent.add(parent_key)
+                deduped.append(it)
+            return deduped
+
         # Patchified dedupe: keep at most one hit per parent group to reduce noise.
-        deduped: List[Dict[str, Any]] = []
-        seen_parent: set[str] = set()
-        for it in items:
-            parent_key = str(it.get("parent_id") or it.get("entry_id") or "").strip()
-            if parent_key and parent_key in seen_parent:
-                continue
-            if parent_key:
-                seen_parent.add(parent_key)
-            deduped.append(it)
-        items = deduped
+        items = _dedupe_parent(items)
 
         # Edge expansion (graph-lite): add related items with small score boost.
         want = max(0, int(limit or 0))
@@ -810,7 +813,7 @@ def retrieve(
         placeholders = ",".join("?" for _ in target_ids)
         rows = conn.execute(
             f"""
-            SELECT memory_id, content, scope, project_key, category
+            SELECT memory_id, content, scope, project_key, category, meta
             FROM memories
             WHERE memory_id IN ({placeholders});
             """,
@@ -830,6 +833,11 @@ def retrieve(
                 continue
             if project_key and r["project_key"] not in (project_key, None, "") and r["scope"] != "global":
                 continue
+            meta = _parse_meta(r["meta"])
+            parent_id = str(meta.get("parent_id") or "").strip() or None
+            # Skip patch chunks if we already have the parent in results.
+            if parent_id and parent_id in existing:
+                continue
             items.append({
                 "entry_id": r["memory_id"],
                 "text": r["content"],
@@ -839,10 +847,16 @@ def retrieve(
                 "bm25": None,
                 "score": 0.15 * weight,
                 "edge_reason": reason,
+                "meta": meta,
+                "parent_id": parent_id,
+                "patch_index": meta.get("patch_index"),
             })
             existing.add(tid)
+            if parent_id:
+                existing.add(parent_id)
 
         items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
+        items = _dedupe_parent(items)
         return items[:want]
     finally:
         conn.close()
