@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-02-13T13:03:52.311892+00:00",
+  "start_ts": 1770987798.2348514,
+  "rounds": 32,
+  "emitted_returns": 0,
+  "engine": {
+    "rows": 64,
+    "trace_rows": 32,
+    "trace_coverage_pct": 50.0,
+    "events": {
+      "user_prompt_prefetch": 32,
+      "no_emit": 32
+    },
+    "routes": {
+      "packet_relaxed": 32
+    },
+    "fallback_share_pct": 0.0
+  },
+  "feedback_requests": {
+    "rows": 0,
+    "trace_rows": 0,
+    "trace_coverage_pct": 0.0,
+    "item_total": 0,
+    "top_repeats": [],
+    "top_repeat_share_pct": 0.0,
+    "unique_ratio_pct": 0.0
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 7200.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 120,
+      "advice_repeat_cooldown_s": 3600,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 4,
+      "min_rank_score": 0.5
+    }
+  },
+  "force_live": false,
+  "label": "2026-02-13_indirect_intelligence_flow_matrix_v2c_m4_trace_D_diagnostic_loose_trace",
+  "trace_prefix": "delta-2026-02-13_indirect_intelligence_flow_matrix_v2c_m4_trace_D_diagnostic_loose_trace-20260213_130318",
+  "session_prefix": "delta-2026-02-13_indirect_intelligence_flow_matrix_v2c_m4_trace_D_diagnostic_loose_trace"
+}

@@ -39,6 +39,8 @@ from lib.diagnostics import setup_component_logging
 PORT = 8777
 SPARK_DIR = Path.home() / ".spark"
 TRACER_STORE_DIR = SPARK_DIR / "tracer"
+AUTO_SCORER_LATEST = TRACER_STORE_DIR / "advisory_auto_score_latest.json"
+_AUTO_SCORER_LOCK = threading.Lock()
 
 # Global state
 _tracer_state: Optional[TraceState] = None
@@ -332,6 +334,37 @@ def generate_html() -> str:
             margin-bottom: 48px;
             padding-bottom: 24px;
             border-bottom: 1px solid var(--border);
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            display: inline-flex;
+            align-items: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            background: var(--bg-deep);
+        }
+
+        .nav a.active {
+            color: var(--text-primary);
+            border-color: rgba(0, 196, 154, 0.8);
+            box-shadow: 0 0 0 1px rgba(0, 196, 154, 0.25);
         }
         
         .brand {
@@ -761,12 +794,18 @@ def generate_html() -> str:
     
     <div class="container">
         <header class="header">
-            <div class="brand">
-                <div class="logo">T</div>
-                <div class="brand-text">
-                    <h1>Tracer</h1>
-                    <p>Decision Trace Observability</p>
+            <div class="header-left">
+                <div class="brand">
+                    <div class="logo">T</div>
+                    <div class="brand-text">
+                        <h1>Tracer</h1>
+                        <p>Decision Trace Observability</p>
+                    </div>
                 </div>
+                <nav class="nav" aria-label="Dashboard pages">
+                    <a class="active" href="/">Tracer</a>
+                    <a href="/scorer">Scorer</a>
+                </nav>
             </div>
             <div class="live-indicator">
                 <div class="live-dot"></div>
