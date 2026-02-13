@@ -437,6 +437,25 @@ def _evaluate_single(
     if state and state.consecutive_failures >= 1 and _is_caution(text):
         adjusted_score *= 1.5
 
+    # ---- Score Adjustment: outcome risk boost (world-model-lite) ----
+    # When we predict this tool call is likely to fail, boost cautionary advice.
+    risk_note = ""
+    try:
+        from .outcome_predictor import PREDICTOR_ENABLED, predict
+
+        if PREDICTOR_ENABLED and state and (_is_caution(text) or _is_negative_advisory(text)):
+            pred = predict(
+                tool_name=tool_name,
+                intent_family=getattr(state, "intent_family", "") or "emergent_other",
+                phase=phase,
+            )
+            # Only act when we have some evidence or high risk.
+            if pred.samples >= 5 or pred.p_fail >= 0.6:
+                adjusted_score *= (1.0 + (0.45 * float(pred.p_fail)))
+                risk_note = f", risk={pred.p_fail:.2f} n={pred.samples}"
+    except Exception:
+        pass
+
     # ---- Agreement gating (escalation only when corroborated) ----
     agreement_count = 1
     agreement_sources: List[str] = []
@@ -471,7 +490,7 @@ def _evaluate_single(
         advice_id=advice_id,
         authority=authority,
         emit=emit,
-        reason=f"phase={phase}, score={adjusted_score:.2f}, authority={authority}{agreement_note}",
+        reason=f"phase={phase}, score={adjusted_score:.2f}, authority={authority}{agreement_note}{risk_note}",
         adjusted_score=adjusted_score,
         original_score=base_score,
     )

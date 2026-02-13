@@ -1138,6 +1138,18 @@ def on_post_tool(
             trace_id=resolved_trace_id,
         )
 
+        # Outcome predictor (world-model-lite): record outcome for cheap risk scoring.
+        try:
+            from .outcome_predictor import record_outcome
+            record_outcome(
+                tool_name=tool_name,
+                intent_family=state.intent_family or "emergent_other",
+                phase=state.task_phase or "implementation",
+                success=bool(success),
+            )
+        except Exception:
+            pass
+
         if state.shown_advice_ids:
             _record_implicit_feedback(state, tool_name, success, resolved_trace_id)
 
