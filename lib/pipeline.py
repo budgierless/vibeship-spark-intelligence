@@ -84,6 +84,13 @@ except Exception:
     LOW_PRIORITY_KEEP_RATE = 0.25
 LOW_PRIORITY_KEEP_RATE = max(0.0, min(1.0, LOW_PRIORITY_KEEP_RATE))
 
+# Macro workflow mining (temporal abstractions over tool sequences)
+MACROS_ENABLED = os.getenv("SPARK_MACROS_ENABLED", "0") == "1"
+try:
+    MACRO_MIN_COUNT = max(2, min(20, int(os.getenv("SPARK_MACRO_MIN_COUNT", "3") or 3)))
+except Exception:
+    MACRO_MIN_COUNT = 3
+
 # Processing health metrics file
 PIPELINE_STATE_FILE = Path.home() / ".spark" / "pipeline_state.json"
 PIPELINE_METRICS_FILE = Path.home() / ".spark" / "pipeline_metrics.json"
@@ -388,6 +395,35 @@ def extract_error_patterns(events: List[SparkEvent]) -> Dict[str, Any]:
     }
 
 
+def _extract_macros_from_sessions(
+    sessions: Dict[str, List[Tuple[str, str]]],
+    *,
+    n: int = 3,
+    min_count: int = 3,
+) -> List[Dict[str, Any]]:
+    """Extract frequent successful tool n-grams as macro candidates."""
+    if n < 2:
+        n = 2
+    counts: Counter[str] = Counter()
+    for _sid, tools in (sessions or {}).items():
+        ok_tools = [tool for tool, status in tools if status == "ok" and tool]
+        if len(ok_tools) < n:
+            continue
+        for i in range(0, len(ok_tools) - n + 1):
+            gram = ok_tools[i : i + n]
+            # Require at least one "action" tool so we don't learn read-only macros.
+            if not any(t in {"Edit", "Write", "Bash", "NotebookEdit"} for t in gram):
+                continue
+            counts["→".join(gram)] += 1
+
+    macros: List[Dict[str, Any]] = []
+    for seq, cnt in counts.most_common(10):
+        if cnt < max(2, int(min_count or 2)):
+            continue
+        macros.append({"sequence": seq, "count": int(cnt)})
+    return macros
+
+
 def extract_session_workflows(events: List[SparkEvent]) -> Dict[str, Any]:
     """Analyze tool usage patterns within sessions.
 
@@ -483,9 +519,21 @@ def extract_session_workflows(events: List[SparkEvent]) -> Dict[str, Any]:
             ),
         })
 
+    macros: List[Dict[str, Any]] = []
+    if MACROS_ENABLED:
+        try:
+            macros = _extract_macros_from_sessions(
+                sessions,
+                n=3,
+                min_count=MACRO_MIN_COUNT,
+            )
+        except Exception:
+            macros = []
+
     return {
         "sessions_analyzed": len(sessions),
         "workflow_insights": workflow_insights,
+        "macros": macros,
     }
 
 
@@ -547,6 +595,30 @@ def store_deep_learnings(
                 result = None
             if result:
                 stored += 1
+
+        # Workflow macros (temporal abstractions over successful tool sequences)
+        macros = session_workflows.get("macros") or []
+        if MACROS_ENABLED and isinstance(macros, list) and macros:
+            # Store at most one per cycle to avoid memory spam.
+            top = macros[0] if isinstance(macros[0], dict) else None
+            if top and top.get("sequence"):
+                seq = str(top.get("sequence") or "").strip()
+                cnt = int(top.get("count") or 0)
+                if seq and cnt >= max(2, MACRO_MIN_COUNT):
+                    text = (
+                        f"Macro (often works): {seq}. "
+                        f"Use this sequence when appropriate to reduce thrash."
+                    )
+                    result = learner.add_insight(
+                        category=CognitiveCategory.META_LEARNING,
+                        insight=text,
+                        context=f"workflow_macro:{seq} count={cnt}",
+                        confidence=0.6,
+                        record_exposure=False,
+                        source="pipeline_macro",
+                    )
+                    if result:
+                        stored += 1
 
     except Exception as e:
         log_debug("pipeline", "store_deep_learnings failed", e)
