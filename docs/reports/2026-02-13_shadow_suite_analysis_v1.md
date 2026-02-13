@@ -14,7 +14,7 @@ Primary consistently passes gates. Shadow consistently fails **two gates**:
 
 This is largely explained by **label drift**: five cases are labeled `should_emit=false` in v1 but `should_emit=true` in v2. When we emit on those cases, v1 counts them as **unsolicited**, dragging shadow high-value and theory-discrimination metrics.
 
-## 1) What “Shadow” Means In This Repo
+## 1) What "Shadow" Means In This Repo
 
 From `benchmarks/data/advisory_realism_operating_contract_v1.json`:
 - PRIMARY cases: `benchmarks/data/advisory_realism_eval_v2.json`
@@ -24,9 +24,9 @@ This is not production shadow traffic. It is a second benchmark suite intended t
 
 Contract policy note (important):
 - `shadow_regression_allowed: true`
-- “v1 remains a historical strict-suppress sanity set and should not block v2 corrective-advisory policy”
+- "v1 remains a historical strict-suppress sanity set and should not block v2 corrective-advisory policy"
 
-## 2) The Concrete Driver: “Unsolicited” In Shadow
+## 2) The Concrete Driver: "Unsolicited" In Shadow
 
 Using the latest force-live full contract:
 - Shadow unsolicited emits: `5/18` (27.78%)
@@ -40,19 +40,19 @@ Those five cases are:
 
 In the shadow report, each has `should_emit=false` and `emitted=true`.
 
-In the primary report, the **same cases** have `should_emit=true`, so the exact same “emit” behavior is no longer counted as unsolicited.
+In the primary report, the **same cases** have `should_emit=true`, so the exact same "emit" behavior is no longer counted as unsolicited.
 
 Interpretation:
-- Shadow is acting as a “be quieter / suppress theory-ish output” suite.
-- Primary is acting as a “be helpful / corrective / proactive” suite.
+- Shadow is acting as a "be quieter / suppress theory-ish output" suite.
+- Primary is acting as a "be helpful / corrective / proactive" suite.
 
 ## 3) What This Means For Decisions
 
-If your product direction is “more proactive advisory”, then:
+If your product direction is "more proactive advisory", then:
 - prioritize PRIMARY gates
-- track SHADOW failures as a *sentinel* (don’t optimize to it by default)
+- track SHADOW failures as a *sentinel* (don't optimize to it by default)
 
-If your product direction is “strict suppress / only speak when extremely confident”, then:
+If your product direction is "strict suppress / only speak when extremely confident", then:
 - you can tune advisory gating upward, but be careful: prior strict canary runs increased critical misses and reduced helpful emission.
 
 ## 4) Options (Recommended Order)

@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-02-13T14:42:32.794642+00:00",
+  "start_ts": 1770993513.067106,
+  "rounds": 120,
+  "emitted_returns": 13,
+  "engine": {
+    "rows": 240,
+    "trace_rows": 120,
+    "trace_coverage_pct": 50.0,
+    "events": {
+      "user_prompt_prefetch": 120,
+      "emitted": 13,
+      "no_emit": 107
+    },
+    "routes": {
+      "live": 120
+    },
+    "fallback_share_pct": 0.0
+  },
+  "feedback_requests": {
+    "rows": 5,
+    "trace_rows": 5,
+    "trace_coverage_pct": 100.0,
+    "item_total": 5,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 3
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 2
+      }
+    ],
+    "top_repeat_share_pct": 60.0,
+    "unique_ratio_pct": 40.0
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 4,
+      "min_rank_score": 0.5
+    }
+  },
+  "force_live": true,
+  "label": "B_cooldowns_up",
+  "trace_prefix": "delta-B_cooldowns_up-20260213_143832",
+  "session_prefix": "delta-B_cooldowns_up"
+}

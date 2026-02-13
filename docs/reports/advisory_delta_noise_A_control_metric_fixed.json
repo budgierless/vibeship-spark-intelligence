@@ -1,31 +1,39 @@
 {
-  "generated_at": "2026-02-13T14:16:38.072050+00:00",
-  "start_ts": 1770992142.7716272,
-  "rounds": 40,
-  "emitted_returns": 7,
+  "generated_at": "2026-02-13T14:38:32.699835+00:00",
+  "start_ts": 1770993272.7410169,
+  "rounds": 120,
+  "emitted_returns": 14,
   "engine": {
-    "rows": 80,
-    "trace_rows": 40,
+    "rows": 240,
+    "trace_rows": 120,
     "trace_coverage_pct": 50.0,
     "events": {
-      "user_prompt_prefetch": 40,
-      "no_advice": 14,
-      "no_emit": 19,
-      "emitted": 7
+      "user_prompt_prefetch": 120,
+      "emitted": 14,
+      "no_emit": 106
     },
     "routes": {
-      "live": 40
+      "live": 120
     },
     "fallback_share_pct": 0.0
   },
   "feedback_requests": {
-    "rows": 0,
-    "trace_rows": 0,
-    "trace_coverage_pct": 0.0,
-    "item_total": 0,
-    "top_repeats": [],
-    "top_repeat_share_pct": 0.0,
-    "unique_ratio_pct": 0.0
+    "rows": 6,
+    "trace_rows": 6,
+    "trace_coverage_pct": 100.0,
+    "item_total": 6,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 4
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 2
+      }
+    ],
+    "top_repeat_share_pct": 66.67,
+    "unique_ratio_pct": 33.33
   },
   "config": {
     "advisory_engine": {
@@ -53,11 +61,11 @@
     },
     "advisor": {
       "max_items": 4,
-      "min_rank_score": 0.55
+      "min_rank_score": 0.5
     }
   },
   "force_live": true,
-  "label": "noise_C_rank_tight",
-  "trace_prefix": "delta-noise_C_rank_tight-20260213_141542",
-  "session_prefix": "delta-noise_C_rank_tight"
+  "label": "A_control_cooldowns_baseline",
+  "trace_prefix": "delta-A_control_cooldowns_baseline-20260213_143432",
+  "session_prefix": "delta-A_control_cooldowns_baseline"
 }

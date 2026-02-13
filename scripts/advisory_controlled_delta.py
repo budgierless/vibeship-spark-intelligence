@@ -33,10 +33,22 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(default)
 
 
+def _row_ts(row: Dict[str, Any]) -> float:
+    # Different Spark logs use different timestamp keys.
+    # - advisory_engine.jsonl: typically "ts"
+    # - advice_feedback_requests.jsonl: typically "created_at"
+    for key in ("ts", "created_at", "timestamp"):
+        if key in row:
+            ts = _safe_float(row.get(key), 0.0)
+            if ts:
+                return ts
+    return 0.0
+
+
 def _collect_rows_since(path: Path, start_ts: float) -> List[Dict[str, Any]]:
     out = []
     for row in _read_jsonl(path):
-        ts = _safe_float(row.get("ts"), 0.0)
+        ts = _row_ts(row)
         if ts >= start_ts:
             out.append(row)
     return out
