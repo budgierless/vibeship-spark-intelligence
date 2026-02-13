@@ -1911,6 +1911,17 @@ class TracerHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        # Safety: by default, only accept POSTs from localhost.
+        # Tracer dashboard can be bound publicly by env, but mutating endpoints should not be.
+        remote = str(self.client_address[0]) if getattr(self, 'client_address', None) else ''
+        allow_remote = (os.environ.get('SPARK_TRACER_ALLOW_REMOTE_POST') or '').strip().lower() in {'1','true','yes','on'}
+        if not allow_remote and remote not in {'127.0.0.1', '::1'}:
+            self.send_response(403)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'ok': False, 'error': 'remote POST forbidden'}).encode())
+            return
+
         try:
             raw_len = self.headers.get("Content-Length", "0")
             n = _safe_int(raw_len, 0, lo=0, hi=5_000_000)
@@ -1995,9 +2006,15 @@ def main():
     
     # Start polling
     start_polling()
+
+    # Bind
+    # Default to loopback for safety; allow override via env.
+    bind_host = (os.environ.get("SPARK_TRACER_BIND") or "127.0.0.1").strip()
+    if bind_host in {"loopback", "localhost"}:
+        bind_host = "127.0.0.1"
     
     # Create server
-    server = ThreadingHTTPServer(('0.0.0.0', PORT), TracerHandler)
+    server = ThreadingHTTPServer((bind_host, PORT), TracerHandler)
     
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
