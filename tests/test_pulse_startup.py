@@ -142,3 +142,40 @@ def test_service_status_detects_watchdog_wrapper_command(monkeypatch):
 
     status = service_control.service_status()
     assert status["watchdog"]["running"] is True
+
+
+def test_load_repo_env_parses_basic_env_file(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "# comment",
+                "MINIMAX_API_KEY=abc123",
+                "SPARK_MINIMAX_MODEL=MiniMax-M2.5",
+                "export SPARK_OPPORTUNITY_LLM_PROVIDER=minimax",
+                "QUOTED='hello world'",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out = service_control._load_repo_env(env_file)
+    assert out["MINIMAX_API_KEY"] == "abc123"
+    assert out["SPARK_MINIMAX_MODEL"] == "MiniMax-M2.5"
+    assert out["SPARK_OPPORTUNITY_LLM_PROVIDER"] == "minimax"
+    assert out["QUOTED"] == "hello world"
+
+
+def test_env_for_child_includes_repo_env_without_overriding(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "MINIMAX_API_KEY=from_file\nSPARK_MINIMAX_MODEL=MiniMax-M2.5\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(service_control, "REPO_ENV_FILE", env_file)
+    monkeypatch.setenv("MINIMAX_API_KEY", "from_env")
+
+    env = service_control._env_for_child(tmp_path)
+    assert env["MINIMAX_API_KEY"] == "from_env"
+    assert env["SPARK_MINIMAX_MODEL"] == "MiniMax-M2.5"

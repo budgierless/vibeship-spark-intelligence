@@ -26,6 +26,7 @@ from lib.ports import (
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+REPO_ENV_FILE = ROOT_DIR / ".env"
 
 
 def _resolve_pulse_dir() -> Path:
@@ -273,8 +274,41 @@ def _scheduler_heartbeat_age() -> Optional[float]:
     return scheduler_heartbeat_age_s()
 
 
+def _load_repo_env(path: Path = REPO_ENV_FILE) -> dict[str, str]:
+    """Load simple KEY=VALUE pairs from repo .env file.
+
+    This avoids requiring python-dotenv for daemon startup paths.
+    """
+    if not path.exists():
+        return {}
+    out: dict[str, str] = {}
+    try:
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.lower().startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key:
+                continue
+            val = value.strip()
+            if len(val) >= 2 and ((val[0] == '"' and val[-1] == '"') or (val[0] == "'" and val[-1] == "'")):
+                val = val[1:-1]
+            out[key] = val
+    except Exception:
+        return {}
+    return out
+
+
 def _env_for_child(log_dir: Path) -> dict:
     env = os.environ.copy()
+    # Import repo-level .env values for daemon processes (e.g., API keys/models).
+    for k, v in _load_repo_env().items():
+        env.setdefault(k, v)
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("SPARK_LOG_DIR", str(log_dir))
