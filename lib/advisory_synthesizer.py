@@ -441,9 +441,9 @@ def _query_minimax(prompt: str) -> Optional[str]:
                     "model": MINIMAX_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     # MiniMax often emits a <think> block before the final answer; for JSON-only
-                    # prompts we give it a larger budget so the structured output isn't truncated.
-                    "max_tokens": 480 if want_json else 200,
-                    "temperature": 0.3,
+                    # prompts we give it a bit more budget so the structured output isn't truncated.
+                    "max_tokens": 420 if want_json else 200,
+                    "temperature": 0.2 if want_json else 0.3,
                     **({"response_format": {"type": "json_object"}} if want_json else {}),
                 },
             )

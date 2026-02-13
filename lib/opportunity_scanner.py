@@ -342,6 +342,13 @@ def _extract_json_candidate(raw: str) -> Optional[Any]:
     decoder = json.JSONDecoder()
 
     candidates = [text]
+    # Prefer scanning after a provider "thinking" block if present. This avoids
+    # accidentally parsing echoed prompt schema inside <think>...</think>.
+    think_matches = list(re.finditer(r"</think>", text, flags=re.IGNORECASE))
+    if think_matches:
+        after = text[think_matches[-1].end() :].strip()
+        if after:
+            candidates.insert(0, after)
     for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text, flags=re.IGNORECASE):
         payload = str(m.group(1) or "").strip()
         if payload:
@@ -451,20 +458,22 @@ def _generate_llm_self_candidates(
         meta["error"] = f"import_failed:{type(e).__name__}"
         return [], meta
 
+    # Keep this prompt short: some providers spend the whole token budget in "<think>"
+    # unless we are extremely direct.
+    stat_slice = {
+        "errors": (stats or {}).get("errors", []),
+        "validation": (stats or {}).get("validation", {}),
+    }
     prompt = (
-        "Return ONLY JSON. Build self-Socratic improvement opportunities for Spark.\n"
-        "Rules:\n"
-        "- Filter out telemetry/noise (tool_*_error, status code, trace ids, heartbeat logs).\n"
-        "- Focus on meaningful improvement opportunities in current work.\n"
-        "- Category must be one of: verification_gap, outcome_clarity, assumption_audit, reversibility, humanity_guardrail, compounding_learning.\n"
-        "- priority must be high|medium|low.\n"
-        "- confidence in [0.55,0.95].\n"
-        "- Each question must be specific, self-directed, and actionable.\n"
-        "- Max 3 opportunities.\n\n"
-        f"Kernel mode: {'conscious' if kernel_ok else 'conservative'}\n"
-        f"Recent context:\n{context_text[:1800]}\n"
-        f"Runtime stats: {json.dumps({'errors': (stats or {}).get('errors', []), 'validation': (stats or {}).get('validation', {})}, ensure_ascii=True)[:500]}\n\n"
-        'Output schema: {"opportunities":[{"category":"...","priority":"...","confidence":0.72,"question":"...","next_step":"...","rationale":"..."}]}'
+        "Return ONLY JSON. No markdown.\n"
+        'Output: JSON object with key "opportunities" (max 3).\n'
+        "Each opportunity keys: category, priority, confidence, question, next_step, rationale.\n"
+        "category must be one of: verification_gap, outcome_clarity, assumption_audit, reversibility, humanity_guardrail, compounding_learning.\n"
+        "priority must be high|medium|low. confidence must be 0.55-0.95.\n"
+        "Filter telemetry/noise (tool_*_error, status code, trace ids, heartbeat logs). Focus on meaningful improvements.\n"
+        f"Kernel: {'conscious' if kernel_ok else 'conservative'}.\n"
+        f"Context: {context_text[:900]}\n"
+        f"Stats: {json.dumps(stat_slice, ensure_ascii=True)[:320]}"
     )
 
     meta["attempted"] = True
@@ -481,6 +490,11 @@ def _generate_llm_self_candidates(
         last_error = None
         for provider in chain:
             try:
+                # Per-provider time budget. Cloud providers (esp. minimax) are higher-latency than local.
+                provider_timeout = float(LLM_TIMEOUT_S)
+                if str(provider or "").strip().lower() == "minimax":
+                    provider_timeout = max(provider_timeout, 12.0)
+                synth.AI_TIMEOUT_S = provider_timeout
                 raw = synth._query_provider(provider, prompt)
             except Exception as e:
                 last_error = f"{provider}:{type(e).__name__}"

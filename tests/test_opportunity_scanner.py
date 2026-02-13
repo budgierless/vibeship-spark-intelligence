@@ -564,6 +564,19 @@ def test_extract_json_candidate_handles_think_wrapped_multiple_json_objects():
     assert "opportunities" in obj
 
 
+def test_extract_json_candidate_prefers_post_think_final_payload():
+    # Ensure we do not accidentally parse an echoed schema JSON inside <think>.
+    raw = (
+        "<think> Output schema: {\"opportunities\":[{\"category\":\"...\",\"priority\":\"...\",\"confidence\":0.72,"
+        "\"question\":\"...\",\"next_step\":\"...\",\"rationale\":\"...\"}]} </think>\n"
+        "{\"opportunities\":[{\"category\":\"verification_gap\",\"priority\":\"high\",\"confidence\":0.8,"
+        "\"question\":\"What proof validates this change?\",\"next_step\":\"Run one focused test.\",\"rationale\":\"Need evidence.\"}]}"
+    )
+    obj = scanner._extract_json_candidate(raw)
+    rows = scanner._sanitize_llm_self_rows(obj)
+    assert len(rows) == 1
+
+
 def test_scan_runtime_opportunities_does_not_repersist_recent_duplicates(tmp_path, monkeypatch):
     # Isolate persistence to temp files.
     monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self.jsonl")
