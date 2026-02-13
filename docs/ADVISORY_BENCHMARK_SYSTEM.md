@@ -297,6 +297,11 @@ python scripts/run_chip_schema_multiseed.py \
 
 Promotion should use multi-seed pass rate, not single-seed outcome.
 
+Deterministic check (required):
+1. Run the same multi-seed command twice with different `--out-prefix` values.
+2. Compare both JSON reports ignoring `generated_at`.
+3. Treat results as valid only when leader, pass-rate, and aggregate metrics are identical.
+
 Mode variation matrix:
 
 ```bash
@@ -325,6 +330,11 @@ python scripts/run_chip_schema_experiments.py \
   --min-candidate-merge-eligible 0.05 \
   --out-prefix chip_schema_merge_activation_v1
 ```
+
+Current lock (2026-02-13 close):
+- Primary: `R3_two_evidence_relaxed_merge`
+- Fallback: `R2_relaxed_runtime_merge`
+- Both pass promotion against `R0`; `R3` remains slightly stronger on objective.
 
 Observer policy from KPI trends (2-3 windows):
 

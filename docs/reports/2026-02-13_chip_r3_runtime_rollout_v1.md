@@ -66,10 +66,16 @@ Schema multiseed (stable-seed runner):
   - `R3`: objective mean `0.9286`, coverage `100%`, merge-eligible mean `0.6429`
   - `R2`: objective mean `0.9266`, coverage `100%`, merge-eligible mean `0.6329`
 
+Deterministic rerun recheck:
+- `chip_schema_merge_activation_multiseed_v5` vs `v6`: identical except `generated_at`.
+- `chip_schema_merge_activation_multiseed_v5_r2` vs `v6_r2`: identical except `generated_at`.
+- `chip_schema_experiments_multiseed_v7` vs `v8`: identical except `generated_at`.
+- `chip_schema_mode_variations_multiseed_v7` vs `v8`: identical except `generated_at`.
+
 ## Honest Assessment
 
 1. Rollout is technically successful: runtime profile and tuneables are now aligned with promoted benchmark profile.
 2. Benchmark confidence is higher after stable-seed fix; prior run-to-run winner drift was partly benchmark-seeding noise.
 3. Telemetry share in historical windows is still high; observer policy is still required as hard guardrail.
 4. `R3` is currently the preferred profile, with `R2` a close fallback.
-
+5. The benchmark runner is now reproducible enough for promotion decisions.

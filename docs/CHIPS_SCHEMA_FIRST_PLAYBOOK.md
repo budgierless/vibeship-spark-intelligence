@@ -198,6 +198,12 @@ python scripts/run_chip_schema_multiseed.py \
   --out-prefix chip_schema_mode_variations_multiseed_latest
 ```
 
+Deterministic verification (required after benchmark runner changes):
+
+1. Run the same command twice with different output prefixes.
+2. Compare reports while ignoring `generated_at`.
+3. Promote only if both runs match on leader and aggregate metrics.
+
 ## Operational Diagnostics
 
 Use fresh, active-chip windows:
@@ -253,10 +259,19 @@ After apply:
 - `python scripts/apply_chip_profile_r3.py`
 4. Keep observer policy trend gate active and re-check every 24h.
 
-## What “Good” Looks Like
+## Current Lock (2026-02-13 Close)
+
+- `R3_two_evidence_relaxed_merge` is primary runtime profile.
+- `R2_relaxed_runtime_merge` is approved fallback profile.
+- `R3` vs `R0` promotion gate pass rate remains `100%` in deterministic rechecks.
+- `A_schema_baseline` remains winner in the base A/B/C/D plan.
+- `M2_two_evidence_low_conf` remains winner in mode variations, while `M1` still fails promotion against `M0`.
+
+## What Good Looks Like
 
 A healthy chip system has:
 - high signal observer rows,
 - low chip-level fallback share,
 - stable schema payload/statement rates,
 - measurable advisory quality lift without noise inflation.
+

@@ -71,7 +71,8 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-13_chip_best_use_findings_and_outlook_v1.md`: best-use findings, observer KPI upgrades, and future promotion path for chips as evidence infrastructure
 - `docs/reports/2026-02-13_chip_observer_policy_and_variation_pass_v1.md`: trigger tightening, observer policy rollout, and schema mode variation matrix results
 - `docs/reports/2026-02-13_chip_schema_randomized_benchmark_pass_v2.md`: trigger-tightening follow-up, multi-seed gate outcomes, and merge-activation profile results
-- `docs/reports/2026-02-13_chip_r3_runtime_rollout_v1.md`: live R3 rollout, startup/runtime profile apply, reproducibility fix, and post-rollout metrics
+- `docs/reports/2026-02-13_chip_r3_runtime_rollout_v1.md`: live R3 rollout, startup/runtime profile apply, reproducibility fix, and deterministic rerun recheck outcomes
+- `prompts/TOMORROW_CHIP_ADVISORY_CONTINUATION_PROMPT.md`: tomorrow handoff prompt for continuing chip/advisory optimization loop
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log
