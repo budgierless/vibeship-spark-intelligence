@@ -33,10 +33,8 @@ If you can paste the original Carmack post/link, I can make this 100% exact (a f
 ## Unresolved (need the exact Carmack link or permission to web-search)
 
 ### 11) Discovering state-of-the-art reinforcement learning algorithms
-- Likely a meta-learning / automated algorithm discovery paper.
-- Candidates to verify once we have the source link:
-  - “Discovering Reinforcement Learning Algorithms”
-  - “Discovering Policy Gradient Methods” / “Learning to learn RL updates”
+- Paper: **Discovering state-of-the-art reinforcement learning algorithms**
+- Nature: https://www.nature.com/articles/s41586-025-09761-x
 
 ### 10) LeJEPA: Provable and Scalable Self-Supervised Learning Without the Heuristics
 - Paper: **LeJEPA: Provable and Scalable Self-Supervised Learning Without the Heuristics**
