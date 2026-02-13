@@ -41,6 +41,7 @@ def test_scan_runtime_opportunities_filters_telemetry_and_persists(monkeypatch, 
     )
     monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
     monkeypatch.setattr(scanner, "OUTCOME_FILE", tmp_path / "outcomes.jsonl")
+    monkeypatch.setattr(scanner, "DECISIONS_FILE", tmp_path / "decisions.jsonl")
     monkeypatch.setattr(scanner, "SCANNER_ENABLED", True)
     monkeypatch.setattr(
         scanner,
@@ -85,6 +86,9 @@ def test_scan_runtime_opportunities_filters_telemetry_and_persists(monkeypatch, 
     ]
     assert len(rows) == out["persisted"]
     assert all("tool_1_error" not in (r.get("question") or "") for r in rows)
+    # Scope fields should exist (even if None in test stubs).
+    assert all("scope_type" in r for r in rows)
+    assert all("scope_id" in r for r in rows)
 
 
 def test_generate_user_opportunities_respects_conservative_mode(monkeypatch):
@@ -206,6 +210,7 @@ def test_scan_runtime_opportunities_filters_recent_repeats(monkeypatch, tmp_path
     )
     monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
     monkeypatch.setattr(scanner, "OUTCOME_FILE", tmp_path / "outcomes.jsonl")
+    monkeypatch.setattr(scanner, "DECISIONS_FILE", tmp_path / "decisions.jsonl")
     monkeypatch.setattr(scanner, "SCANNER_ENABLED", True)
     monkeypatch.setattr(scanner, "SELF_MAX_ITEMS", 10)
     monkeypatch.setattr(scanner, "SELF_DEDUP_WINDOW_S", 3600.0)
@@ -249,6 +254,131 @@ def test_scan_runtime_opportunities_filters_recent_repeats(monkeypatch, tmp_path
     questions = [str(r.get("question") or "") for r in out.get("self_opportunities") or []]
     assert not any("What exact outcome marks done" in q for q in questions)
     assert out.get("dedup_recent_filtered", 0) >= 1
+
+
+def test_scan_runtime_opportunities_respects_scope_hint_and_passes_cooldown_key(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        scanner,
+        "fetch_soul_state",
+        lambda session_id="default": SoulState(
+            ok=True,
+            mood="builder",
+            soul_kernel={"non_harm": True, "service": True, "clarity": True},
+            source="test",
+        ),
+    )
+    monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
+    monkeypatch.setattr(scanner, "OUTCOME_FILE", tmp_path / "outcomes.jsonl")
+    monkeypatch.setattr(scanner, "DECISIONS_FILE", tmp_path / "decisions.jsonl")
+    monkeypatch.setattr(scanner, "SCANNER_ENABLED", True)
+    monkeypatch.setattr(scanner, "_track_meta_retrieval", lambda **_k: None)
+    monkeypatch.setattr(scanner, "_track_meta_outcome", lambda **_k: None)
+
+    seen = {}
+
+    def _fake_llm(*, cooldown_key=None, **_k):
+        seen["cooldown_key"] = cooldown_key
+        return (
+            [
+                {
+                    "category": "verification_gap",
+                    "priority": "high",
+                    "confidence": 0.8,
+                    "question": "Test question from LLM",
+                    "next_step": "Test next step",
+                    "rationale": "Test rationale",
+                    "source": "llm",
+                    "llm_provider": "minimax",
+                }
+            ],
+            {
+                "enabled": True,
+                "attempted": True,
+                "used": True,
+                "provider": "minimax",
+                "error": None,
+                "candidates": 1,
+            },
+        )
+
+    monkeypatch.setattr(scanner, "_generate_llm_self_candidates", _fake_llm)
+
+    events = [
+        _mk_event(
+            EventType.USER_PROMPT,
+            payload={"text": "scope:operation op:marketing Improve our marketing workflow with verification gates."},
+        ),
+    ]
+    out = scanner.scan_runtime_opportunities(events, stats={"errors": []}, query="", session_id="s1", persist=True)
+    assert out["scope_type"] == "operation"
+    assert out["scope_id"] == "marketing"
+    assert seen.get("cooldown_key") == "operation:marketing"
+
+
+def test_scan_runtime_opportunities_filters_dismissed_questions(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        scanner,
+        "fetch_soul_state",
+        lambda session_id="default": SoulState(
+            ok=True,
+            mood="builder",
+            soul_kernel={"non_harm": True, "service": True, "clarity": True},
+            source="test",
+        ),
+    )
+    monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
+    monkeypatch.setattr(scanner, "OUTCOME_FILE", tmp_path / "outcomes.jsonl")
+    monkeypatch.setattr(scanner, "DECISIONS_FILE", tmp_path / "decisions.jsonl")
+    monkeypatch.setattr(scanner, "SCANNER_ENABLED", True)
+    monkeypatch.setattr(
+        scanner,
+        "_generate_llm_self_candidates",
+        lambda **_k: ([], {"enabled": False, "attempted": False, "used": False, "provider": None, "error": None, "candidates": 0}),
+    )
+    monkeypatch.setattr(scanner, "_track_meta_retrieval", lambda **_k: None)
+    monkeypatch.setattr(scanner, "_track_meta_outcome", lambda **_k: None)
+
+    q = "What exact outcome marks done, and how will Spark verify it?"
+    scanner.DECISIONS_FILE.write_text(
+        json.dumps(
+            {
+                "ts": time.time(),
+                "action": "dismiss",
+                "opportunity_id": "opp:test",
+                "question_key": scanner._question_key(q),
+                "note": "not relevant",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        scanner,
+        "_derive_self_candidates",
+        lambda **_k: [
+            {
+                "category": "outcome_clarity",
+                "priority": "high",
+                "confidence": 0.8,
+                "question": q,
+                "next_step": "Define acceptance check.",
+                "rationale": "test",
+            }
+        ],
+    )
+
+    out = scanner.scan_runtime_opportunities(
+        [
+            _mk_event(EventType.USER_PROMPT, payload={"text": "Improve something with clear done criteria."}),
+        ],
+        stats={"errors": []},
+        query="",
+        session_id="s1",
+        persist=True,
+    )
+    assert out["opportunities_found"] == 0
+    assert out["persisted"] == 0
 
 
 def test_select_diverse_self_rows_prefers_category_spread():
@@ -473,7 +603,7 @@ def test_generate_llm_self_candidates_blocks_deepseek(monkeypatch):
     monkeypatch.setattr(scanner, "LLM_PROVIDER", "deepseek")
     monkeypatch.setattr(scanner, "LLM_MIN_CONTEXT_CHARS", 10)
     monkeypatch.setattr(scanner, "LLM_COOLDOWN_S", 0.0)
-    scanner._LAST_LLM_ATTEMPT_BY_SESSION.clear()
+    scanner._LAST_LLM_ATTEMPT_BY_KEY.clear()
 
     rows, meta = scanner._generate_llm_self_candidates(
         prompts=["Improve Spark autonomy with measurable checks"],
@@ -495,7 +625,7 @@ def test_generate_llm_self_candidates_honors_forced_provider(monkeypatch):
     monkeypatch.setattr(scanner, "LLM_TIMEOUT_S", 0.5)
     monkeypatch.setattr(scanner, "LLM_MIN_CONTEXT_CHARS", 10)
     monkeypatch.setattr(scanner, "LLM_COOLDOWN_S", 0.0)
-    scanner._LAST_LLM_ATTEMPT_BY_SESSION.clear()
+    scanner._LAST_LLM_ATTEMPT_BY_KEY.clear()
 
     class _DummySynth:
         AI_TIMEOUT_S = 1.0
@@ -532,7 +662,7 @@ def test_generate_llm_self_candidates_surfaces_empty_or_timeout(monkeypatch):
     monkeypatch.setattr(scanner, "LLM_TIMEOUT_S", 0.1)
     monkeypatch.setattr(scanner, "LLM_MIN_CONTEXT_CHARS", 10)
     monkeypatch.setattr(scanner, "LLM_COOLDOWN_S", 0.0)
-    scanner._LAST_LLM_ATTEMPT_BY_SESSION.clear()
+    scanner._LAST_LLM_ATTEMPT_BY_KEY.clear()
 
     class _DummySynth:
         AI_TIMEOUT_S = 1.0
@@ -568,7 +698,7 @@ def test_generate_llm_self_candidates_respects_cooldown(monkeypatch):
     monkeypatch.setattr(scanner, "LLM_TIMEOUT_S", 0.1)
     monkeypatch.setattr(scanner, "LLM_COOLDOWN_S", 9999.0)
     monkeypatch.setattr(scanner, "LLM_MIN_CONTEXT_CHARS", 10)
-    scanner._LAST_LLM_ATTEMPT_BY_SESSION.clear()
+    scanner._LAST_LLM_ATTEMPT_BY_KEY.clear()
 
     class _DummySynth:
         AI_TIMEOUT_S = 1.0

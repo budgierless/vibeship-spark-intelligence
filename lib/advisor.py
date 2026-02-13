@@ -74,7 +74,9 @@ RECENT_OUTCOMES_MAX = 5000
 # Defaults — overridden by ~/.spark/tuneables.json → "advisor" section at module load.
 MIN_RELIABILITY_FOR_ADVICE = 0.5  # Lowered from 0.6 for more advice coverage
 MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
-MAX_ADVICE_ITEMS = 3  # Prefer fewer, higher-signal items (tuned via controlled A/B/C/D)
+# Default to a wider surface area; ranking/gates should keep quality high.
+# Some experiments may tune this lower via config.
+MAX_ADVICE_ITEMS = 8
 ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
 MIN_RANK_SCORE = 0.55  # Drop advice below this after ranking — tuned to reduce repeat/noise
 MIND_MAX_STALE_SECONDS = float(os.environ.get("SPARK_ADVISOR_MIND_MAX_STALE_S", "0"))
