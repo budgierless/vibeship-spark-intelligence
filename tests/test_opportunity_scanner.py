@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -182,3 +183,81 @@ def test_advisor_can_surface_opportunity_source(monkeypatch, tmp_path: Path):
     )
 
     assert any(item.source == "opportunity" for item in out)
+
+
+def test_scan_runtime_opportunities_filters_recent_repeats(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        scanner,
+        "fetch_soul_state",
+        lambda session_id="default": SoulState(
+            ok=True,
+            mood="builder",
+            soul_kernel={"non_harm": True, "service": True, "clarity": True},
+            source="test",
+        ),
+    )
+    monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
+    monkeypatch.setattr(scanner, "SCANNER_ENABLED", True)
+    monkeypatch.setattr(scanner, "SELF_MAX_ITEMS", 10)
+    monkeypatch.setattr(scanner, "SELF_DEDUP_WINDOW_S", 3600.0)
+    monkeypatch.setattr(scanner, "SELF_RECENT_LOOKBACK", 100)
+
+    prior = {
+        "ts": time.time(),
+        "session_id": "s1",
+        "scope": "self",
+        "question": "What exact outcome marks done, and how will Spark verify it?",
+    }
+    scanner.SELF_FILE.write_text(json.dumps(prior) + "\n", encoding="utf-8")
+
+    events = [
+        _mk_event(
+            EventType.USER_PROMPT,
+            payload={"text": "Let's improve Spark reliability and autonomy for this task."},
+        ),
+        _mk_event(
+            EventType.POST_TOOL,
+            tool_name="Edit",
+            tool_input={"content": "def refactor_loop():\n    return True\n"},
+        ),
+    ]
+
+    out = scanner.scan_runtime_opportunities(
+        events,
+        stats={"errors": ["pipeline"]},
+        query="improve Spark delivery quality",
+        session_id="s1",
+        persist=False,
+    )
+
+    questions = [str(r.get("question") or "") for r in out.get("self_opportunities") or []]
+    assert not any("What exact outcome marks done" in q for q in questions)
+    assert out.get("dedup_recent_filtered", 0) >= 1
+
+
+def test_select_diverse_self_rows_prefers_category_spread():
+    candidates = [
+        {
+            "category": "assumption_audit",
+            "priority": "high",
+            "confidence": 0.9,
+            "question": "Which assumption keeps failing, and what evidence would quickly disprove it?",
+        },
+        {
+            "category": "assumption_audit",
+            "priority": "medium",
+            "confidence": 0.8,
+            "question": "Which assumption is most likely wrong right now?",
+        },
+        {
+            "category": "reversibility",
+            "priority": "medium",
+            "confidence": 0.7,
+            "question": "What is the safest reversible step if this change regresses?",
+        },
+    ]
+
+    selected, _filtered = scanner._select_diverse_self_rows(candidates, max_items=2, recent_keys=set())
+    cats = [str(r.get("category") or "") for r in selected]
+    assert "assumption_audit" in cats
+    assert "reversibility" in cats

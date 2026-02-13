@@ -30,6 +30,9 @@ SCANNER_ENABLED = str(os.getenv("SPARK_OPPORTUNITY_SCANNER", "1")).strip().lower
 SELF_MAX_ITEMS = max(1, int(os.getenv("SPARK_OPPORTUNITY_SELF_MAX", "3") or 3))
 USER_MAX_ITEMS = max(1, int(os.getenv("SPARK_OPPORTUNITY_USER_MAX", "2") or 2))
 MAX_HISTORY_LINES = max(50, int(os.getenv("SPARK_OPPORTUNITY_HISTORY_MAX", "500") or 500))
+SELF_DEDUP_WINDOW_S = max(0.0, float(os.getenv("SPARK_OPPORTUNITY_SELF_DEDUP_WINDOW_S", "14400") or 14400.0))
+SELF_RECENT_LOOKBACK = max(20, int(os.getenv("SPARK_OPPORTUNITY_SELF_RECENT_LOOKBACK", "240") or 240))
+SELF_CATEGORY_CAP = max(1, int(os.getenv("SPARK_OPPORTUNITY_SELF_CATEGORY_CAP", "1") or 1))
 USER_SCAN_ENABLED = str(os.getenv("SPARK_OPPORTUNITY_USER_SCAN", "0")).strip().lower() in {
     "1",
     "true",
@@ -69,6 +72,35 @@ _STRATEGIC_MARKERS = (
     "autonomy",
 )
 _HIGH_IMPACT_TOOLS = {"task", "edit", "write", "bash", "askuser"}
+
+_QUESTION_STOPWORDS = {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "to",
+    "of",
+    "for",
+    "in",
+    "on",
+    "at",
+    "is",
+    "it",
+    "this",
+    "that",
+    "what",
+    "which",
+    "how",
+    "will",
+    "with",
+    "before",
+    "after",
+    "from",
+    "should",
+    "does",
+    "can",
+}
 
 
 def _tail_jsonl(path: Path, max_lines: int) -> List[Dict[str, Any]]:
@@ -157,6 +189,125 @@ def _extract_edit_text(ev: Any) -> str:
 def _mentions_any(text: str, words: Sequence[str]) -> bool:
     tl = str(text or "").lower()
     return any(w in tl for w in words)
+
+
+def _question_key(question: str) -> str:
+    tokens = [t for t in re.findall(r"[a-z0-9]+", str(question or "").lower()) if t not in _QUESTION_STOPWORDS]
+    if not tokens:
+        return ""
+    return " ".join(tokens[:14])
+
+
+def _priority_score(priority: Any) -> int:
+    pl = str(priority or "").strip().lower()
+    if pl == "high":
+        return 3
+    if pl == "medium":
+        return 2
+    if pl == "low":
+        return 1
+    return 0
+
+
+def _recent_self_question_keys() -> set[str]:
+    if SELF_DEDUP_WINDOW_S <= 0:
+        return set()
+    rows = _tail_jsonl(SELF_FILE, SELF_RECENT_LOOKBACK)
+    if not rows:
+        return set()
+    now = time.time()
+    out = set()
+    for row in rows:
+        ts = float(row.get("ts") or 0.0)
+        if ts <= 0:
+            continue
+        if (now - ts) > SELF_DEDUP_WINDOW_S:
+            continue
+        key = _question_key(str(row.get("question") or ""))
+        if key:
+            out.add(key)
+    return out
+
+
+def _select_diverse_self_rows(
+    candidates: List[Dict[str, Any]],
+    *,
+    max_items: int,
+    recent_keys: Optional[set[str]] = None,
+) -> tuple[List[Dict[str, Any]], int]:
+    if not candidates:
+        return [], 0
+    rk = recent_keys or set()
+    merged_by_key: Dict[str, Dict[str, Any]] = {}
+    for row in candidates:
+        key = _question_key(str(row.get("question") or ""))
+        if not key:
+            continue
+        prev = merged_by_key.get(key)
+        if prev is None:
+            merged_by_key[key] = row
+            continue
+        prev_score = (_priority_score(prev.get("priority")), float(prev.get("confidence") or 0.0))
+        row_score = (_priority_score(row.get("priority")), float(row.get("confidence") or 0.0))
+        if row_score > prev_score:
+            merged_by_key[key] = row
+
+    merged = list(merged_by_key.values())
+    if not merged:
+        return [], 0
+
+    merged.sort(
+        key=lambda r: (
+            0 if _question_key(str(r.get("question") or "")) in rk else 1,
+            _priority_score(r.get("priority")),
+            float(r.get("confidence") or 0.0),
+        ),
+        reverse=True,
+    )
+
+    selected: List[Dict[str, Any]] = []
+    category_counts: Dict[str, int] = {}
+    filtered_recent = 0
+
+    # Pass 1: favor novel questions and category diversity.
+    for row in merged:
+        key = _question_key(str(row.get("question") or ""))
+        if key in rk:
+            filtered_recent += 1
+            continue
+        cat = str(row.get("category") or "general")
+        if category_counts.get(cat, 0) >= SELF_CATEGORY_CAP:
+            continue
+        selected.append(row)
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+        if len(selected) >= max_items:
+            return selected, filtered_recent
+
+    # Pass 2: fill from remaining novel rows even if category repeats.
+    if len(selected) < max_items:
+        seen = {_question_key(str(r.get("question") or "")) for r in selected}
+        for row in merged:
+            key = _question_key(str(row.get("question") or ""))
+            if key in rk or key in seen:
+                continue
+            selected.append(row)
+            seen.add(key)
+            if len(selected) >= max_items:
+                return selected, filtered_recent
+
+    # Pass 3: if everything is repeated, still provide bounded output.
+    if not selected and len(selected) < max_items:
+        seen = {_question_key(str(r.get("question") or "")) for r in selected}
+        for row in merged:
+            key = _question_key(str(row.get("question") or ""))
+            if key in seen:
+                continue
+            selected.append(row)
+            seen.add(key)
+            if len(selected) >= max_items:
+                break
+
+    return selected, filtered_recent
 
 
 def _derive_self_candidates(
@@ -263,6 +414,7 @@ def scan_runtime_opportunities(
         "captured_prompts": 0,
         "captured_edits": 0,
         "telemetry_filtered": 0,
+        "dedup_recent_filtered": 0,
         "opportunities_found": 0,
         "self_opportunities": [],
     }
@@ -307,16 +459,12 @@ def scan_runtime_opportunities(
         query=query,
         kernel_ok=kernel_ok,
     )
-    deduped: List[Dict[str, Any]] = []
-    seen_questions = set()
-    for row in candidates:
-        q = str(row.get("question") or "").strip()
-        if not q or q.lower() in seen_questions:
-            continue
-        seen_questions.add(q.lower())
-        deduped.append(row)
-        if len(deduped) >= SELF_MAX_ITEMS:
-            break
+    recent_keys = _recent_self_question_keys()
+    deduped, dedup_recent_filtered = _select_diverse_self_rows(
+        candidates,
+        max_items=SELF_MAX_ITEMS,
+        recent_keys=recent_keys,
+    )
 
     now_ts = time.time()
     persisted = 0
@@ -339,6 +487,7 @@ def scan_runtime_opportunities(
         "captured_prompts": len(prompts),
         "captured_edits": len(edits),
         "telemetry_filtered": telemetry_filtered,
+        "dedup_recent_filtered": dedup_recent_filtered,
         "opportunities_found": len(deduped),
         "self_opportunities": deduped,
         "persisted": persisted,
