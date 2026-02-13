@@ -19,6 +19,12 @@ These optimizations were shipped as isolated commits so we can `git revert <sha>
 7) `2c4a31f` — Cache advisor prefilter tokenization
 8) `cca5c76` — Add sampling knob for semantic retrieval logging
 9) `7340030` — Add optimization checker playbook
+10) `3619dd4` — Docs: add rollback-map changelog to optimization checker
+
+### Phase-1 behavior upgrades (2026-02-14)
+11) `7ceca23` — Advisory: require agreement before warning escalation (flagged)
+12) `9439361` — Pipeline: importance-sample low-priority events under backlog (flagged)
+13) `81d627e` — Pipeline: mine successful tool macros (flagged)
 
 Notes:
 - Prefer `git revert <sha>` (keeps history) instead of reset.
@@ -65,6 +71,59 @@ Look for:
 ---
 
 ## 1) Optimization items shipped (what to validate)
+
+### Phase 1 behavior upgrades (advisory + learning)
+
+#### H) Agreement-gated advisory escalation (warnings require corroboration)
+**Change:** `SPARK_ADVISORY_AGREEMENT_GATE=1` makes WARNING-level advisories require agreement across multiple sources.
+
+**What to look for:**
+- You still see **whispers/notes**, but fewer noisy warnings.
+- Warnings that appear should have strong backing (multiple sources).
+
+**Checks:**
+- Watch GAUR + noise burden via `lib/carmack_kpi.py` scorecard.
+- If warnings disappeared completely: either agreement gate too strict or you don't have multi-source overlap yet.
+
+**Knobs:**
+- `SPARK_ADVISORY_AGREEMENT_GATE=1|0`
+- `SPARK_ADVISORY_AGREEMENT_MIN_SOURCES=2` (default)
+
+---
+
+#### I) Importance sampling under backlog (skip low-priority pattern detection)
+**Change:** `SPARK_PIPELINE_IMPORTANCE_SAMPLING=1` skips LOW-priority events in the expensive pattern detection loop when backlog is `critical|emergency`.
+
+**What to look for:**
+- Queue drains faster during spikes.
+- No drop in learning from **user prompts / failures**.
+
+**Checks:**
+- `~/.spark/pipeline_metrics.json`:
+  - under backlog: processing_rate_eps ↑, queue_depth_after stabilizes
+- Watchdog log should not show new error loops.
+
+**Knobs:**
+- `SPARK_PIPELINE_IMPORTANCE_SAMPLING=1|0`
+- `SPARK_PIPELINE_LOW_KEEP_RATE=0.25` (default)
+
+---
+
+#### J) Macro mining (temporal tool-sequence abstractions)
+**Change:** `SPARK_MACROS_ENABLED=1` mines frequent successful tool n-grams and stores at most one macro insight per cycle.
+
+**What to look for:**
+- Over time, you should see macro-style insights appear in cognitive insights (META_LEARNING).
+
+**Checks:**
+- Inspect `~/.spark/cognitive_insights.json` for entries starting with `Macro (often works):`.
+- Make sure cognitive insights don't explode in count (should be bounded by the min_count + “one per cycle” cap).
+
+**Knobs:**
+- `SPARK_MACROS_ENABLED=1|0`
+- `SPARK_MACRO_MIN_COUNT=3` (default)
+
+---
 
 ### A) Semantic retrieval logging bounded (rotation + sampling)
 **Change(s):**
