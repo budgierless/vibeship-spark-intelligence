@@ -99,8 +99,12 @@ Enable Minimax-backed scanner synthesis (optional):
 ```bash
 set SPARK_OPPORTUNITY_LLM_ENABLED=1
 set SPARK_OPPORTUNITY_LLM_PROVIDER=minimax
-set SPARK_MINIMAX_API_KEY=your_key_here
+set MINIMAX_API_KEY=your_key_here
 set SPARK_MINIMAX_MODEL=MiniMax-M2.5
+
+# Recommended cadence: one LLM "deep scan" at most every 15 minutes per session while you're actively working.
+# (Scanner already skips LLM calls when context is insufficient.)
+set SPARK_OPPORTUNITY_LLM_COOLDOWN_S=900
 ```
 
 After setting env vars, restart services (`spark down` then `spark up`) and check scanner heartbeat `llm` fields (`used`, `provider`, `error`).
