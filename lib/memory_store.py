@@ -10,7 +10,10 @@ No server required. Falls back gracefully if embeddings or FTS5 are unavailable.
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
+import hashlib
 from array import array
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -19,6 +22,17 @@ from lib.embeddings import embed_texts
 
 DB_PATH = Path.home() / ".spark" / "memory_store.sqlite"
 _FTS_AVAILABLE: Optional[bool] = None
+
+# Phase 2: patchified (chunked) memory storage
+PATCHIFIED_ENABLED = os.getenv("SPARK_MEMORY_PATCHIFIED", "0") == "1"
+try:
+    PATCH_MAX_CHARS = max(120, min(2000, int(os.getenv("SPARK_MEMORY_PATCH_MAX_CHARS", "600") or 600)))
+except Exception:
+    PATCH_MAX_CHARS = 600
+try:
+    PATCH_MIN_CHARS = max(40, min(400, int(os.getenv("SPARK_MEMORY_PATCH_MIN_CHARS", "120") or 120)))
+except Exception:
+    PATCH_MIN_CHARS = 120
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -215,6 +229,127 @@ def _link_edges(
         _upsert_edge(conn, tid, memory_id, weight, reason, created_at)
 
 
+def _split_patches(text: str) -> List[str]:
+    """Split a memory into chunk-sized patches.
+
+    Heuristics:
+    - Prefer paragraph/bullet boundaries
+    - Keep each patch <= PATCH_MAX_CHARS
+    - Drop tiny fragments (< PATCH_MIN_CHARS) by merging forward
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+
+    # Normalize line endings
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Split into logical blocks: paragraphs + bullet runs
+    blocks: List[str] = []
+    for part in re.split(r"\n\s*\n+", raw):
+        part = part.strip()
+        if not part:
+            continue
+        # If it's a multi-line bullet list, keep bullets separate-ish
+        lines = [ln.strip() for ln in part.split("\n") if ln.strip()]
+        if sum(1 for ln in lines if ln.startswith(("- ", "* ", "• "))) >= 2:
+            # group bullets into blocks but keep max size bound
+            buf = ""
+            for ln in lines:
+                candidate = (buf + "\n" + ln).strip() if buf else ln
+                if len(candidate) > PATCH_MAX_CHARS and buf:
+                    blocks.append(buf)
+                    buf = ln
+                else:
+                    buf = candidate
+            if buf:
+                blocks.append(buf)
+        else:
+            blocks.append(part)
+
+    # Now pack blocks into patches under PATCH_MAX_CHARS
+    patches: List[str] = []
+    buf = ""
+    for blk in blocks:
+        candidate = (buf + "\n\n" + blk).strip() if buf else blk
+        if len(candidate) > PATCH_MAX_CHARS and buf:
+            patches.append(buf)
+            buf = blk
+        else:
+            buf = candidate
+    if buf:
+        patches.append(buf)
+
+    # Merge small tail fragments
+    merged: List[str] = []
+    i = 0
+    while i < len(patches):
+        p = patches[i].strip()
+        if not p:
+            i += 1
+            continue
+        if len(p) < PATCH_MIN_CHARS and merged:
+            prev = merged[-1]
+            candidate = (prev + "\n\n" + p).strip()
+            if len(candidate) <= int(PATCH_MAX_CHARS * 1.2):
+                merged[-1] = candidate
+            else:
+                merged.append(p)
+        else:
+            merged.append(p)
+        i += 1
+
+    return merged
+
+
+def _upsert_entry_raw(
+    conn: sqlite3.Connection,
+    *,
+    memory_id: str,
+    content: str,
+    scope: str,
+    project_key: Optional[str],
+    category: str,
+    created_at: float,
+    source: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO memories
+        (memory_id, content, scope, project_key, category, created_at, source, meta)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            memory_id,
+            content,
+            scope,
+            project_key,
+            category,
+            created_at,
+            source,
+            json.dumps(meta or {}),
+        ),
+    )
+
+    if _ensure_fts(conn):
+        conn.execute("DELETE FROM memories_fts WHERE memory_id = ?", (memory_id,))
+        conn.execute(
+            "INSERT INTO memories_fts (content, memory_id, scope, project_key, category) VALUES (?, ?, ?, ?, ?)",
+            (content, memory_id, scope, project_key or "", category),
+        )
+
+    vectors = _embed_texts([content])
+    if vectors:
+        vec = vectors[0]
+        conn.execute(
+            "INSERT OR REPLACE INTO memories_vec (memory_id, dim, vector) VALUES (?, ?, ?)",
+            (memory_id, len(vec), _vector_to_blob(vec)),
+        )
+
+    _link_edges(conn, memory_id, project_key, scope, created_at)
+
+
 def upsert_entry(
     *,
     memory_id: str,
@@ -228,43 +363,72 @@ def upsert_entry(
 ) -> None:
     if _is_telemetry_memory(content):
         return
+
+    # Patchified mode: store a compact root + chunk entries for better retrieval precision.
+    if PATCHIFIED_ENABLED and content and len(content) > PATCH_MAX_CHARS:
+        patches = _split_patches(content)
+        if len(patches) >= 2:
+            conn = _connect()
+            try:
+                root_meta = dict(meta or {})
+                root_meta.update({
+                    "patchified": True,
+                    "patch_count": len(patches),
+                    "patch_max_chars": PATCH_MAX_CHARS,
+                    "patch_min_chars": PATCH_MIN_CHARS,
+                })
+                # Root stores first patch (not the full content) to keep DB light.
+                _upsert_entry_raw(
+                    conn,
+                    memory_id=memory_id,
+                    content=patches[0],
+                    scope=scope,
+                    project_key=project_key,
+                    category=category,
+                    created_at=created_at,
+                    source=source,
+                    meta=root_meta,
+                )
+
+                for idx, patch in enumerate(patches[1:], start=1):
+                    pid = f"{memory_id}#p{idx}"
+                    pmeta = dict(meta or {})
+                    pmeta.update({
+                        "parent_id": memory_id,
+                        "patch_index": idx,
+                        "patch_count": len(patches),
+                        "patchified": True,
+                    })
+                    _upsert_entry_raw(
+                        conn,
+                        memory_id=pid,
+                        content=patch,
+                        scope=scope,
+                        project_key=project_key,
+                        category=category,
+                        created_at=created_at,
+                        source=source,
+                        meta=pmeta,
+                    )
+
+                conn.commit()
+                return
+            finally:
+                conn.close()
+
     conn = _connect()
     try:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO memories
-            (memory_id, content, scope, project_key, category, created_at, source, meta)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-            """,
-            (
-                memory_id,
-                content,
-                scope,
-                project_key,
-                category,
-                created_at,
-                source,
-                json.dumps(meta or {}),
-            ),
+        _upsert_entry_raw(
+            conn,
+            memory_id=memory_id,
+            content=content,
+            scope=scope,
+            project_key=project_key,
+            category=category,
+            created_at=created_at,
+            source=source,
+            meta=meta,
         )
-
-        if _ensure_fts(conn):
-            conn.execute("DELETE FROM memories_fts WHERE memory_id = ?", (memory_id,))
-            conn.execute(
-                "INSERT INTO memories_fts (content, memory_id, scope, project_key, category) VALUES (?, ?, ?, ?, ?)",
-                (content, memory_id, scope, project_key or "", category),
-            )
-
-        vectors = _embed_texts([content])
-        if vectors:
-            vec = vectors[0]
-            conn.execute(
-                "INSERT OR REPLACE INTO memories_vec (memory_id, dim, vector) VALUES (?, ?, ?)",
-                (memory_id, len(vec), _vector_to_blob(vec)),
-            )
-
-        _link_edges(conn, memory_id, project_key, scope, created_at)
-
         conn.commit()
     finally:
         conn.close()
@@ -349,6 +513,17 @@ def purge_telemetry_memories(
         conn.close()
 
 
+def _parse_meta(raw: Any) -> Dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
 def retrieve(
     query: str,
     *,
@@ -371,13 +546,15 @@ def retrieve(
             params: List[Any] = [fts_query]
             where = "memories_fts MATCH ?"
             if project_key:
-                where += " AND (scope = 'global' OR project_key = ?)"
+                where += " AND (m.scope = 'global' OR m.project_key = ?)"
                 params.append(project_key)
             params.append(max(10, int(candidate_limit)))
             rows = conn.execute(
                 f"""
-                SELECT memory_id, content, scope, project_key, category, bm25(memories_fts) AS bm25
+                SELECT m.memory_id, m.content, m.scope, m.project_key, m.category, m.meta,
+                       bm25(memories_fts) AS bm25
                 FROM memories_fts
+                JOIN memories m ON m.memory_id = memories_fts.memory_id
                 WHERE {where}
                 ORDER BY bm25
                 LIMIT ?;
@@ -392,6 +569,8 @@ def retrieve(
                 bm25 = float(r["bm25"]) if r["bm25"] is not None else 0.0
                 bm25 = max(0.0, bm25)
                 lex = 1.0 / (1.0 + bm25)
+                meta = _parse_meta(r["meta"])
+                parent_id = str(meta.get("parent_id") or "").strip() or None
                 items.append({
                     "entry_id": r["memory_id"],
                     "text": content,
@@ -400,12 +579,15 @@ def retrieve(
                     "category": r["category"],
                     "bm25": bm25,
                     "score": lex,
+                    "meta": meta,
+                    "parent_id": parent_id,
+                    "patch_index": meta.get("patch_index"),
                 })
         else:
             # FTS not available; fallback to simple scan
             rows = conn.execute(
                 """
-                SELECT memory_id, content, scope, project_key, category
+                SELECT memory_id, content, scope, project_key, category, meta
                 FROM memories
                 ORDER BY created_at DESC
                 LIMIT ?;
@@ -429,6 +611,8 @@ def retrieve(
                     score += 0.4
                 if score <= 0.25:
                     continue
+                meta = _parse_meta(r["meta"])
+                parent_id = str(meta.get("parent_id") or "").strip() or None
                 items.append({
                     "entry_id": r["memory_id"],
                     "text": content,
@@ -437,6 +621,9 @@ def retrieve(
                     "category": r["category"],
                     "bm25": None,
                     "score": score,
+                    "meta": meta,
+                    "parent_id": parent_id,
+                    "patch_index": meta.get("patch_index"),
                 })
 
         if not items:
@@ -453,6 +640,18 @@ def retrieve(
                     it["score"] = (0.6 * it["score"]) + (0.4 * cos)
 
         items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
+
+        # Patchified dedupe: keep at most one hit per parent group to reduce noise.
+        deduped: List[Dict[str, Any]] = []
+        seen_parent: set[str] = set()
+        for it in items:
+            parent_key = str(it.get("parent_id") or it.get("entry_id") or "").strip()
+            if parent_key and parent_key in seen_parent:
+                continue
+            if parent_key:
+                seen_parent.add(parent_key)
+            deduped.append(it)
+        items = deduped
 
         # Edge expansion (graph-lite): add related items with small score boost.
         want = max(0, int(limit or 0))
