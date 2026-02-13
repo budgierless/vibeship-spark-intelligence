@@ -27,6 +27,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -43,6 +45,10 @@ STATE_FILE = SCHEDULER_DIR / "state.json"
 DRAFT_REPLIES_FILE = SPARK_DIR / "multiplier" / "draft_replies.json"
 MULTIPLIER_DB_PATH = SPARK_DIR / "multiplier" / "scored_mentions.db"
 TUNEABLES_FILE = SPARK_DIR / "tuneables.json"
+OPENCLAW_HANDOFF_DIR = SPARK_DIR / "claw_integration"
+OPENCLAW_HANDOFF_FILE = OPENCLAW_HANDOFF_DIR / "latest_trend_handoff.json"
+OPENCLAW_WEBHOOK_URL = os.getenv("OPENCLAW_WEBHOOK_URL", "").strip()
+CLAWDBOT_WEBHOOK_URL = os.getenv("CLAWDBOT_WEBHOOK_URL", "").strip()
 
 CHECK_INTERVAL = 60  # Main loop checks every 60s which tasks are due
 
@@ -128,6 +134,105 @@ def scheduler_heartbeat_age_s() -> Optional[float]:
         return max(0.0, time.time() - ts)
     except Exception:
         return None
+
+
+def _post_json_to_webhook(url: str, payload: Dict[str, Any]) -> bool:
+    """Post payload to a webhook if URL is configured."""
+    if not url:
+        return False
+    try:
+        data = json.dumps(payload, default=str).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return 200 <= resp.status < 300
+    except Exception as exc:
+        logger.debug("Failed webhook post to %s: %s", url, exc)
+        return False
+
+
+def _run_external_trend_builder() -> Dict[str, Any]:
+    """Run trend research in the standalone spark-x-builder repo."""
+    builder_root = Path(
+        os.getenv(
+            "SPARK_X_BUILDER_PATH",
+            str(Path.home() / "Desktop" / "spark-x-builder"),
+        )
+    ).expanduser()
+    script_path = builder_root / "scripts" / "daily_trend_research.py"
+    if not script_path.exists():
+        return {"error": f"Spark X Builder script missing: {script_path}"}
+
+    proc = subprocess.run(
+        [sys.executable, str(script_path)],
+        cwd=str(builder_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+    )
+
+    raw_output = (proc.stdout or "").rstrip()
+    if proc.returncode != 0:
+        return {
+            "error": f"trend_builder_exit={proc.returncode}",
+            "stderr": (proc.stderr or "").strip()[:2000],
+            "stdout": raw_output[-2000:],
+        }
+
+    start = raw_output.rfind("{")
+    end = raw_output.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return {"error": "trend_builder_no_json", "stdout": raw_output[-2000:]}
+
+    payload_raw = raw_output[start:end + 1]
+    try:
+        payload = json.loads(payload_raw)
+    except Exception:
+        return {"error": "trend_builder_bad_json", "stdout": raw_output[-2000:]}
+
+    payload["runner"] = {
+        "repo": "spark-x-builder",
+        "path": str(script_path.parent.parent),
+        "command": " ".join([sys.executable, str(script_path)]),
+    }
+    return payload
+
+
+def _emit_claw_handoff(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist a stable handoff payload for OpenClaw/Clawdbot consumers."""
+    handoff = {
+        "generated_at": datetime.fromtimestamp(time.time(), tz=None).isoformat(),
+        "source": "spark_scheduler.daily_research",
+        "status": payload.get("status"),
+        "topics_processed": payload.get("topics_processed"),
+        "queries_run": payload.get("queries_run"),
+        "insights_extracted": payload.get("insights_extracted"),
+        "recommendations": payload.get("recommendations"),
+        "build_candidates": payload.get("build_candidates"),
+        "report": payload.get("report"),
+        "runner": payload.get("runner", {}),
+    }
+
+    try:
+        OPENCLAW_HANDOFF_DIR.mkdir(parents=True, exist_ok=True)
+        OPENCLAW_HANDOFF_FILE.write_text(json.dumps(handoff, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.debug("Failed writing claw handoff: %s", exc)
+        handoff["handoff_error"] = str(exc)
+        return handoff
+
+    delivered = {
+        "openclaw_webhook_ok": _post_json_to_webhook(OPENCLAW_WEBHOOK_URL, handoff),
+        "clawdbot_webhook_ok": _post_json_to_webhook(CLAWDBOT_WEBHOOK_URL, handoff),
+    }
+    handoff["deliveries"] = delivered
+    return handoff
 
 
 # ---------------------------------------------------------------------------
@@ -302,63 +407,39 @@ def task_engagement_snapshots(state: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def task_daily_research(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Run X searches for configured topics, feed through chip system."""
-    from lib.x_client import get_x_client
-    from scripts.daily_trend_research import (
-        RESEARCH_TOPICS,
-        extract_insights_from_search,
-        generate_content_recommendations,
-        store_daily_report,
-        inject_to_spark,
-        scan_niche_accounts,
-        study_reply_patterns,
-    )
+    """Delegate research and candidate generation to the standalone spark-x-builder."""
+    del state  # state not required for external execution.
 
-    client = get_x_client()
-    all_insights = []
-    all_search_results = []
+    result = _run_external_trend_builder()
+    if "error" in result:
+        logger.warning("daily_research: delegated run failed: %s", result.get("error"))
+        return {"error": result.get("error"), "stdout": result.get("stdout", ""), "stderr": result.get("stderr", "")}
 
-    for topic_name, topic_config in RESEARCH_TOPICS.items():
-        for query in topic_config["queries"]:
-            results = client.search_tweets(query, max_results=30)
-            if results:
-                # Convert to format expected by extract_insights_from_search
-                formatted = [
-                    {
-                        "text": r.get("text", ""),
-                        "likes": r.get("likes", 0),
-                        "retweets": r.get("retweets", 0),
-                        "created_at": r.get("created_at", ""),
-                        "author": r.get("author", ""),
-                    }
-                    for r in results
-                ]
-                insights = extract_insights_from_search(formatted, topic_name)
-                all_insights.extend(insights)
-                all_search_results.extend(formatted)
-
-    # Generate recommendations and store report
-    recommendations = generate_content_recommendations(all_insights) if all_insights else []
-    if all_insights:
-        store_daily_report(all_insights, recommendations)
-        injected = inject_to_spark(all_insights)
-    else:
-        injected = 0
-
-    # Feed through NicheNet and ConvoIQ
-    niche_discovered = scan_niche_accounts(all_search_results) if all_search_results else 0
-    patterns_found = study_reply_patterns(all_search_results) if all_search_results else 0
-
+    handoff = _emit_claw_handoff(result)
+    build_candidates = result.get("build_candidates", {})
     logger.info(
-        "daily_research: %d insights, %d injected, %d niche accounts, %d patterns",
-        len(all_insights), injected, niche_discovered, patterns_found,
+        "daily_research: delegated run complete: %d candidates (S:%d M:%d U:%d), delivered=%s",
+        len(build_candidates.get("skills", []))
+        + len(build_candidates.get("mcps", []))
+        + len(build_candidates.get("startup_ideas", [])),
+        len(build_candidates.get("skills", [])),
+        len(build_candidates.get("mcps", [])),
+        len(build_candidates.get("startup_ideas", [])),
+        handoff.get("deliveries", {}),
     )
     return {
-        "insights": len(all_insights),
-        "recommendations": len(recommendations),
-        "injected": injected,
-        "niche_discovered": niche_discovered,
-        "patterns_found": patterns_found,
+        "status": result.get("status"),
+        "insights": result.get("insights_extracted", 0),
+        "recommendations": result.get("recommendations", 0),
+        "topics_scanned": result.get("topics_processed", 0),
+        "queries_run": result.get("queries_run", 0),
+        "build_candidates": {
+            "skills": len(build_candidates.get("skills", [])),
+            "mcps": len(build_candidates.get("mcps", [])),
+            "startups": len(build_candidates.get("startup_ideas", [])),
+        },
+        "handoff_file": str(OPENCLAW_HANDOFF_FILE),
+        "deliveries": handoff.get("deliveries", {}),
     }
 
 

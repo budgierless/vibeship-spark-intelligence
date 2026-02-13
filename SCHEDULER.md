@@ -8,7 +8,7 @@ Runs your X/Twitter intelligence automatically in the background. Four tasks:
 |------|-------|-------------|
 | Mention poll | 10 min | Fetches @mentions, scores them, queues draft replies |
 | Engagement snapshots | 30 min | Checks how your tweets are performing |
-| Daily research | 24 hours | Searches X for trends in your topics |
+| Daily research | 24 hours | Searches X for trends in your topics and outputs build/MCP/startup ideas |
 | Niche scan | 6 hours | Discovers new accounts in your space |
 
 **It never posts anything.** Draft replies go to a review queue.
@@ -32,6 +32,37 @@ python spark_scheduler.py --task engagement_snapshots --force
 python spark_scheduler.py --task daily_research --force
 python spark_scheduler.py --task niche_scan --force
 ```
+`daily_research` stores build candidates into:
+
+```
+~/.spark/research_reports/latest.json
+```
+
+`daily_research` now runs inside the external repo at `spark-x-builder` (path in `SPARK_X_BUILDER_PATH`) and writes an OpenClaw/Clawdbot handoff here:
+
+```
+~/.spark/claw_integration/latest_trend_handoff.json
+```
+
+Look for:
+- `build_candidates.skills` -> Skill opportunities
+- `build_candidates.mcps` -> MCP opportunities
+- `build_candidates.startup_ideas` -> one-shot startup prompts
+
+Canonical implementation for trend-scout logic now lives in:
+`C:\Users\USER\Desktop\spark-x-builder`.
+
+## OpenClaw / Clawdbot handoff
+
+Set these env vars if those systems should receive each run:
+
+```
+OPENCLAW_WEBHOOK_URL=https://your-openclaw-endpoint/webhook
+CLAWDBOT_WEBHOOK_URL=https://your-clawdbot-endpoint/webhook
+SPARK_X_BUILDER_PATH=C:\Users\USER\Desktop\spark-x-builder
+```
+
+When set, the scheduler posts the exact payload in `~/.spark/claw_integration/latest_trend_handoff.json` to both endpoints after each successful run.
 
 ### Run all due tasks once and exit
 ```
@@ -85,6 +116,30 @@ Edit `~/.spark/tuneables.json`, add a `"scheduler"` section:
 All intervals are in seconds. Changes apply on next cycle (no restart needed).
 
 To disable a specific task, set its `_enabled` to `false`.
+
+You can add trend topics and subtopics in:
+
+```
+~/.spark/trend_research_topics.json
+```
+
+Example structure:
+
+```json
+{
+  "vibe_coding": {
+    "queries": ["vibe coding MCP", "builder agents"],
+    "priority": "high"
+  },
+  "agent_ops": {
+    "queries": ["agent automation", "agent observability"],
+    "priority": "medium"
+  }
+}
+```
+
+Optional: point the loader to a different file with
+`TREND_TOPICS_CONFIG_PATH` environment variable.
 
 ## Files
 
