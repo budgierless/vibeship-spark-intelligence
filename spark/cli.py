@@ -543,6 +543,89 @@ def cmd_events(args):
         print(f"[{event.event_type.value}]{tool_str}{error_str}")
 
 
+def cmd_opportunities(args):
+    """Opportunity Scanner inbox: list/accept/dismiss self-opportunities."""
+    from lib.opportunity_inbox import (
+        load_self_opportunities,
+        resolve_opportunity,
+        record_decision,
+        decisions_by_opportunity_id,
+        write_task_file,
+    )
+
+    sub = getattr(args, "opps_cmd", None) or "list"
+    if sub == "list":
+        rows = load_self_opportunities(
+            limit=int(args.limit or 20),
+            scope_type=args.scope_type,
+            scope_id=args.scope_id,
+            project_id=args.project_id,
+            operation=args.operation,
+            since_hours=args.since_hours,
+        )
+        latest = decisions_by_opportunity_id()
+        if not args.all:
+            filtered = []
+            for r in rows:
+                oid = str(r.get("opportunity_id") or "").strip()
+                st = latest.get(oid)
+                if st and st.action in {"accept", "dismiss"}:
+                    continue
+                filtered.append(r)
+            rows = filtered
+
+        if args.json:
+            print(json.dumps(rows, indent=2, ensure_ascii=True))
+            return
+
+        print(f"[SPARK] Opportunities (showing {len(rows)})")
+        for r in rows:
+            oid = str(r.get("opportunity_id") or "").strip()
+            short = oid[-12:] if len(oid) > 12 else oid
+            st = latest.get(oid)
+            status = (st.action if st else "").upper()
+            scope = f"{r.get('scope_type') or ''}:{r.get('scope_id') or ''}".strip(":")
+            cat = str(r.get("category") or "")
+            pri = str(r.get("priority") or "")
+            src = str(r.get("source") or "")
+            prov = str(r.get("llm_provider") or "")
+            q = str(r.get("question") or "").strip().replace("\n", " ")
+            if len(q) > 140:
+                q = q[:137] + "..."
+            meta = f"{cat}/{pri} {src}{('/' + prov) if prov else ''}"
+            if status:
+                meta = f"{meta} [{status}]"
+            print(f"- {short} | {scope} | {meta}")
+            print(f"  Q: {q}")
+
+    elif sub in {"accept", "dismiss"}:
+        prefix = getattr(args, "id", None) or ""
+        row = resolve_opportunity(prefix)
+        if not row:
+            print(f"[SPARK] Opportunity not found for id/prefix: {prefix}")
+            return
+        oid = str(row.get("opportunity_id") or "").strip()
+        action = "accept" if sub == "accept" else "dismiss"
+        note = str(getattr(args, "note", "") or "").strip()
+        record_decision(
+            action=action,
+            opportunity_id=oid,
+            question=str(row.get("question") or ""),
+            note=note,
+            scope_type=row.get("scope_type"),
+            scope_id=row.get("scope_id"),
+            project_id=row.get("project_id"),
+            operation=row.get("operation"),
+        )
+        if action == "accept":
+            out_path = write_task_file(row)
+            print(f"[SPARK] Accepted {oid} -> {out_path}")
+        else:
+            print(f"[SPARK] Dismissed {oid}")
+    else:
+        print("[SPARK] Unknown opportunities subcommand. Use: spark opportunities list|accept|dismiss")
+
+
 def cmd_capture(args):
     """Portable memory capture: scan → suggest → accept/reject."""
     if args.scan or (not args.list and not args.accept and not args.reject):
@@ -2356,6 +2439,28 @@ Examples:
     events_parser = subparsers.add_parser("events", help="Show recent events")
     events_parser.add_argument("--limit", "-n", type=int, default=20, help="Number to show")
 
+    # opportunities
+    opps_parser = subparsers.add_parser("opportunities", help="Review and act on Opportunity Scanner outputs")
+    opps_sub = opps_parser.add_subparsers(dest="opps_cmd")
+
+    opps_list = opps_sub.add_parser("list", help="List recent self-opportunities")
+    opps_list.add_argument("--limit", "-n", type=int, default=20, help="Max to show")
+    opps_list.add_argument("--since-hours", type=float, default=None, help="Only show opportunities newer than this")
+    opps_list.add_argument("--scope-type", choices=["project", "operation", "spark_global"], help="Filter by scope_type")
+    opps_list.add_argument("--scope-id", help="Filter by scope_id (project key, operation name, or global)")
+    opps_list.add_argument("--project-id", help="Filter by project_id")
+    opps_list.add_argument("--operation", help="Filter by operation tag")
+    opps_list.add_argument("--all", action="store_true", help="Include accepted/dismissed items")
+    opps_list.add_argument("--json", action="store_true", help="Emit JSON")
+
+    opps_accept = opps_sub.add_parser("accept", help="Accept an opportunity and generate a task file")
+    opps_accept.add_argument("id", help="opportunity_id (full or prefix)")
+    opps_accept.add_argument("--note", "-n", default="", help="Optional note")
+
+    opps_dismiss = opps_sub.add_parser("dismiss", help="Dismiss an opportunity to reduce repeats")
+    opps_dismiss.add_argument("id", help="opportunity_id (full or prefix)")
+    opps_dismiss.add_argument("--note", "-n", default="", help="Optional note")
+
     # outcome
     outcome_parser = subparsers.add_parser("outcome", help="Record explicit outcome check-in")
     outcome_parser.add_argument("--result", choices=["yes", "no", "partial", "mixed", "success", "failure"], help="Outcome result")
@@ -2644,6 +2749,7 @@ Examples:
         "decay": cmd_decay,
         "health": cmd_health,
         "events": cmd_events,
+        "opportunities": cmd_opportunities,
         "outcome": cmd_outcome,
         "advice-feedback": cmd_advice_feedback,
         "outcome-link": cmd_outcome_link,
