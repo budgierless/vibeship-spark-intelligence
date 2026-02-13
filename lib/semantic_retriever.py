@@ -55,6 +55,9 @@ DEFAULT_CONFIG = {
     # Log file safety (prevent unbounded growth)
     "log_max_bytes": 5 * 1024 * 1024,  # 5MB
     "log_backups": 3,
+    # Optional sampling to reduce disk I/O on hot path.
+    # 1.0 = log every retrieval, 0.1 = log ~10%, 0.0 = log none.
+    "log_sample_rate": 1.0,
 }
 
 
@@ -887,6 +890,16 @@ class SemanticRetriever:
     ) -> None:
         if not self.config.get("log_retrievals", True):
             return
+        try:
+            rate = float(self.config.get("log_sample_rate", 1.0) or 1.0)
+        except Exception:
+            rate = 1.0
+        if rate <= 0.0:
+            return
+        if rate < 1.0:
+            import random
+            if random.random() > rate:
+                return
         try:
             log_dir = Path.home() / ".spark" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
