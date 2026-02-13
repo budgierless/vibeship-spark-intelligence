@@ -233,9 +233,18 @@ class XVoice:
         Returns:
             One of: witty, technical, conversational, provocative
         """
-        # Start with default for this context type
+        # Start with default for this context type.
+        # Contract: return one of the known tone keys, regardless of config richness.
+        default_by_context = {
+            "reply": "conversational",
+            "quote_tweet": "witty",
+            "original_post": "technical",
+            "thread": "technical",
+            "hot_take": "provocative",
+        }
         defaults = self.config.get("tone_defaults", {})
-        tone = defaults.get(context_type, "conversational")
+        raw = str(defaults.get(context_type, "") or "").strip().lower()
+        tone = raw if raw in TONE_PROFILES else default_by_context.get(context_type, "conversational")
 
         # Adapt based on user relationship
         if user_handle:

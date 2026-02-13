@@ -21,6 +21,7 @@ import json
 import time
 import hashlib
 import os
+import sys
 import re
 import math
 from datetime import datetime
@@ -256,6 +257,23 @@ def _load_advisor_config() -> None:
     global MAX_ADVICE_ITEMS, ADVICE_CACHE_TTL_SECONDS, MIN_RANK_SCORE
     global MIND_MAX_STALE_SECONDS, MIND_STALE_ALLOW_IF_EMPTY, MIND_MIN_SALIENCE
     try:
+        # Tests should be deterministic and not depend on user-local ~/.spark state.
+        # However, some unit tests *do* validate this loader by monkeypatching Path.home().
+        # So we only skip when running under pytest AND Path.home() still points at the
+        # real user profile directory (not a monkeypatched temp dir).
+        if "pytest" in sys.modules and str(os.environ.get("SPARK_TEST_ALLOW_HOME_TUNEABLES", "")).strip().lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            try:
+                real_home = Path(os.path.expanduser("~")).resolve()
+                current_home = Path.home().resolve()
+                if current_home == real_home:
+                    return
+            except Exception:
+                return
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if not tuneables.exists():
             return
