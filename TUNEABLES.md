@@ -489,9 +489,9 @@ Tool + Context → Query Memory Banks + Cognitive Insights + Mind → Rank by Re
 |-----------|---------|-------------|
 | `MIN_RELIABILITY_FOR_ADVICE` | **0.5** | **Quality filter.** Only include insights with 50%+ reliability in advice. Lowered from 0.6 for more advice coverage. Wired to `tuneables.json` -> `advisor.min_reliability`. |
 | `MIN_VALIDATIONS_FOR_STRONG_ADVICE` | **2** | **Strong advice threshold.** Insights validated 2+ times are marked as "strong" advice. Wired to `advisor.min_validations_strong`. |
-| `MAX_ADVICE_ITEMS` | **8** | **Advice limit.** Runtime reads `advisor.max_items`. Keep `advisor.max_advice_items` mirrored for auto-tuner compatibility. |
+| `MAX_ADVICE_ITEMS` | **3** | **Advice limit.** Runtime reads `advisor.max_items`. Keep `advisor.max_advice_items` mirrored for auto-tuner compatibility. |
 | `ADVICE_CACHE_TTL_SECONDS` | **120** | **Cache duration (2 min).** Same query within 2 minutes returns cached advice. Wired to `advisor.cache_ttl` (also reads `values.advice_cache_ttl`). |
-| `MIN_RANK_SCORE` | **0.35** | **Rank cutoff.** Drop advice below this score after ranking; prefer fewer, higher-quality items. Wired to `advisor.min_rank_score`. |
+| `MIN_RANK_SCORE` | **0.55** | **Rank cutoff.** Drop advice below this score after ranking; prefer fewer, higher-quality items. Wired to `advisor.min_rank_score`. |
 | `MIND_MAX_STALE_SECONDS` | **0** | **Mind freshness gate.** `0` disables staleness blocking; positive values block stale Mind retrieval when newer local evidence exists. Wired to `advisor.mind_max_stale_s`. |
 | `MIND_STALE_ALLOW_IF_EMPTY` | **true** | **Cross-session fallback.** If Mind is stale but no other advice exists, still allow Mind retrieval. Wired to `advisor.mind_stale_allow_if_empty`. |
 | `MIND_MIN_SALIENCE` | **0.5** | **Mind quality floor.** Ignore low-salience Mind memories below this threshold. Wired to `advisor.mind_min_salience`. |
@@ -1202,13 +1202,13 @@ This is the active hot-path advisory stack used by hooks:
   "advisor": {
     "min_reliability": 0.5,
     "min_validations_strong": 2,
-    "max_items": 5,
-    "max_advice_items": 5,
+    "max_items": 3,
+    "max_advice_items": 3,
     "cache_ttl": 120,
-    "min_rank_score": 0.35,
-    "mind_max_stale_s": 0,
+    "min_rank_score": 0.55,
+    "mind_max_stale_s": 172800,
     "mind_stale_allow_if_empty": true,
-    "mind_min_salience": 0.5
+    "mind_min_salience": 0.55
   },
   "advisory_engine": {
     "enabled": true,
@@ -1222,13 +1222,13 @@ This is the active hot-path advisory stack used by hooks:
     "fallback_rate_max_ratio": 0.55,
     "fallback_rate_window": 80,
     "delivery_stale_s": 900,
-    "advisory_text_repeat_cooldown_s": 1800,
+    "advisory_text_repeat_cooldown_s": 9000,
     "actionability_enforce": true
   },
   "advisory_gate": {
     "max_emit_per_call": 1,
-    "tool_cooldown_s": 90,
-    "advice_repeat_cooldown_s": 1800,
+    "tool_cooldown_s": 150,
+    "advice_repeat_cooldown_s": 5400,
     "warning_threshold": 0.8,
     "note_threshold": 0.5,
     "whisper_threshold": 0.35

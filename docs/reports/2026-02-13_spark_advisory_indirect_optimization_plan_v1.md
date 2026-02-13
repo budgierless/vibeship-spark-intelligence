@@ -80,20 +80,20 @@ Current tuned live cooldowns (B profile) in `~/.spark/tuneables.json`:
 - `advisory_gate.tool_cooldown_s=150`
 - `advisory_gate.advice_repeat_cooldown_s=5400`
 
-Next A/B/C/D to run (in order):
-1. A vs B (already re-run today with metric fix):
-   - artifacts:
-     - `docs/reports/advisory_delta_noise_A_control_metric_fixed.json`
-     - `docs/reports/advisory_delta_noise_B_cooldowns_up_metric_fixed.json`
-2. C: raise `advisor.min_rank_score` slightly (ex: `0.55`) and re-run.
-3. D: keep `min_rank_score=0.50` but reduce `advisor.max_items` to 3 (if not already) and re-run.
+Completed A/B/C/D (2026-02-13):
+- Summary: `docs/reports/2026-02-13_advisory_repeat_abcd_controlled_delta_v1.md`
+- Runs:
+  - A: `docs/reports/advisory_repeat_abcd_A_baseline_current.json`
+  - B: `docs/reports/advisory_repeat_abcd_B_min_rank_0p55.json`
+  - C: `docs/reports/advisory_repeat_abcd_C_max_items_3.json`
+  - D: `docs/reports/advisory_repeat_abcd_D_min_rank_0p55_max_items_3.json`
 
-Success criteria:
-- emission rate decreases modestly (not to "near-zero")
-- top-repeat share decreases on *normalized families* ("Read before Edit", "WebFetch caution", etc.)
+Winner (by lowest `feedback_top_share` in this harness):
+- D: set `advisor.min_rank_score=0.55` and `advisor.max_items=3` (and mirror `advisor.max_advice_items=3`).
 
-Note:
-- Today's controlled-delta repeat metric is still conservative because it counts feedback-request items; perceived repetition is better approximated by emitted text normalization (next small optimization if needed).
+Contract safety check for D (2026-02-13, baseline profile, repeats=1, force-live):
+- PRIMARY: PASS, objective `0.8299`, high_value `72.22%`, theory_disc `88.89%`, trace `94.44%`.
+  - `benchmarks/out/advisory_realism_primary_repeatD_20260213_report.json`
 
 ### C) Advisory realism contract (primary only for blocking)
 Why: ensure no regression in high-value, theory discrimination, trace binding while we tune upstream.

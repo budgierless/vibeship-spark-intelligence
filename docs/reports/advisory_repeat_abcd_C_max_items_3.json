@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-02-13T15:29:01.199234+00:00",
+  "start_ts": 1770996215.2632182,
+  "rounds": 160,
+  "emitted_returns": 14,
+  "engine": {
+    "rows": 376,
+    "trace_rows": 212,
+    "trace_coverage_pct": 56.38,
+    "events": {
+      "user_prompt_prefetch": 163,
+      "emitted": 23,
+      "no_emit": 188,
+      "no_advice": 1,
+      "user_prompt_error": 1
+    },
+    "routes": {
+      "live": 190,
+      "packet_relaxed": 22
+    },
+    "fallback_share_pct": 0.0
+  },
+  "feedback_requests": {
+    "rows": 11,
+    "trace_rows": 11,
+    "trace_coverage_pct": 100.0,
+    "item_total": 11,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 4
+      },
+      {
+        "text": "[vibe_coding] RT @GuarEmperor: Holly molly this good article \"Vibe Code\" \n\nThere are many explanations, tips and tricks regarding Claude Code AI to impro\u2026",
+        "count": 4
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 2
+      },
+      {
+        "text": "lets push gitthub, and then clean up the whole system except this spark, and at some point we were thinking to bring the council of 50, as the agents can you see where we worked on",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 36.36,
+    "unique_ratio_pct": 36.36
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 3,
+      "min_rank_score": 0.5
+    }
+  },
+  "force_live": true,
+  "label": "RPT_C_max_items_3",
+  "trace_prefix": "delta-RPT_C_max_items_3-20260213_152335",
+  "session_prefix": "delta-RPT_C_max_items_3"
+}

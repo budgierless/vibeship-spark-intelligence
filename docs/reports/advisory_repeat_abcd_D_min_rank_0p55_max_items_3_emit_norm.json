@@ -1,0 +1,39 @@
+{
+  "emit_rows": 27,
+  "emit_texts": 27,
+  "unique_norm": 14,
+  "top_norm": [
+    {
+      "k": "FAM_git_push",
+      "count": 8
+    },
+    {
+      "k": "FAM_read_before_edit",
+      "count": 5
+    },
+    {
+      "k": "(spark: use glob with caution; test paths before deployment due to frequent erro",
+      "count": 2
+    },
+    {
+      "k": "(spark: read files before editing; verify content first for accuracy and context",
+      "count": 2
+    },
+    {
+      "k": "[spark] prioritize error handling for webfetch failures; log each failure with a",
+      "count": 1
+    },
+    {
+      "k": "[spark] use webfetch judiciously; monitor for failures with other tasks closely ",
+      "count": 1
+    },
+    {
+      "k": "[spark] when using webfetch for repetitive tasks, ensure you handle exceptions g",
+      "count": 1
+    },
+    {
+      "k": "(spark: read current file contents before editing; use enterplanmode for plannin",
+      "count": 1
+    }
+  ]
+}

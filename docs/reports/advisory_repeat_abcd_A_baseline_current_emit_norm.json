@@ -1,0 +1,39 @@
+{
+  "emit_rows": 15,
+  "emit_texts": 15,
+  "unique_norm": 12,
+  "top_norm": [
+    {
+      "k": "FAM_read_before_edit",
+      "count": 3
+    },
+    {
+      "k": "FAM_webfetch_caution",
+      "count": 2
+    },
+    {
+      "k": "(spark: read files before editing; verify content changes manually after edits f",
+      "count": 1
+    },
+    {
+      "k": "[spark] when using webfetch for repetitive tasks, ensure you have error handling",
+      "count": 1
+    },
+    {
+      "k": "(spark: read files before editing for accuracy; always verify content post-read ",
+      "count": 1
+    },
+    {
+      "k": "[spark] use webfetch cautiously; monitor for failures when switching tasks and l",
+      "count": 1
+    },
+    {
+      "k": "(spark: always open a file before editing it for content verification; this prev",
+      "count": 1
+    },
+    {
+      "k": "[spark] use webfetch cautiously; monitor for failures with other tasks and adjus",
+      "count": 1
+    }
+  ]
+}

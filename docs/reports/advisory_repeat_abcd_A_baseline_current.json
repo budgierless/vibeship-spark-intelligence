@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-02-13T15:17:25.397368+00:00",
+  "start_ts": 1770995524.4685645,
+  "rounds": 160,
+  "emitted_returns": 14,
+  "engine": {
+    "rows": 329,
+    "trace_rows": 166,
+    "trace_coverage_pct": 50.46,
+    "events": {
+      "user_prompt_prefetch": 163,
+      "emitted": 15,
+      "no_emit": 151
+    },
+    "routes": {
+      "live": 162,
+      "packet_relaxed": 4
+    },
+    "fallback_share_pct": 0.0
+  },
+  "feedback_requests": {
+    "rows": 7,
+    "trace_rows": 7,
+    "trace_coverage_pct": 100.0,
+    "item_total": 7,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 4
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 2
+      },
+      {
+        "text": "Constraint: in **exactly one state** at all times",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 57.14,
+    "unique_ratio_pct": 42.86
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 4,
+      "min_rank_score": 0.5
+    }
+  },
+  "force_live": true,
+  "label": "RPT_A_baseline_current",
+  "trace_prefix": "delta-RPT_A_baseline_current-20260213_151204",
+  "session_prefix": "delta-RPT_A_baseline_current"
+}
