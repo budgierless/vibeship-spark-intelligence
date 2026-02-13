@@ -60,7 +60,8 @@ If you can paste the original Carmack post/link, I can make this 100% exact (a f
 - Vision/patch-based representation paper; need exact arXiv entry.
 
 ### 2) Deep Delta Learning
-- Need exact match.
+- Paper: **Deep Delta Learning**
+- arXiv: https://arxiv.org/abs/2601.00417
 
 ### 1) Emergent temporal abstractions in autoregressive models enable hierarchical reinforcement learning
 - Need exact match.
