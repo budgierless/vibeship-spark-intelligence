@@ -489,7 +489,9 @@ def run_bridge_cycle(
             counter += 1
             _eidos_counter_file.write_text(str(counter))
 
-            if counter % 10 == 0 and patterns_found > 0:
+            opp_stats = stats.get("opportunity_scanner") or {}
+            opp_promotions = (opp_stats.get("promoted_candidates") or []) if isinstance(opp_stats, dict) else []
+            if counter % 10 == 0 and (patterns_found > 0 or opp_promotions):
                 # Gather behavioral observations
                 observations = []
                 if stats.get("llm_advisory"):
@@ -499,6 +501,10 @@ def run_bridge_cycle(
                     observations.append(f"Captured {chip_stats['insights_captured']} chip insights")
                 if stats.get("auto_tuner", {}).get("health_recs"):
                     observations.append(f"Auto-tuner made {stats['auto_tuner']['health_recs']} recommendations")
+                for cand in opp_promotions[:3]:
+                    obs = str(cand.get("eidos_observation") or cand.get("statement") or "").strip()
+                    if obs:
+                        observations.append(obs[:240])
 
                 if observations:
                     eidos_update = distill_eidos(observations)

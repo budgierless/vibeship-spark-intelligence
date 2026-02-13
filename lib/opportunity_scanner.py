@@ -47,6 +47,13 @@ USER_FILE = OPPORTUNITY_DIR / "user_opportunities.jsonl"
 OUTCOME_FILE = OPPORTUNITY_DIR / "outcomes.jsonl"
 OUTCOME_WINDOW_S = max(300.0, float(os.getenv("SPARK_OPPORTUNITY_OUTCOME_WINDOW_S", "21600") or 21600.0))
 OUTCOME_LOOKBACK = max(20, int(os.getenv("SPARK_OPPORTUNITY_OUTCOME_LOOKBACK", "200") or 200))
+PROMOTION_FILE = OPPORTUNITY_DIR / "promoted_opportunities.jsonl"
+PROMOTION_MIN_SUCCESSES = max(1, int(os.getenv("SPARK_OPPORTUNITY_PROMOTION_MIN_SUCCESSES", "2") or 2))
+PROMOTION_MIN_EFFECTIVENESS = max(
+    0.0,
+    min(1.0, float(os.getenv("SPARK_OPPORTUNITY_PROMOTION_MIN_EFFECTIVENESS", "0.66") or 0.66)),
+)
+PROMOTION_LOOKBACK = max(20, int(os.getenv("SPARK_OPPORTUNITY_PROMOTION_LOOKBACK", "400") or 400))
 
 _TELEMETRY_MARKERS = (
     "tool_",
@@ -229,6 +236,16 @@ def _load_recorded_outcome_ids() -> set[str]:
         oid = str(row.get("opportunity_id") or "").strip()
         if oid:
             out.add(oid)
+    return out
+
+
+def _load_promoted_opportunity_keys() -> set[str]:
+    rows = _tail_jsonl(PROMOTION_FILE, PROMOTION_LOOKBACK)
+    out: set[str] = set()
+    for row in rows:
+        key = str(row.get("promotion_key") or "").strip()
+        if key:
+            out.add(key)
     return out
 
 
@@ -613,6 +630,106 @@ def _track_recent_outcomes(
     return {"tracked": tracked, "improved": improved_count}
 
 
+def promote_high_performing_opportunities(
+    *,
+    limit: int = 3,
+    persist: bool = True,
+) -> List[Dict[str, Any]]:
+    self_rows = _tail_jsonl(SELF_FILE, PROMOTION_LOOKBACK)
+    outcome_rows = _tail_jsonl(OUTCOME_FILE, PROMOTION_LOOKBACK)
+    if not self_rows or not outcome_rows:
+        return []
+
+    by_opp: Dict[str, Dict[str, Any]] = {}
+    for row in self_rows:
+        oid = str(row.get("opportunity_id") or "").strip()
+        if oid:
+            by_opp[oid] = row
+
+    grouped: Dict[str, Dict[str, Any]] = {}
+    for out in outcome_rows:
+        oid = str(out.get("opportunity_id") or "").strip()
+        if not oid:
+            continue
+        src = by_opp.get(oid) or {}
+        question = str(src.get("question") or "").strip()
+        if not question:
+            continue
+        category = str(src.get("category") or "general").strip().lower()
+        key = _question_key(question) or f"{category}:{question.lower()[:32]}"
+        g = grouped.setdefault(
+            key,
+            {
+                "promotion_key": key,
+                "category": category,
+                "question": question,
+                "next_step": str(src.get("next_step") or "").strip(),
+                "attempts": 0,
+                "good": 0,
+                "strict_good": 0,
+            },
+        )
+        if bool(out.get("acted_on")):
+            g["attempts"] += 1
+        if str(out.get("outcome") or "").strip().lower() == "good":
+            g["good"] += 1
+            if bool(out.get("strict_trace_match")):
+                g["strict_good"] += 1
+
+    promoted_keys = _load_promoted_opportunity_keys() if persist else set()
+    now = time.time()
+    candidates: List[Dict[str, Any]] = []
+    for g in grouped.values():
+        attempts = int(g.get("attempts") or 0)
+        good = int(g.get("good") or 0)
+        if attempts <= 0:
+            continue
+        effectiveness = good / max(attempts, 1)
+        if good < PROMOTION_MIN_SUCCESSES:
+            continue
+        if effectiveness < PROMOTION_MIN_EFFECTIVENESS:
+            continue
+        pkey = str(g.get("promotion_key") or "")
+        if pkey in promoted_keys:
+            continue
+        category = str(g.get("category") or "general")
+        question = str(g.get("question") or "")
+        next_step = str(g.get("next_step") or "Apply the same pattern with explicit proof checks.")
+        statement = (
+            f"When {category.replace('_', ' ')} appears, use: {next_step} "
+            f"because opportunity outcomes were good in {good}/{attempts} acted cases."
+        )
+        candidate = {
+            "ts": now,
+            "promotion_key": pkey,
+            "promotion_id": f"opp-promote:{hashlib.sha1((pkey + str(now)).encode('utf-8')).hexdigest()[:14]}",
+            "category": category,
+            "question": question,
+            "next_step": next_step,
+            "attempts": attempts,
+            "good": good,
+            "strict_good": int(g.get("strict_good") or 0),
+            "effectiveness": round(effectiveness, 4),
+            "statement": statement,
+            "eidos_observation": f"Opportunity promotion candidate: {statement}",
+        }
+        candidates.append(candidate)
+
+    candidates.sort(
+        key=lambda r: (
+            float(r.get("effectiveness") or 0.0),
+            int(r.get("good") or 0),
+            int(r.get("strict_good") or 0),
+        ),
+        reverse=True,
+    )
+    selected = candidates[: max(0, int(limit or 0))]
+    if persist and selected:
+        for row in selected:
+            _append_jsonl_capped(PROMOTION_FILE, row)
+    return selected
+
+
 def scan_runtime_opportunities(
     events: Sequence[Any],
     *,
@@ -632,6 +749,7 @@ def scan_runtime_opportunities(
         "dedup_recent_filtered": 0,
         "outcomes_tracked": 0,
         "outcomes_improved": 0,
+        "promoted_candidates": [],
         "opportunities_found": 0,
         "self_opportunities": [],
     }
@@ -671,6 +789,7 @@ def scan_runtime_opportunities(
         trace_id=primary_trace_id,
         persist=persist,
     )
+    promoted_candidates = promote_high_performing_opportunities(limit=3, persist=persist)
 
     try:
         soul = fetch_soul_state(session_id=session_id or "default")
@@ -734,6 +853,7 @@ def scan_runtime_opportunities(
         "dedup_recent_filtered": dedup_recent_filtered,
         "outcomes_tracked": int(outcome_stats.get("tracked") or 0),
         "outcomes_improved": int(outcome_stats.get("improved") or 0),
+        "promoted_candidates": promoted_candidates,
         "opportunities_found": len(deduped),
         "self_opportunities": deduped,
         "persisted": persisted,
@@ -897,10 +1017,12 @@ def get_scanner_status() -> Dict[str, Any]:
     try:
         self_rows = _tail_jsonl(SELF_FILE, 20)
         outcome_rows = _tail_jsonl(OUTCOME_FILE, 80)
+        promotion_rows = _tail_jsonl(PROMOTION_FILE, 40)
     except Exception as e:
         log_debug("opportunity_scanner", "status read failed", e)
         self_rows = []
         outcome_rows = []
+        promotion_rows = []
     acted = [r for r in outcome_rows if bool(r.get("acted_on"))]
     improved = [r for r in acted if bool(r.get("improved"))]
     adoption_rate = (len(improved) / max(len(acted), 1)) if acted else 0.0
@@ -913,4 +1035,5 @@ def get_scanner_status() -> Dict[str, Any]:
         "self_recent": len(self_rows),
         "outcomes_recent": len(outcome_rows),
         "adoption_rate": round(adoption_rate, 4),
+        "promotions_recent": len(promotion_rows),
     }

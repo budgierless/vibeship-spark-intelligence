@@ -325,3 +325,50 @@ def test_scan_runtime_opportunities_tracks_acted_outcomes(monkeypatch, tmp_path:
     assert rows[-1]["acted_on"] is True
     assert rows[-1]["outcome"] == "good"
     assert rows[-1]["strict_trace_match"] is True
+
+
+def test_promote_high_performing_opportunities_emits_candidates(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(scanner, "SELF_FILE", tmp_path / "self_opportunities.jsonl")
+    monkeypatch.setattr(scanner, "OUTCOME_FILE", tmp_path / "outcomes.jsonl")
+    monkeypatch.setattr(scanner, "PROMOTION_FILE", tmp_path / "promoted_opportunities.jsonl")
+    monkeypatch.setattr(scanner, "PROMOTION_MIN_SUCCESSES", 2)
+    monkeypatch.setattr(scanner, "PROMOTION_MIN_EFFECTIVENESS", 0.6)
+
+    self_rows = [
+        {
+            "ts": time.time() - 40,
+            "session_id": "s1",
+            "opportunity_id": "opp:a",
+            "category": "verification_gap",
+            "question": "What is the smallest proof that this change works before the next edit?",
+            "next_step": "Run one focused command/test that validates the changed behavior.",
+        },
+        {
+            "ts": time.time() - 30,
+            "session_id": "s1",
+            "opportunity_id": "opp:b",
+            "category": "verification_gap",
+            "question": "What is the smallest proof that this change works before the next edit?",
+            "next_step": "Run one focused command/test that validates the changed behavior.",
+        },
+    ]
+    scanner.SELF_FILE.write_text(
+        "".join(json.dumps(r) + "\n" for r in self_rows),
+        encoding="utf-8",
+    )
+
+    outcome_rows = [
+        {"ts": time.time() - 20, "opportunity_id": "opp:a", "acted_on": True, "outcome": "good", "strict_trace_match": True},
+        {"ts": time.time() - 10, "opportunity_id": "opp:b", "acted_on": True, "outcome": "good", "strict_trace_match": True},
+    ]
+    scanner.OUTCOME_FILE.write_text(
+        "".join(json.dumps(r) + "\n" for r in outcome_rows),
+        encoding="utf-8",
+    )
+
+    promoted = scanner.promote_high_performing_opportunities(limit=3, persist=True)
+
+    assert promoted
+    assert promoted[0]["good"] >= 2
+    assert "eidos_observation" in promoted[0]
+    assert scanner.PROMOTION_FILE.exists()
