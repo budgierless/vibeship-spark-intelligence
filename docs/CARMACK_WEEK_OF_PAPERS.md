@@ -39,7 +39,8 @@ If you can paste the original Carmack post/link, I can make this 100% exact (a f
   - “Discovering Policy Gradient Methods” / “Learning to learn RL updates”
 
 ### 10) LeJEPA: Provable and Scalable Self-Supervised Learning Without the Heuristics
-- Looks like a JEPA-family paper (LeCun/FAIR line). Need exact PDF.
+- Paper: **LeJEPA: Provable and Scalable Self-Supervised Learning Without the Heuristics**
+- arXiv: https://arxiv.org/abs/2511.08544
 
 ### 9) floq: Training Critics via Flow-Matching for Scaling Compute in Value-Based RL
 - Paper: **floq: Training Critics via Flow-Matching for Scaling Compute in Value-Based RL**
