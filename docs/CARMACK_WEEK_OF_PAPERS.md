@@ -57,7 +57,8 @@ If you can paste the original Carmack post/link, I can make this 100% exact (a f
 - LM training dynamics paper; need exact arXiv entry.
 
 ### 4) Patches Are All You Need?
-- Vision/patch-based representation paper; need exact arXiv entry.
+- Paper: **Patches Are All You Need?**
+- arXiv: https://arxiv.org/abs/2201.09792
 
 ### 2) Deep Delta Learning
 - Paper: **Deep Delta Learning**
