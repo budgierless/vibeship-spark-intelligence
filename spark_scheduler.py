@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import signal
+import re
 import subprocess
 import sys
 import threading
@@ -49,6 +50,60 @@ OPENCLAW_HANDOFF_DIR = SPARK_DIR / "claw_integration"
 OPENCLAW_HANDOFF_FILE = OPENCLAW_HANDOFF_DIR / "latest_trend_handoff.json"
 OPENCLAW_WEBHOOK_URL = os.getenv("OPENCLAW_WEBHOOK_URL", "").strip()
 CLAWDBOT_WEBHOOK_URL = os.getenv("CLAWDBOT_WEBHOOK_URL", "").strip()
+TREND_BUILD_QUEUE_DIR = Path(
+    os.getenv(
+        "TREND_BUILD_QUEUE_DIR",
+        str(Path.home() / ".openclaw" / "workspace" / "spark_build_queue"),
+    )
+)
+OPENCLAW_WORKSPACE = Path(
+    os.getenv(
+        "SPARK_OPENCLAW_WORKSPACE",
+        str(Path.home() / ".openclaw" / "workspace"),
+    )
+)
+TREND_BUILD_QUEUE_FILE = TREND_BUILD_QUEUE_DIR / "latest_build_queue.json"
+TREND_BUILD_DISPATCH_LOG = OPENCLAW_HANDOFF_DIR / "build_dispatch_log.jsonl"
+TREND_MAX_QUEUED_ITEMS = int(os.getenv("TREND_MAX_QUEUED_ITEMS", "24"))
+TREND_NOTIFY_OPENCLAW = os.getenv("TREND_NOTIFY_OPENCLAW", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+    "y",
+}
+TREND_WAKE_OPENCLAW = os.getenv("TREND_WAKE_OPENCLAW", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+    "y",
+}
+TREND_ENGINE_DEFAULTS = {
+    "skill": os.getenv("TREND_BUILD_TARGET_SKILL", "codex").strip().lower(),
+    "mcp": os.getenv("TREND_BUILD_TARGET_MCP", "minimax").strip().lower(),
+    "startup": os.getenv("TREND_BUILD_TARGET_STARTUP", "opus").strip().lower(),
+}
+TREND_BUILD_BUCKETS = {
+    "skills": "skill",
+    "mcps": "mcp",
+    "startup_ideas": "startup",
+}
+TREND_BUILD_TYPE_ALIASES = {
+    "startup_idea": "startup",
+    "startup_ideas": "startup",
+    "mcps": "mcp",
+    "skills": "skill",
+    "skill": "skill",
+    "mcp": "mcp",
+}
+ENGINE_CANONICAL_MAP = {
+    "gpt": "opus",
+    "claude": "codex",
+    "codex": "codex",
+    "minimax": "minimax",
+    "opus": "opus",
+}
 
 CHECK_INTERVAL = 60  # Main loop checks every 60s which tasks are due
 
@@ -90,6 +145,232 @@ def load_scheduler_config() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # State management
 # ---------------------------------------------------------------------------
+
+
+def _canonical_engine(raw_engine: Any, fallback: str = "codex") -> str:
+    """Normalize a requested model/engine name to a supported routing key."""
+    if not raw_engine:
+        return fallback
+    normalized = str(raw_engine).strip().lower()
+    if not normalized:
+        return fallback
+    if normalized.startswith("claude-"):
+        normalized = "codex"
+    if normalized.startswith("gpt-"):
+        normalized = "opus"
+    return ENGINE_CANONICAL_MAP.get(normalized, normalized)
+
+
+def _slugify(value: str) -> str:
+    """Create a safe filesystem-friendly slug."""
+    text = str(value).strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text).strip("-")
+    return text or "trend-work"
+
+
+def _safe_float(raw: Any, default: float = 0.0) -> float:
+    try:
+        return float(raw)
+    except Exception:
+        return default
+
+
+def _safe_int(raw: Any, default: int = 0) -> int:
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _safe_bool(raw: Any, default: bool = False) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on", "y"}
+
+
+def _normalize_build_type(item_type: Any, bucket: str) -> str:
+    for candidate in (
+        str(item_type or "").strip().lower(),
+        str(bucket or "").strip().lower(),
+    ):
+        if candidate in TREND_BUILD_BUCKETS:
+            return TREND_BUILD_BUCKETS[candidate]
+        if candidate in TREND_BUILD_TYPE_ALIASES:
+            return TREND_BUILD_TYPE_ALIASES[candidate]
+    return "skill"
+
+
+def _resolve_engine_for_item(item: Dict[str, Any], item_type: str) -> str:
+    defaults = _canonical_engine(TREND_ENGINE_DEFAULTS.get(item_type, "codex"), "codex")
+    explicit = item.get("assigned_engine")
+    if not explicit:
+        explicit = (
+            item.get("default_agent")
+            or item.get("target_engine")
+            or item.get("build_plan", {}).get("target_engine")
+        )
+    return _canonical_engine(explicit, defaults)
+
+
+def _resolve_target_path(item: Dict[str, Any], item_type: str) -> str:
+    explicit_path = item.get("build_plan", {}).get("target_path")
+    if isinstance(explicit_path, str) and explicit_path.strip():
+        return str(Path(explicit_path).expanduser())
+
+    name = item.get("name") or f"{_slugify(item.get('source_topic', 'trend'))}-{item_type}"
+    plan_root = (
+        item.get("build_plan", {}).get("automation_root")
+        or str(Path.home() / "trend-builds")
+    )
+    return str(
+        Path(plan_root).expanduser()
+        / _canonical_engine(TREND_ENGINE_DEFAULTS.get(item_type, "codex"), "codex")
+        / ({"skill": "skills", "mcp": "mcps", "startup": "startups"}.get(item_type, "items"))
+        / name
+    )
+
+
+def _collect_build_queue_items(result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    candidates = result.get("build_candidates")
+    if not isinstance(candidates, dict):
+        return []
+
+    jobs: List[Dict[str, Any]] = []
+    for bucket, items in candidates.items():
+        if not isinstance(items, list):
+            continue
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                continue
+            item_type = _normalize_build_type(item.get("type"), bucket)
+            engine = _resolve_engine_for_item(item, item_type)
+            item_slug = _slugify(item.get("name") or item.get("title") or item_type)
+            run_payload = {
+                "job_id": f"{item_type}-{int(time.time())}-{index}",
+                "source_bucket": bucket,
+                "build_type": item_type,
+                "build_name": item.get("name") or f"{item_slug}_{item_type}",
+                "title": item.get("title") or item.get("name") or item_slug,
+                "assigned_engine": engine,
+                "source_topic": item.get("source_topic", ""),
+                "confidence": _safe_float(item.get("confidence"), 0.0),
+                "trend_rank": _safe_int(
+                    item.get("trend_profile", {}).get("trend_rank")
+                    if isinstance(item.get("trend_profile"), dict)
+                    else item.get("trend_rank"),
+                    0,
+                ),
+                "target_path": _resolve_target_path(item, item_type),
+                "priority": (
+                    item.get("build_plan", {}).get("default_priority")
+                    or item.get("priority", "medium")
+                ),
+                "why_build_now": item.get("why_build_now", ""),
+                "launch_pack": item.get("launch_pack", {}),
+                "trend_profile": item.get("trend_profile", {}),
+                "build_plan": item.get("build_plan", {}),
+                "one_shot_spawn": item.get("one_shot_spawn", {}),
+                "source_payload": item,
+            }
+            jobs.append(run_payload)
+
+    jobs.sort(key=lambda j: (j["assigned_engine"], -float(j.get("confidence", 0.0)))
+    if len(jobs) <= TREND_MAX_QUEUED_ITEMS:
+        return jobs
+    return jobs[:TREND_MAX_QUEUED_ITEMS]
+
+
+def _emit_build_queue(trend_payload: Dict[str, Any]) -> Dict[str, Any]:
+    jobs = _collect_build_queue_items(trend_payload)
+    build_stats = {
+        "queued": len(jobs),
+        "by_engine": {"codex": 0, "minimax": 0, "opus": 0},
+        "skipped": max(0, len(_collect_build_queue_items(trend_payload)) - len(jobs)),
+    }
+    if not jobs:
+        return {
+            "queued": 0,
+            "by_engine": build_stats["by_engine"],
+            "skipped": 0,
+            "manifest": None,
+            "log_file": str(TREND_BUILD_DISPATCH_LOG),
+        }
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = time.time()
+    for job in jobs:
+        build_stats["by_engine"][job["assigned_engine"]] = (
+            build_stats["by_engine"].get(job["assigned_engine"], 0) + 1
+        )
+        job["run_id"] = run_id
+        job["scheduled_at"] = datetime.fromtimestamp(ts).isoformat()
+        job["source_file"] = str(OPENCLAW_HANDOFF_FILE)
+
+    manifest = {
+        "run_id": run_id,
+        "generated_at": datetime.fromtimestamp(ts).isoformat(),
+        "source": "spark_scheduler.daily_research",
+        "run_status": trend_payload.get("status"),
+        "topics_processed": trend_payload.get("topics_processed", 0),
+        "jobs": jobs,
+        "stats": {
+            "trends_evaluated": trend_payload.get("trends_evaluated", 0),
+            "trends_selected": trend_payload.get("trends_selected", 0),
+            "trends_filtered": trend_payload.get("trends_filtered", 0),
+            "queue_count": len(jobs),
+            "max_queue": TREND_MAX_QUEUED_ITEMS,
+        },
+    }
+
+    TREND_BUILD_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+    manifest_file = TREND_BUILD_QUEUE_DIR / f"trend_build_queue_{run_id}.json"
+    try:
+        manifest_file.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        TREND_BUILD_QUEUE_FILE.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        with TREND_BUILD_DISPATCH_LOG.open("a", encoding="utf-8") as f:
+            f.write(
+                json.dumps({
+                    "run_id": run_id,
+                    "generated_at": manifest["generated_at"],
+                    "queue_file": str(manifest_file),
+                    "queue_count": len(jobs),
+                })
+                + "\n"
+            )
+        build_stats["manifest"] = str(manifest_file)
+    except Exception as exc:
+        logger.debug("Build queue emit failed: %s", exc)
+        build_stats["manifest"] = None
+        build_stats["error"] = str(exc)
+
+    if TREND_NOTIFY_OPENCLAW:
+        try:
+            from lib.openclaw_notify import notify_agent, wake_agent
+            notify_agent(
+                (
+                    f"Trend build queue generated ({run_id}): "
+                    f"{len(jobs)} jobs -> "
+                    f"codex {build_stats['by_engine'].get('codex', 0)}, "
+                    f"minimax {build_stats['by_engine'].get('minimax', 0)}, "
+                    f"opus {build_stats['by_engine'].get('opus', 0)}."
+                ),
+                priority="normal",
+            )
+            if TREND_WAKE_OPENCLAW and len(jobs) >= 1:
+                wake_agent(
+                    "Spark trend build jobs are ready. Review the latest_queue manifest in "
+                    "~/.openclaw/workspace/spark_build_queue/latest_build_queue.json."
+                )
+        except Exception as exc:
+            logger.debug("OpenClaw handoff notify failed: %s", exc)
+            build_stats.setdefault("notifications", {})["openclaw_error"] = str(exc)
+
+    build_stats["manifest"] = build_stats.get("manifest")
+    return build_stats
+
 
 def _load_state() -> Dict[str, Any]:
     """Load scheduler state from disk."""
