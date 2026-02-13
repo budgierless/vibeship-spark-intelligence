@@ -435,6 +435,10 @@ class SparkAdvisor:
         self.retrieval_policy = self._load_retrieval_policy()
         self._agentic_route_history: List[bool] = []
 
+        # Prefilter cache: avoid per-query regex tokenization across large insight sets.
+        # key -> (blob_hash, token_set, blob_lower)
+        self._prefilter_cache: Dict[str, Tuple[str, set, str]] = {}
+
     def _load_effectiveness(self) -> Dict[str, Any]:
         """Load effectiveness tracking data."""
         if EFFECTIVENESS_FILE.exists():
@@ -945,6 +949,22 @@ class SparkAdvisor:
                     parts.append(str(val))
         return " ".join(parts).lower()
 
+    def _prefilter_cached_blob_tokens(self, key: str, insight: Any) -> Tuple[set, str]:
+        """Return (tokens, blob_lower) for an insight, cached by blob hash."""
+        blob = self._insight_blob(key, insight)
+        blob_hash = hashlib.sha1(blob.encode("utf-8", errors="replace")).hexdigest()[:16]
+        cached = self._prefilter_cache.get(key)
+        if cached and cached[0] == blob_hash:
+            return cached[1], cached[2]
+        tokens = {t for t in re.findall(r"[a-z0-9_]+", blob) if len(t) >= 3}
+        self._prefilter_cache[key] = (blob_hash, tokens, blob)
+        # Keep cache bounded (avoid unbounded growth if keys churn).
+        if len(self._prefilter_cache) > 5000:
+            # Drop an arbitrary 20% slice.
+            for k in list(self._prefilter_cache.keys())[:1000]:
+                self._prefilter_cache.pop(k, None)
+        return tokens, blob
+
     def _prefilter_insights_for_retrieval(
         self,
         insights: Dict[str, Any],
@@ -963,8 +983,7 @@ class SparkAdvisor:
         scored: List[Tuple[float, str, Any]] = []
         fallback: List[Tuple[float, str, Any]] = []
         for key, insight in insights.items():
-            blob = self._insight_blob(str(key), insight)
-            blob_tokens = {t for t in re.findall(r"[a-z0-9_]+", blob) if len(t) >= 3}
+            blob_tokens, blob = self._prefilter_cached_blob_tokens(str(key), insight)
             overlap = len(query_tokens & blob_tokens) if query_tokens else 0
             metadata_boost = 2.0 if tool and tool in blob else 0.0
             reliability = float(getattr(insight, "reliability", 0.5) or 0.5)
