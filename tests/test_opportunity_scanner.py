@@ -466,3 +466,20 @@ def test_scan_runtime_opportunities_merges_llm_candidates(monkeypatch, tmp_path:
     assert any("hidden assumption" in q for q in questions)
     assert out.get("llm", {}).get("used") is True
     assert out.get("llm", {}).get("provider") == "minimax"
+
+
+def test_generate_llm_self_candidates_blocks_deepseek(monkeypatch):
+    monkeypatch.setattr(scanner, "LLM_ENABLED", True)
+    monkeypatch.setattr(scanner, "LLM_PROVIDER", "deepseek")
+
+    rows, meta = scanner._generate_llm_self_candidates(
+        prompts=["Improve Spark autonomy with measurable checks"],
+        edits=["def x(): return True"],
+        query="",
+        stats={},
+        kernel_ok=True,
+    )
+
+    assert rows == []
+    assert meta.get("attempted") is False
+    assert str(meta.get("error") or "").startswith("provider_blocked:")

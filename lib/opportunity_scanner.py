@@ -100,6 +100,7 @@ _SELF_CATEGORY_ALLOWLIST = {
     "humanity_guardrail",
     "compounding_learning",
 }
+_FORBIDDEN_LLM_PROVIDERS = {"deepseek", "deep-seek"}
 
 _QUESTION_STOPWORDS = {
     "the",
@@ -426,6 +427,9 @@ def _generate_llm_self_candidates(
     }
     if not LLM_ENABLED:
         return [], meta
+    if LLM_PROVIDER in _FORBIDDEN_LLM_PROVIDERS:
+        meta["error"] = f"provider_blocked:{LLM_PROVIDER}"
+        return [], meta
 
     context_bits = prompts[-3:] + edits[-2:] + ([query] if query else [])
     context_text = " ".join(str(x or "").strip() for x in context_bits if str(x or "").strip()).strip()
@@ -459,6 +463,10 @@ def _generate_llm_self_candidates(
     try:
         synth.AI_TIMEOUT_S = LLM_TIMEOUT_S
         chain = synth._get_provider_chain(LLM_PROVIDER or None)
+        chain = [p for p in chain if str(p or "").strip().lower() not in _FORBIDDEN_LLM_PROVIDERS]
+        if not chain:
+            meta["error"] = "no_allowed_provider"
+            return [], meta
         last_error = None
         for provider in chain:
             try:
