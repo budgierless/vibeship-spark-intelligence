@@ -52,7 +52,41 @@ DEFAULT_CONFIG = {
     "category_exclude": [],
     "triggers_enabled": False,
     "log_retrievals": True,
+    # Log file safety (prevent unbounded growth)
+    "log_max_bytes": 5 * 1024 * 1024,  # 5MB
+    "log_backups": 3,
 }
+
+
+def _rotate_log_if_needed(path: Path, max_bytes: int, backups: int = 3) -> None:
+    """Rotate a JSONL log if it exceeds max_bytes.
+
+    Keeps up to `backups` rotated files: <name>.jsonl.1, .2, ...
+    """
+    try:
+        if max_bytes <= 0 or not path.exists():
+            return
+        size = path.stat().st_size
+        if size <= max_bytes:
+            return
+        backups = max(0, int(backups or 0))
+
+        # Shift existing rotations
+        for i in range(backups, 0, -1):
+            src = path.with_suffix(path.suffix + f".{i}")
+            dst = path.with_suffix(path.suffix + f".{i + 1}")
+            if src.exists():
+                if i == backups:
+                    src.unlink(missing_ok=True)
+                else:
+                    src.replace(dst)
+
+        # Rotate current log to .1
+        rotated = path.with_suffix(path.suffix + ".1")
+        path.replace(rotated)
+    except Exception:
+        return
+
 
 
 DEFAULT_TRIGGER_RULES = {
@@ -857,6 +891,12 @@ class SemanticRetriever:
             log_dir = Path.home() / ".spark" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / "semantic_retrieval.jsonl"
+
+            # Keep log bounded so the hot path doesn't create unbounded disk I/O.
+            max_bytes = int(self.config.get("log_max_bytes", 0) or 0)
+            backups = int(self.config.get("log_backups", 3) or 3)
+            _rotate_log_if_needed(path, max_bytes=max_bytes, backups=backups)
+
             payload = {
                 "ts": time.time(),
                 "intent": intent[:200],
