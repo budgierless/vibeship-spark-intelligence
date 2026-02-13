@@ -54,7 +54,8 @@ If you can paste the original Carmack post/link, I can make this 100% exact (a f
 - RL generalization augmentation paper; need exact arXiv entry.
 
 ### 5) Small Batch Size Training for Language Models: When Vanilla SGD Works, and Why Gradient Accumulation Is Wasteful
-- LM training dynamics paper; need exact arXiv entry.
+- Paper: **Small Batch Size Training for Language Models: When Vanilla SGD Works, and Why Gradient Accumulation Is Wasteful**
+- arXiv: https://arxiv.org/abs/2507.07101
 
 ### 4) Patches Are All You Need?
 - Paper: **Patches Are All You Need?**
