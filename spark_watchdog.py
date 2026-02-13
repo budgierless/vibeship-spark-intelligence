@@ -268,6 +268,8 @@ def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> bo
         log_path = LOG_DIR / f"{name}.log"
         env = os.environ.copy()
         env["SPARK_LOG_DIR"] = str(LOG_DIR)
+        # Child services should not pop browsers on startup when managed.
+        env.setdefault("SPARK_SERVICE_MODE", "1")
         creationflags = 0
         if os.name == "nt":
             # CREATE_NO_WINDOW (0x08000000) prevents console windows from opening
@@ -391,6 +393,26 @@ def _restart_allowed(service: str, plugin_only_mode: bool) -> bool:
     return service not in PLUGIN_ONLY_SKIP_RESTARTS
 
 
+def _env_disabled(service: str) -> bool:
+    """Allow operators to disable watchdog management for specific services."""
+    v = None
+    if service == "meta_ralph":
+        v = os.environ.get("SPARK_NO_META_RALPH")
+    elif service == "dashboard":
+        v = os.environ.get("SPARK_NO_DASHBOARD")
+    elif service == "pulse":
+        v = os.environ.get("SPARK_NO_PULSE")
+    elif service == "sparkd":
+        v = os.environ.get("SPARK_NO_SPARKD")
+    elif service == "bridge_worker":
+        v = os.environ.get("SPARK_NO_BRIDGE_WORKER")
+    elif service == "scheduler":
+        v = os.environ.get("SPARK_NO_SCHEDULER")
+    if v is None:
+        return False
+    return str(v).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--interval", type=int, default=60, help="seconds between checks")
@@ -456,7 +478,7 @@ def main() -> None:
             return failures.get(name, 0)
 
         # sparkd
-        manage_sparkd = _restart_allowed("sparkd", plugin_only_mode)
+        manage_sparkd = _restart_allowed("sparkd", plugin_only_mode) and not _env_disabled("sparkd")
         sparkd_ok = _http_ok(SPARKD_HEALTH_URL)
         sparkd_fail = _bump_fail("sparkd", sparkd_ok or not manage_sparkd)
         if manage_sparkd and (not sparkd_ok):
@@ -477,7 +499,7 @@ def main() -> None:
                     failures["sparkd"] = 0
 
         # dashboard
-        manage_dashboard = _restart_allowed("dashboard", plugin_only_mode)
+        manage_dashboard = _restart_allowed("dashboard", plugin_only_mode) and not _env_disabled("dashboard")
         dash_ok = _http_ok(DASHBOARD_STATUS_URL)
         dash_fail = _bump_fail("dashboard", dash_ok or not manage_dashboard)
         if manage_dashboard and (not dash_ok):
@@ -495,7 +517,7 @@ def main() -> None:
                     failures["dashboard"] = 0
 
         # spark pulse -- unified startup via service_control
-        manage_pulse = _restart_allowed("pulse", plugin_only_mode)
+        manage_pulse = _restart_allowed("pulse", plugin_only_mode) and not _env_disabled("pulse")
         pulse_ok = _http_ok(PULSE_DOCS_URL, timeout=2.0) and _http_ok(PULSE_UI_URL, timeout=2.0)
         pulse_fail = _bump_fail("pulse", pulse_ok or not manage_pulse)
         if manage_pulse and (not pulse_ok):
@@ -533,7 +555,7 @@ def main() -> None:
                     failures["pulse"] = 0
 
         # meta-ralph dashboard
-        manage_meta = _restart_allowed("meta_ralph", plugin_only_mode)
+        manage_meta = _restart_allowed("meta_ralph", plugin_only_mode) and not _env_disabled("meta_ralph")
         meta_ok = _http_ok(META_RALPH_HEALTH_URL)
         meta_fail = _bump_fail("meta_ralph", meta_ok or not manage_meta)
         if manage_meta and (not meta_ok):
@@ -548,7 +570,7 @@ def main() -> None:
                     failures["meta_ralph"] = 0
 
         # bridge_worker
-        manage_bridge = _restart_allowed("bridge_worker", plugin_only_mode)
+        manage_bridge = _restart_allowed("bridge_worker", plugin_only_mode) and not _env_disabled("bridge_worker")
         hb_age = _bridge_heartbeat_age()
         bridge_ok = hb_age is not None and hb_age <= args.bridge_stale_s
         bridge_fail = _bump_fail("bridge_worker", bridge_ok or not manage_bridge)
@@ -575,18 +597,22 @@ def main() -> None:
         sched_ok = sched_hb is not None and sched_hb <= sched_stale_s
         sched_fail = _bump_fail("scheduler", sched_ok)
         if not sched_ok:
-            sched_pids = _find_pids_by_keywords(["spark_scheduler.py"], snapshot)
-            if sched_pids and sched_fail < args.fail_threshold:
-                _log(f"scheduler heartbeat stale (fail {sched_fail}/{args.fail_threshold}) but process exists")
-            elif not args.no_restart and _can_restart(state, "scheduler"):
-                if sched_pids:
-                    _terminate_pids(sched_pids)
-                if _start_process(
-                    "scheduler",
-                    [sys.executable, str(SPARK_DIR / "spark_scheduler.py")],
-                ):
-                    _record_restart(state, "scheduler")
-                    failures["scheduler"] = 0
+            manage_sched = _restart_allowed("scheduler", plugin_only_mode) and not _env_disabled("scheduler")
+            if not manage_sched:
+                pass
+            else:
+                sched_pids = _find_pids_by_keywords(["spark_scheduler.py"], snapshot)
+                if sched_pids and sched_fail < args.fail_threshold:
+                    _log(f"scheduler heartbeat stale (fail {sched_fail}/{args.fail_threshold}) but process exists")
+                elif not args.no_restart and _can_restart(state, "scheduler"):
+                    if sched_pids:
+                        _terminate_pids(sched_pids)
+                    if _start_process(
+                        "scheduler",
+                        [sys.executable, str(SPARK_DIR / "spark_scheduler.py")],
+                    ):
+                        _record_restart(state, "scheduler")
+                        failures["scheduler"] = 0
 
         # queue pressure warning
         try:

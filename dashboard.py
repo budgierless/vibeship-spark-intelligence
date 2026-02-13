@@ -5008,11 +5008,24 @@ def main():
     except Exception:
         pass
     
-    def open_browser():
-        time.sleep(1)
-        webbrowser.open(f'http://localhost:{PORT}')
-    
-    threading.Thread(target=open_browser, daemon=True).start()
+    def _parse_bool(v: object) -> bool:
+        return str(v or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _should_open_browser() -> bool:
+        if _parse_bool(os.environ.get("SPARK_SERVICE_MODE")):
+            return False
+        if _parse_bool(os.environ.get("SPARK_NO_BROWSER")):
+            return False
+        if _parse_bool(os.environ.get("SPARK_OPEN_BROWSER")):
+            return True
+        return True
+
+    if _should_open_browser():
+        def open_browser():
+            time.sleep(1)
+            webbrowser.open(f'http://localhost:{PORT}')
+        
+        threading.Thread(target=open_browser, daemon=True).start()
     
     try:
         server.serve_forever()

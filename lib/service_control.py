@@ -312,6 +312,8 @@ def _env_for_child(log_dir: Path) -> dict:
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("SPARK_LOG_DIR", str(log_dir))
+    # Child services should not pop browsers on startup when managed.
+    env.setdefault("SPARK_SERVICE_MODE", "1")
     return env
 
 

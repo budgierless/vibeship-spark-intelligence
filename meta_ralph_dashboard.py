@@ -990,12 +990,27 @@ def main():
     except Exception:
         pass
 
-    # Open browser
-    def open_browser():
-        time.sleep(0.5)
-        webbrowser.open(f"http://localhost:{PORT}")
+    def _parse_bool(v: object) -> bool:
+        return str(v or "").strip().lower() in {"1", "true", "yes", "on"}
 
-    threading.Thread(target=open_browser, daemon=True).start()
+    def _should_open_browser() -> bool:
+        # If managed by service_control / watchdog, don't pop browser windows.
+        if _parse_bool(os.environ.get("SPARK_SERVICE_MODE")):
+            return False
+        # Allow explicit on/off overrides.
+        if _parse_bool(os.environ.get("SPARK_NO_BROWSER")):
+            return False
+        if _parse_bool(os.environ.get("SPARK_OPEN_BROWSER")):
+            return True
+        return True
+
+    # Open browser (interactive runs only by default)
+    if _should_open_browser():
+        def open_browser():
+            time.sleep(0.5)
+            webbrowser.open(f"http://localhost:{PORT}")
+
+        threading.Thread(target=open_browser, daemon=True).start()
 
     try:
         server.serve_forever()
