@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Optional
 from urllib import request
 
+from lib.diagnostics import _rotate_log_file, _LOG_MAX_BYTES, _LOG_BACKUPS
+
 from lib.ports import (
     DASHBOARD_STATUS_URL,
     DASHBOARD_URL,
@@ -331,6 +333,10 @@ def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> Op
             getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             | CREATE_NO_WINDOW
         )
+
+    # Rotate log before opening so external services (pulse) that lack
+    # their own _RotatingFile still get bounded log files.
+    _rotate_log_file(log_path, _LOG_MAX_BYTES, _LOG_BACKUPS)
 
     with open(log_path, "a", encoding="utf-8", errors="replace") as log_f:
         proc = subprocess.Popen(
