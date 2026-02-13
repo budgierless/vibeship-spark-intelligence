@@ -77,6 +77,9 @@ EIDOS_ACTIVE_EPISODES_FILE = SPARK_DIR / "eidos_active_episodes.json"
 EIDOS_ACTIVE_STEPS_FILE = SPARK_DIR / "eidos_active_steps.json"
 EIDOS_ESCALATIONS_FILE = SPARK_DIR / "eidos_escalations.jsonl"
 MINIMAL_MODE_HISTORY_FILE = SPARK_DIR / "minimal_mode_history.jsonl"
+OPPORTUNITY_DIR = SPARK_DIR / "opportunity_scanner"
+OPPORTUNITY_SELF_FILE = OPPORTUNITY_DIR / "self_opportunities.jsonl"
+OPPORTUNITY_OUTCOMES_FILE = OPPORTUNITY_DIR / "outcomes.jsonl"
 
 
 def get_eidos_status():
@@ -380,6 +383,7 @@ def get_dashboard_data():
             "recent": __import__("lib.tastebank", fromlist=["recent"]).recent(limit=5),
         },
         "advisory": _get_advisory_status_block(),
+        "opportunity_scanner": _get_opportunity_scanner_snapshot(),
         "eidos": get_eidos_status(),
         "systems": {
             "mind": {"ok": mind_stats["mind_available"], "label": "Mind API"},
@@ -430,6 +434,82 @@ def _read_jsonl(path: Path, limit: Optional[int] = None) -> List[Dict[str, Any]]
     if limit and limit > 0:
         return items[-limit:]
     return items
+
+
+def _get_opportunity_scanner_snapshot(limit: int = 5, max_age_s: float = 172800.0) -> Dict[str, Any]:
+    status = {"enabled": False, "user_scan_enabled": False, "self_recent": 0}
+    try:
+        from lib.opportunity_scanner import get_scanner_status
+
+        status = get_scanner_status()
+    except Exception:
+        pass
+
+    now = time.time()
+    rows = _read_jsonl(OPPORTUNITY_SELF_FILE, limit=400)
+    outcomes = _read_jsonl(OPPORTUNITY_OUTCOMES_FILE, limit=400)
+
+    recent_rows: List[Dict[str, Any]] = []
+    seen_questions: set[str] = set()
+    scanned_recent = 0
+    for row in reversed(rows):
+        ts = _to_float(row.get("ts"), 0.0)
+        if ts <= 0:
+            continue
+        if max_age_s > 0 and (now - ts) > max_age_s:
+            continue
+        scanned_recent += 1
+        question = str(row.get("question") or "").strip()
+        if not question:
+            continue
+        key = question.lower()
+        if key in seen_questions:
+            continue
+        seen_questions.add(key)
+        recent_rows.append(
+            {
+                "ts": ts,
+                "category": str(row.get("category") or "general"),
+                "priority": str(row.get("priority") or "medium"),
+                "question": question[:140],
+                "next_step": str(row.get("next_step") or "")[:160],
+            }
+        )
+        if len(recent_rows) >= max(1, int(limit or 1)):
+            break
+
+    adopted_recent = 0
+    acted_total = 0
+    for row in reversed(outcomes):
+        ts = _to_float(row.get("ts"), 0.0)
+        if ts <= 0:
+            continue
+        if max_age_s > 0 and (now - ts) > max_age_s:
+            continue
+        acted = bool(row.get("acted_on"))
+        if not acted:
+            continue
+        acted_total += 1
+        if bool(row.get("improved")):
+            adopted_recent += 1
+
+    if acted_total > 0:
+        adoption_rate = round(adopted_recent / max(acted_total, 1), 4)
+    else:
+        fallback_adopted = len([r for r in rows if isinstance(r, dict) and bool(r.get("adopted"))])
+        fallback_total = len([r for r in rows if isinstance(r, dict)])
+        adoption_rate = round(fallback_adopted / max(fallback_total, 1), 4) if fallback_total > 0 else 0.0
+
+    return {
+        "enabled": bool(status.get("enabled")),
+        "user_scan_enabled": bool(status.get("user_scan_enabled")),
+        "self_recent": int(status.get("self_recent") or 0),
+        "scanned_recent": int(scanned_recent),
+        "acted_total": int(acted_total),
+        "adopted_recent": int(adopted_recent),
+        "adoption_rate": float(adoption_rate),
+        "latest": recent_rows,
+    }
 
 
 def _count_jsonl(path: Path, max_lines: Optional[int] = None) -> int:
@@ -1142,6 +1222,7 @@ def get_mission_control_data(include_pulse_probe: bool = True) -> Dict[str, Any]
         "advisory": _get_advisory_status_block(),
         "queue": queue_health,
         "bridge": bridge_health,
+        "opportunity_scanner": _get_opportunity_scanner_snapshot(),
         "eidos": eidos_block,
         "active_episode": active_episode,
         "acceptance_status": acceptance_status,
@@ -1700,6 +1781,26 @@ def generate_html():
     
     mind_status = "live" if data["mind"]["available"] else "offline"
     mind_text = "Connected" if data["mind"]["available"] else "Offline"
+    opp = data.get("opportunity_scanner") or {}
+    opp_enabled = bool(opp.get("enabled"))
+    opp_state_class = "live" if opp_enabled else "offline"
+    opp_state_text = "Active" if opp_enabled else "Disabled"
+    opp_rate = int(round(_to_float(opp.get("adoption_rate"), 0.0) * 100))
+    opp_recent_total = int(opp.get("scanned_recent", 0) or 0)
+    opp_latest = opp.get("latest") or []
+    opp_rows = ""
+    for row in opp_latest:
+        cat = str(row.get("category") or "general").replace("_", " ")
+        pr = str(row.get("priority") or "medium")
+        q = str(row.get("question") or "")
+        ns = str(row.get("next_step") or "")
+        opp_rows += f'''
+        <div class="event-row">
+            <span class="event-time">{cat}</span>
+            <span class="event-type">{pr}</span>
+            <span class="event-tool">{q[:96]}</span>
+            <span class="event-status success">{'+' if ns else '|'}</span>
+        </div>'''
     
     html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -2636,6 +2737,32 @@ def generate_html():
                 </div>
             </div>
         </div>
+
+        <div class="card" id="opportunity-card">
+            <div class="card-header">
+                <span class="card-title">Opportunity Scanner</span>
+                <span class="card-status {opp_state_class}" id="opp-enabled"><span class="status-dot"></span> {opp_state_text}</span>
+            </div>
+            <div class="card-body">
+                <div class="mini-stats">
+                    <div class="mini-stat">
+                        <div class="mini-stat-value" id="opp-adoption">{opp_rate}%</div>
+                        <div class="mini-stat-label">Adoption</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-value" id="opp-scanned">{opp_recent_total}</div>
+                        <div class="mini-stat-label">Last 48h</div>
+                    </div>
+                    <div class="mini-stat">
+                        <div class="mini-stat-value" id="opp-acted">{int(opp.get("acted_total", 0) or 0)}</div>
+                        <div class="mini-stat-label">Acted</div>
+                    </div>
+                </div>
+                <div id="opp-list">
+                    {opp_rows if opp_rows else '<div class="empty">No recent self-opportunities captured yet.</div>'}
+                </div>
+            </div>
+        </div>
         
         <div class="card">
             <div class="card-header">
@@ -2810,6 +2937,24 @@ def generate_html():
         }}).join('');
       }}
 
+      function renderOpportunityItems(items) {{
+        if (!Array.isArray(items) || items.length === 0) {{
+          return '<div class="empty">No recent self-opportunities captured yet.</div>';
+        }}
+        return items.map((o) => {{
+          const category = esc(String(o.category || 'general').replaceAll('_', ' '));
+          const priority = esc(o.priority || 'medium');
+          const question = esc(o.question || '');
+          return `
+            <div class="event-row">
+              <span class="event-time">${{category}}</span>
+              <span class="event-type">${{priority}}</span>
+              <span class="event-tool">${{question}}</span>
+              <span class="event-status success">+</span>
+            </div>`;
+        }}).join('');
+      }}
+
       async function postJSON(url, body) {{
         const res = await fetch(url, {{
           method: 'POST',
@@ -2825,6 +2970,19 @@ def generate_html():
         // Update surprises with pagination
         surprisesData = data.surprises?.recent || [];
         renderSurprisesPage();
+
+        // Opportunity Scanner panel
+        const opp = data.opportunity_scanner || {{}};
+        const oppEnabled = !!opp.enabled;
+        const oppEl = $('opp-enabled');
+        if (oppEl) {{
+          oppEl.className = `card-status ${{oppEnabled ? 'live' : 'offline'}}`;
+          oppEl.innerHTML = `<span class="status-dot"></span> ${{oppEnabled ? 'Active' : 'Disabled'}}`;
+        }}
+        if ($('opp-adoption')) $('opp-adoption').textContent = `${{Math.round((Number(opp.adoption_rate) || 0) * 100)}}%`;
+        if ($('opp-scanned')) $('opp-scanned').textContent = `${{Number(opp.scanned_recent || 0)}}`;
+        if ($('opp-acted')) $('opp-acted').textContent = `${{Number(opp.acted_total || 0)}}`;
+        if ($('opp-list')) $('opp-list').innerHTML = renderOpportunityItems(opp.latest || []);
 
         // Update footer systems status
         const footerSys = $('footer-systems');

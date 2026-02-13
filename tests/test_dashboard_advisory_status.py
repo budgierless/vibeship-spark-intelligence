@@ -1,4 +1,5 @@
 import dashboard
+import lib.opportunity_scanner as scanner
 
 
 def test_build_advisory_status_block_normalizes_state_and_summarizes():
@@ -75,3 +76,40 @@ def test_get_ops_data_includes_advisory_block(monkeypatch):
     data = dashboard.get_ops_data()
 
     assert data["advisory"]["delivery_badge"]["state"] == "fallback"
+
+
+def test_opportunity_snapshot_includes_latest_and_adoption(monkeypatch):
+    now = 1000.0
+    monkeypatch.setattr(dashboard.time, "time", lambda: now)
+    monkeypatch.setattr(
+        scanner,
+        "get_scanner_status",
+        lambda: {"enabled": True, "user_scan_enabled": False, "self_recent": 3},
+    )
+
+    self_rows = [
+        {"ts": now - 10, "category": "verification_gap", "priority": "high", "question": "Run a proof test?", "next_step": "Run one test"},
+        {"ts": now - 12, "category": "verification_gap", "priority": "high", "question": "Run a proof test?", "next_step": "Run one test"},
+        {"ts": now - 30, "category": "humanity_guardrail", "priority": "medium", "question": "How does this help people?", "next_step": "State user benefit"},
+    ]
+    outcome_rows = [
+        {"ts": now - 20, "acted_on": True, "improved": True},
+        {"ts": now - 15, "acted_on": True, "improved": False},
+        {"ts": now - 2000, "acted_on": True, "improved": True},
+    ]
+
+    def _fake_read(path, limit=None):
+        if path == dashboard.OPPORTUNITY_SELF_FILE:
+            return self_rows
+        if path == dashboard.OPPORTUNITY_OUTCOMES_FILE:
+            return outcome_rows
+        return []
+
+    monkeypatch.setattr(dashboard, "_read_jsonl", _fake_read)
+
+    out = dashboard._get_opportunity_scanner_snapshot(limit=5, max_age_s=300.0)
+
+    assert out["enabled"] is True
+    assert out["adoption_rate"] == 0.5
+    assert out["acted_total"] == 2
+    assert len(out["latest"]) == 2
