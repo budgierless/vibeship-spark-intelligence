@@ -10,14 +10,20 @@ This script:
 
 Run daily via cron/scheduler or manually:
     python scripts/daily_trend_research.py
+
+Live mode (uses X API via bearer token):
+    python scripts/daily_trend_research.py --live
+
+By default, live mode runs only high-priority topics (to reduce rate/latency).
 """
 
 import sys
 import json
 import asyncio
+import time
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -396,39 +402,88 @@ def study_reply_patterns(search_results: List[Dict]) -> int:
 
 
 def run_research_with_mcp():
-    """
-    This function would be called when MCP tools are available.
-    For now, we provide the structure - actual X searches happen via Claude.
+    """Legacy: print structure for manual mode.
+
+    Kept for backwards compatibility.
     """
     print("""
     =====================================================
     DAILY TREND RESEARCH SYSTEM
     =====================================================
 
-    This script is designed to be run in two ways:
+    Modes:
 
-    1. VIA CLAUDE (Recommended):
-       Ask Claude to run daily research with:
-       "Run daily trend research and update Spark"
+    1) LIVE MODE:
+       python scripts/daily_trend_research.py --live
 
-       Claude will:
-       - Search X using MCP tools
-       - Extract insights
-       - Call this script to store them
+       Uses X API (bearer token) if available to fetch recent tweets,
+       then extracts insights + injects into Spark.
 
-    2. MANUAL MODE:
-       Edit the MOCK_RESULTS below with actual search data
-       Then run: python scripts/daily_trend_research.py --manual
+    2) MANUAL MODE:
+       Provide search results data yourself:
+       python scripts/daily_trend_research.py --manual
 
     =====================================================
     """)
 
-    # Structure for manual mode
     return {
         'status': 'ready',
         'topics': list(RESEARCH_TOPICS.keys()),
         'queries': [q for t in RESEARCH_TOPICS.values() for q in t['queries']],
     }
+
+
+def run_live_mode(
+    *,
+    topics: Optional[List[str]] = None,
+    high_only: bool = True,
+    per_query: int = 12,
+) -> Dict[str, Any]:
+    """Run live X searches and process results through Spark pipeline."""
+    from scripts._x_search import search_recent
+
+    selected = topics
+    if not selected:
+        if high_only:
+            selected = [k for k, v in RESEARCH_TOPICS.items() if v.get('priority') == 'high']
+        else:
+            selected = list(RESEARCH_TOPICS.keys())
+
+    search_data: Dict[str, List[Dict]] = {}
+    total_tweets = 0
+
+    for topic in selected:
+        cfg = RESEARCH_TOPICS.get(topic)
+        if not cfg:
+            continue
+        topic_results: List[Dict] = []
+        for q in cfg.get('queries', []):
+            try:
+                rows = search_recent(query=q, max_results=per_query)
+            except Exception as e:
+                print(f"LIVE search failed for '{q}': {e}")
+                rows = []
+            topic_results.extend(rows)
+
+        # Deduplicate by text
+        seen = set()
+        deduped: List[Dict] = []
+        for r in topic_results:
+            t = (r.get('text') or '').strip()
+            key = t[:280]
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(r)
+
+        search_data[topic] = deduped
+        total_tweets += len(deduped)
+        print(f"LIVE: {topic}: {len(deduped)} tweets")
+
+    stats = manual_mode_with_data(search_data)
+    stats['live_topics'] = selected
+    stats['live_tweets_total'] = total_tweets
+    return stats
 
 
 def manual_mode_with_data(search_data: Dict[str, List[Dict]]):
@@ -462,7 +517,11 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Spark Daily Trend Research')
-    parser.add_argument('--manual', action='store_true', help='Run in manual mode')
+    parser.add_argument('--manual', action='store_true', help='Run in manual mode (provide your own search data)')
+    parser.add_argument('--live', action='store_true', help='Run live X searches (requires TWITTER_BEARER_TOKEN)')
+    parser.add_argument('--all-topics', action='store_true', help='In live mode: include medium-priority topics too')
+    parser.add_argument('--topics', nargs='*', default=None, help='In live mode: explicit topic keys to run')
+    parser.add_argument('--per-query', type=int, default=12, help='In live mode: max tweets per query (10-100)')
     parser.add_argument('--show-topics', action='store_true', help='Show research topics')
     args = parser.parse_args()
 
@@ -472,6 +531,16 @@ if __name__ == '__main__':
             print(f"\n{topic} (priority: {config['priority']})")
             for q in config['queries']:
                 print(f"  - {q}")
-    else:
-        result = run_research_with_mcp()
-        print(json.dumps(result, indent=2))
+        raise SystemExit(0)
+
+    if args.live:
+        stats = run_live_mode(
+            topics=args.topics,
+            high_only=not bool(args.all_topics),
+            per_query=int(args.per_query),
+        )
+        print(json.dumps(stats, indent=2))
+        raise SystemExit(0)
+
+    result = run_research_with_mcp()
+    print(json.dumps(result, indent=2))
