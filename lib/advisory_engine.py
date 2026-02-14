@@ -23,6 +23,14 @@ INCLUDE_MIND_IN_MEMORY = os.getenv("SPARK_ADVISORY_INCLUDE_MIND", "0") == "1"
 ENABLE_PREFETCH_QUEUE = os.getenv("SPARK_ADVISORY_PREFETCH_QUEUE", "1") != "0"
 ENABLE_INLINE_PREFETCH_WORKER = os.getenv("SPARK_ADVISORY_PREFETCH_INLINE", "1") != "0"
 PACKET_FALLBACK_EMIT_ENABLED = os.getenv("SPARK_ADVISORY_PACKET_FALLBACK_EMIT", "0") == "1"
+
+# When live advisory is running out of budget, emit a cheap deterministic hint
+# instead of returning no advice (increases real-time advisory delivery).
+LIVE_QUICK_FALLBACK_ENABLED = os.getenv("SPARK_ADVISORY_LIVE_QUICK_FALLBACK", "0") == "1"
+LIVE_QUICK_FALLBACK_MIN_REMAINING_MS = float(
+    os.getenv("SPARK_ADVISORY_LIVE_QUICK_MIN_REMAINING_MS", "900")
+)
+
 FALLBACK_RATE_GUARD_ENABLED = os.getenv("SPARK_ADVISORY_FALLBACK_RATE_GUARD", "1") != "0"
 FALLBACK_RATE_GUARD_MAX_RATIO = float(
     os.getenv("SPARK_ADVISORY_FALLBACK_RATE_MAX_RATIO", "0.55")
@@ -82,6 +90,8 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global ENABLE_PREFETCH_QUEUE
     global ENABLE_INLINE_PREFETCH_WORKER
     global PACKET_FALLBACK_EMIT_ENABLED
+    global LIVE_QUICK_FALLBACK_ENABLED
+    global LIVE_QUICK_FALLBACK_MIN_REMAINING_MS
     global FALLBACK_RATE_GUARD_ENABLED
     global FALLBACK_RATE_GUARD_MAX_RATIO
     global FALLBACK_RATE_GUARD_WINDOW
@@ -127,6 +137,22 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             PACKET_FALLBACK_EMIT_ENABLED,
         )
         applied.append("packet_fallback_emit_enabled")
+
+    if "live_quick_fallback_enabled" in cfg:
+        LIVE_QUICK_FALLBACK_ENABLED = _parse_bool(
+            cfg.get("live_quick_fallback_enabled"),
+            LIVE_QUICK_FALLBACK_ENABLED,
+        )
+        applied.append("live_quick_fallback_enabled")
+
+    if "live_quick_min_remaining_ms" in cfg:
+        try:
+            LIVE_QUICK_FALLBACK_MIN_REMAINING_MS = max(
+                100.0, min(5000.0, float(cfg.get("live_quick_min_remaining_ms")))
+            )
+            applied.append("live_quick_min_remaining_ms")
+        except Exception:
+            warnings.append("invalid_live_quick_min_remaining_ms")
 
     if "fallback_rate_guard_enabled" in cfg:
         FALLBACK_RATE_GUARD_ENABLED = _parse_bool(
@@ -746,14 +772,48 @@ def on_pre_tool(
             packet_id = str(packet.get("packet_id") or "")
             advice_items = _packet_to_advice(packet)
         else:
-            advice_items = advise_on_tool(
-                tool_name,
-                tool_input or {},
-                context=state.user_intent,
-                include_mind=INCLUDE_MIND_IN_MEMORY,
-                trace_id=resolved_trace_id,
-            )
-            route = "live"
+            # If we're low on remaining budget, skip heavy retrieval and emit a
+            # cheap deterministic hint instead. This improves real-time advisory
+            # delivery (better than returning None due to slow paths).
+            elapsed_ms_pre = (time.time() * 1000.0) - start_ms
+            remaining_ms_pre = MAX_ENGINE_MS - elapsed_ms_pre
+            if LIVE_QUICK_FALLBACK_ENABLED and remaining_ms_pre < float(LIVE_QUICK_FALLBACK_MIN_REMAINING_MS):
+                try:
+                    from .advisor import Advice, get_quick_advice
+
+                    quick_text = (get_quick_advice(tool_name) or "").strip()
+                    if not quick_text:
+                        quick_text = _baseline_text(intent_family).strip()
+                    advice_items = [
+                        Advice(
+                            advice_id=f"quick_{tool_name.lower()}_0",
+                            insight_key="quick_fallback",
+                            text=quick_text,
+                            confidence=0.78,
+                            source="quick",
+                            context_match=0.78,
+                            reason=f"quick_fallback remaining_ms={int(remaining_ms_pre)}",
+                        )
+                    ]
+                    route = "live_quick"
+                except Exception:
+                    advice_items = advise_on_tool(
+                        tool_name,
+                        tool_input or {},
+                        context=state.user_intent,
+                        include_mind=INCLUDE_MIND_IN_MEMORY,
+                        trace_id=resolved_trace_id,
+                    )
+                    route = "live"
+            else:
+                advice_items = advise_on_tool(
+                    tool_name,
+                    tool_input or {},
+                    context=state.user_intent,
+                    include_mind=INCLUDE_MIND_IN_MEMORY,
+                    trace_id=resolved_trace_id,
+                )
+                route = "live"
         advice_source_counts = _advice_source_counts(advice_items)
 
         if not advice_items:

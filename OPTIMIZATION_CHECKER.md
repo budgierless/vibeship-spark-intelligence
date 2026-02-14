@@ -410,3 +410,34 @@ No issues; artifacts continue to be generated locally but not committed.
 - Day 3: 
 
 - Mark verified: [ ]
+
+### chg-20260214-190824-advisory-quick-fallback-when-time-bu — Advisory: quick fallback when time budget is low
+
+- Status: **PLANNED**
+- Started: `2026-02-14T19:08:24Z`
+- Commit: ``
+- Baseline snapshot: ``
+- After snapshot: ``
+
+**Hypothesis:**
+When live advisory is slow or budget is tight, a quick deterministic hint increases real-time advisory delivery + usage without adding latency.
+
+**Risk:**
+Low: uses baseline/quick advice only when remaining_ms is low; still gated + duplicate-suppressed; flagged.
+
+**Rollback:**
+git revert <sha>
+
+**Validation Today:**
+Run services; check advisories still appear; ensure no new crashes; check advisory_engine logs for route=live_quick.
+
+**Validation Next Days:**
+Monitor for increased delivered advisories with stable noise burden; ensure no spam via repeat cooldown.
+
+**Verification log:**
+- Day 0: 
+- Day 1: 
+- Day 2: 
+- Day 3: 
+
+- Mark verified: [ ]

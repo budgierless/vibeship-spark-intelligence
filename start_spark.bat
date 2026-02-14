@@ -39,6 +39,10 @@ if "%SPARK_MEMORY_DELTA_MIN_SIM%"=="" set SPARK_MEMORY_DELTA_MIN_SIM=0.86
 REM Phase 3 advisory intelligence flags (overridable via environment).
 if "%SPARK_OUTCOME_PREDICTOR%"=="" set SPARK_OUTCOME_PREDICTOR=1
 
+REM Advisory: cheap fallback hint when time budget is low (improves real-time delivery).
+if "%SPARK_ADVISORY_LIVE_QUICK_FALLBACK%"=="" set SPARK_ADVISORY_LIVE_QUICK_FALLBACK=1
+if "%SPARK_ADVISORY_LIVE_QUICK_MIN_REMAINING_MS%"=="" set SPARK_ADVISORY_LIVE_QUICK_MIN_REMAINING_MS=900
+
 if "%SPARK_NO_MIND%"=="1" goto start_spark
 set MIND_PORT=%SPARK_MIND_PORT%
 if "%MIND_PORT%"=="" set MIND_PORT=8080
