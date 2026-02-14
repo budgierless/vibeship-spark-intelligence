@@ -7,6 +7,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 - `README.md`: project entry point
 - `docs/QUICKSTART.md`: setup and daily operations
+- `docs/OPPORTUNITIES.md`: Opportunity Scanner (self-evolution) methodology + inbox workflow
 - `Intelligence_Flow.md`: runtime flow, data stores, tuneables
 - `Intelligence_Flow_Map.md`: high-level system map
 

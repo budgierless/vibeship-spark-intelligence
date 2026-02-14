@@ -94,6 +94,13 @@ Verify scanner status and recent self-Socratic prompts:
 python -c "from lib.opportunity_scanner import get_scanner_status, get_recent_self_opportunities; import json; print(json.dumps(get_scanner_status(), indent=2)); print(json.dumps(get_recent_self_opportunities(limit=5), indent=2))"
 ```
 
+Inbox workflow (accept/dismiss):
+```bash
+python -m spark.cli opportunities list --limit 20
+python -m spark.cli opportunities accept <id-prefix>
+python -m spark.cli opportunities dismiss <id-prefix>
+```
+
 Enable Minimax-backed scanner synthesis (optional):
 
 ```bash
