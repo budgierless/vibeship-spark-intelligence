@@ -53,6 +53,12 @@ twitter_credentials*
 .learnings/
 *.db
 
+# optcheck local data (keep config tracked)
+.optcheck/
+!.optcheck/config.yml
+!.optcheck/config.yaml
+!.optcheck/config.json
+
 # Moltbook credentials - NEVER commit
 moltbook_credentials.json
 .moltbook/
