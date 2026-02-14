@@ -291,7 +291,7 @@ def _collect_build_queue_items(result: Dict[str, Any]) -> List[Dict[str, Any]]:
             }
             jobs.append(run_payload)
 
-    jobs.sort(key=lambda j: (j["assigned_engine"], -float(j.get("confidence", 0.0)))
+    jobs.sort(key=lambda j: (j["assigned_engine"], -float(j.get("confidence", 0.0))))
     if len(jobs) <= TREND_MAX_QUEUED_ITEMS:
         return jobs
     return jobs[:TREND_MAX_QUEUED_ITEMS]
