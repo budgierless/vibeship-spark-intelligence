@@ -342,18 +342,21 @@ Cognitive learning and promotion:
 
 Advisor retrieval router:
 - ~/.spark/tuneables.json -> retrieval:
-  - level, mode, gate_strategy
-  - semantic_limit, max_queries, agentic_query_limit
-  - agentic_deadline_ms, agentic_rate_limit, agentic_rate_window
-  - fast_path_budget_ms
-  - prefilter_enabled, prefilter_max_insights
-  - lexical_weight, bm25_k1, bm25_b, bm25_mix
-  - min_results_no_escalation, min_top_score_no_escalation
-  - escalate_on_high_risk, escalate_on_trigger
+  - level
+  - overrides:
+    - mode, gate_strategy
+    - semantic_limit, max_queries, agentic_query_limit
+    - agentic_deadline_ms, agentic_rate_limit, agentic_rate_window
+    - fast_path_budget_ms
+    - prefilter_enabled, prefilter_max_insights
+    - lexical_weight, bm25_k1, bm25_b, bm25_mix
+    - min_results_no_escalation, min_top_score_no_escalation
+    - escalate_on_high_risk, escalate_on_trigger
+    - semantic_context_min, semantic_lexical_min, semantic_strong_override
 
 Advisor / skills:
-- advisor MIN_RELIABILITY_FOR_ADVICE=0.5, MIN_VALIDATIONS_FOR_STRONG_ADVICE=2, MAX_ADVICE_ITEMS=8, ADVICE_CACHE_TTL_SECONDS=120
-- advisor Mind controls: MIND_MAX_STALE_SECONDS=0 (disabled by default), MIND_STALE_ALLOW_IF_EMPTY=true, MIND_MIN_SALIENCE=0.5
+- advisor tuneables: `~/.spark/tuneables.json` -> `advisor.*` (reliability floor, max_items, cache_ttl, min_rank_score, etc.)
+- advisor Mind tuneables: `~/.spark/tuneables.json` -> `advisor.mind_*` (staleness + salience controls)
 - skills_router scoring weights (query/name/desc/owns/etc) and limit clamp to 1..10
 - advisor recent-advice lookup is tail-based (bounded by RECENT_ADVICE_MAX_LINES, no full-file scans)
 - advisor cache key now includes `include_mind` to avoid mixed-policy cache reuse.
@@ -364,9 +367,9 @@ Advisory foundation:
   - packet TTL DEFAULT_PACKET_TTL_S=900
   - max indexed packets MAX_INDEX_PACKETS=2000
 - prefetch queue is enabled by default (SPARK_ADVISORY_PREFETCH_QUEUE=1) and fed from UserPromptSubmit.
-- memory fusion can optionally include Mind retrieval (SPARK_ADVISORY_INCLUDE_MIND=1 to enable).
+- memory fusion can optionally include Mind retrieval (tuneable `advisory_engine.include_mind`; env `SPARK_ADVISORY_INCLUDE_MIND` sets the default).
 - actionability enforcement is on by default (SPARK_ADVISORY_REQUIRE_ACTION=1).
-- repeat suppression uses text fingerprint cooldown (SPARK_ADVISORY_TEXT_REPEAT_COOLDOWN_S, default 1800s).
+- repeat suppression uses text fingerprint cooldown (tuneable `advisory_engine.advisory_text_repeat_cooldown_s`; env default is 1800s).
 - delivery stale window defaults to 900s (SPARK_ADVISORY_STALE_S) for `live/fallback/blocked/stale` status.
 Advisory synthesis:
 - SPARK_SYNTH_MODE=auto|ai_only|programmatic (default auto)

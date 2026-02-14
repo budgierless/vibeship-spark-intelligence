@@ -171,6 +171,8 @@ ralph.end_batch()
 
 `diagnose_gaps()` reads health metrics from all Spark Intelligence subsystems:
 
+Update (2026-02-14): Auto-tuner execution is implemented (`lib/auto_tuner.py`). The tuneables gap only applies when `auto_tuner` is missing/disabled, not as a permanent system gap.
+
 ```python
 from lib.x_evolution import get_evolution
 evo = get_evolution()
@@ -180,7 +182,7 @@ gaps = evo.diagnose_gaps()
 #   "total_gaps": 2,
 #   "gaps": [
 #     {"system": "eidos", "severity": "high", "gap": "Distillation rate 2.5%", ...},
-#     {"system": "tuneables", "severity": "high", "gap": "Auto-tuner not active", ...},
+#     {"system": "tuneables", "severity": "medium", "gap": "Auto-tuner disabled", ...},
 #   ],
 #   "system_health": {
 #     "cognitive": {"total_insights": 442, ...},

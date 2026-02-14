@@ -12,6 +12,10 @@ Navigation hub: `docs/GLOSSARY.md`
 
 This controls when advisor stays on fast embeddings retrieval versus escalating to hybrid-agentic retrieval.
 
+Canonical routing tuneables surface:
+- Live: `~/.spark/tuneables.json` -> `retrieval.overrides.*`
+- Benchmark overlays: also use `retrieval.overrides.*` (same schema)
+
 ### Core Strategy
 
 - Fast path first: semantic retrieval on primary query.
@@ -28,25 +32,28 @@ This controls when advisor stays on fast embeddings retrieval versus escalating 
 | Parameter | Default (Level 2) | Description |
 |-----------|-------------------|-------------|
 | `retrieval.level` | `"2"` | Profile baseline (`1` local-free, `2` balanced, `3` quality-max). |
-| `mode` | `auto` | `auto`, `embeddings_only`, or `hybrid_agentic`. |
-| `gate_strategy` | `minimal` | `minimal` uses weak_count/weak_score/high_risk; `extended` also uses complexity+trigger gates. |
-| `min_results_no_escalation` | `4` | If primary result count is below this, escalate. |
-| `min_top_score_no_escalation` | `0.72` | If primary top fusion score is below this, escalate. |
-| `escalate_on_high_risk` | `true` | Escalate when high-risk terms are present. |
-| `escalate_on_trigger` | `false` (L2) | Trigger-based escalation (mostly for extended/high-quality profiles). |
-| `agentic_rate_limit` | `0.20` | Max fraction of recent queries allowed to escalate agentically. |
-| `agentic_rate_window` | `80` | Rolling window size for rate cap. |
-| `agentic_deadline_ms` | `700` | Deadline for agentic facet fanout; stop on timeout. |
-| `fast_path_budget_ms` | `250` | Target budget marker for primary retrieval path telemetry. |
-| `prefilter_enabled` | `true` | Enables metadata/token prefilter before semantic retrieval. |
-| `prefilter_max_insights` | `500` | Max candidate insights after prefilter. |
-| `semantic_limit` | `10` | Number of semantic candidates returned from each retrieval call. |
-| `max_queries` | `3` | Max total retrieval queries (primary + facets). |
-| `agentic_query_limit` | `3` | Max extracted facet queries before clipping by `max_queries`. |
-| `lexical_weight` | `0.30` | Weight applied to lexical blend during rerank. |
-| `bm25_k1` | `1.2` | BM25 TF saturation parameter. |
-| `bm25_b` | `0.75` | BM25 length normalization parameter. |
-| `bm25_mix` | `0.75` | Blend ratio: BM25 vs overlap lexical signal. |
+| `retrieval.overrides.mode` | `auto` | `auto`, `embeddings_only`, or `hybrid_agentic`. |
+| `retrieval.overrides.gate_strategy` | `minimal` | `minimal` uses weak_count/weak_score/high_risk; `extended` also uses complexity+trigger gates. |
+| `retrieval.overrides.min_results_no_escalation` | `4` | If primary result count is below this, escalate. |
+| `retrieval.overrides.min_top_score_no_escalation` | `0.72` | If primary top fusion score is below this, escalate. |
+| `retrieval.overrides.escalate_on_high_risk` | `true` | Escalate when high-risk terms are present. |
+| `retrieval.overrides.escalate_on_trigger` | `false` (L2) | Trigger-based escalation (mostly for extended/high-quality profiles). |
+| `retrieval.overrides.agentic_rate_limit` | `0.20` | Max fraction of recent queries allowed to escalate agentically. |
+| `retrieval.overrides.agentic_rate_window` | `80` | Rolling window size for rate cap. |
+| `retrieval.overrides.agentic_deadline_ms` | `700` | Deadline for agentic facet fanout; stop on timeout. |
+| `retrieval.overrides.fast_path_budget_ms` | `250` | Target budget marker for primary retrieval path telemetry. |
+| `retrieval.overrides.prefilter_enabled` | `true` | Enables metadata/token prefilter before semantic retrieval. |
+| `retrieval.overrides.prefilter_max_insights` | `500` | Max candidate insights after prefilter. |
+| `retrieval.overrides.semantic_limit` | `10` | Number of semantic candidates returned from each retrieval call. |
+| `retrieval.overrides.max_queries` | `3` | Max total retrieval queries (primary + facets). |
+| `retrieval.overrides.agentic_query_limit` | `3` | Max extracted facet queries before clipping by `max_queries`. |
+| `retrieval.overrides.lexical_weight` | `0.28` | Weight applied to lexical blend during rerank. |
+| `retrieval.overrides.bm25_k1` | `1.2` | BM25 TF saturation parameter. |
+| `retrieval.overrides.bm25_b` | `0.75` | BM25 length normalization parameter. |
+| `retrieval.overrides.bm25_mix` | `0.75` | Blend ratio: BM25 vs overlap lexical signal. |
+| `retrieval.overrides.semantic_context_min` | `0.18` | Minimum semantic similarity to treat a candidate as a context match. |
+| `retrieval.overrides.semantic_lexical_min` | `0.05` | Minimum lexical overlap to keep a candidate when semantic similarity is weak. |
+| `retrieval.overrides.semantic_strong_override` | `0.92` | If semantic similarity is this strong, keep the candidate even if lexical overlap is weak. |
 
 ---
 ## 1. Memory Gate (Pattern → EIDOS)
@@ -1159,7 +1166,7 @@ This is the active hot-path advisory stack used by hooks:
 | `SPARK_ADVISORY_FALLBACK_RATE_GUARD` | `1` | Enables rate guard for packet no-emit fallback emissions. |
 | `SPARK_ADVISORY_FALLBACK_RATE_MAX_RATIO` | `0.55` | Maximum allowed fallback share in recent delivered advisories. |
 | `SPARK_ADVISORY_FALLBACK_RATE_WINDOW` | `80` | Rolling advisory event window used by fallback rate guard. |
-| `SPARK_ADVISORY_INCLUDE_MIND` | `0` | Includes Mind retrieval in memory fusion bundle when set to `1`. |
+| `SPARK_ADVISORY_INCLUDE_MIND` | `0` | Default for Mind retrieval inclusion. Tuneable `advisory_engine.include_mind` (if set) overrides this. |
 | `SPARK_ADVISORY_EMIT` | `1` | Enables writing advisory text to stdout hook output. |
 | `SPARK_ADVISORY_MAX_CHARS` | `500` | Caps emitted advisory length. |
 | `SPARK_ADVISORY_FORMAT` | `inline` | Advisory formatting style (`inline` or `block`). |
@@ -1199,28 +1206,96 @@ This is the active hot-path advisory stack used by hooks:
 
 ```json
 {
-  "advisor": {
-    "min_reliability": 0.5,
-    "min_validations_strong": 2,
-    "max_items": 3,
-    "max_advice_items": 3,
-    "cache_ttl": 120,
-    "min_rank_score": 0.55,
-    "mind_max_stale_s": 172800,
-    "mind_stale_allow_if_empty": true,
-    "mind_min_salience": 0.55
+  "preset": "custom",
+  "values": {
+    "min_occurrences": 1,
+    "min_occurrences_critical": 1,
+    "confidence_threshold": 0.6,
+    "gate_threshold": 0.45,
+    "max_retries_per_error": 3,
+    "max_file_touches": 5,
+    "no_evidence_steps": 6,
+    "min_confidence_delta": 0.08,
+    "weight_impact": 0.25,
+    "weight_novelty": 0.25,
+    "weight_surprise": 0.35,
+    "weight_irreversible": 0.45,
+    "max_steps": 40,
+    "episode_timeout_minutes": 20,
+    "advice_cache_ttl": 180,
+    "queue_batch_size": 100
+  },
+  "semantic": {
+    "enabled": true,
+    "min_similarity": 0.58,
+    "min_fusion_score": 0.5,
+    "weight_recency": 0.1,
+    "weight_outcome": 0.35,
+    "mmr_lambda": 0.5,
+    "dedupe_similarity": 0.92,
+    "index_on_write": true,
+    "index_on_read": true,
+    "index_backfill_limit": 500,
+    "index_cache_ttl_seconds": 120,
+    "exclude_categories": [],
+    "category_caps": {
+      "cognitive": 3,
+      "trigger": 2,
+      "default": 2,
+      "user_understanding": 2,
+      "context": 2,
+      "self_awareness": 2,
+      "meta_learning": 1,
+      "wisdom": 2,
+      "reasoning": 2
+    },
+    "category_exclude": [],
+    "log_retrievals": true
+  },
+  "triggers": {
+    "enabled": true,
+    "rules_file": "~/.spark/trigger_rules.yaml"
+  },
+  "promotion": {
+    "adapter_budgets": {
+      "CLAUDE.md": {
+        "max_items": 40
+      },
+      "AGENTS.md": {
+        "max_items": 30
+      },
+      "TOOLS.md": {
+        "max_items": 25
+      },
+      "SOUL.md": {
+        "max_items": 25
+      },
+      ".cursorrules": {
+        "max_items": 40
+      },
+      ".windsurfrules": {
+        "max_items": 40
+      }
+    },
+    "confidence_floor": 0.9,
+    "min_age_hours": 2.0,
+    "auto_interval_s": 3600,
+    "threshold": 0.5
+  },
+  "synthesizer": {
+    "mode": "auto",
+    "ai_timeout_s": 12,
+    "cache_ttl_s": 120,
+    "max_cache_entries": 50,
+    "preferred_provider": "auto"
   },
   "advisory_engine": {
     "enabled": true,
     "max_ms": 3500,
-    "include_mind": false,
+    "include_mind": true,
     "prefetch_queue_enabled": true,
     "prefetch_inline_enabled": true,
     "prefetch_inline_max_jobs": 1,
-    "packet_fallback_emit_enabled": false,
-    "fallback_rate_guard_enabled": true,
-    "fallback_rate_max_ratio": 0.55,
-    "fallback_rate_window": 80,
     "delivery_stale_s": 900,
     "advisory_text_repeat_cooldown_s": 9000,
     "actionability_enforce": true
@@ -1234,15 +1309,65 @@ This is the active hot-path advisory stack used by hooks:
     "whisper_threshold": 0.35
   },
   "advisory_packet_store": {
-    "packet_ttl_s": 900,
+    "packet_ttl_s": 600,
     "max_index_packets": 2000,
-    "relaxed_effectiveness_weight": 2.0
+    "relaxed_effectiveness_weight": 2.0,
+    "relaxed_low_effectiveness_threshold": 0.3,
+    "relaxed_low_effectiveness_penalty": 0.5
   },
   "advisory_prefetch": {
     "worker_enabled": true,
     "max_jobs_per_run": 2,
     "max_tools_per_job": 3,
     "min_probability": 0.25
+  },
+  "advisor": {
+    "min_reliability": 0.5,
+    "min_validations_strong": 2,
+    "max_items": 3,
+    "cache_ttl": 180,
+    "min_rank_score": 0.55,
+    "max_advice_items": 3,
+    "mind_max_stale_s": 172800,
+    "mind_stale_allow_if_empty": true,
+    "mind_min_salience": 0.55
+  },
+  "retrieval": {
+    "level": "2",
+    "overrides": {
+      "mode": "auto",
+      "gate_strategy": "minimal",
+      "semantic_limit": 10,
+      "max_queries": 3,
+      "agentic_query_limit": 3,
+      "agentic_deadline_ms": 700,
+      "agentic_rate_limit": 0.2,
+      "agentic_rate_window": 80,
+      "fast_path_budget_ms": 250,
+      "prefilter_enabled": true,
+      "prefilter_max_insights": 500,
+      "lexical_weight": 0.28,
+      "bm25_k1": 1.2,
+      "bm25_b": 0.75,
+      "bm25_mix": 0.75,
+      "complexity_threshold": 2,
+      "min_results_no_escalation": 4,
+      "min_top_score_no_escalation": 0.72,
+      "escalate_on_high_risk": true,
+      "escalate_on_trigger": false,
+      "semantic_context_min": 0.18,
+      "semantic_lexical_min": 0.05,
+      "semantic_strong_override": 0.92
+    }
+  },
+  "chip_merge": {
+    "duplicate_churn_ratio": 0.8,
+    "duplicate_churn_min_processed": 10,
+    "duplicate_churn_cooldown_s": 1800,
+    "min_cognitive_value": 0.25,
+    "min_actionability": 0.15,
+    "min_transferability": 0.15,
+    "min_statement_len": 20
   },
   "auto_tuner": {
     "enabled": true,
@@ -1251,40 +1376,23 @@ This is the active hot-path advisory stack used by hooks:
     "run_interval_s": 86400,
     "max_change_per_run": 0.15
   },
-  "sync": {
-    "mode": "core",
-    "adapters_enabled": ["openclaw", "exports"],
-    "adapters_disabled": ["claude_code", "cursor", "windsurf", "clawdbot"]
+  "meta_ralph": {
+    "quality_threshold": 4,
+    "needs_work_threshold": 2,
+    "needs_work_close_delta": 0.5,
+    "min_outcome_samples": 5,
+    "min_tuneable_samples": 50,
+    "min_needs_work_samples": 5,
+    "min_source_samples": 15,
+    "attribution_window_s": 1200,
+    "strict_attribution_require_trace": true
   },
-  "chip_merge": {
-    "duplicate_churn_ratio": 0.8,
-    "duplicate_churn_min_processed": 10,
-    "duplicate_churn_cooldown_s": 1800,
-    "min_cognitive_value": 0.35,
-    "min_actionability": 0.25,
-    "min_transferability": 0.20,
-    "min_statement_len": 28
-  },
-  "request_tracker": {
-    "max_pending": 50,
-    "max_completed": 200,
-    "max_age_seconds": 3600
-  },
-  "memory_capture": {
-    "auto_save_threshold": 0.82,
-    "suggest_threshold": 0.55,
-    "max_capture_chars": 2000
-  },
-  "queue": {
-    "max_events": 10000,
-    "tail_chunk_bytes": 65536
-  },
-  "synthesizer": {
-    "mode": "auto",
-    "preferred_provider": "ollama",
-    "ai_timeout_s": 3.0,
-    "cache_ttl_s": 120,
-    "max_cache_entries": 50
+  "eidos": {
+    "max_steps": 40,
+    "max_time_seconds": 1200,
+    "max_retries_per_error": 3,
+    "max_file_touches": 5,
+    "no_evidence_limit": 6
   },
   "scheduler": {
     "enabled": true,
@@ -1292,13 +1400,13 @@ This is the active hot-path advisory stack used by hooks:
     "engagement_snapshot_interval": 1800,
     "daily_research_interval": 86400,
     "niche_scan_interval": 21600,
-    "advisory_review_interval": 43200,
-    "advisory_review_window_hours": 12,
     "mention_poll_enabled": true,
     "engagement_snapshot_enabled": true,
     "daily_research_enabled": true,
     "niche_scan_enabled": true,
-    "advisory_review_enabled": true
+    "advisory_review_interval": 43200,
+    "advisory_review_enabled": true,
+    "advisory_review_window_hours": 12
   }
 }
 ```
@@ -1330,22 +1438,25 @@ Components fall back to hard-coded defaults when a key is absent.
 
 | JSON Section | Component | Keys |
 |-------------|-----------|------|
+| `preset` | Tuneables preset selection | Preset id string (e.g., `custom`) |
+| `updated_at` | Tuneables metadata | ISO timestamp string (written by some automated updaters) |
 | `values` | Pattern distiller, memory gate, EIDOS (fallback) | `min_occurrences`, `confidence_threshold`, `gate_threshold`, `min_confidence_delta`, `max_steps`, `max_retries_per_error`, `max_file_touches`, `no_evidence_steps`, `queue_batch_size`, `advice_cache_ttl` |
 | `semantic` | Semantic retriever | `enabled`, `min_similarity`, `min_fusion_score`, `weight_recency`, `weight_outcome`, `mmr_lambda`, `category_caps`, etc. |
 | `triggers` | Trigger rules | `enabled`, `rules_file` |
 | `promotion` | Promoter + auto-promotion interval | `adapter_budgets`, `confidence_floor`, `min_age_hours`, `auto_interval_s` |
 | `synthesizer` | Advisory synthesizer | `mode`, `preferred_provider`, `ai_timeout_s`, `cache_ttl_s`, `max_cache_entries` |
 | `advisor` | Advisor | `min_reliability`, `min_validations_strong`, `max_items`, `max_advice_items` (compat), `cache_ttl`, `min_rank_score`, `mind_max_stale_s`, `mind_stale_allow_if_empty`, `mind_min_salience` |
+| `retrieval` | Advisor retrieval router | `level`, `overrides.*` (mode/gates/budgets, lexical blend, and routing thresholds like `semantic_context_min`) |
 | `advisory_engine` | Predictive advisory orchestration | `enabled`, `max_ms`, `include_mind`, `prefetch_queue_enabled`, `prefetch_inline_enabled`, `prefetch_inline_max_jobs`, `packet_fallback_emit_enabled`, `fallback_rate_guard_enabled`, `fallback_rate_max_ratio`, `fallback_rate_window`, `delivery_stale_s`, `advisory_text_repeat_cooldown_s`, `actionability_enforce` |
 | `advisory_gate` | Advisory emission policy | `max_emit_per_call`, `tool_cooldown_s`, `advice_repeat_cooldown_s`, `warning_threshold`, `note_threshold`, `whisper_threshold` |
 | `advisory_packet_store` | Packet lifecycle + relaxed lookup weighting | `packet_ttl_s`, `max_index_packets`, `relaxed_effectiveness_weight`, `relaxed_low_effectiveness_threshold`, `relaxed_low_effectiveness_penalty` |
 | `advisory_prefetch` | Prefetch worker planning limits | `worker_enabled`, `max_jobs_per_run`, `max_tools_per_job`, `min_probability` |
-| `sync` | Context sync output targets | `mode`, `adapters_enabled`, `adapters_disabled` |
+| `sync` | Context sync output targets (optional) | `mode`, `adapters_enabled`, `adapters_disabled` |
 | `chip_merge` | Chip merge duplicate churn + learning distillation quality gates | `duplicate_churn_ratio`, `duplicate_churn_min_processed`, `duplicate_churn_cooldown_s`, `min_cognitive_value`, `min_actionability`, `min_transferability`, `min_statement_len` |
 | `auto_tuner` | Feedback-driven tune recommendations and bounded apply | `enabled`, `mode`, `max_changes_per_cycle`, `run_interval_s`, `max_change_per_run`, `source_boosts` |
-| `request_tracker` | EIDOS request envelope retention + timeout policy | `max_pending`, `max_completed`, `max_age_seconds` |
-| `memory_capture` | Conversational memory auto-save/suggestion policy | `auto_save_threshold`, `suggest_threshold`, `max_capture_chars` |
-| `queue` | Queue growth + read safety limits | `max_events`, `tail_chunk_bytes` |
+| `request_tracker` | EIDOS request envelope retention + timeout policy (optional) | `max_pending`, `max_completed`, `max_age_seconds` |
+| `memory_capture` | Conversational memory auto-save/suggestion policy (optional) | `auto_save_threshold`, `suggest_threshold`, `max_capture_chars` |
+| `queue` | Queue growth + read safety limits (optional) | `max_events`, `tail_chunk_bytes` |
 | `meta_ralph` | Meta-Ralph quality gate | `quality_threshold`, `needs_work_threshold`, `needs_work_close_delta`, `min_outcome_samples`, `min_tuneable_samples` |
 | `eidos` | EIDOS Budget defaults | `max_steps`, `max_time_seconds`, `max_retries_per_error`, `max_file_touches`, `no_evidence_limit` |
 | `scheduler` | Spark scheduler automation | `enabled`, `mention_poll_interval`, `engagement_snapshot_interval`, `daily_research_interval`, `niche_scan_interval`, `advisory_review_interval`, `advisory_review_window_hours`, `*_enabled` task flags |

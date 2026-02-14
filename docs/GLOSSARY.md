@@ -1,6 +1,6 @@
 # Glossary and Navigation Hub
 
-Updated: 2026-02-06
+Updated: 2026-02-14
 
 This is the central documentation hub.
 Use this file to find terms, systems, and the correct source-of-truth doc.
@@ -43,6 +43,7 @@ Use this file to find terms, systems, and the correct source-of-truth doc.
 - Promotion: Durable publication of proven learnings into persistent context files. Docs: `Intelligence_Flow.md`, `docs/QUICKSTART.md`.
 - Queue: Event ingest buffer with overflow handling and logical consume head. Docs: `Intelligence_Flow.md`.
 - Semantic retrieval: Meaning-based retrieval and ranking with trigger and outcome-aware fusion. Docs: `SEMANTIC_ADVISOR_DESIGN.md`.
+- Shadow run: A non-blocking benchmark run used for telemetry and drift detection. Shadow results should not gate promotions or change live tuneables unless explicitly promoted. Docs: `docs/ADVISORY_REALISM_PLAYBOOK.md`, `docs/reports/2026-02-12_advisory_realism_contract_decision.md`.
 - SPARK_CONTEXT: Runtime context artifact produced from selected learnings. Docs: `Intelligence_Flow.md`.
 - Trace ID: Cross-stage linking key for ingest, steps, outcomes, and dashboards. Docs: `Intelligence_Flow.md`.
 - Tuneables: Configurable thresholds and weights across the runtime. Docs: `TUNEABLES.md`.

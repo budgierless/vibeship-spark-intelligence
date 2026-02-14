@@ -4,6 +4,8 @@
 **System**: Spark Intelligence X Social Evolution Engine
 **Previous**: [v1 Report](EVOLUTION_FILTER_REPORT_2026-02-07.md)
 
+> Update (2026-02-14): Auto-tuner execution is implemented in `lib/auto_tuner.py` and can run from the bridge cycle when enabled. The auto-tuner notes below reflect what was true at the time of this report.
+
 ---
 
 ## Executive Summary
@@ -18,7 +20,7 @@ This report documents the results of a comprehensive fine-tuning session that ad
 | X-domain cognitive insights | 0 | 3 | New capability |
 | System gaps (high severity) | 2 | 1 | -50% |
 | Distillation types | 2 (heuristic only) | 3 (+playbook) | New type unlocked |
-| Auto-tuner status | Not implemented | Configured + calibrated | Gap resolved |
+| Auto-tuner status | Not implemented | Implemented + calibrated | Running (suggest mode) |
 
 ---
 
@@ -320,8 +322,7 @@ Despite fixing 3 root causes, the distillation rate is 4.8% not 40% because:
 - Escalated episodes with 0 step rows (39 episodes)
   - Requires saving steps to DB in pre-action (not just post-action)
 - Auto-tuner execution engine
-  - Section configured but no code runs it yet
-  - Needs `lib/auto_tuner.py` to read effectiveness data and apply changes
+  - Update: implemented in `lib/auto_tuner.py` (added after this report) and can apply changes when enabled
 - Advisor action tracking for X evolution
   - Connected but no X-specific actions tracked yet
 

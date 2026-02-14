@@ -340,10 +340,16 @@ class ChipRuntime:
 
                 insights.append(insight)
                 self._store_insight(insight)
-                log.info(
-                    f"Captured insight from {match.chip.id}/{match.observer.name if match.observer else 'chip'}: "
-                    f"{insight.content[:100]}"
+                msg = (
+                    f"Captured insight from {match.chip.id}/{match.observer.name if match.observer else 'chip'} "
+                    f"tier={score.promotion_tier}: {insight.content[:100]}"
                 )
+                # Avoid flooding INFO logs with low-tier (session) chip telemetry while still
+                # preserving a debug trail for diagnosing chips/observers.
+                if score.promotion_tier in {"working", "long_term"}:
+                    log.info(msg)
+                else:
+                    log.debug(msg)
         return insights
 
     def _passes_runtime_gate(self, match: TriggerMatch, insight: ChipInsight, score: Any) -> bool:

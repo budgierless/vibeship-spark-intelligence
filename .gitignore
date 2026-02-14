@@ -77,6 +77,7 @@ tmp/
 docs/reports/_runs/
 dashboard_out.txt
 dashboard_err.txt
+reports/tune_replay_*.md
 
 # Local npm scratch files (not tracked in repo)
 package.json

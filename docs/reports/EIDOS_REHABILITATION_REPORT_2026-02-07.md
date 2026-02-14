@@ -4,6 +4,8 @@
 **System**: Spark Intelligence - EIDOS Episodic Learning Engine
 **Status**: 8 fixes applied, system operational, clean slate for learning
 
+> Update (2026-02-14): Auto-tuner execution is now implemented in `lib/auto_tuner.py` and can run from the bridge cycle when enabled. The auto-tuner note in "Not Yet Addressed" below is historical.
+
 ---
 
 ## Executive Summary
@@ -174,7 +176,7 @@ Distillation: "Playbook for 'Fix the authentication timeout': 1. Inspect auth.py
 - **Phase advancement**: Episodes stay in `explore` phase forever. The guardrails block Edit/Bash but the blocks are advisory. Phase transitions need a trigger mechanism.
 
 ### Not Yet Addressed
-- **Auto-tuner execution engine**: `auto_tuner` section exists in tuneables.json but no code runs it. Needs `lib/auto_tuner.py`.
+- **Auto-tuner execution engine**: Implemented in `lib/auto_tuner.py` (added after this report) and runs from the bridge cycle when enabled via `auto_tuner.enabled=true`.
 - **Negative constraints** (LLM 3): ANTI_PATTERN distillation type exists but is never generated because it requires failure patterns with specific error context.
 - **Decay/eviction** (LLM 3): Old distillations don't lose confidence over time. The `revalidate_by` field exists (7-day window) but no code checks it.
 - **Retrieval trigger scoping**: The "timezone bug" distillation was correct advice but was retrieved for every Read operation. Trigger matching needs to be more specific.

@@ -84,6 +84,7 @@ python benchmarks/advisory_realism_bench.py \
 Primary + shadow cadence:
 - Primary contract run: `benchmarks/data/advisory_realism_eval_v2.json` (blocking)
 - Shadow run: `benchmarks/data/advisory_realism_eval_v1.json` (non-blocking)
+  - Shadow = telemetry-only drift detector; it should not gate promotions or change live tuneables unless explicitly promoted.
 - Contract reference: `benchmarks/data/advisory_realism_operating_contract_v1.json`
 - Contract runner: `scripts/run_advisory_realism_contract.py`
 

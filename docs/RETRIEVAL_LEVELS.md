@@ -25,7 +25,7 @@ Controls:
 - Env:
   - `SPARK_RETRIEVAL_LEVEL=1|2|3`
   - `SPARK_RETRIEVAL_MODE=auto|embeddings_only|hybrid_agentic`
-- Tuneables: `~/.spark/tuneables.json` -> `retrieval` section.
+- Tuneables: `~/.spark/tuneables.json` -> `retrieval.level` + `retrieval.overrides.*` (canonical).
 
 ## Level 1: Local-Free (No Spend)
 
@@ -79,6 +79,10 @@ Suggested config:
       "agentic_rate_limit": 0.20,
       "fast_path_budget_ms": 250,
       "prefilter_max_insights": 500,
+      "lexical_weight": 0.28,
+      "semantic_context_min": 0.18,
+      "semantic_lexical_min": 0.05,
+      "semantic_strong_override": 0.92,
       "bm25_k1": 1.2,
       "bm25_b": 0.75,
       "bm25_mix": 0.75,
@@ -110,6 +114,10 @@ Suggested config:
       "agentic_query_limit": 4,
       "agentic_deadline_ms": 1400,
       "agentic_rate_limit": 1.0,
+      "lexical_weight": 0.28,
+      "semantic_context_min": 0.18,
+      "semantic_lexical_min": 0.05,
+      "semantic_strong_override": 0.92,
       "complexity_threshold": 1
     }
   }
