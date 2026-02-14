@@ -1,0 +1,44 @@
+version: 1
+commands:
+  test: ''
+  build: ''
+  lint: ''
+timings:
+- name: tests
+  cmd: ''
+  runs: 1
+  timeout_s: 900
+size_paths:
+- .
+http_probes: []
+review:
+  recommended: true
+  require_attestation: true
+  enforce_recommended_modes: true
+  allowed_modes:
+    codex:
+    - xhigh
+    - high
+    claude:
+    - plan
+  recommended_tools:
+    codex:
+      reasoning_mode: xhigh
+    claude:
+      reasoning_mode: plan
+verification:
+  min_monitor_days: 3
+  require_clean_git: false
+project:
+  goals:
+  - "Carmack-style optimization: lighter runtime + smarter learning quality"
+  intents:
+  - latency
+  - throughput
+  - memory
+  - disk
+  - reliability
+  - cost
+  languages: []
+  python_ignore_deps:
+  - pyyaml
