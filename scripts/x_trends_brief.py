@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -54,6 +55,12 @@ def _read_jsonl(path: Path):
 
 
 def main() -> None:
+    # Windows consoles often default to cp1252; ensure we can print emojis/unicode safely.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=4.0, help="Lookback window in hours")
     ap.add_argument("--save", default=None, help="Optional directory to save a markdown report")
