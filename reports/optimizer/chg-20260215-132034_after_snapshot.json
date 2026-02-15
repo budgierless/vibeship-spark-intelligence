@@ -1,0 +1,64 @@
+{
+  "schema": "vibeship_optimizer.snapshot.v1",
+  "generated_at": "2026-02-15T13:23:31Z",
+  "label": "after_chg-20260215-132034",
+  "system": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python": "3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]",
+    "executable": "C:\\Python313\\python.exe",
+    "cwd": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence"
+  },
+  "git": {
+    "is_git": true,
+    "git_root": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence",
+    "branch": "main",
+    "commit": "79c9895aed798efe034b39ff8f1679ed19ec10ce",
+    "describe": "79c9895-dirty",
+    "dirty": true,
+    "dirty_count": 9,
+    "diff_stat": "OPTIMIZATION_CHECKER.md |  2 +-\n VIBESHIP_OPTIMIZER.md   | 32 +++++++++++++++++++++-\n vibeship_optimizer.json | 71 -------------------------------------------------\n 3 files changed, 32 insertions(+), 73 deletions(-)"
+  },
+  "sizes": {
+    "lib": {
+      "path": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\lib",
+      "bytes": 5830008
+    },
+    "scripts": {
+      "path": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\scripts",
+      "bytes": 863643
+    },
+    "docs": {
+      "path": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\docs",
+      "bytes": 1362394
+    }
+  },
+  "timings": [
+    {
+      "name": "pipeline_health",
+      "cmd": "python -m pytest -q tests/test_pipeline_health.py",
+      "runs": 1,
+      "timeout_s": 900,
+      "last_rc": 0,
+      "last_err": "",
+      "mean_s": 1.3633,
+      "p95_s": 1.3633,
+      "all_s": [
+        1.3633
+      ]
+    },
+    {
+      "name": "advisory_delta",
+      "cmd": "python scripts/advisory_controlled_delta.py --rounds 40 --label optimizer --force-live",
+      "runs": 1,
+      "timeout_s": 1200,
+      "last_rc": 0,
+      "last_err": "",
+      "mean_s": 24.6407,
+      "p95_s": 24.6407,
+      "all_s": [
+        24.6407
+      ]
+    }
+  ],
+  "http": []
+}

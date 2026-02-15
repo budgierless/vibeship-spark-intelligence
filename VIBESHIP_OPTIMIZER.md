@@ -62,7 +62,7 @@ python -m vibeship_optimizer change verify --change-id <chg-id> --apply --summar
 
 ## Canonical Config
 
-- Config file (tracked): `vibeship_optimizer.json`
+- Config file (tracked): `vibeship_optimizer.yml`
 - Output reports (tracked): `reports/optimizer/`
 
 ---
@@ -71,3 +71,37 @@ python -m vibeship_optimizer change verify --change-id <chg-id> --apply --summar
 
 <!-- Append change records here via vibeship-optimizer. -->
 
+### chg-20260215-132034-advisory-speed-force-programmatic-sy — Advisory speed: force programmatic synth + packet index cache
+
+- Status: **SHIPPED**
+- Started: `2026-02-15T13:20:34Z`
+- Commit: `79c9895`
+- Baseline snapshot: `reports/optimizer/chg-20260215-132034_before_snapshot.json`
+- After snapshot: `reports/optimizer/chg-20260215-132034_after_snapshot.json`
+- Snapshot compare: `reports/optimizer/chg-20260215-132034_compare.md`
+- Advisory KPI (before): `reports/optimizer/chg-20260215-132034_advisory_delta_before.json`
+- Advisory KPI (after): `reports/optimizer/chg-20260215-132034_advisory_delta_after.json` (run with `SPARK_ADVISORY_FORCE_PROGRAMMATIC_SYNTH=1`)
+
+**Hypothesis:**
+- Reduce advisory hot-path time by removing AI synthesis from the critical path (programmatic-only option) and making packet lookup faster (index cache).
+
+**Risk:**
+- Advisory text quality may regress in cases where AI synthesis helped. Keep `force_programmatic_synth` opt-in.
+
+**Rollback:**
+git revert <sha>
+
+**Validation Today:**
+- `scripts/advisory_controlled_delta.py` run saved (before/after JSON above).
+- `vibeship-optimizer compare` saved (snapshot compare above).
+
+**Validation Next Days:**
+- Monitor advisory usefulness vs noise, and watch for any increased `no_emit` share.
+
+**Verification log:**
+- Day 0: 
+- Day 1: 
+- Day 2: 
+- Day 3: 
+
+- Mark verified: [ ]

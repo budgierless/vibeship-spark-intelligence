@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-02-15T13:25:22.307646+00:00",
+  "start_ts": 1771161870.561258,
+  "rounds": 80,
+  "emitted_returns": 13,
+  "engine": {
+    "rows": 160,
+    "trace_rows": 80,
+    "trace_coverage_pct": 50.0,
+    "events": {
+      "user_prompt_prefetch": 80,
+      "emitted": 13,
+      "no_emit": 67
+    },
+    "routes": {
+      "live": 80
+    },
+    "fallback_share_pct": 0.0
+  },
+  "feedback_requests": {
+    "rows": 4,
+    "trace_rows": 4,
+    "trace_coverage_pct": 100.0,
+    "item_total": 4,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 2
+      },
+      {
+        "text": "Constraint: in **exactly one state** at all times",
+        "count": 1
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 50.0,
+    "unique_ratio_pct": 75.0
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 3,
+      "min_rank_score": 0.45
+    }
+  },
+  "force_live": true,
+  "label": "chg-20260215-132034_before",
+  "trace_prefix": "delta-chg-20260215-132034_before-20260215_132430",
+  "session_prefix": "delta-chg-20260215-132034_before"
+}

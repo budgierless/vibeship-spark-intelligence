@@ -1,0 +1,75 @@
+{
+  "schema": "vibeship_optimizer.compare.v1",
+  "before": {
+    "label": "before_chg-20260215-132034",
+    "generated_at": "2026-02-15T13:22:34Z",
+    "git": {
+      "is_git": true,
+      "git_root": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\tmp\\opt_base",
+      "branch": "HEAD",
+      "commit": "5fc9387763d6d3fe4a7975bad0222a3e6c0a1a74",
+      "describe": "5fc9387",
+      "dirty": true,
+      "dirty_count": 1,
+      "diff_stat": ""
+    }
+  },
+  "after": {
+    "label": "after_chg-20260215-132034",
+    "generated_at": "2026-02-15T13:23:31Z",
+    "git": {
+      "is_git": true,
+      "git_root": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence",
+      "branch": "main",
+      "commit": "79c9895aed798efe034b39ff8f1679ed19ec10ce",
+      "describe": "79c9895-dirty",
+      "dirty": true,
+      "dirty_count": 9,
+      "diff_stat": "OPTIMIZATION_CHECKER.md |  2 +-\n VIBESHIP_OPTIMIZER.md   | 32 +++++++++++++++++++++-\n vibeship_optimizer.json | 71 -------------------------------------------------\n 3 files changed, 32 insertions(+), 73 deletions(-)"
+    }
+  },
+  "deltas": {
+    "sizes": {
+      "docs": {
+        "before_bytes": 1299401,
+        "after_bytes": 1362394,
+        "delta_bytes": 62993
+      },
+      "lib": {
+        "before_bytes": 2653988,
+        "after_bytes": 5830008,
+        "delta_bytes": 3176020
+      },
+      "scripts": {
+        "before_bytes": 473326,
+        "after_bytes": 863643,
+        "delta_bytes": 390317
+      }
+    },
+    "timings": [
+      {
+        "name": "advisory_delta",
+        "before_mean_s": 29.1974,
+        "after_mean_s": 24.6407,
+        "delta_mean_s": -4.556699999999999,
+        "before_p95_s": 29.1974,
+        "after_p95_s": 24.6407,
+        "delta_p95_s": -4.556699999999999,
+        "before_last_rc": 0,
+        "after_last_rc": 0
+      },
+      {
+        "name": "pipeline_health",
+        "before_mean_s": 1.9468,
+        "after_mean_s": 1.3633,
+        "delta_mean_s": -0.5835000000000001,
+        "before_p95_s": 1.9468,
+        "after_p95_s": 1.3633,
+        "delta_p95_s": -0.5835000000000001,
+        "before_last_rc": 0,
+        "after_last_rc": 0
+      }
+    ],
+    "http": []
+  }
+}

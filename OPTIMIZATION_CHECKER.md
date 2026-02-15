@@ -4,7 +4,7 @@ This file is the **post-optimization validation playbook**.
 
 This repo also uses `vibeship-optimizer` as the standard optimization change tracker:
 - Durable optimization logbook: `VIBESHIP_OPTIMIZER.md`
-- Config (tracked): `vibeship_optimizer.json`
+- Config (tracked): `vibeship_optimizer.yml`
 - Reports (tracked): `reports/optimizer/`
 
 ---
