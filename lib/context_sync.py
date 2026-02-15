@@ -74,7 +74,8 @@ def _load_sync_adapter_policy() -> Dict[str, Any]:
 
     try:
         if TUNEABLES_FILE.exists():
-            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             raw = data.get("sync") or {}
             if isinstance(raw, dict):
                 cfg = raw

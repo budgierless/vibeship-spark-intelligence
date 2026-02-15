@@ -159,7 +159,8 @@ def _load_promotion_config() -> Dict[str, Any]:
     try:
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if tuneables.exists():
-            data = json.loads(tuneables.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
             cfg = data.get("promotion") or data.get("promoter") or {}
     except Exception:
         return {}

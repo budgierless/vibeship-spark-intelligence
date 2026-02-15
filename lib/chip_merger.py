@@ -196,7 +196,8 @@ def _load_merge_tuneables() -> Dict[str, float]:
     cfg: Dict[str, Any] = {}
     try:
         if TUNEABLES_FILE.exists():
-            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             section = data.get("chip_merge") or {}
             if isinstance(section, dict):
                 cfg = section

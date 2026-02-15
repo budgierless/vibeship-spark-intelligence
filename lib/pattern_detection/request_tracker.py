@@ -33,7 +33,8 @@ REQUEST_TRACKER_MAX_AGE_SECONDS = 3600.0
 def _load_request_tracker_config() -> Dict[str, Any]:
     try:
         if TUNEABLES_FILE.exists():
-            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             if isinstance(data, dict):
                 cfg = data.get("request_tracker") or {}
                 if isinstance(cfg, dict):

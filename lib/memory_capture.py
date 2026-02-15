@@ -238,7 +238,8 @@ _CHANNEL_PREFIX_RE = re.compile(r"^\s*\[[^\]]+\]\s*", re.IGNORECASE)
 def _load_memory_capture_config() -> Dict[str, Any]:
     try:
         if TUNEABLES_FILE.exists():
-            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             if isinstance(data, dict):
                 cfg = data.get("memory_capture") or {}
                 if isinstance(cfg, dict):

@@ -1170,7 +1170,8 @@ class XEvolution:
         # ── 6. Tuneables / Auto-Tuning ──
         if TUNEABLES_PATH.exists():
             try:
-                tuneables = json.loads(TUNEABLES_PATH.read_text(encoding="utf-8"))
+                # Accept UTF-8 with BOM (common on Windows).
+                tuneables = json.loads(TUNEABLES_PATH.read_text(encoding="utf-8-sig"))
                 has_auto_tuner = "auto_tuner" in tuneables
                 health["tuneables"] = {
                     "sections": list(tuneables.keys()),

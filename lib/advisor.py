@@ -839,7 +839,7 @@ class SparkAdvisor:
         try:
             tuneables = Path.home() / ".spark" / "tuneables.json"
             if tuneables.exists():
-                data = json.loads(tuneables.read_text(encoding="utf-8"))
+                data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
                 advisor = data.get("advisor") or {}
                 if isinstance(advisor, dict):
                     ap = advisor.get("retrieval_policy")

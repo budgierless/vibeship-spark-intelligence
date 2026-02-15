@@ -121,7 +121,8 @@ def _read_json(path: Path) -> dict:
     """Read a JSON file, returning empty dict on error."""
     try:
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            return json.loads(path.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError):
         pass
     return {}

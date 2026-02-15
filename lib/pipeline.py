@@ -59,7 +59,8 @@ def _load_pipeline_config() -> None:
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if not tuneables.exists():
             return
-        data = json.loads(tuneables.read_text(encoding="utf-8"))
+        # Accept UTF-8 with BOM (common on Windows).
+        data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
         values = data.get("values") or {}
         if isinstance(values, dict) and "queue_batch_size" in values:
             batch = int(values["queue_batch_size"])

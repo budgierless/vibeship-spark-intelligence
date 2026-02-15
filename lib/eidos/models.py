@@ -144,7 +144,8 @@ def _load_eidos_config() -> Dict[str, Any]:
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if not tuneables.exists():
             return {}
-        data = json.loads(tuneables.read_text(encoding="utf-8"))
+        # Accept UTF-8 with BOM (common on Windows).
+        data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
         # Prefer dedicated "eidos" section
         cfg = data.get("eidos") or {}
         if not isinstance(cfg, dict):

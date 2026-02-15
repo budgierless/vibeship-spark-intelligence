@@ -150,7 +150,8 @@ def _load_synth_config() -> dict:
     """Load synthesis config from tuneables.json → 'synthesizer' section."""
     try:
         if SYNTH_CONFIG_FILE.exists():
-            data = json.loads(SYNTH_CONFIG_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(SYNTH_CONFIG_FILE.read_text(encoding="utf-8-sig"))
             return data.get("synthesizer") or {}
     except Exception:
         pass

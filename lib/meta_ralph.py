@@ -50,7 +50,8 @@ def _load_meta_ralph_config() -> None:
         tuneables = Path.home() / ".spark" / "tuneables.json"
         if not tuneables.exists():
             return
-        data = json.loads(tuneables.read_text(encoding="utf-8"))
+        # Accept UTF-8 with BOM (common on Windows).
+        data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
         cfg = data.get("meta_ralph") or {}
         if not isinstance(cfg, dict):
             return

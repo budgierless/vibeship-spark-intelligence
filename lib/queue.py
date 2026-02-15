@@ -47,7 +47,8 @@ _COUNT_CACHE_TTL_S: float = 1.0
 def _load_queue_config() -> Dict[str, Any]:
     try:
         if TUNEABLES_FILE.exists():
-            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8"))
+            # Accept UTF-8 with BOM (common on Windows).
+            data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             if isinstance(data, dict):
                 cfg = data.get("queue") or {}
                 if isinstance(cfg, dict):
