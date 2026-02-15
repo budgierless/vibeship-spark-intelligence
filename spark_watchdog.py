@@ -30,6 +30,10 @@ PID_FILE = Path.home() / ".spark" / "pids" / "watchdog.pid"
 PLUGIN_ONLY_SENTINEL = Path.home() / ".spark" / "plugin_only_mode"
 PLUGIN_ONLY_SKIP_RESTARTS = {"bridge_worker", "dashboard", "meta_ralph", "pulse"}
 
+# OpenClaw integration: keep the OpenClaw tailer alive whenever OpenClaw Gateway is running.
+# (Does not require core ownership; safe to run in plugin-only mode.)
+OPENCLAW_GW_KEYWORDS = ["openclaw.mjs gateway", "openclaw gateway"]
+
 LOG_MAX_BYTES = int(os.environ.get("SPARK_LOG_MAX_BYTES", "10485760"))
 LOG_BACKUPS = int(os.environ.get("SPARK_LOG_BACKUPS", "5"))
 
@@ -272,6 +276,18 @@ def _process_exists(keywords: list[str], snapshot: Optional[list[tuple[int, str]
     return bool(_find_pids_by_keywords(keywords, snapshot))
 
 
+def _openclaw_gateway_running(snapshot: Optional[list[tuple[int, str]]] = None) -> bool:
+    """Best-effort detection for whether OpenClaw Gateway is running on this host."""
+    if snapshot is None:
+        snapshot = _process_snapshot()
+    for _, cmd in snapshot:
+        if not cmd:
+            continue
+        if any(k in cmd for k in OPENCLAW_GW_KEYWORDS):
+            return True
+    return False
+
+
 def _terminate_pids(pids: list[int]) -> None:
     for pid in pids:
         try:
@@ -434,6 +450,8 @@ def _env_disabled(service: str) -> bool:
         v = os.environ.get("SPARK_NO_BRIDGE_WORKER")
     elif service == "scheduler":
         v = os.environ.get("SPARK_NO_SCHEDULER")
+    elif service == "openclaw_tailer":
+        v = os.environ.get("SPARK_NO_OPENCLAW_TAILER")
     if v is None:
         return False
     return str(v).strip().lower() in {"1", "true", "yes", "on"}
@@ -650,6 +668,48 @@ def main() -> None:
                     ):
                         _record_restart(state, "scheduler")
                         failures["scheduler"] = 0
+
+        # openclaw_tailer (integration adapter)
+        # If OpenClaw Gateway is up, keep the OpenClaw->Spark tailer alive so Spark can learn from sessions.
+        try:
+            openclaw_up = _openclaw_gateway_running(snapshot)
+            manage_tailer = openclaw_up and not _env_disabled("openclaw_tailer")
+
+            tailer_pids = _find_pids_by_keywords(["openclaw_tailer.py"], snapshot)
+            tailer_ok = bool(tailer_pids)
+            tailer_fail = _bump_fail("openclaw_tailer", tailer_ok or not manage_tailer)
+
+            # Enforce single instance (duplicate tailers can contend on offset state).
+            if len(tailer_pids) > 1 and not args.no_restart:
+                keep = tailer_pids[0]
+                extras = [p for p in tailer_pids[1:] if p != keep]
+                if extras:
+                    _terminate_pids(extras)
+                    _log(f"openclaw_tailer multiple instances detected; terminated extras: {extras}")
+
+            if manage_tailer and (not tailer_ok):
+                if tailer_fail < args.fail_threshold:
+                    _log(f"openclaw_tailer missing (fail {tailer_fail}/{args.fail_threshold}); waiting")
+                elif not args.no_restart and _can_restart(state, "openclaw_tailer"):
+                    sparkd_port = os.environ.get("SPARKD_PORT", "8787")
+                    sparkd_url = f"http://127.0.0.1:{sparkd_port}"
+                    if _start_process(
+                        "openclaw_tailer",
+                        [
+                            sys.executable,
+                            str(SPARK_DIR / "adapters" / "openclaw_tailer.py"),
+                            "--sparkd",
+                            sparkd_url,
+                            "--agent",
+                            "main",
+                            "--include-subagents",
+                        ],
+                        cwd=SPARK_DIR,
+                    ):
+                        _record_restart(state, "openclaw_tailer")
+                        failures["openclaw_tailer"] = 0
+        except Exception as e:
+            _log(f"openclaw_tailer check failed: {e}")
 
         # queue pressure warning
         try:
