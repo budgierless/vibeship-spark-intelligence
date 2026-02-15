@@ -181,7 +181,7 @@ git revert <sha>
 
 - Status: **SHIPPED**
 - Started: `2026-02-15T15:02:44Z`
-- Commit: ``
+- Commit: `3b7f457`
 - Baseline snapshot: `reports/optimizer/chg-20260215-150244-step3-latency-tail-deny-agentic-esca_before_snapshot.json`
 - After snapshot: `reports/optimizer/chg-20260215-150244-step3-latency-tail-deny-agentic-esca_after_snapshot.json`
 - Snapshot compare: `reports/optimizer/chg-20260215-150244-step3-latency-tail-deny-agentic-esca_compare.md`
