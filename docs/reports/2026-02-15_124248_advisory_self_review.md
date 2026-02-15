@@ -1,0 +1,57 @@
+# Advisory Self-Review (2026-02-15T12:42:48.093024+00:00)
+
+## Window
+- Hours analyzed: 12
+- State: unclear
+
+## Core Metrics
+- Advisory rows: 9
+- Advisory trace coverage: 0/9 (0.0%)
+- Advice items emitted: 21
+- Engine events: 13
+- Engine trace coverage: 3/13 (23.08%)
+- Fallback share (delivered): 0.0%
+- Strict action rate: 0.75
+- Strict effectiveness rate: 0.6667
+- Trace mismatch count: 0
+
+## Honest Answers
+### Did learnings help make better decisions?
+- Yes, but unevenly. Trace-bound clusters show good outcomes, mostly from cognitive/self-awareness sources.
+- Mind usage exists but is still low-share in retrieval mix.
+
+### Examples with trace IDs
+- No trace-bound advisory rows found in this window.
+
+### Were there misses despite memory existing?
+- Mixed. Fallback was not dominant in this window; evaluate misses via trace coverage and repeated-noise patterns.
+- Engine trace coverage is low; evidence linkage is incomplete in the engine path.
+
+### Were unnecessary advisories/memories triggered?
+- Yes. Top repeated advisories account for ~95.24% of all advice items in this window.
+
+## Top Repeated Advice (Noise Candidates)
+- 6x (28.57%) When using Bash, remember: Do it, and is this system fully connected to spark intelligence flow right now, for spark to e
+- 5x (23.81%) lets push gitthub, and then clean up the whole system except this spark, and at some point we were thinking to bring the council of 50, as the agents can you se
+- 3x (14.29%) Constraint: in **exactly one state** at all times
+- 3x (14.29%) [openclaw_moltbook] RT @iancr: We built Agent Payments with @Ledger for the @circle @USDC Hackathon — agents propose, humans sign, your Ledger enforces.
+
+🎬 Dem…
+- 2x (9.52%) Consider skill [Team Communications]: Your team can't execute what they don't understand. And they won't buy in to what they don't feel part of. Internal comm
+- 1x (4.76%) [ConvoIQ] Try question hook with conversational tone: Questions are the safest opener for new relationships
+
+## Bad Outcome Records
+- trace `2d9e3d427699ddf6` | source `opportunity_scanner` | insight `opportunity:compounding_learning` | opp:34eb0962e4de61df
+
+## Optimization (No New Features)
+- Increase advisory repeat cooldowns and tool cooldowns to reduce duplicate cautions.
+- Keep `include_mind=true` with stale gating and minimum salience to improve cross-session quality without flooding.
+- Prefer fewer higher-rank items (`advisor.max_items` and `advisor.min_rank_score`) to improve signal density.
+- Improve strict trace discipline in advisory engine events before trusting aggregate success counters.
+
+## Questions To Ask Every Review
+1. Which advisories changed a concrete decision, with trace IDs?
+2. Which advisories repeated without adding new actionability?
+3. Where did fallback dominate and why?
+4. Which sources had strict-good outcomes vs non-strict optimism?
+5. What is one simplification we can do before adding anything new?
