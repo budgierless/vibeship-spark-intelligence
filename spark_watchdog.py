@@ -304,7 +304,12 @@ def _terminate_pids(pids: list[int]) -> None:
             continue
 
 
-def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> bool:
+def _start_process(
+    name: str,
+    args: list[str],
+    cwd: Optional[Path] = None,
+    env_overrides: Optional[dict] = None,
+) -> bool:
     try:
         _ensure_log_dir()
         log_path = LOG_DIR / f"{name}.log"
@@ -312,6 +317,11 @@ def _start_process(name: str, args: list[str], cwd: Optional[Path] = None) -> bo
         env["SPARK_LOG_DIR"] = str(LOG_DIR)
         # Child services should not pop browsers on startup when managed.
         env.setdefault("SPARK_SERVICE_MODE", "1")
+        if env_overrides:
+            try:
+                env.update({k: str(v) for k, v in env_overrides.items()})
+            except Exception:
+                pass
         creationflags = 0
         if os.name == "nt":
             # CREATE_NO_WINDOW (0x08000000) prevents console windows from opening
@@ -693,6 +703,13 @@ def main() -> None:
                 elif not args.no_restart and _can_restart(state, "openclaw_tailer"):
                     sparkd_port = os.environ.get("SPARKD_PORT", "8787")
                     sparkd_url = f"http://127.0.0.1:{sparkd_port}"
+                    hb_env = {}
+                    # Enable tailer heartbeat by default (low frequency) unless operator overrides.
+                    if "SPARK_OPENCLAW_HEARTBEAT" not in os.environ:
+                        hb_env["SPARK_OPENCLAW_HEARTBEAT"] = "1"
+                    if "SPARK_OPENCLAW_HEARTBEAT_MINUTES" not in os.environ:
+                        hb_env["SPARK_OPENCLAW_HEARTBEAT_MINUTES"] = "15"
+
                     if _start_process(
                         "openclaw_tailer",
                         [
@@ -705,6 +722,7 @@ def main() -> None:
                             "--include-subagents",
                         ],
                         cwd=SPARK_DIR,
+                        env_overrides=hb_env,
                     ):
                         _record_restart(state, "openclaw_tailer")
                         failures["openclaw_tailer"] = 0

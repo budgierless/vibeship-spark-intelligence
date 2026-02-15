@@ -35,6 +35,20 @@ MAX_TOOL_RESULT_CHARS = 4000
 
 DEFAULT_REPORT_DIR = Path.home() / ".openclaw" / "workspace" / "spark_reports"
 
+# Optional integration heartbeat (off by default)
+HEARTBEAT_ENABLED = os.environ.get("SPARK_OPENCLAW_HEARTBEAT", "").strip().lower() not in ("", "0", "false", "no")
+HEARTBEAT_EVERY_SECONDS = int(float(os.environ.get("SPARK_OPENCLAW_HEARTBEAT_MINUTES", "15")) * 60)
+HEARTBEAT_PATH = Path(
+    os.environ.get("SPARK_OPENCLAW_HEARTBEAT_PATH")
+    or (Path.home() / ".spark" / "logs" / "openclaw_tailer_heartbeat.jsonl")
+)
+
+
+def _append_jsonl(path: Path, row: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
 
 def _post_json(url: str, payload: dict, token: str = None):
     data = json.dumps(payload).encode("utf-8")
@@ -478,6 +492,24 @@ def main():
 
     sparkd_url = args.sparkd
 
+    # Heartbeat state
+    total_lines_sent = 0
+    last_send_ts = None
+    last_session_file = None
+    next_hb_ts = time.time() if HEARTBEAT_ENABLED else None
+    if HEARTBEAT_ENABLED:
+        _append_jsonl(HEARTBEAT_PATH, {
+            "ts": time.time(),
+            "kind": "startup",
+            "adapter": "openclaw_tailer",
+            "agent": args.agent,
+            "pid": os.getpid(),
+            "sparkd": sparkd_url,
+            "interval_sec": HEARTBEAT_EVERY_SECONDS,
+            "include_subagents": include_subagents,
+        })
+        next_hb_ts = time.time() + max(5, HEARTBEAT_EVERY_SECONDS)
+
     while True:
         try:
             if args.verbose:
@@ -588,6 +620,11 @@ def main():
 
                 state.set_offset(file_key, off + sent)
 
+                if sent:
+                    total_lines_sent += sent
+                    last_send_ts = time.time()
+                    last_session_file = str(session_file)
+
                 if args.verbose and sent:
                     remaining = max(0, len(new_lines) - sent)
                     print(f"[openclaw_tailer] [{session_key}] sent {sent}, remaining {remaining}", flush=True)
@@ -600,6 +637,23 @@ def main():
             except Exception as e:
                 if args.verbose:
                     print(f"[openclaw_tailer] report scan error: {e}", flush=True)
+
+            # --- Optional integration heartbeat ---
+            if HEARTBEAT_ENABLED and next_hb_ts is not None and time.time() >= next_hb_ts:
+                _append_jsonl(HEARTBEAT_PATH, {
+                    "ts": time.time(),
+                    "kind": "heartbeat",
+                    "adapter": "openclaw_tailer",
+                    "agent": args.agent,
+                    "pid": os.getpid(),
+                    "sparkd": sparkd_url,
+                    "sessions_count": len(sessions) if 'sessions' in locals() else None,
+                    "last_session_file": last_session_file,
+                    "total_lines_sent": total_lines_sent,
+                    "last_send_ts": last_send_ts,
+                    "since_last_send_sec": (time.time() - last_send_ts) if last_send_ts else None,
+                })
+                next_hb_ts = time.time() + max(5, HEARTBEAT_EVERY_SECONDS)
 
         except Exception as e:
             if args.verbose:
