@@ -1488,8 +1488,15 @@ class MetaRalph:
         window = self.roast_history[-1000:]
         effective = []
         filtered_pipeline_tests = 0
+        filtered_duplicates = 0
         for r in window:
             res = r.get("result") or {}
+            verdict = (res.get("verdict") or "").strip()
+            # Duplicates are a dedupe/retention artifact, not a quality signal for the stream.
+            # Exclude them from the quality-band denominator to avoid false "low quality" gating.
+            if verdict == "duplicate":
+                filtered_duplicates += 1
+                continue
             original = res.get("original") or ""
             if isinstance(original, str) and "[PIPELINE_TEST" in original:
                 filtered_pipeline_tests += 1
@@ -1517,6 +1524,7 @@ class MetaRalph:
             "quality_rate": quality_rate_window,
             "quality_rate_window_samples": effective_total,
             "quality_rate_window_filtered_pipeline_tests": filtered_pipeline_tests,
+            "quality_rate_window_filtered_duplicates": filtered_duplicates,
             "quality_rate_all_time": quality_rate_all_time,
             "reject_rate": self.primitive_rejected / max(self.total_roasted, 1),
             "outcome_stats": self.get_outcome_stats(),

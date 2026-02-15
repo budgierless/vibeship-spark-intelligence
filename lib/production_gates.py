@@ -38,6 +38,7 @@ class LoopMetrics:
     quality_rate: float = 0.0
     quality_rate_samples: int = 0
     quality_rate_filtered_pipeline_tests: int = 0
+    quality_rate_filtered_duplicates: int = 0
     distillations: int = 0
     queue_depth: int = 0
     advice_total: int = 0
@@ -148,6 +149,9 @@ def _read_meta_metrics() -> Dict[str, Any]:
             "quality_rate_filtered_pipeline_tests": int(
                 stats.get("quality_rate_window_filtered_pipeline_tests", 0) or 0
             ),
+            "quality_rate_filtered_duplicates": int(
+                stats.get("quality_rate_window_filtered_duplicates", 0) or 0
+            ),
         }
     except Exception:
         return {}
@@ -228,6 +232,7 @@ def load_live_metrics() -> LoopMetrics:
     quality_rate = 0.0
     quality_rate_samples = 0
     quality_rate_filtered_pipeline_tests = 0
+    quality_rate_filtered_duplicates = 0
     distillations = 0
     queue_depth = 0
     advice_total = 0
@@ -256,6 +261,9 @@ def load_live_metrics() -> LoopMetrics:
         quality_rate_samples = int(meta.get("quality_rate_samples", 0) or 0)
         quality_rate_filtered_pipeline_tests = int(
             meta.get("quality_rate_filtered_pipeline_tests", 0) or 0
+        )
+        quality_rate_filtered_duplicates = int(
+            meta.get("quality_rate_filtered_duplicates", 0) or 0
         )
 
     distillations = _read_distillation_count()
@@ -303,6 +311,7 @@ def load_live_metrics() -> LoopMetrics:
         quality_rate=quality_rate,
         quality_rate_samples=quality_rate_samples,
         quality_rate_filtered_pipeline_tests=quality_rate_filtered_pipeline_tests,
+        quality_rate_filtered_duplicates=quality_rate_filtered_duplicates,
         distillations=distillations,
         queue_depth=queue_depth,
         advice_total=advice_total,
@@ -437,6 +446,7 @@ def evaluate_gates(
             "quality_rate": round(metrics.quality_rate, 4),
             "samples": int(metrics.quality_rate_samples),
             "filtered_pipeline_tests": int(metrics.quality_rate_filtered_pipeline_tests),
+            "filtered_duplicates": int(metrics.quality_rate_filtered_duplicates),
             "enforced": bool(metrics.quality_rate_samples >= t.min_quality_samples),
         },
         (
@@ -502,6 +512,7 @@ def format_gate_report(metrics: LoopMetrics, result: Dict[str, Any]) -> str:
     lines.append(
         f"  quality_rate={metrics.quality_rate:.1%} quality_samples={metrics.quality_rate_samples} "
         f"filtered_pipeline_tests={metrics.quality_rate_filtered_pipeline_tests} "
+        f"filtered_duplicates={metrics.quality_rate_filtered_duplicates} "
         f"distillations={metrics.distillations} "
         f"chip_ratio={metrics.chip_to_cognitive_ratio:.1f} queue_depth={metrics.queue_depth} "
         f"non_actionable={metrics.ignored_non_actionable}"
