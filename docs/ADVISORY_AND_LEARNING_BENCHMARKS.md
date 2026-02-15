@@ -111,6 +111,27 @@ Quick audit (how many distinct advice IDs exist for one stable insight key in re
 python -c "import os,json,pathlib; from collections import Counter; p=pathlib.Path(os.path.expanduser('~/.spark/advisor/recent_advice.jsonl')); key='reasoning:always_read_a_file_before_edit_to_verify'; rows=[]; \nfor ln in p.read_text('utf-8', errors='ignore').splitlines()[-5000:]:\n r=json.loads(ln); iks=r.get('insight_keys') or []; aids=r.get('advice_ids') or []; \n for i,ik in enumerate(iks):\n  if ik==key: rows.append(aids[i] if i < len(aids) else None);\nctr=Counter([x for x in rows if x]); print('matches',len(rows),'unique_advice_ids',len(ctr)); print('top',ctr.most_common(5))"
 ```
 
+## Tomorrow Checklist (2026-02-16)
+
+State at end of day:
+- Outcome trace binding: new-window mismatches should be `0` when running `scripts/advisory_self_review.py --window-hours 0.1 --json`.
+- Advice ID stability: new deliveries for `reasoning:always_read_a_file_before_edit_to_verify` now use stable `advice_id` `cognitive:reasoning:always_read_a_file_before_edit_to_verify`.
+- Global dedupe: engine emits `global_dedupe_suppressed` when repeats are blocked; log at `~/.spark/advisory_global_dedupe.jsonl`.
+
+Remaining work for tomorrow:
+1. Confirm stable IDs in the full engine loop (packet + live paths), not just direct `advise_on_tool`:
+```bash
+python scripts/advisory_self_review.py --window-hours 0.1 --json
+```
+2. Spot-check that packets created before advice-id stabilization do not reintroduce churn:
+   - Trigger packet path by running a few normal tool calls.
+   - Inspect `~/.spark/advisor/recent_advice.jsonl` for repeated `insight_key` with changing `advice_id`.
+3. Optional: add a small metric in `scripts/advisory_self_review.py` for “advice_id churn per insight_key” over window.
+
+Where to continue from:
+- Benchmarks + runbook: `docs/ADVISORY_AND_LEARNING_BENCHMARKS.md`
+- Stability regression test: `tests/test_advice_id_stability.py`
+
 Notes:
 - `recent_advice.trace_coverage_pct` can be lower if you call the advisor directly outside the observed tool loop (no `trace_id` available).
 
