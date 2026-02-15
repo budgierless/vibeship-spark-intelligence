@@ -1,0 +1,88 @@
+{
+  "generated_at": "2026-02-15T21:03:51.987155+00:00",
+  "start_ts": 1771189347.2528815,
+  "rounds": 120,
+  "emitted_returns": 7,
+  "engine": {
+    "rows": 242,
+    "trace_rows": 242,
+    "trace_coverage_pct": 100.0,
+    "events": {
+      "user_prompt_prefetch": 121,
+      "emitted": 8,
+      "no_emit": 83,
+      "no_advice": 30
+    },
+    "routes": {
+      "live": 120,
+      "packet_relaxed": 1
+    },
+    "fallback_share_pct": 0.0,
+    "latency": {
+      "n": 8,
+      "p50_ms": 421.6,
+      "p90_ms": 515.8,
+      "p95_ms": 741.4,
+      "p99_ms": 741.4,
+      "max_ms": 741.4
+    }
+  },
+  "feedback_requests": {
+    "rows": 4,
+    "trace_rows": 4,
+    "trace_coverage_pct": 100.0,
+    "item_total": 4,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 2
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 1
+      },
+      {
+        "text": "Use Bash conservatively with fast validation and explicit rollback safety.",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 50.0,
+    "unique_ratio_pct": 75.0
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "session_key_include_recent_tools": false,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "emit_whispers": true,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 3,
+      "min_rank_score": 0.45
+    }
+  },
+  "force_live": true,
+  "label": "variantC_plus",
+  "trace_prefix": "delta-variantC_plus-20260215_210227",
+  "session_prefix": "delta-variantC_plus"
+}
