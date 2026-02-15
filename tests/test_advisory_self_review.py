@@ -40,12 +40,23 @@ def test_summarize_recent_advice_counts_trace_and_repeats(tmp_path):
 
     out = mod.summarize_recent_advice(p, window_s=3600, now_ts=now)
     assert out["rows"] == 2
+    assert out["excluded"] == 0
     assert out["trace_rows"] == 1
     assert out["item_total"] == 3
     assert out["sources"]["cognitive"] == 1
     assert out["sources"]["mind"] == 1
     assert out["repeated_texts"][0]["text"] == "repeat me"
     assert out["repeated_texts"][0]["count"] == 2
+
+    # Exclude rows by trace prefix (used to remove benchmark traffic).
+    out2 = mod.summarize_recent_advice(
+        p,
+        window_s=3600,
+        now_ts=now,
+        exclude_trace_prefixes=["abc"],
+    )
+    assert out2["rows"] == 1
+    assert out2["excluded"] == 1
 
 
 def test_summarize_engine_and_outcomes(tmp_path):

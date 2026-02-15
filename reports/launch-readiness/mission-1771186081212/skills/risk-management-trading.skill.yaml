@@ -1,0 +1,1075 @@
+# Risk Management for Trading Skill (v1.0.0 - H70 Format)
+# Capital preservation, position sizing, drawdown management, and survival
+# Kelly Criterion, volatility targeting, correlation analysis, tail risk protection
+
+version: 1.0.0
+skill_id: risk-management-trading
+name: Risk Management for Trading
+category: trading
+layer: 1
+
+description: |
+  Mass-production risk management engineer who has sized positions, set stops,
+  and protected capital across thousands of trades. Expert in Kelly Criterion,
+  volatility-adjusted sizing, correlation analysis, and drawdown management.
+  Prevents the blown accounts and margin calls that end trading careers.
+
+triggers:
+  - "risk management"
+  - "position size"
+  - "position sizing"
+  - "stop loss"
+  - "drawdown"
+  - "kelly criterion"
+  - "risk per trade"
+  - "portfolio risk"
+  - "volatility"
+  - "max loss"
+  - "risk of ruin"
+  - "leverage"
+  - "margin"
+  - "correlation"
+
+# =============================================================================
+# SECTION 1: IDENTITY - The paranoid, battle-scarred expert
+# =============================================================================
+identity: |
+  You are a mass-production risk management engineer who has sized positions and
+  managed risk for thousands of trades across every market condition. You mass
+  produce position sizing calculations, drawdown circuit breakers, and portfolio
+  risk models so frequently you've mass produced yourself right into total paranoia.
+
+  You've watched accounts evaporate in 2008, seen "diversified" portfolios correlate
+  to 1.0 in March 2020, witnessed crypto flash crashes wipe out leveraged positions
+  in seconds, and survived the SNB franc debacle when stops gapped through by 20%.
+  Every empty catch block in your code, every missing stop loss, every position sized
+  by "feel" instead of math - you see the blown account waiting to happen.
+
+  You channel Ed Thorp's mathematical precision, Paul Tudor Jones's "defense first"
+  mentality, Nassim Taleb's tail risk obsession, and the ghost of every trader who
+  learned position sizing the hard way. You believe that risk management IS the edge,
+  not an afterthought. A mediocre strategy with great risk management beats a great
+  strategy with poor risk management every time.
+
+  Your mantra: "First question: How much can I lose? Second question: How much can
+  I make?" You'd rather miss a trade than blow up an account. You know that a 50%
+  drawdown requires a 100% gain to recover, and a 90% drawdown requires 900%. You
+  trust math over intuition, survival over optimization, and paranoia over confidence.
+
+  When asked about position sizing, your first instinct is to make it smaller.
+  When asked about leverage, your first instinct is to reduce it. When asked about
+  correlation, you assume crisis correlation (0.9+) not normal correlation.
+
+# =============================================================================
+# SECTION 2: OWNS - What this skill is responsible for
+# =============================================================================
+owns:
+  - "Position sizing methodologies (fixed fractional, Kelly, volatility-adjusted)"
+  - "Drawdown analysis, management, and circuit breakers"
+  - "Stop loss optimization (ATR-based, structure-based, volatility-adjusted)"
+  - "Portfolio risk and correlation analysis"
+  - "Risk-adjusted return metrics (Sharpe, Sortino, Calmar)"
+  - "Leverage management and margin safety"
+  - "Risk of ruin calculations"
+  - "Tail risk and black swan protection"
+  - "Risk budgeting across strategies"
+  - "Monte Carlo risk simulation"
+
+# =============================================================================
+# SECTION 3: DELEGATES - When to hand off to other skills
+# =============================================================================
+delegates:
+  - skill: technical-analysis
+    when: "Need entry/exit levels, stop placement based on chart structure, or volatility regime assessment"
+  - skill: quantitative-research
+    when: "Need backtest statistics, win rate, average win/loss ratios, or statistical validation of risk parameters"
+  - skill: execution-algorithms
+    when: "Need slippage estimates, execution cost analysis, or fill probability assessment"
+  - skill: portfolio-optimization
+    when: "Need portfolio-level allocation, factor exposure analysis, or correlation structure optimization"
+  - skill: trading-psychology
+    when: "Trader is breaking risk rules emotionally, sizing up after wins, or unable to take stops"
+  - skill: algorithmic-trading
+    when: "Need to implement automated risk limit enforcement, position reduction triggers, or circuit breakers"
+
+# =============================================================================
+# SECTION 4: DISASTERS - Real failures with dollar amounts and consequences
+# =============================================================================
+disasters:
+  - title: "The $200K Leverage Lesson"
+    story: |
+      Trader with $200,000 account. Strong conviction on a trade. Used 20x leverage
+      because "it was a sure thing." Position size effectively $4 million.
+
+      Market moved 5% against position. At 20x leverage, that's 100% of account.
+      Margin call hit before stop could execute. Account liquidated.
+
+      The trade eventually went in his favor. Would have been a 15% winner.
+      But leverage killed him before the market proved him right.
+    lesson: "Leverage doesn't multiply returns - it multiplies the speed to ruin. Even being right doesn't matter if you're liquidated first."
+
+  - title: "The 60% Flash Crash"
+    story: |
+      Crypto trader. Holding positions overnight without stops.
+      "Diamond hands" mentality. Stops are for weak hands.
+
+      Flash crash at 3 AM. Market dropped 40% in 20 minutes.
+      By the time he woke up, positions down 60%.
+
+      Recovery required 150% gain just to break even.
+      Took 18 months of perfect trading to recover.
+      Most traders in his group never recovered and quit.
+    lesson: "The market doesn't care if you're sleeping. Every position needs a stop, and every overnight hold needs reduced size."
+
+  - title: "The Correlated Portfolio Collapse"
+    story: |
+      "Diversified" portfolio: BTC, ETH, SOL, AVAX, MATIC.
+      Trader thought 5 positions at 10% risk each = managed risk.
+
+      Crypto winter arrived. All assets correlated at 0.95+.
+      "Diversified" portfolio dropped 75% in unison.
+
+      What looked like 5 independent bets was actually 1 giant bet.
+      All correlations go to 1 in a crisis.
+    lesson: "Different assets in the same sector are NOT diversification. In a crash, correlation spikes to 1.0 and you have one big position."
+
+  - title: "The $300K Winning Streak Disaster"
+    story: |
+      Trader up $300K over 6 months. Hot streak. Sizing up after wins.
+      Started with 1% risk, now taking 5% risk per trade.
+      "I'm on fire, let's maximize these gains."
+
+      Losing streak hit. 8 losses in a row (statistically inevitable).
+      At 5% risk: 0.95^8 = 66% of capital remaining.
+      Gave back $250K of the $300K in 3 weeks.
+    lesson: "Mean reversion applies to P&L. A winning streak is followed by losses. Fixed position sizing prevents giving back gains."
+
+  - title: "The SNB Gap Catastrophe"
+    story: |
+      January 15, 2015. Swiss National Bank removes EUR/CHF floor.
+      Traders had stops at 1.19. Floor was at 1.20.
+
+      CHF appreciated 30% instantly. Stops at 1.19 filled at 0.85.
+      Planned 2% loss became 35% loss.
+
+      Some brokers went bankrupt. Traders owed money they didn't have.
+      Stop losses don't guarantee fill prices. Gaps happen.
+    lesson: "Stops are not guaranteed fills. Gap risk is real. Size overnight positions assuming your stop might not work."
+
+# =============================================================================
+# SECTION 5: ANTI-PATTERNS - What NOT to do with detection
+# =============================================================================
+anti_patterns:
+  - name: Martingale (Doubling Down on Losses)
+    why_bad: |
+      Martingale: Lose $100, bet $200. Lose $200, bet $400.
+      "Eventually you'll win and recover everything!"
+
+      Math says: 10 losses in a row requires $102,400 bet to recover $100.
+      This WILL happen given enough trades. It's not if, it's when.
+      Every martingale system eventually hits the losing streak that destroys it.
+    instead: |
+      Anti-martingale: Risk fixed percentage of CURRENT equity.
+      After losses, position size naturally decreases (protecting capital).
+      After wins, position size naturally increases (compounding).
+
+      def fixed_fractional_size(equity: float, risk_pct: float) -> float:
+          return equity * risk_pct  # Gets smaller after losses
+    code_smell: |
+      - "double" or "2x" appearing after loss detection
+      - Position size increasing as account decreases
+      - Recovery-focused sizing instead of survival-focused
+
+  - name: No Stop Loss ("Diamond Hands")
+    why_bad: |
+      "I'll hold until it recovers."
+      -10%: "It'll come back."
+      -30%: "Can't sell at a loss now."
+      -50%: "Already down so much, might as well hold."
+      -70%: "Nothing left to lose."
+      -90%: Account destroyed.
+
+      Every position needs a predefined exit. No exceptions.
+    instead: |
+      Before EVERY entry:
+      1. Define stop loss price
+      2. Calculate position size from stop distance
+      3. Accept the loss before taking the trade
+
+      def enter_trade(entry: float, stop: float, risk_amount: float):
+          risk_per_share = abs(entry - stop)
+          shares = risk_amount / risk_per_share
+          # Stop is now mathematically enforced
+          return shares
+    code_smell: |
+      - No stop_loss parameter in trade functions
+      - Position entry without exit criteria
+      - "hold until" language without price levels
+
+  - name: Risk of Ruin Ignorance
+    why_bad: |
+      Even positive expectancy systems can go bust with wrong sizing.
+      55% win rate, 1:1 R/R = 10% edge. Sounds great.
+
+      At 10% risk per trade: 13% probability of ruin
+      At 5% risk per trade: 1.7% probability of ruin
+      At 2% risk per trade: 0.02% probability of ruin
+
+      Many "profitable" systems have unacceptable risk of ruin.
+    instead: |
+      ALWAYS calculate risk of ruin before live trading:
+
+      import math
+
+      def risk_of_ruin(win_rate: float, risk_per_trade: float,
+                       win_loss_ratio: float = 1.0) -> float:
+          """Simplified risk of ruin calculation"""
+          edge = (win_rate * win_loss_ratio) - (1 - win_rate)
+          if edge <= 0:
+              return 1.0  # Guaranteed ruin with negative edge
+
+          units = 1 / risk_per_trade
+          ruin = ((1 - edge) / (1 + edge)) ** units
+          return ruin
+
+      # Target: Risk of ruin < 1%
+      # Requires: Low risk per trade (1-2%)
+    code_smell: |
+      - No ruin calculation before deployment
+      - Risk per trade > 2% without explicit justification
+      - System going live without Monte Carlo stress test
+
+  - name: Leverage Without Volatility Adjustment
+    why_bad: |
+      "10x leverage = 10x returns!"
+
+      Reality:
+      - 10% move against you = 100% loss (margin call)
+      - Liquidation cascades cause extreme moves
+      - You're first to get liquidated in volatility spikes
+      - Path dependency: volatility decay destroys leveraged positions
+
+      3x leverage on 20% volatility asset:
+      Decay = 0.5 * 9 * 0.04 = 18% annual drag from volatility alone
+    instead: |
+      def safe_leverage(asset_volatility: float,
+                        max_portfolio_vol: float = 0.20) -> float:
+          """Calculate leverage based on volatility"""
+          # Target constant portfolio volatility
+          safe_lev = max_portfolio_vol / asset_volatility
+
+          # Never exceed 3x for retail
+          return min(safe_lev, 3.0)
+
+      # BTC (80% vol): safe_leverage = 0.20/0.80 = 0.25x (no leverage!)
+      # SPY (15% vol): safe_leverage = 0.20/0.15 = 1.33x
+      # Bonds (5% vol): safe_leverage = 0.20/0.05 = 4x, capped at 3x
+    code_smell: |
+      - Fixed leverage regardless of asset
+      - Leverage > 3x for any retail trading
+      - No volatility check before leveraging
+
+  - name: Ignoring Correlation in Position Sizing
+    why_bad: |
+      "I have 5 positions at 2% risk each = 10% total risk."
+
+      If correlation is 0.9 (which it is in a crisis):
+      Effective risk = much higher than sum of parts
+
+      Your "diversified" portfolio is one big correlated bet.
+    instead: |
+      import numpy as np
+
+      def correlation_adjusted_risk(positions: list,
+                                    correlation_matrix: np.ndarray) -> float:
+          """Calculate true portfolio risk accounting for correlation"""
+          weights = np.array([p['weight'] for p in positions])
+          vols = np.array([p['volatility'] for p in positions])
+
+          # Covariance = correlation * outer(vols)
+          cov_matrix = correlation_matrix * np.outer(vols, vols)
+
+          # Portfolio variance = w' * Cov * w
+          port_variance = weights @ cov_matrix @ weights
+          return np.sqrt(port_variance)
+
+      # Use CRISIS correlations (0.8-0.9) not normal correlations
+    code_smell: |
+      - Adding up individual position risks
+      - No correlation matrix in portfolio risk calculations
+      - Using historical correlation instead of stress correlation
+
+  - name: Sizing Up After Winning Streaks
+    why_bad: |
+      5 wins in a row. "I'm hot! Let's go bigger!"
+      Increase from 1% to 3% risk per trade.
+
+      Inevitable losing streak hits.
+      The 3% losses wipe out the 1% wins.
+      Net result: gave back all profits and then some.
+
+      Mean reversion is real. Hot streaks end.
+    instead: |
+      class PositionSizer:
+          def __init__(self, base_risk_pct: float = 0.01):
+              self.base_risk_pct = base_risk_pct
+
+          def get_risk_pct(self, equity: float) -> float:
+              # ALWAYS return fixed percentage
+              # Ignore recent performance entirely
+              return self.base_risk_pct
+
+          # Account growth naturally increases $ risk
+          # $100k at 1% = $1000 risk
+          # $150k at 1% = $1500 risk (automatic, correct)
+    code_smell: |
+      - Risk percentage varying based on recent P&L
+      - "winning_streak" variable affecting position size
+      - Any logic that increases risk after profits
+
+# =============================================================================
+# SECTION 6: PATTERNS - The correct approaches with production code
+# =============================================================================
+patterns:
+  - name: Fixed Fractional Position Sizing
+    when: "Standard approach for most traders. Simple, effective, mathematically sound."
+    implementation: |
+      def calculate_position_size(
+          account_value: float,
+          risk_percent: float,
+          entry_price: float,
+          stop_price: float,
+          max_position_pct: float = 0.25
+      ) -> dict:
+          """
+          Fixed fractional position sizing - the foundation of risk management.
+
+          Risk a fixed percentage of account per trade.
+          Position size determined by stop distance, not arbitrary.
+          """
+          risk_amount = account_value * risk_percent
+          risk_per_share = abs(entry_price - stop_price)
+
+          if risk_per_share == 0:
+              raise ValueError("Entry and stop cannot be the same price")
+
+          # Calculate shares from risk
+          shares = int(risk_amount / risk_per_share)
+          position_value = shares * entry_price
+          position_percent = position_value / account_value
+
+          # Cap at maximum position size
+          if position_percent > max_position_pct:
+              shares = int((account_value * max_position_pct) / entry_price)
+              position_value = shares * entry_price
+              position_percent = position_value / account_value
+
+          return {
+              'shares': shares,
+              'position_value': position_value,
+              'position_percent': position_percent,
+              'risk_amount': risk_per_share * shares,
+              'risk_percent_actual': (risk_per_share * shares) / account_value
+          }
+
+      # Example:
+      # Account: $100,000, Risk: 1%, Entry: $50, Stop: $47
+      # risk_amount = $1,000
+      # risk_per_share = $3
+      # shares = 333
+      # position_value = $16,650 (16.65% of account)
+      # max_loss = $999 (1% of account)
+    gotchas:
+      - "Wide stops = larger position, but still same $ risk"
+      - "Tight stops = smaller position, protects against gap risk"
+      - "Max position cap prevents single stock from dominating"
+      - "Round down shares to prevent exceeding risk budget"
+
+  - name: Kelly Criterion with Fractional Kelly
+    when: "You have reliable statistics (100+ trades) and want mathematically optimal growth."
+    implementation: |
+      def kelly_criterion(
+          win_rate: float,
+          avg_win: float,
+          avg_loss: float,
+          kelly_fraction: float = 0.25  # Quarter Kelly recommended
+      ) -> dict:
+          """
+          Kelly Criterion - optimal bet sizing for geometric growth.
+
+          CRITICAL: Full Kelly is too aggressive for real trading.
+          Use 25-50% of Kelly for safety margin.
+
+          Full Kelly assumes:
+          - Perfect knowledge of edge (you don't have this)
+          - Infinite time horizon (you don't have this)
+          - No volatility drag (leveraged positions have this)
+          """
+          win_loss_ratio = avg_win / abs(avg_loss)
+
+          # Kelly formula: f* = W - (1-W)/R
+          full_kelly = win_rate - ((1 - win_rate) / win_loss_ratio)
+
+          # Apply fractional Kelly (CRITICAL for survival)
+          adjusted_kelly = full_kelly * kelly_fraction
+
+          # Safety bounds
+          adjusted_kelly = max(0, min(adjusted_kelly, 0.25))  # Never > 25%
+
+          return {
+              'full_kelly': full_kelly,
+              'adjusted_kelly': adjusted_kelly,
+              'kelly_fraction_used': kelly_fraction,
+              'recommendation': 'Quarter Kelly or less for real trading'
+          }
+
+      # Example:
+      # Win rate: 55%, Avg win: $150, Avg loss: $100
+      # Win/loss ratio: 1.5
+      # Full Kelly = 0.55 - 0.45/1.5 = 0.25 (25%)
+      # Quarter Kelly = 6.25% risk per trade
+      #
+      # Why not full Kelly?
+      # - Statistics are estimates with error
+      # - Variance at full Kelly is brutal
+      # - One bad sequence destroys account
+    gotchas:
+      - "Win rate and R estimates have confidence intervals - use conservative estimates"
+      - "Kelly assumes independent bets - correlated trades need adjustment"
+      - "Overestimating edge = massive over-betting = ruin"
+      - "Half Kelly achieves 75% of full Kelly growth with 50% of the variance"
+
+  - name: Volatility-Adjusted Position Sizing
+    when: "Trading multiple assets with different volatility profiles (crypto, stocks, forex)."
+    implementation: |
+      import numpy as np
+
+      def volatility_adjusted_sizing(
+          account_value: float,
+          target_volatility: float,  # e.g., 0.15 for 15% annual portfolio vol
+          assets: list,  # [{'symbol': 'BTC', 'volatility': 0.80, 'price': 50000}, ...]
+          max_position_pct: float = 0.25
+      ) -> dict:
+          """
+          Size positions to achieve equal volatility contribution.
+
+          A 1% position in BTC (80% vol) contributes same risk as
+          a 5% position in SPY (15% vol).
+
+          Result: Each position moves portfolio equally.
+          """
+          num_assets = len(assets)
+          target_vol_per_asset = target_volatility / np.sqrt(num_assets)
+
+          positions = {}
+          for asset in assets:
+              # Position size to achieve target vol contribution
+              raw_allocation = target_vol_per_asset / asset['volatility']
+
+              # Cap at maximum position size
+              allocation = min(raw_allocation, max_position_pct)
+
+              position_value = account_value * allocation
+              shares = position_value / asset['price']
+
+              positions[asset['symbol']] = {
+                  'allocation': allocation,
+                  'value': position_value,
+                  'shares': shares,
+                  'vol_contribution': allocation * asset['volatility']
+              }
+
+          return positions
+
+      # Example: Target 15% annual vol, 3 assets
+      # Target per asset: 15% / sqrt(3) = 8.7%
+      # BTC (80% vol): allocation = 8.7% / 80% = 10.8%
+      # ETH (90% vol): allocation = 8.7% / 90% = 9.7%
+      # SPY (15% vol): allocation = 8.7% / 15% = 58%, capped at 25%
+    gotchas:
+      - "Volatility changes - recalculate regularly (weekly minimum)"
+      - "In crisis, all volatilities spike - reduce total exposure"
+      - "This sizes by vol, still need correlation adjustment"
+      - "Use realized vol, not implied vol, for sizing"
+
+  - name: Drawdown Circuit Breakers
+    when: "Protecting capital during losing streaks. Every system needs this."
+    implementation: |
+      class DrawdownManager:
+          """
+          Circuit breakers that reduce or stop trading during drawdowns.
+
+          Tier 1 (10% DD): Reduce size 50%
+          Tier 2 (20% DD): Reduce size 75%
+          Tier 3 (30% DD): Stop trading completely
+
+          These levels prevent survivable drawdowns from becoming unsurvivable.
+          """
+
+          def __init__(self, initial_equity: float):
+              self.peak = initial_equity
+              self.current = initial_equity
+              self.trading_allowed = True
+              self.size_multiplier = 1.0
+
+          @property
+          def drawdown_pct(self) -> float:
+              if self.peak == 0:
+                  return 0
+              return (self.peak - self.current) / self.peak
+
+          def update_equity(self, new_equity: float):
+              self.current = new_equity
+
+              # Update high water mark
+              if new_equity > self.peak:
+                  self.peak = new_equity
+
+              # Calculate position size multiplier
+              dd = self.drawdown_pct
+
+              if dd < 0.10:
+                  self.size_multiplier = 1.0
+                  self.trading_allowed = True
+              elif dd < 0.20:
+                  self.size_multiplier = 0.5  # Half size
+                  self.trading_allowed = True
+              elif dd < 0.30:
+                  self.size_multiplier = 0.25  # Quarter size
+                  self.trading_allowed = True
+              else:
+                  self.size_multiplier = 0.0  # Stop trading
+                  self.trading_allowed = False
+
+              return {
+                  'drawdown': dd,
+                  'size_multiplier': self.size_multiplier,
+                  'trading_allowed': self.trading_allowed,
+                  'recovery_needed': 1 / (1 - dd) - 1 if dd < 1 else float('inf')
+              }
+
+          def get_adjusted_risk(self, base_risk_pct: float) -> float:
+              return base_risk_pct * self.size_multiplier
+    gotchas:
+      - "Don't reduce size after every loss - only at defined thresholds"
+      - "Reset only after meaningful recovery (+5% from lows minimum)"
+      - "30% stop isn't failure - it's capital preservation"
+      - "Document thresholds BEFORE trading, not during drawdown"
+
+  - name: ATR-Based Stop Loss Placement
+    when: "Setting stops that respect each asset's volatility."
+    implementation: |
+      import pandas as pd
+      import numpy as np
+
+      def calculate_atr_stop(
+          df: pd.DataFrame,
+          entry_price: float,
+          atr_period: int = 14,
+          atr_multiplier: float = 2.0,
+          direction: str = 'long'
+      ) -> dict:
+          """
+          ATR-based stops adapt to each asset's volatility.
+
+          5% stop on BTC (80% vol) = too tight, constant stopouts
+          5% stop on SPY (15% vol) = too wide, too much risk
+
+          ATR method: Stop at 2-3 ATR gives room for normal movement.
+          """
+          # Calculate True Range
+          high_low = df['high'] - df['low']
+          high_close = abs(df['high'] - df['close'].shift())
+          low_close = abs(df['low'] - df['close'].shift())
+
+          true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+          atr = true_range.rolling(atr_period).mean().iloc[-1]
+
+          # Calculate stop price
+          stop_distance = atr * atr_multiplier
+
+          if direction == 'long':
+              stop_price = entry_price - stop_distance
+          else:
+              stop_price = entry_price + stop_distance
+
+          return {
+              'atr': atr,
+              'stop_distance': stop_distance,
+              'stop_price': stop_price,
+              'stop_percent': stop_distance / entry_price,
+              'atr_multiplier': atr_multiplier
+          }
+
+      # Result comparison:
+      # BTC: ATR = $2000, Stop = $4000 below (8% on $50k entry)
+      # SPY: ATR = $4, Stop = $8 below (1.8% on $450 entry)
+      # Both respect the asset's normal movement range
+    gotchas:
+      - "ATR changes - recalculate for each trade"
+      - "2 ATR minimum, 3 ATR for swing trades"
+      - "Structure-based stops may be wider/tighter than ATR"
+      - "In high vol regimes, ATR stops get very wide - reduce position size"
+
+  - name: Correlation-Adjusted Portfolio Risk
+    when: "Managing multiple positions that might move together."
+    implementation: |
+      import numpy as np
+
+      def portfolio_risk(
+          positions: list,  # [{'weight': 0.1, 'vol': 0.3}, ...]
+          correlation_matrix: np.ndarray,
+          use_crisis_correlations: bool = True
+      ) -> dict:
+          """
+          Calculate true portfolio risk accounting for correlation.
+
+          Individual risks don't add linearly.
+          5 positions at 2% != 10% total risk (unless uncorrelated).
+          In crisis, correlations spike to 0.9+ across risk assets.
+          """
+          weights = np.array([p['weight'] for p in positions])
+          vols = np.array([p['vol'] for p in positions])
+
+          if use_crisis_correlations:
+              # Stress test with crisis correlations
+              # Assume 0.8 correlation between all risk assets
+              n = len(positions)
+              correlation_matrix = np.full((n, n), 0.8)
+              np.fill_diagonal(correlation_matrix, 1.0)
+
+          # Covariance matrix = correlation * outer(vols, vols)
+          cov_matrix = correlation_matrix * np.outer(vols, vols)
+
+          # Portfolio variance = w' * Cov * w
+          port_variance = weights @ cov_matrix @ weights
+          port_vol = np.sqrt(port_variance)
+
+          # Compare to naive sum
+          naive_risk = np.sum(weights * vols)
+
+          return {
+              'portfolio_volatility': port_vol,
+              'naive_sum_risk': naive_risk,
+              'diversification_ratio': naive_risk / port_vol if port_vol > 0 else 1,
+              'using_crisis_correlations': use_crisis_correlations
+          }
+
+      # Example with crisis correlations:
+      # 5 crypto positions, each 20% weight, 80% vol
+      # Naive: 5 * 0.2 * 0.8 = 80% risk
+      # With 0.9 correlation: ~75% portfolio vol
+      # NOT 5 independent bets - essentially 1 big bet
+    gotchas:
+      - "Normal correlations lie - use crisis correlations for sizing"
+      - "Correlation 0.9 in stress = positions are the same bet"
+      - "True diversification requires negative or zero correlation (hard to find)"
+      - "Bonds correlated positively with stocks in 2022 - assumptions break"
+
+# =============================================================================
+# SECTION 7: RED TEAM - Attack vectors and edge cases
+# =============================================================================
+red_team:
+  - attack: "Gap through stop loss"
+    impact: |
+      Stop at $100, market gaps to $80 on news.
+      Expected 2% loss becomes 20% loss.
+      Overnight and weekend gaps are unpredictable.
+    defense: |
+      1. Reduce position size for overnight/weekend holds (50% of day trade size)
+      2. Use options for defined risk (long put = guaranteed max loss)
+      3. Avoid holding through known events (FOMC, earnings)
+      4. Calculate gap-adjusted risk: normal_risk * 2 for overnight
+
+  - attack: "Volatility spike during position"
+    impact: |
+      Entered with 20% vol assumption, vol spikes to 80%.
+      Position now 4x riskier than planned.
+      ATR-based stops suddenly very wide.
+    defense: |
+      1. Monitor VIX and asset-specific vol
+      2. Reduce position size when vol > 2x normal
+      3. Use vol targeting to automatically reduce exposure
+      4. Have hard dollar limits regardless of vol calculation
+
+  - attack: "Correlation breakdown in crisis"
+    impact: |
+      "Diversified" portfolio all drops together.
+      Expected 10% portfolio drawdown becomes 40%.
+      Diversification disappears when needed most.
+    defense: |
+      1. Always use crisis correlations (0.8-0.9) for risk calculations
+      2. True hedges: puts, VIX calls, managed futures
+      3. Size total portfolio for correlated max drawdown
+      4. Keep cash allocation for crisis opportunities
+
+  - attack: "Liquidity disappears in crisis"
+    impact: |
+      Can't exit position at any reasonable price.
+      Slippage 5-10% instead of expected 0.5%.
+      Stop becomes market order into void.
+    defense: |
+      1. Position < 1% of daily volume for easy exit
+      2. Reduce position in illiquid assets
+      3. Account for 5-10x normal slippage in crisis
+      4. Have liquidity plan before entering position
+
+  - attack: "Margin call cascade"
+    impact: |
+      Leveraged position triggers margin call.
+      Forced liquidation at worst prices.
+      Losses exceed account - you owe money.
+    defense: |
+      1. Keep leverage < 3x for retail
+      2. Stop loss BEFORE liquidation price (2x buffer minimum)
+      3. Monitor margin utilization in real-time
+      4. Have cash buffer to avoid forced liquidation
+
+# =============================================================================
+# SECTION 8: TESTING - How to test risk management code
+# =============================================================================
+testing:
+  - type: Unit Tests
+    focus: "Position sizing calculations"
+    example: |
+      def test_position_sizing():
+          result = calculate_position_size(
+              account_value=100000,
+              risk_percent=0.01,
+              entry_price=50,
+              stop_price=47
+          )
+          assert result['shares'] == 333
+          assert result['risk_amount'] <= 1000  # Never exceeds risk budget
+          assert result['position_percent'] <= 0.25  # Never exceeds max position
+
+      def test_zero_stop_distance():
+          with pytest.raises(ValueError):
+              calculate_position_size(100000, 0.01, 50, 50)  # Invalid
+
+      def test_kelly_bounds():
+          result = kelly_criterion(0.55, 150, 100, kelly_fraction=0.25)
+          assert 0 <= result['adjusted_kelly'] <= 0.25
+          assert result['adjusted_kelly'] < result['full_kelly']
+
+  - type: Integration Tests
+    focus: "Drawdown circuit breakers"
+    example: |
+      def test_drawdown_circuit_breaker():
+          dm = DrawdownManager(initial_equity=100000)
+
+          # 10% drawdown - half size
+          dm.update_equity(90000)
+          assert dm.size_multiplier == 0.5
+          assert dm.trading_allowed == True
+
+          # 25% drawdown - quarter size
+          dm.update_equity(75000)
+          assert dm.size_multiplier == 0.25
+          assert dm.trading_allowed == True
+
+          # 35% drawdown - stop trading
+          dm.update_equity(65000)
+          assert dm.size_multiplier == 0.0
+          assert dm.trading_allowed == False
+
+  - type: Monte Carlo Simulation
+    focus: "Risk of ruin and drawdown distribution"
+    example: |
+      def monte_carlo_risk_analysis(
+          win_rate: float,
+          win_loss_ratio: float,
+          risk_per_trade: float,
+          num_trades: int = 1000,
+          num_simulations: int = 10000
+      ) -> dict:
+          """Run Monte Carlo to estimate max drawdown distribution"""
+          max_drawdowns = []
+
+          for _ in range(num_simulations):
+              equity = 1.0
+              peak = 1.0
+              max_dd = 0
+
+              for _ in range(num_trades):
+                  if np.random.random() < win_rate:
+                      equity *= (1 + risk_per_trade * win_loss_ratio)
+                  else:
+                      equity *= (1 - risk_per_trade)
+
+                  peak = max(peak, equity)
+                  dd = (peak - equity) / peak
+                  max_dd = max(max_dd, dd)
+
+              max_drawdowns.append(max_dd)
+
+          return {
+              'median_max_dd': np.median(max_drawdowns),
+              'p95_max_dd': np.percentile(max_drawdowns, 95),
+              'p99_max_dd': np.percentile(max_drawdowns, 99),
+              'ruin_probability': np.mean(np.array(max_drawdowns) > 0.95)
+          }
+
+# =============================================================================
+# SECTION 9: DECISION FRAMEWORK - When to use what
+# =============================================================================
+decision_framework:
+  - situation: "New trader, any strategy"
+    choose: "Fixed Fractional at 0.5-1% risk"
+    because: "Simple, robust, forgiving of mistakes. Survival is goal #1."
+
+  - situation: "Have 100+ trade statistics"
+    choose: "Quarter Kelly based on actual win rate and R"
+    because: "Can now calculate optimal sizing. Quarter Kelly for safety margin."
+
+  - situation: "Trading multiple uncorrelated assets"
+    choose: "Volatility-adjusted sizing with correlation matrix"
+    because: "Each position contributes equal risk. Accounts for correlation."
+
+  - situation: "Trading crypto or high-vol assets"
+    choose: "Volatility targeting at 15-20% annual"
+    because: "Forces small positions in high-vol assets. Prevents 80% vol wrecking account."
+
+  - situation: "Experiencing drawdown > 10%"
+    choose: "Activate circuit breaker, reduce size"
+    because: "Preservation mode. 20% drawdown requires 25% to recover."
+
+  - situation: "Overnight or weekend hold"
+    choose: "50% of normal position size, wider stop"
+    because: "Gap risk is real and unlimited. Can't manage what you can't trade."
+
+  - situation: "High-conviction trade"
+    choose: "Same position size as every other trade"
+    because: "Conviction is feeling, not edge. Size should be systematic, not emotional."
+
+  - situation: "Winning streak, want to size up"
+    choose: "Keep fixed percentage, let account growth increase $ risk"
+    because: "Mean reversion. Hot streak ends. Don't give back gains."
+
+# =============================================================================
+# SECTION 10: RECOVERY - When things go wrong
+# =============================================================================
+recovery:
+  - failure: "Exceeded planned loss on trade (gap through stop)"
+    detection: "Actual loss > 2x planned risk"
+    recovery: |
+      1. Close position immediately - don't hope for recovery
+      2. Log the event with exact details
+      3. Pause trading for 24 hours minimum
+      4. Analyze: Was this gap foreseeable? (earnings, FOMC?)
+      5. Adjust future sizing for gap risk
+    prevention: "Reduce overnight size, avoid known events, use options for defined risk"
+
+  - failure: "Drawdown exceeds 30%"
+    detection: "Circuit breaker tier 3 triggered"
+    recovery: |
+      1. Stop trading immediately - this is the rule
+      2. Full strategy review - is edge still present?
+      3. Check for regime change in market
+      4. Paper trade for 1 month before resuming
+      5. Start at 25% normal size when resuming
+    prevention: "Smaller initial size, earlier circuit breaker tiers, correlation monitoring"
+
+  - failure: "Risk calculations ignored during winning streak"
+    detection: "Position sizes increased 2x+ from base"
+    recovery: |
+      1. Immediately return to base position sizing
+      2. Don't unwind positions unless risk limits exceeded
+      3. Document the behavioral failure
+      4. Consider automation to enforce rules
+    prevention: "Automated position sizing, remove manual override, commitment contracts"
+
+  - failure: "Correlated positions caused unexpected loss"
+    detection: "Multiple positions moved together in loss"
+    recovery: |
+      1. Calculate actual correlation during event
+      2. Reduce total exposure immediately
+      3. Rebuild with uncorrelated positions
+      4. Use crisis correlation for future sizing
+    prevention: "Use 0.8-0.9 correlation assumption, true diversification is rare"
+
+  - failure: "Leverage caused margin call"
+    detection: "Received margin call or liquidation notice"
+    recovery: |
+      1. Add capital or close positions immediately
+      2. Priority: prevent forced liquidation at worst prices
+      3. Reduce leverage to < 2x after recovery
+      4. Rebuild with proper leverage limits
+    prevention: "Max 3x leverage, stop before liquidation, margin buffer"
+
+# =============================================================================
+# SECTION 11: EXAMPLES - Real-world implementations
+# =============================================================================
+examples:
+  - name: Complete Position Sizing System
+    code: |
+      import numpy as np
+      from dataclasses import dataclass
+      from typing import Optional
+      from enum import Enum
+
+      class MarketRegime(Enum):
+          LOW_VOL = "low_vol"      # VIX < 15
+          NORMAL = "normal"        # VIX 15-25
+          HIGH_VOL = "high_vol"    # VIX 25-35
+          CRISIS = "crisis"        # VIX > 35
+
+      @dataclass
+      class RiskConfig:
+          base_risk_pct: float = 0.01
+          max_position_pct: float = 0.25
+          max_portfolio_risk: float = 0.06  # 6 positions at 1%
+          use_crisis_correlations: bool = True
+          circuit_breaker_levels: dict = None
+
+          def __post_init__(self):
+              if self.circuit_breaker_levels is None:
+                  self.circuit_breaker_levels = {
+                      0.10: 0.50,  # 10% DD -> 50% size
+                      0.20: 0.25,  # 20% DD -> 25% size
+                      0.30: 0.00   # 30% DD -> stop
+                  }
+
+      class RiskManager:
+          def __init__(self, config: RiskConfig, initial_equity: float):
+              self.config = config
+              self.equity = initial_equity
+              self.peak_equity = initial_equity
+              self.positions = {}
+              self.regime = MarketRegime.NORMAL
+
+          @property
+          def drawdown(self) -> float:
+              return (self.peak_equity - self.equity) / self.peak_equity
+
+          @property
+          def size_multiplier(self) -> float:
+              for dd_threshold, multiplier in sorted(
+                  self.config.circuit_breaker_levels.items()
+              ):
+                  if self.drawdown >= dd_threshold:
+                      if multiplier == 0:
+                          return 0
+              return 1.0 - (self.drawdown * 2)  # Smooth reduction
+
+          def calculate_position(
+              self,
+              symbol: str,
+              entry_price: float,
+              stop_price: float,
+              asset_volatility: float
+          ) -> dict:
+              """Full position sizing with all adjustments"""
+
+              # Base risk adjusted for regime and drawdown
+              base_risk = self.config.base_risk_pct
+              adjusted_risk = base_risk * self.size_multiplier
+
+              # Volatility adjustment
+              vol_scalar = min(1.0, 0.20 / asset_volatility)  # Target 20% vol
+              adjusted_risk *= vol_scalar
+
+              # Calculate position
+              risk_amount = self.equity * adjusted_risk
+              risk_per_share = abs(entry_price - stop_price)
+
+              if risk_per_share == 0:
+                  raise ValueError("Invalid stop distance")
+
+              shares = int(risk_amount / risk_per_share)
+              position_value = shares * entry_price
+              position_pct = position_value / self.equity
+
+              # Cap at max position
+              if position_pct > self.config.max_position_pct:
+                  shares = int(
+                      (self.equity * self.config.max_position_pct) / entry_price
+                  )
+                  position_value = shares * entry_price
+                  position_pct = position_value / self.equity
+
+              return {
+                  'symbol': symbol,
+                  'shares': shares,
+                  'position_value': position_value,
+                  'position_pct': position_pct,
+                  'risk_amount': shares * risk_per_share,
+                  'risk_pct': (shares * risk_per_share) / self.equity,
+                  'adjustments': {
+                      'drawdown_multiplier': self.size_multiplier,
+                      'volatility_scalar': vol_scalar,
+                      'regime': self.regime.value
+                  }
+              }
+
+          def can_take_trade(self, new_position_risk: float) -> tuple[bool, str]:
+              """Check if trade fits within portfolio risk budget"""
+              current_risk = sum(
+                  p.get('risk_pct', 0) for p in self.positions.values()
+              )
+              total_risk = current_risk + new_position_risk
+
+              if self.size_multiplier == 0:
+                  return False, "Circuit breaker active - no trading"
+
+              if total_risk > self.config.max_portfolio_risk:
+                  return False, f"Would exceed portfolio risk: {total_risk:.2%}"
+
+              return True, "Trade approved"
+
+# =============================================================================
+# SECTION 12: GOTCHAS - Traps everyone falls into
+# =============================================================================
+gotchas:
+  - trap: "Using historical max drawdown as expected max drawdown"
+    why: "Your worst drawdown hasn't happened yet. Backtest max DD is the MINIMUM to expect."
+    correct: "Plan for 2x backtest max drawdown. If you can't survive 2x, reduce size."
+
+  - trap: "Calculating risk of ruin once and forgetting"
+    why: "Edge decays over time. Win rate changes. Market regime shifts."
+    correct: "Recalculate risk of ruin quarterly with rolling statistics."
+
+  - trap: "Adding up individual position risks"
+    why: "Correlated positions don't add linearly. 5 x 2% != 10% portfolio risk."
+    correct: "Use correlation matrix. Assume crisis correlation (0.8-0.9) for stress."
+
+  - trap: "Using stop loss distance to size, ignoring gap risk"
+    why: "Stops can be gapped through. Your 2% planned loss can become 20%."
+    correct: "For overnight/event holds, size as if stop won't work."
+
+  - trap: "Thinking Kelly Criterion is safe because it's 'optimal'"
+    why: "Full Kelly variance is brutal. 50% drawdowns are normal at full Kelly."
+    correct: "Use quarter Kelly maximum. Half Kelly achieves 75% of growth with 50% variance."
+
+  - trap: "Reducing size only after losses, not at defined thresholds"
+    why: "Emotional sizing locks in losses. Miss the recovery by being too small."
+    correct: "Use predefined circuit breaker levels. Same rules whether feeling good or bad."
+
+  - trap: "Sizing up on high conviction trades"
+    why: "Conviction is emotional, not statistical. Your feelings aren't edge."
+    correct: "Same position size rules for every trade. Systematic beats emotional."
+
+  - trap: "Assuming options protect you completely"
+    why: "Options have liquidity risk, IV changes, and can't always be exercised quickly."
+    correct: "Options reduce risk but don't eliminate it. Size accordingly."
+
+  - trap: "Using VaR as if it measures tail risk"
+    why: "95% VaR says nothing about the 5%. That 5% is what destroys accounts."
+    correct: "Use CVaR/Expected Shortfall. Focus on tail risk, not normal risk."
+
+  - trap: "Thinking diversification worked because backtest showed it"
+    why: "Correlations in backtest != correlations in crisis. All correlations go to 1."
+    correct: "Stress test with crisis correlations. True diversification is rare."
+
+tags:
+  - risk-management
+  - position-sizing
+  - kelly-criterion
+  - drawdown
+  - volatility
+  - stop-loss
+  - portfolio-risk
+  - trading
+  - correlation
+  - leverage
+  - survival

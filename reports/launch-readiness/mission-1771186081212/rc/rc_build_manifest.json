@@ -1,0 +1,18 @@
+﻿{
+    "createdAt":  "2026-02-16T00:31:06.6463864+04:00",
+    "outDir":  "reports\\\\launch-readiness\\\\mission-1771186081212\\\\rc",
+    "artifacts":  [
+                      {
+                          "name":  "vibeship_spark-0.1.0.tar.gz",
+                          "bytes":  850473,
+                          "sha256":  "f27dbd6cbd40262f2b7967a458bf7db6a0b859aa9b951f88333482f50b065952",
+                          "path":  "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\dist\\vibeship_spark-0.1.0.tar.gz"
+                      },
+                      {
+                          "name":  "vibeship_spark-0.1.0-py3-none-any.whl",
+                          "bytes":  823488,
+                          "sha256":  "3a2c72caec493ce50a09a97387b38909a559a9377e3c08f9863a40eff53364f7",
+                          "path":  "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\dist\\vibeship_spark-0.1.0-py3-none-any.whl"
+                      }
+                  ]
+}

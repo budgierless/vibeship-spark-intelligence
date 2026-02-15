@@ -175,6 +175,9 @@ class OutcomeRecord:
     outcome_evidence: Optional[str] = None
     outcome_at: Optional[str] = None
     outcome_trace_id: Optional[str] = None
+    # If an outcome is reported under a different trace than retrieval, keep the reported
+    # value for debugging while keeping strict attribution trace-bound to retrieval.
+    reported_outcome_trace_id: Optional[str] = None
     outcome_latency_s: Optional[float] = None
 
     def to_dict(self) -> Dict:
@@ -190,6 +193,7 @@ class OutcomeRecord:
             "outcome_evidence": self.outcome_evidence,
             "outcome_at": self.outcome_at,
             "outcome_trace_id": self.outcome_trace_id,
+            "reported_outcome_trace_id": self.reported_outcome_trace_id,
             "outcome_latency_s": self.outcome_latency_s,
         }
 
@@ -253,6 +257,8 @@ class MetaRalph:
         self.mind = mind_client
         self.roast_history: List[Dict] = []
         self.outcome_records: Dict[str, OutcomeRecord] = {}
+        # Track last loaded mtime so we only merge when another process updated disk.
+        self._outcome_loaded_mtime: float = 0.0
         self.learnings_stored: Dict[str, Dict] = {}
         self.self_roast_results: List[Dict] = []
 
@@ -345,6 +351,10 @@ class MetaRalph:
                 for rec_data in data.get("records", []):
                     rec = OutcomeRecord(**rec_data)
                     self.outcome_records[rec.learning_id] = rec
+                try:
+                    self._outcome_loaded_mtime = float(self.OUTCOME_TRACKING_FILE.stat().st_mtime or 0.0)
+                except Exception:
+                    self._outcome_loaded_mtime = 0.0
             except Exception:
                 pass
 
@@ -408,54 +418,48 @@ class MetaRalph:
             return 0.0
 
     def _merge_outcome_record(self, current: OutcomeRecord, incoming: OutcomeRecord) -> OutcomeRecord:
-        """Merge two records for the same learning_id without dropping stronger data."""
-        merged = OutcomeRecord(
-            learning_id=current.learning_id or incoming.learning_id,
-            learning_content=(
-                current.learning_content
-                if len(current.learning_content or "") >= len(incoming.learning_content or "")
-                else incoming.learning_content
-            ),
-            retrieved_at=current.retrieved_at or incoming.retrieved_at,
-            insight_key=current.insight_key or incoming.insight_key,
-            source=current.source or incoming.source,
-            trace_id=current.trace_id or incoming.trace_id,
-            acted_on=bool(current.acted_on or incoming.acted_on),
-            outcome=current.outcome or incoming.outcome,
-            outcome_evidence=current.outcome_evidence or incoming.outcome_evidence,
-            outcome_at=current.outcome_at or incoming.outcome_at,
-            outcome_trace_id=current.outcome_trace_id or incoming.outcome_trace_id,
-            outcome_latency_s=(
-                current.outcome_latency_s
-                if current.outcome_latency_s is not None
-                else incoming.outcome_latency_s
-            ),
+        """Merge two records for the same learning_id without mixing trace cycles."""
+        cur_ts = self._record_recency_ts(current)
+        inc_ts = self._record_recency_ts(incoming)
+        newer, older = (incoming, current) if inc_ts >= cur_ts else (current, incoming)
+
+        # Keep the newest cycle intact (retrieved_at/trace_id/outcome_*). Only backfill
+        # metadata fields from the older record.
+        learning_id = newer.learning_id or older.learning_id
+        learning_content = (
+            newer.learning_content
+            if len(str(newer.learning_content or "")) >= len(str(older.learning_content or ""))
+            else older.learning_content
         )
-
-        # Preserve explicit outcome labels if either side has one.
-        explicit_current = self._normalize_outcome(current.outcome) in ("good", "bad")
-        explicit_incoming = self._normalize_outcome(incoming.outcome) in ("good", "bad")
-        if not explicit_current and explicit_incoming:
-            merged.outcome = incoming.outcome
-            merged.outcome_evidence = incoming.outcome_evidence or merged.outcome_evidence
-            merged.outcome_at = incoming.outcome_at or merged.outcome_at
-            merged.outcome_trace_id = incoming.outcome_trace_id or merged.outcome_trace_id
-            if incoming.outcome_latency_s is not None:
-                merged.outcome_latency_s = incoming.outcome_latency_s
-        elif explicit_current and not explicit_incoming:
-            merged.outcome = current.outcome
-            merged.outcome_evidence = current.outcome_evidence or merged.outcome_evidence
-            merged.outcome_at = current.outcome_at or merged.outcome_at
-            merged.outcome_trace_id = current.outcome_trace_id or merged.outcome_trace_id
-            if current.outcome_latency_s is not None:
-                merged.outcome_latency_s = current.outcome_latency_s
-
-        return merged
+        return OutcomeRecord(
+            learning_id=learning_id,
+            learning_content=learning_content,
+            retrieved_at=newer.retrieved_at or older.retrieved_at,
+            insight_key=newer.insight_key or older.insight_key,
+            source=newer.source or older.source,
+            trace_id=newer.trace_id or older.trace_id,
+            acted_on=bool(newer.acted_on),
+            outcome=newer.outcome,
+            outcome_evidence=newer.outcome_evidence,
+            outcome_at=newer.outcome_at,
+            outcome_trace_id=newer.outcome_trace_id,
+            reported_outcome_trace_id=(
+                newer.reported_outcome_trace_id or older.reported_outcome_trace_id
+            ),
+            outcome_latency_s=newer.outcome_latency_s,
+        )
 
     def _merge_outcome_records_from_disk(self) -> None:
         """Merge current in-memory outcome records with latest on-disk snapshot."""
         if not self.OUTCOME_TRACKING_FILE.exists():
             return
+        # Only merge when another process has updated the file since we last loaded/wrote it.
+        try:
+            disk_mtime = float(self.OUTCOME_TRACKING_FILE.stat().st_mtime or 0.0)
+            if disk_mtime and disk_mtime <= float(self._outcome_loaded_mtime or 0.0):
+                return
+        except Exception:
+            disk_mtime = None
         data = self._read_json_safe(self.OUTCOME_TRACKING_FILE) or {}
         records = data.get("records", [])
         if not isinstance(records, list):
@@ -472,6 +476,11 @@ class MetaRalph:
                 self.outcome_records[disk_record.learning_id] = self._merge_outcome_record(
                     existing, disk_record
                 )
+        try:
+            if disk_mtime is not None:
+                self._outcome_loaded_mtime = float(disk_mtime)
+        except Exception:
+            pass
 
     def _save_state_now(self):
         """Actually persist state to disk."""
@@ -577,6 +586,11 @@ class MetaRalph:
             "records": [r.to_dict() for r in list(self.outcome_records.values())[-500:]],
             "last_updated": datetime.now().isoformat()
         })
+        try:
+            if self.OUTCOME_TRACKING_FILE.exists():
+                self._outcome_loaded_mtime = float(self.OUTCOME_TRACKING_FILE.stat().st_mtime or 0.0)
+        except Exception:
+            pass
 
         # Keep last N learnings for dedupe (oldest trimmed)
         if self.learnings_stored:
@@ -940,21 +954,45 @@ class MetaRalph:
         """
         if not self.roast_history and self.ROAST_HISTORY_FILE.exists():
             self._load_state()
+        now_iso = datetime.now().isoformat()
         if learning_id not in self.outcome_records:
             self.outcome_records[learning_id] = OutcomeRecord(
                 learning_id=learning_id,
                 learning_content=learning_content,
-                retrieved_at=datetime.now().isoformat(),
+                retrieved_at=now_iso,
                 insight_key=insight_key,
                 source=source,
                 trace_id=trace_id,
             )
             self._save_state()
-        else:
-            rec = self.outcome_records[learning_id]
-            if trace_id and not rec.trace_id:
-                rec.trace_id = trace_id
-                self._save_state()
+            return
+
+        # Refresh the attribution sample on every retrieval. Advice IDs are reused across
+        # sessions; keeping the first-seen trace_id causes systematic trace mismatches when
+        # the same advice is delivered and scored again later.
+        rec = self.outcome_records[learning_id]
+        try:
+            if learning_content and len(str(learning_content)) > len(str(rec.learning_content or "")):
+                rec.learning_content = str(learning_content)
+        except Exception:
+            pass
+        if insight_key and not rec.insight_key:
+            rec.insight_key = insight_key
+        if source and (not rec.source or rec.source == "auto_created"):
+            rec.source = source
+
+        rec.retrieved_at = now_iso
+        if trace_id:
+            rec.trace_id = trace_id
+
+        # Start a fresh "attempt" for strict attribution in this window.
+        rec.acted_on = False
+        rec.outcome = None
+        rec.outcome_evidence = None
+        rec.outcome_at = None
+        rec.outcome_trace_id = None
+        rec.outcome_latency_s = None
+        self._save_state()
 
     def track_outcome(
         self,
@@ -1004,6 +1042,12 @@ class MetaRalph:
         rec.outcome_at = outcome_now
         if trace_id:
             rec.outcome_trace_id = trace_id
+            try:
+                if rec.trace_id and str(rec.trace_id).strip() and str(trace_id).strip():
+                    if str(rec.trace_id).strip() != str(trace_id).strip():
+                        rec.reported_outcome_trace_id = str(trace_id).strip()
+            except Exception:
+                pass
         elif not rec.outcome_trace_id and rec.trace_id:
             rec.outcome_trace_id = rec.trace_id
         latency_s = self._compute_outcome_latency_s(rec)
@@ -1438,18 +1482,45 @@ class MetaRalph:
 
     def get_stats(self) -> Dict:
         """Get Meta-Ralph statistics."""
+        # Quality-rate gate should reflect the *current* stream of meaningful learning candidates.
+        # The roast history can be polluted by synthetic pipeline tests; exclude those from the
+        # quality-band metric used by production gates.
+        window = self.roast_history[-1000:]
+        effective = []
+        filtered_pipeline_tests = 0
+        for r in window:
+            res = r.get("result") or {}
+            original = res.get("original") or ""
+            if isinstance(original, str) and "[PIPELINE_TEST" in original:
+                filtered_pipeline_tests += 1
+                continue
+            effective.append(r)
+
+        effective_total = len(effective)
+        effective_quality = 0
+        for r in effective:
+            res = r.get("result") or {}
+            if (res.get("verdict") or "") == "quality":
+                effective_quality += 1
+
+        quality_rate_window = effective_quality / max(effective_total, 1)
+        quality_rate_all_time = self.quality_passed / max(self.total_roasted, 1)
+
         return {
             "total_roasted": self.total_roasted,
             "quality_passed": self.quality_passed,
             "primitive_rejected": self.primitive_rejected,
             "duplicates_caught": self.duplicates_caught,
             "refinements_made": self.refinements_made,
-            "pass_rate": self.quality_passed / max(self.total_roasted, 1),
-            # Alias for health checks / dashboards expecting quality_rate.
-            "quality_rate": self.quality_passed / max(self.total_roasted, 1),
+            "pass_rate": quality_rate_all_time,
+            # Used by production loop gates: windowed, excludes synthetic pipeline test pollution.
+            "quality_rate": quality_rate_window,
+            "quality_rate_window_samples": effective_total,
+            "quality_rate_window_filtered_pipeline_tests": filtered_pipeline_tests,
+            "quality_rate_all_time": quality_rate_all_time,
             "reject_rate": self.primitive_rejected / max(self.total_roasted, 1),
             "outcome_stats": self.get_outcome_stats(),
-            "learnings_stored": len(self.learnings_stored)
+            "learnings_stored": len(self.learnings_stored),
         }
 
     def get_recent_roasts(self, limit: int = 10) -> List[Dict]:

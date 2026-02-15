@@ -63,6 +63,10 @@ TOOL_COOLDOWN_S = 90
 # Don't repeat the same advice within N seconds
 ADVICE_REPEAT_COOLDOWN_S = 1800  # 30 minutes
 
+# Whether WHISPER-level advice should be emitted at all.
+# Default: off (whispers are high-noise in real operations).
+EMIT_WHISPERS = os.getenv("SPARK_ADVISORY_EMIT_WHISPERS", "1") == "1"
+
 # Phase-based relevance boosts
 PHASE_RELEVANCE = {
     "exploration": {
@@ -123,6 +127,7 @@ def apply_gate_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global MAX_EMIT_PER_CALL
     global TOOL_COOLDOWN_S
     global ADVICE_REPEAT_COOLDOWN_S
+    global EMIT_WHISPERS
 
     applied: List[str] = []
     warnings: List[str] = []
@@ -151,6 +156,17 @@ def apply_gate_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             applied.append("advice_repeat_cooldown_s")
         except Exception:
             warnings.append("invalid_advice_repeat_cooldown_s")
+
+    if "emit_whispers" in cfg:
+        text = str(cfg.get("emit_whispers") or "").strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            EMIT_WHISPERS = True
+            applied.append("emit_whispers")
+        elif text in {"0", "false", "no", "off"}:
+            EMIT_WHISPERS = False
+            applied.append("emit_whispers")
+        else:
+            warnings.append("invalid_emit_whispers")
 
     warning_threshold = _clamp_float(
         cfg.get("warning_threshold", AUTHORITY_THRESHOLDS.get(AuthorityLevel.WARNING, 0.8)),
@@ -198,6 +214,7 @@ def get_gate_config() -> Dict[str, Any]:
         "max_emit_per_call": int(MAX_EMIT_PER_CALL),
         "tool_cooldown_s": int(TOOL_COOLDOWN_S),
         "advice_repeat_cooldown_s": int(ADVICE_REPEAT_COOLDOWN_S),
+        "emit_whispers": bool(EMIT_WHISPERS),
         "warning_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.WARNING, 0.8)),
         "note_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.NOTE, 0.5)),
         "whisper_threshold": float(AUTHORITY_THRESHOLDS.get(AuthorityLevel.WHISPER, 0.35)),
@@ -480,7 +497,9 @@ def _evaluate_single(
     # ---- Final emit decision ----
     # WHISPER (0.35-0.49) was previously dead code — classified but never emitted.
     # Now included so low-confidence advice still reaches the user as a gentle hint.
-    emit = authority in (AuthorityLevel.WHISPER, AuthorityLevel.NOTE, AuthorityLevel.WARNING)
+    emit = authority in (AuthorityLevel.NOTE, AuthorityLevel.WARNING) or (
+        authority == AuthorityLevel.WHISPER and bool(EMIT_WHISPERS)
+    )
 
     agreement_note = ""
     if AGREEMENT_GATE_ENABLED:
@@ -507,6 +526,20 @@ def _check_obvious_suppression(
 
     text_lower = text.lower()
 
+    # Suppress tool-mismatch "Read before Edit" advice on tools where it adds noise.
+    # It's still relevant while Reading (as a reminder before you Edit), so allow Read/Edit/Write.
+    if any(
+        k in text_lower
+        for k in (
+            "read before edit",
+            "read a file before edit",
+            "read file before edit",
+            "before edit to verify",
+        )
+    ):
+        if tool_name not in {"Read", "Edit", "Write"}:
+            return True, "read-before-edit advice on unrelated tool"
+
     # "Read before Edit" suppression: if the file was recently Read, don't say it
     if tool_name == "Edit" and "read before edit" in text_lower:
         file_path = ""
@@ -518,6 +551,16 @@ def _check_obvious_suppression(
     # Suppress generic tool advice when tool is being used correctly
     if tool_name == "Read" and "read" in text_lower and "before" not in text_lower:
         return True, "generic Read advice while already Reading"
+
+    # Suppress tool-specific struggle cautions unless we're in that tool family.
+    # (WebFetch/WebSearch are where this is actionable; elsewhere it tends to be spam.)
+    if "webfetch" in text_lower and tool_name not in {"WebFetch", "WebSearch"}:
+        return True, "WebFetch caution on non-web tool"
+
+    # Suppress meta-constraints unless we're in planning/control tools.
+    if text_lower.startswith("constraint:") and "one state" in text_lower:
+        if tool_name not in {"Task", "EnterPlanMode", "ExitPlanMode"}:
+            return True, "meta constraint on non-planning tool"
 
     # Suppress deployment warnings during exploration phase
     if state and state.task_phase == "exploration":

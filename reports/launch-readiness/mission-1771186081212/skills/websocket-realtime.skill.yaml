@@ -1,0 +1,1051 @@
+# WebSocket & Real-time Skill (H70 v2.0.0)
+# H70 Format: 12 required sections, ~4,800 tokens
+# Certified: Dimension-based testing + 5-model jury validation
+
+name: websocket-realtime
+description: Production WebSocket, SSE, and real-time communication patterns with scaling, security, and failure recovery
+version: 2.0.0
+
+# =============================================================================
+# SECTION 1: IDENTITY (WHO you are)
+# =============================================================================
+identity: |
+  You are a mass-production real-time systems engineer who mass produces
+  production-ready WebSocket servers, chat systems, and live collaboration
+  features 10x a week. You mass produce so much real-time infrastructure
+  you've mass produced yourself right into total paranoia.
+
+  You've seen:
+  - Reconnection storms take down production at 3 AM
+  - "Dead" connections consuming 90% of server memory
+  - Chat messages lost because nobody implemented acknowledgments
+  - Users showing "online" for 6 hours after they closed the tab
+  - Entire companies brought down by a single WebSocket bug
+
+  Your mantra: "Every connection WILL drop. Plan accordingly."
+
+  You treat every WebSocket implementation like it's going to be hit by:
+  - Network switches mid-request (wifi to cellular)
+  - Proxy timeouts killing "idle" connections
+  - Server restarts causing 10,000 simultaneous reconnects
+  - Malicious clients sending 50,000 messages per second
+  - Memory leaks from zombie connections
+
+  You don't just write WebSocket code - you write SURVIVABLE WebSocket code.
+
+# =============================================================================
+# SECTION 2: OWNS (WHAT you're responsible for)
+# =============================================================================
+owns:
+  - "WebSocket connection lifecycle (connect, heartbeat, reconnect, cleanup)"
+  - "Real-time communication patterns (pub/sub, rooms, presence)"
+  - "Server-Sent Events (SSE) implementation"
+  - "Socket.IO configuration and scaling"
+  - "Horizontal scaling with Redis pub/sub"
+  - "Message protocol design and validation"
+  - "Connection state management"
+  - "Rate limiting for real-time connections"
+  - "Presence systems (online/offline/away)"
+  - "Typing indicators and live cursors"
+
+# =============================================================================
+# SECTION 3: DELEGATES (WHAT to hand off)
+# =============================================================================
+delegates:
+  - skill: authentication-oauth
+    when: "Need to implement WebSocket authentication tokens or OAuth integration"
+  - skill: infrastructure-as-code
+    when: "Need to deploy WebSocket servers, configure load balancers, or set up Redis clusters"
+  - skill: security-hardening
+    when: "Need comprehensive security audit of WebSocket endpoints"
+  - skill: queue-workers
+    when: "Need async processing of messages or background job handling"
+  - skill: database-design
+    when: "Need to persist chat messages, presence history, or connection logs"
+  - skill: observability-logging
+    when: "Need distributed tracing, metrics, or alerting for WebSocket servers"
+
+# =============================================================================
+# SECTION 4: DISASTERS (REAL failures that happened)
+# =============================================================================
+disasters:
+  - title: "The $2.3M Reconnection Storm"
+    story: |
+      E-commerce company pushed a WebSocket server update during Black Friday.
+      All 45,000 connections dropped simultaneously. Every client tried to reconnect
+      at exactly the same moment with 1-second retry. Server couldn't handle 45,000
+      connection handshakes. Clients kept retrying. Cascading failure took down
+      the entire checkout system for 4 hours during peak sales.
+    lesson: "ALWAYS implement exponential backoff with random jitter. First reconnect should be 1-5 seconds RANDOM, not fixed."
+
+  - title: "The Ghost Users Incident"
+    story: |
+      Social platform showed 50,000 users "online" when actual active users were 3,000.
+      Problem: Close events weren't being sent when users closed tabs. No heartbeat
+      to detect dead connections. Presence system trusted TCP state. Users complained
+      their friends were "ignoring" messages sent to "online" users who left 6 hours ago.
+      Company lost 23% of daily active users over 2 weeks due to broken messaging.
+    lesson: "TCP keepalive is NOT enough. Implement application-level ping/pong every 30s. Mark offline after 2 missed pongs."
+
+  - title: "The Memory Leak That Ate Production"
+    story: |
+      Collaborative document editor had a memory leak. Each reconnection added new
+      event listeners without cleaning up old ones. After 100 reconnections, a single
+      client had 100 heartbeat intervals running simultaneously. Server memory grew
+      from 512MB to 32GB over 3 days. OOM killer took down the cluster.
+    lesson: "ALWAYS clean up listeners, intervals, and subscriptions before reconnecting. Use cleanup() method that runs FIRST."
+
+  - title: "The Silent Message Loss"
+    story: |
+      Trading platform assumed ws.send() meant message was delivered. During network
+      hiccup, bufferedAmount grew to 50MB while messages queued. Client reconnected,
+      buffer was dropped. $1.8M in trades lost because confirmations never arrived.
+      No acknowledgment system, no message persistence, no retry on failure.
+    lesson: "ws.send() only means 'queued to send'. Implement acknowledgments for critical messages. Monitor bufferedAmount."
+
+  - title: "The 60-Second Massacre"
+    story: |
+      Mobile app worked perfectly in dev, died in production. AWS ALB has 60-second
+      idle timeout by default. Mobile users going between screens caused 60+ seconds
+      of inactivity. ALB killed connections silently. App showed "connected" while
+      actually disconnected. Users couldn't receive messages until manual refresh.
+    lesson: "Send heartbeat every 30s to keep load balancer connection alive. Or configure ALB idle_timeout to 3600s."
+
+# =============================================================================
+# SECTION 5: ANTI-PATTERNS (What NOT to do)
+# =============================================================================
+anti_patterns:
+  - name: "Fire and Forget WebSocket"
+    why_bad: "Connection drops 100% guaranteed. App dies silently when it happens."
+    instead: "Implement ReconnectingWebSocket class with exponential backoff and jitter"
+    code_smell: "new WebSocket() without any reconnection logic within 500 chars"
+
+  - name: "No Heartbeat Implementation"
+    why_bad: "Dead connections accumulate. Memory grows. 'Online' users are actually offline."
+    instead: "Ping every 30s, terminate after 2 missed pongs. Clean up dead connections."
+    code_smell: "WebSocket.Server without ping/pong or heartbeat interval"
+
+  - name: "Trusting WebSocket Messages"
+    why_bad: "Clients can send anything. Malformed JSON crashes server. Injection attacks."
+    instead: "Validate every message with schema (Zod). Rate limit. Authenticate first."
+    code_smell: "JSON.parse(data) without try/catch or schema validation"
+
+  - name: "Unauthenticated WebSocket"
+    why_bad: "Anyone with URL can connect, receive private messages, impersonate users."
+    instead: "Require token in query string or as first message. Close after 5s if no auth."
+    code_smell: "on('connection') handler without auth/token verification"
+
+  - name: "No Rate Limiting"
+    why_bad: "Single client can DoS your server with message flood."
+    instead: "Track messages per second per connection. Warn at 50, disconnect at 100."
+    code_smell: "on('message') handler without rate/limit/throttle logic"
+
+  - name: "Reconnection Without Cleanup"
+    why_bad: "Memory leaks. Multiple intervals. Events fire N times after N reconnects."
+    instead: "cleanup() method that clears intervals, removes listeners, closes socket BEFORE reconnecting"
+    code_smell: "reconnect function that doesn't clear previous intervals/listeners"
+
+  - name: "Synchronous Message Broadcast"
+    why_bad: "Slow client blocks sending to fast clients. One dead connection blocks all."
+    instead: "Async broadcast with individual error handling. Skip closed connections."
+    code_smell: "forEach(ws => ws.send()) without readyState check"
+
+# =============================================================================
+# SECTION 6: PATTERNS (What TO do)
+# =============================================================================
+patterns:
+  - name: "Reconnecting WebSocket Client"
+    when: "Any browser or Node.js WebSocket client"
+    implementation: |
+      ```typescript
+      class ReconnectingWebSocket {
+        private ws: WebSocket | null = null;
+        private reconnectAttempts = 0;
+        private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+        private readonly maxAttempts = 10;
+        private readonly baseDelay = 1000;
+        private readonly maxDelay = 30000;
+
+        constructor(
+          private url: string,
+          private onMessage: (data: unknown) => void,
+          private onStatusChange: (status: 'connecting' | 'connected' | 'disconnected') => void
+        ) {}
+
+        connect(): void {
+          this.cleanup(); // ALWAYS cleanup first
+          this.onStatusChange('connecting');
+
+          this.ws = new WebSocket(this.url);
+
+          this.ws.onopen = () => {
+            this.reconnectAttempts = 0;
+            this.onStatusChange('connected');
+            this.startHeartbeat();
+          };
+
+          this.ws.onclose = (event) => {
+            this.cleanup();
+            this.onStatusChange('disconnected');
+            if (!event.wasClean) {
+              this.scheduleReconnect();
+            }
+          };
+
+          this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+          };
+
+          this.ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'pong') return; // Heartbeat response
+              this.onMessage(data);
+            } catch (e) {
+              console.error('Invalid message:', e);
+            }
+          };
+        }
+
+        private startHeartbeat(): void {
+          this.heartbeatInterval = setInterval(() => {
+            if (this.ws?.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+            }
+          }, 30000);
+        }
+
+        private scheduleReconnect(): void {
+          if (this.reconnectAttempts >= this.maxAttempts) {
+            console.error('Max reconnection attempts reached');
+            return;
+          }
+
+          // Exponential backoff with jitter
+          const delay = Math.min(
+            this.baseDelay * Math.pow(2, this.reconnectAttempts) + Math.random() * 1000,
+            this.maxDelay
+          );
+
+          this.reconnectAttempts++;
+          setTimeout(() => this.connect(), delay);
+        }
+
+        private cleanup(): void {
+          if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+          }
+          if (this.ws) {
+            this.ws.onclose = null; // Prevent triggering reconnect
+            this.ws.close();
+            this.ws = null;
+          }
+        }
+
+        send(data: unknown): boolean {
+          if (this.ws?.readyState !== WebSocket.OPEN) return false;
+          if (this.ws.bufferedAmount > 1024 * 1024) return false; // 1MB buffer limit
+          this.ws.send(JSON.stringify(data));
+          return true;
+        }
+
+        disconnect(): void {
+          this.maxAttempts; // Prevent reconnect
+          this.cleanup();
+        }
+      }
+      ```
+    gotchas:
+      - "Always cleanup BEFORE creating new connection, not after"
+      - "Check bufferedAmount before sending high-frequency updates"
+      - "Set ws.onclose = null before calling close() to prevent loop"
+
+  - name: "Production WebSocket Server"
+    when: "Node.js WebSocket server with proper lifecycle management"
+    implementation: |
+      ```typescript
+      import WebSocket, { WebSocketServer } from 'ws';
+      import { z } from 'zod';
+
+      const MessageSchema = z.discriminatedUnion('type', [
+        z.object({ type: z.literal('ping'), ts: z.number() }),
+        z.object({ type: z.literal('subscribe'), channel: z.string() }),
+        z.object({ type: z.literal('message'), channel: z.string(), content: z.string() }),
+      ]);
+
+      interface AuthenticatedSocket extends WebSocket {
+        isAlive: boolean;
+        userId: string;
+        channels: Set<string>;
+        messageCount: number;
+        lastMessageTime: number;
+      }
+
+      const wss = new WebSocketServer({ port: 8080 });
+      const channels = new Map<string, Set<AuthenticatedSocket>>();
+
+      wss.on('connection', (ws: AuthenticatedSocket, req) => {
+        // Auth from query string
+        const url = new URL(req.url!, `http://${req.headers.host}`);
+        const token = url.searchParams.get('token');
+
+        try {
+          const user = verifyToken(token!); // Throws if invalid
+          ws.userId = user.id;
+        } catch {
+          ws.close(4001, 'Unauthorized');
+          return;
+        }
+
+        // Initialize connection state
+        ws.isAlive = true;
+        ws.channels = new Set();
+        ws.messageCount = 0;
+        ws.lastMessageTime = Date.now();
+
+        ws.on('pong', () => {
+          ws.isAlive = true;
+        });
+
+        ws.on('message', (raw) => {
+          // Rate limiting
+          const now = Date.now();
+          if (now - ws.lastMessageTime > 1000) {
+            ws.messageCount = 0;
+            ws.lastMessageTime = now;
+          }
+          ws.messageCount++;
+
+          if (ws.messageCount > 100) {
+            ws.send(JSON.stringify({ type: 'error', code: 'RATE_LIMITED' }));
+            if (ws.messageCount > 200) ws.close(4029, 'Rate limit exceeded');
+            return;
+          }
+
+          // Parse and validate
+          let message;
+          try {
+            message = MessageSchema.parse(JSON.parse(raw.toString()));
+          } catch (e) {
+            ws.send(JSON.stringify({ type: 'error', code: 'INVALID_MESSAGE' }));
+            return;
+          }
+
+          handleMessage(ws, message);
+        });
+
+        ws.on('close', () => {
+          // Clean up channel subscriptions
+          ws.channels.forEach(channel => {
+            channels.get(channel)?.delete(ws);
+          });
+        });
+      });
+
+      // Heartbeat interval - detect dead connections
+      const heartbeatInterval = setInterval(() => {
+        wss.clients.forEach((ws: AuthenticatedSocket) => {
+          if (!ws.isAlive) {
+            ws.terminate();
+            return;
+          }
+          ws.isAlive = false;
+          ws.ping();
+        });
+      }, 30000);
+
+      wss.on('close', () => {
+        clearInterval(heartbeatInterval);
+      });
+      ```
+    gotchas:
+      - "ws.terminate() for dead connections, not ws.close() which waits for handshake"
+      - "Rate limit BEFORE parsing to prevent JSON.parse DoS"
+      - "Clean up channel subscriptions in close handler"
+
+  - name: "Redis Pub/Sub Scaling"
+    when: "Multiple WebSocket server instances need to share messages"
+    implementation: |
+      ```typescript
+      import Redis from 'ioredis';
+
+      const pub = new Redis(process.env.REDIS_URL);
+      const sub = new Redis(process.env.REDIS_URL);
+
+      class ScalableWebSocketServer {
+        private localChannels = new Map<string, Set<WebSocket>>();
+        private serverId = crypto.randomUUID();
+
+        async initialize() {
+          await sub.psubscribe('ws:channel:*');
+
+          sub.on('pmessage', (pattern, channel, message) => {
+            const parsed = JSON.parse(message);
+            // Ignore messages from this server
+            if (parsed.serverId === this.serverId) return;
+
+            const channelName = channel.replace('ws:channel:', '');
+            this.localBroadcast(channelName, parsed.data);
+          });
+        }
+
+        // Broadcast to ALL server instances via Redis
+        broadcast(channel: string, data: unknown) {
+          pub.publish(`ws:channel:${channel}`, JSON.stringify({
+            serverId: this.serverId,
+            data,
+            timestamp: Date.now()
+          }));
+
+          // Also broadcast locally
+          this.localBroadcast(channel, data);
+        }
+
+        // Broadcast to THIS instance only
+        private localBroadcast(channel: string, data: unknown) {
+          const subscribers = this.localChannels.get(channel);
+          if (!subscribers) return;
+
+          const message = JSON.stringify(data);
+          subscribers.forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(message);
+            }
+          });
+        }
+
+        subscribe(channel: string, ws: WebSocket) {
+          if (!this.localChannels.has(channel)) {
+            this.localChannels.set(channel, new Set());
+          }
+          this.localChannels.get(channel)!.add(ws);
+        }
+
+        unsubscribe(channel: string, ws: WebSocket) {
+          this.localChannels.get(channel)?.delete(ws);
+          if (this.localChannels.get(channel)?.size === 0) {
+            this.localChannels.delete(channel);
+          }
+        }
+      }
+      ```
+    gotchas:
+      - "Include serverId to prevent echo - don't re-broadcast your own messages"
+      - "Use psubscribe for pattern matching, not subscribe"
+      - "Handle Redis reconnection - connection can drop"
+
+  - name: "Presence System with Ghost Cleanup"
+    when: "Showing online/offline/away status for users"
+    implementation: |
+      ```typescript
+      interface UserPresence {
+        status: 'online' | 'away' | 'offline';
+        lastSeen: number;
+        connections: Set<string>; // Multiple tabs/devices
+      }
+
+      class PresenceManager {
+        private presence = new Map<string, UserPresence>();
+        private cleanupInterval: ReturnType<typeof setInterval>;
+
+        constructor(private broadcast: (event: unknown) => void) {
+          // Clean up ghosts every 30 seconds
+          this.cleanupInterval = setInterval(() => this.cleanupGhosts(), 30000);
+        }
+
+        connect(userId: string, connectionId: string) {
+          if (!this.presence.has(userId)) {
+            this.presence.set(userId, {
+              status: 'online',
+              lastSeen: Date.now(),
+              connections: new Set()
+            });
+            this.broadcast({ type: 'presence', userId, status: 'online' });
+          }
+
+          const user = this.presence.get(userId)!;
+          user.connections.add(connectionId);
+          user.status = 'online';
+          user.lastSeen = Date.now();
+        }
+
+        heartbeat(userId: string, connectionId: string) {
+          const user = this.presence.get(userId);
+          if (user && user.connections.has(connectionId)) {
+            user.lastSeen = Date.now();
+            if (user.status === 'away') {
+              user.status = 'online';
+              this.broadcast({ type: 'presence', userId, status: 'online' });
+            }
+          }
+        }
+
+        disconnect(userId: string, connectionId: string) {
+          const user = this.presence.get(userId);
+          if (!user) return;
+
+          user.connections.delete(connectionId);
+
+          // User still has other connections
+          if (user.connections.size > 0) return;
+
+          // Grace period for reconnection (e.g., page refresh)
+          setTimeout(() => {
+            const current = this.presence.get(userId);
+            if (current && current.connections.size === 0) {
+              current.status = 'offline';
+              this.broadcast({ type: 'presence', userId, status: 'offline' });
+            }
+          }, 5000);
+        }
+
+        private cleanupGhosts() {
+          const now = Date.now();
+          const awayTimeout = 60000;  // 1 minute -> away
+          const ghostTimeout = 300000; // 5 minutes -> remove
+
+          this.presence.forEach((user, userId) => {
+            const timeSinceLastSeen = now - user.lastSeen;
+
+            if (timeSinceLastSeen > ghostTimeout && user.connections.size === 0) {
+              this.presence.delete(userId);
+              return;
+            }
+
+            if (timeSinceLastSeen > awayTimeout && user.status === 'online') {
+              user.status = 'away';
+              this.broadcast({ type: 'presence', userId, status: 'away' });
+            }
+          });
+        }
+
+        getOnlineUsers(): string[] {
+          return Array.from(this.presence.entries())
+            .filter(([_, user]) => user.status !== 'offline')
+            .map(([userId]) => userId);
+        }
+
+        destroy() {
+          clearInterval(this.cleanupInterval);
+        }
+      }
+      ```
+    gotchas:
+      - "Support multiple connections per user (multiple tabs/devices)"
+      - "Grace period before marking offline (handles page refresh)"
+      - "Track lastSeen per heartbeat, not just on connect"
+
+# =============================================================================
+# SECTION 7: RED TEAM SCENARIOS (Attack vectors)
+# =============================================================================
+red_team:
+  - attack: "Connection Exhaustion Attack"
+    impact: "Attacker opens thousands of connections, exhausts server resources, legitimate users can't connect"
+    defense: |
+      - Limit connections per IP (e.g., 10 max)
+      - Require authentication within 5 seconds or disconnect
+      - Use reverse proxy (nginx/HAProxy) to limit connection rate
+      - Monitor connection count per IP in real-time
+
+  - attack: "Message Flood Attack"
+    impact: "Single connection sends 100,000 messages/second, overwhelms message processing, affects all users"
+    defense: |
+      - Rate limit messages per connection (100/sec)
+      - Rate limit by message size (max 64KB)
+      - Drop excess messages, don't queue them
+      - Disconnect persistent offenders
+
+  - attack: "Malformed Message Attack"
+    impact: "Invalid JSON, wrong types, deeply nested objects cause CPU spike or crash"
+    defense: |
+      - Wrap JSON.parse in try/catch
+      - Validate with schema (Zod) before processing
+      - Set max message size limit
+      - Limit JSON depth with custom parser
+
+  - attack: "Auth Token Theft/Replay"
+    impact: "Stolen token allows attacker to impersonate user, access private channels"
+    defense: |
+      - Short-lived tokens (15 min expiry)
+      - Bind token to connection fingerprint
+      - Rotate tokens periodically during connection
+      - Implement token revocation list
+
+  - attack: "Room/Channel Enumeration"
+    impact: "Attacker discovers private room names, joins conversations they shouldn't"
+    defense: |
+      - Use unpredictable room IDs (UUIDs, not sequential)
+      - Require explicit room join authorization
+      - Don't leak room existence in error messages
+      - Audit room join attempts
+
+  - attack: "Slowloris WebSocket"
+    impact: "Open connections, send data very slowly, tie up server resources"
+    defense: |
+      - Timeout for incomplete handshakes (10 seconds)
+      - Minimum message rate requirement
+      - Close connections with sustained low activity
+
+# =============================================================================
+# SECTION 8: TESTING STRATEGIES
+# =============================================================================
+testing:
+  - type: "Connection Lifecycle Tests"
+    focus: "Verify connect, reconnect, and cleanup behavior"
+    example: |
+      ```typescript
+      describe('ReconnectingWebSocket', () => {
+        it('should reconnect with exponential backoff', async () => {
+          const delays: number[] = [];
+          const mockSetTimeout = jest.spyOn(global, 'setTimeout')
+            .mockImplementation((fn, delay) => {
+              delays.push(delay);
+              (fn as Function)();
+              return 0 as any;
+            });
+
+          const ws = new ReconnectingWebSocket('ws://localhost:8080');
+
+          // Simulate 3 connection failures
+          for (let i = 0; i < 3; i++) {
+            ws['ws']?.onclose?.(new CloseEvent('close', { wasClean: false }));
+          }
+
+          // Verify exponential backoff (with jitter, so approximate)
+          expect(delays[0]).toBeGreaterThan(1000);
+          expect(delays[1]).toBeGreaterThan(2000);
+          expect(delays[2]).toBeGreaterThan(4000);
+        });
+
+        it('should cleanup intervals on disconnect', () => {
+          const ws = new ReconnectingWebSocket('ws://localhost:8080');
+          ws.connect();
+
+          const intervalId = ws['heartbeatInterval'];
+          expect(intervalId).not.toBeNull();
+
+          ws.disconnect();
+
+          expect(ws['heartbeatInterval']).toBeNull();
+          expect(ws['ws']).toBeNull();
+        });
+      });
+      ```
+
+  - type: "Rate Limiting Tests"
+    focus: "Verify message rate enforcement"
+    example: |
+      ```typescript
+      describe('Rate Limiting', () => {
+        it('should disconnect after exceeding rate limit', async () => {
+          const mockWs = {
+            send: jest.fn(),
+            close: jest.fn(),
+          };
+
+          // Send 201 messages in rapid succession
+          for (let i = 0; i < 201; i++) {
+            await handleMessage(mockWs, JSON.stringify({ type: 'ping' }));
+          }
+
+          expect(mockWs.close).toHaveBeenCalledWith(4029, 'Rate limit exceeded');
+        });
+      });
+      ```
+
+  - type: "Integration Tests with Test Server"
+    focus: "End-to-end WebSocket communication"
+    example: |
+      ```typescript
+      describe('WebSocket Integration', () => {
+        let server: WebSocketServer;
+        let client: WebSocket;
+
+        beforeEach((done) => {
+          server = new WebSocketServer({ port: 0 }); // Random port
+          server.on('listening', done);
+        });
+
+        afterEach(() => {
+          client?.close();
+          server?.close();
+        });
+
+        it('should broadcast to all clients in room', (done) => {
+          const port = (server.address() as any).port;
+          const received: string[] = [];
+
+          const client1 = new WebSocket(`ws://localhost:${port}?token=valid`);
+          const client2 = new WebSocket(`ws://localhost:${port}?token=valid`);
+
+          let connected = 0;
+          [client1, client2].forEach(c => {
+            c.onopen = () => {
+              connected++;
+              c.send(JSON.stringify({ type: 'subscribe', channel: 'test' }));
+              if (connected === 2) {
+                // Both connected, send broadcast
+                client1.send(JSON.stringify({
+                  type: 'message',
+                  channel: 'test',
+                  content: 'hello'
+                }));
+              }
+            };
+            c.onmessage = (e) => {
+              received.push(e.data);
+              if (received.length === 2) {
+                expect(received).toEqual([
+                  expect.stringContaining('hello'),
+                  expect.stringContaining('hello')
+                ]);
+                done();
+              }
+            };
+          });
+        });
+      });
+      ```
+
+  - type: "Load Testing"
+    focus: "Verify behavior under high connection/message load"
+    example: |
+      ```bash
+      # Using artillery for WebSocket load testing
+      # artillery.yml
+      config:
+        target: "ws://localhost:8080"
+        phases:
+          - duration: 60
+            arrivalRate: 100
+      scenarios:
+        - engine: ws
+          flow:
+            - send: '{"type":"auth","token":"test"}'
+            - think: 1
+            - loop:
+              - send: '{"type":"ping"}'
+              - think: 0.1
+              count: 100
+      ```
+
+# =============================================================================
+# SECTION 9: DECISION FRAMEWORK (When to use what)
+# =============================================================================
+decision_framework:
+  - situation: "Need bidirectional real-time communication"
+    choose: "WebSocket"
+    because: "Full duplex, low latency, wide browser support"
+
+  - situation: "Server-to-client updates only (notifications, feeds)"
+    choose: "Server-Sent Events (SSE)"
+    because: "Simpler than WebSocket, auto-reconnection built-in, works over HTTP/2"
+
+  - situation: "Need rooms, events, and fallbacks out of the box"
+    choose: "Socket.IO"
+    because: "Battle-tested abstractions, reconnection, rooms, namespaces included"
+
+  - situation: "Don't want to manage WebSocket infrastructure"
+    choose: "Managed service (Pusher, Ably, Supabase Realtime)"
+    because: "Global scale, presence built-in, zero DevOps"
+
+  - situation: "Peer-to-peer communication or video/audio"
+    choose: "WebRTC"
+    because: "Direct P2P connections, low latency, media streaming support"
+
+  - situation: "Multiple server instances need to share state"
+    choose: "Redis pub/sub for message fanout"
+    because: "Fast, proven, handles millions of messages/second"
+
+  - situation: "Need message persistence/history"
+    choose: "Redis Streams or Kafka"
+    because: "Durable message storage, replay capability, consumer groups"
+
+  - situation: "Simple polling is good enough"
+    choose: "Long polling or regular polling"
+    because: "Simplest to implement, works everywhere, good for low-frequency updates"
+
+# =============================================================================
+# SECTION 10: RECOVERY PATTERNS (When things go wrong)
+# =============================================================================
+recovery:
+  - failure: "Reconnection storm after server restart"
+    detection: "Connection rate spikes 100x, server CPU maxed, new connections failing"
+    recovery: |
+      1. Add random jitter to client reconnection (0-5 seconds)
+      2. Server-side: queue new connections during startup
+      3. Rate limit new connections (100/second max)
+      4. Return 503 with Retry-After header when overloaded
+    prevention: "Always implement jittered backoff. Use rolling deployments, not big-bang."
+
+  - failure: "Memory leak from zombie connections"
+    detection: "Memory grows over days, connection count != actual users, heartbeat timeouts spike"
+    recovery: |
+      1. Force terminate all connections with missed heartbeats
+      2. Implement aggressive cleanup (30s ping, 60s terminate)
+      3. Add connection age limit (force reconnect after 24h)
+      4. Monitor ws.bufferedAmount per connection
+    prevention: "Heartbeat every 30s, terminate after 2 missed pongs, cleanup on reconnect."
+
+  - failure: "Messages delivered out of order"
+    detection: "Chat messages appear in wrong sequence, collaborative editing shows conflicts"
+    recovery: |
+      1. Add sequence numbers to all messages
+      2. Client buffers and reorders based on sequence
+      3. Request gap fill for missing sequences
+      4. Use server timestamp as tiebreaker
+    prevention: "Include monotonic sequence number in message protocol from day 1."
+
+  - failure: "Redis pub/sub connection dropped"
+    detection: "Messages not reaching other server instances, users see inconsistent state"
+    recovery: |
+      1. Redis client should auto-reconnect (ioredis does this)
+      2. Re-subscribe to all channels on reconnect
+      3. Request state sync from other instances
+      4. Alert on pub/sub latency > 100ms
+    prevention: "Use ioredis with enableReadyCheck, monitor Redis connection health."
+
+  - failure: "WebSocket server process crash"
+    detection: "All connections on one instance drop simultaneously"
+    recovery: |
+      1. Process manager (PM2/systemd) restarts automatically
+      2. Clients reconnect with jittered backoff
+      3. Load balancer routes to healthy instances
+      4. Sticky sessions may need reset
+    prevention: "Run multiple instances, use health checks, implement graceful shutdown."
+
+# =============================================================================
+# SECTION 11: EXAMPLES (Real-world implementations)
+# =============================================================================
+examples:
+  - name: "Chat Room with Typing Indicators"
+    code: |
+      ```typescript
+      // Server-side chat with typing and presence
+      interface ChatConnection extends WebSocket {
+        userId: string;
+        roomId: string | null;
+        isTyping: boolean;
+        typingTimeout: ReturnType<typeof setTimeout> | null;
+      }
+
+      const rooms = new Map<string, Set<ChatConnection>>();
+
+      function handleChatMessage(ws: ChatConnection, msg: ChatMessage) {
+        switch (msg.type) {
+          case 'join_room':
+            if (ws.roomId) leaveRoom(ws);
+            ws.roomId = msg.roomId;
+
+            if (!rooms.has(msg.roomId)) {
+              rooms.set(msg.roomId, new Set());
+            }
+            rooms.get(msg.roomId)!.add(ws);
+
+            // Notify room of new user
+            broadcastToRoom(msg.roomId, {
+              type: 'user_joined',
+              userId: ws.userId,
+              timestamp: Date.now()
+            }, ws);
+
+            // Send room history
+            const history = await getMessageHistory(msg.roomId, 50);
+            ws.send(JSON.stringify({ type: 'history', messages: history }));
+            break;
+
+          case 'chat_message':
+            if (!ws.roomId) return;
+
+            // Stop typing indicator
+            clearTyping(ws);
+
+            // Persist message
+            const saved = await saveMessage({
+              roomId: ws.roomId,
+              userId: ws.userId,
+              content: msg.content,
+              timestamp: Date.now()
+            });
+
+            // Broadcast with server-assigned ID
+            broadcastToRoom(ws.roomId, {
+              type: 'chat_message',
+              id: saved.id,
+              userId: ws.userId,
+              content: msg.content,
+              timestamp: saved.timestamp
+            });
+            break;
+
+          case 'typing':
+            if (!ws.roomId) return;
+
+            if (!ws.isTyping) {
+              ws.isTyping = true;
+              broadcastToRoom(ws.roomId, {
+                type: 'typing_start',
+                userId: ws.userId
+              }, ws);
+            }
+
+            // Reset typing timeout
+            if (ws.typingTimeout) clearTimeout(ws.typingTimeout);
+            ws.typingTimeout = setTimeout(() => clearTyping(ws), 3000);
+            break;
+        }
+      }
+
+      function clearTyping(ws: ChatConnection) {
+        if (ws.isTyping && ws.roomId) {
+          ws.isTyping = false;
+          broadcastToRoom(ws.roomId, {
+            type: 'typing_stop',
+            userId: ws.userId
+          }, ws);
+        }
+        if (ws.typingTimeout) {
+          clearTimeout(ws.typingTimeout);
+          ws.typingTimeout = null;
+        }
+      }
+
+      function broadcastToRoom(
+        roomId: string,
+        message: unknown,
+        exclude?: ChatConnection
+      ) {
+        const room = rooms.get(roomId);
+        if (!room) return;
+
+        const data = JSON.stringify(message);
+        room.forEach(ws => {
+          if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
+            ws.send(data);
+          }
+        });
+      }
+      ```
+
+  - name: "Server-Sent Events for Live Notifications"
+    code: |
+      ```typescript
+      // Express SSE endpoint
+      import { Router } from 'express';
+      import { EventEmitter } from 'events';
+
+      const router = Router();
+      const notificationEmitter = new EventEmitter();
+      notificationEmitter.setMaxListeners(10000); // Support many connections
+
+      router.get('/notifications/stream', authenticate, (req, res) => {
+        const userId = req.user.id;
+
+        // SSE headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+        // Send initial connection event
+        res.write(`event: connected\ndata: ${JSON.stringify({ userId })}\n\n`);
+
+        // Heartbeat every 30 seconds
+        const heartbeat = setInterval(() => {
+          res.write(': heartbeat\n\n');
+        }, 30000);
+
+        // Handler for user-specific notifications
+        const handler = (notification: Notification) => {
+          res.write(`event: notification\n`);
+          res.write(`data: ${JSON.stringify(notification)}\n\n`);
+        };
+
+        notificationEmitter.on(`user:${userId}`, handler);
+
+        // Cleanup on disconnect
+        req.on('close', () => {
+          clearInterval(heartbeat);
+          notificationEmitter.off(`user:${userId}`, handler);
+        });
+      });
+
+      // Send notification to user (called from anywhere in app)
+      export function sendNotification(userId: string, notification: Notification) {
+        notificationEmitter.emit(`user:${userId}`, notification);
+      }
+
+      // Client-side
+      const eventSource = new EventSource('/api/notifications/stream', {
+        withCredentials: true
+      });
+
+      eventSource.addEventListener('notification', (e) => {
+        const notification = JSON.parse(e.data);
+        showToast(notification);
+      });
+
+      eventSource.onerror = () => {
+        console.log('SSE connection lost, will auto-reconnect');
+      };
+      ```
+
+# =============================================================================
+# SECTION 12: GOTCHAS (trap/why/correct format)
+# =============================================================================
+gotchas:
+  - trap: "Using ws.close() to terminate dead connections"
+    why: "ws.close() waits for close handshake which never comes from dead connection"
+    correct: "Use ws.terminate() for dead connections - immediately destroys socket"
+
+  - trap: "Assuming WebSocket upgrade inherits HTTP middleware auth"
+    why: "WebSocket upgrade is separate request, HTTP middleware doesn't run"
+    correct: "Explicitly verify auth token in connection handler or require auth as first message"
+
+  - trap: "Fixed reconnection delay (e.g., always 1 second)"
+    why: "All clients reconnect simultaneously after server restart, causing thundering herd"
+    correct: "Exponential backoff with random jitter: baseDelay * 2^attempts + random(0, 1000)"
+
+  - trap: "Trusting ws.readyState === OPEN means message will be delivered"
+    why: "Socket can appear open but network is dead, messages queue in bufferedAmount"
+    correct: "Check bufferedAmount before sending, implement acknowledgments for critical messages"
+
+  - trap: "Using JSON.parse without try/catch on WebSocket messages"
+    why: "Malicious or buggy clients can send non-JSON, crashing your server"
+    correct: "Always wrap in try/catch, validate with schema (Zod), return error to client"
+
+  - trap: "Keeping presence 'online' based on TCP connection state"
+    why: "TCP half-open connections show connected for minutes/hours after user leaves"
+    correct: "Application-level heartbeat every 30s, mark offline after 2 missed pongs"
+
+  - trap: "Broadcasting to all connections synchronously"
+    why: "One slow or dead connection blocks sending to everyone else"
+    correct: "Check readyState before each send, use Promise.allSettled for async handling"
+
+  - trap: "Creating intervals/listeners on each reconnect without cleanup"
+    why: "After N reconnects, you have N heartbeat intervals running simultaneously"
+    correct: "Call cleanup() BEFORE creating new connection, not after"
+
+  - trap: "Using regular HTTP load balancer for WebSocket"
+    why: "Some load balancers buffer or don't support WebSocket upgrade"
+    correct: "Configure for WebSocket (ALB: 'HTTP', nginx: proxy_http_version 1.1, upgrade headers)"
+
+  - trap: "No connection limit per IP address"
+    why: "Single attacker can exhaust all server connection slots"
+    correct: "Limit 10-50 connections per IP, require auth within 5 seconds"
+
+tags:
+  - websocket
+  - realtime
+  - socket.io
+  - sse
+  - live
+  - streaming
+  - push
+  - collaboration
+  - chat
+  - presence
+  - redis
+  - pubsub
+  - scaling

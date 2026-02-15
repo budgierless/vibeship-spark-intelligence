@@ -61,12 +61,198 @@ DELIVERY_STALE_SECONDS = float(os.getenv("SPARK_ADVISORY_STALE_S", "900"))
 ADVISORY_TEXT_REPEAT_COOLDOWN_S = float(
     os.getenv("SPARK_ADVISORY_TEXT_REPEAT_COOLDOWN_S", "1800")
 )
+
+# Cross-session spam guard: suppress repeated low-authority emissions (WHISPER/NOTE)
+# even when session_id churns. (Bench sessions bypass to keep eval stability.)
+LOW_AUTH_GLOBAL_DEDUPE_ENABLED = (
+    os.getenv(
+        "SPARK_ADVISORY_LOW_AUTH_GLOBAL_DEDUPE",
+        os.getenv("SPARK_ADVISORY_WHISPER_GLOBAL_DEDUPE", "1"),
+    )
+    != "0"
+)
+try:
+    LOW_AUTH_GLOBAL_COOLDOWN_S = float(
+        os.getenv(
+            "SPARK_ADVISORY_LOW_AUTH_GLOBAL_COOLDOWN_S",
+            os.getenv("SPARK_ADVISORY_WHISPER_GLOBAL_COOLDOWN_S", "3600"),
+        )
+    )
+except Exception:
+    LOW_AUTH_GLOBAL_COOLDOWN_S = 3600.0
+LOW_AUTH_DEDUPE_LOG = Path.home() / ".spark" / "advisory_low_auth_dedupe.jsonl"
+LOW_AUTH_DEDUPE_LOG_MAX = 2000
+
+# Cross-session dedupe for any emitted advice_id. This reduces high-frequency spam
+# like "Always Read..." when session_id churns and per-session cooldowns can't help.
+GLOBAL_DEDUPE_ENABLED = os.getenv("SPARK_ADVISORY_GLOBAL_DEDUPE", "1") != "0"
+GLOBAL_DEDUPE_TEXT_ENABLED = os.getenv("SPARK_ADVISORY_GLOBAL_DEDUPE_BY_TEXT", "1") != "0"
+try:
+    GLOBAL_DEDUPE_COOLDOWN_S = float(os.getenv("SPARK_ADVISORY_GLOBAL_DEDUPE_COOLDOWN_S", "600"))
+except Exception:
+    GLOBAL_DEDUPE_COOLDOWN_S = 600.0
+GLOBAL_DEDUPE_LOG = Path.home() / ".spark" / "advisory_global_dedupe.jsonl"
+GLOBAL_DEDUPE_LOG_MAX = 5000
 try:
     INLINE_PREFETCH_MAX_JOBS = max(
         1, int(os.getenv("SPARK_ADVISORY_PREFETCH_INLINE_MAX_JOBS", "1") or 1)
     )
 except Exception:
     INLINE_PREFETCH_MAX_JOBS = 1
+
+
+def _tail_jsonl(path: Path, count: int) -> List[Dict[str, Any]]:
+    if count <= 0 or not path.exists():
+        return []
+    chunk_size = 64 * 1024
+    try:
+        with path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            buffer = b""
+            lines: List[bytes] = []
+            while pos > 0 and len(lines) <= count:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                f.seek(pos)
+                data = f.read(read_size)
+                buffer = data + buffer
+                if b"\n" in buffer:
+                    parts = buffer.split(b"\n")
+                    buffer = parts[0]
+                    lines = parts[1:] + lines
+            if buffer:
+                lines = [buffer] + lines
+        out: List[Dict[str, Any]] = []
+        for ln in lines[-count:]:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                row = json.loads(ln.decode("utf-8", errors="ignore"))
+            except Exception:
+                continue
+            if isinstance(row, dict):
+                out.append(row)
+        return out
+    except Exception:
+        return []
+
+
+def _append_jsonl_capped(path: Path, entry: Dict[str, Any], max_lines: int) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+        if max_lines <= 0:
+            return
+        probe = _tail_jsonl(path, max_lines + 1)
+        if len(probe) <= max_lines:
+            return
+        path.write_text("\n".join(json.dumps(r) for r in probe[-max_lines:]) + "\n", encoding="utf-8")
+    except Exception:
+        return
+
+
+def _low_auth_recently_emitted(
+    *,
+    tool_name: str,
+    advice_id: str,
+    authority: str,
+    now_ts: float,
+    cooldown_s: float,
+) -> Optional[Dict[str, Any]]:
+    if not advice_id or cooldown_s <= 0:
+        return None
+    rows = _tail_jsonl(LOW_AUTH_DEDUPE_LOG, 250)
+    tool_lower = str(tool_name or "").strip().lower()
+    auth_lower = str(authority or "").strip().lower()
+    for row in reversed(rows):
+        if str(row.get("advice_id") or "") != advice_id:
+            continue
+        prev_auth = str(row.get("authority") or "").strip().lower()
+        if prev_auth and auth_lower and prev_auth != auth_lower:
+            continue
+        prev_tool = str(row.get("tool") or "").strip().lower()
+        if prev_tool and tool_lower and prev_tool != tool_lower:
+            continue
+        ts = 0.0
+        try:
+            ts = float(row.get("ts") or 0.0)
+        except Exception:
+            ts = 0.0
+        if ts <= 0:
+            continue
+        age = max(0.0, now_ts - ts)
+        if age < cooldown_s:
+            out = dict(row)
+            out["age_s"] = age
+            out["cooldown_s"] = cooldown_s
+            return out
+    return None
+
+
+def _global_recently_emitted(
+    *,
+    tool_name: str,
+    advice_id: str,
+    now_ts: float,
+    cooldown_s: float,
+) -> Optional[Dict[str, Any]]:
+    aid = str(advice_id or "").strip()
+    if not aid:
+        return None
+    try:
+        rows = _tail_jsonl(GLOBAL_DEDUPE_LOG, 400)
+    except Exception:
+        return None
+    for row in reversed(rows):
+        try:
+            if str(row.get("advice_id") or "").strip() != aid:
+                continue
+            ts = float(row.get("ts") or 0.0)
+        except Exception:
+            continue
+        if ts <= 0:
+            continue
+        age_s = now_ts - ts
+        if age_s < 0:
+            continue
+        if age_s <= max(0.0, float(cooldown_s)):
+            return {"age_s": age_s, "cooldown_s": cooldown_s, "row": row}
+        break
+    return None
+
+
+def _global_recently_emitted_text_sig(
+    *,
+    text_sig: str,
+    now_ts: float,
+    cooldown_s: float,
+) -> Optional[Dict[str, Any]]:
+    sig = str(text_sig or "").strip()
+    if not sig:
+        return None
+    try:
+        rows = _tail_jsonl(GLOBAL_DEDUPE_LOG, 400)
+    except Exception:
+        return None
+    for row in reversed(rows):
+        try:
+            if str(row.get("text_sig") or "").strip() != sig:
+                continue
+            ts = float(row.get("ts") or 0.0)
+        except Exception:
+            continue
+        if ts <= 0:
+            continue
+        age_s = now_ts - ts
+        if age_s < 0:
+            continue
+        if age_s <= max(0.0, float(cooldown_s)):
+            return {"age_s": age_s, "cooldown_s": cooldown_s, "row": row}
+        break
+    return None
 
 
 def _load_engine_config(path: Optional[Path] = None) -> Dict[str, Any]:
@@ -815,6 +1001,9 @@ def on_pre_tool(
                 resolved_trace_id = infer_latest_trace_id(session_id)
             except Exception:
                 resolved_trace_id = None
+        if not resolved_trace_id:
+            # Keep engine events trace-bound even when upstream did not provide a trace.
+            resolved_trace_id = f"spark-auto-{session_id[:16]}-{tool_name.lower()}-{int(time.time()*1000)}"
 
         record_tool_call(state, tool_name, tool_input, success=None, trace_id=resolved_trace_id)
         # Use tool-agnostic intent for packet keying/prefetch alignment.
@@ -896,15 +1085,17 @@ def on_pre_tool(
                     route = "live_quick"
                 except Exception:
                     t_live = time.time() * 1000.0
-                    advice_items = advise_on_tool(
-                        tool_name,
-                        tool_input or {},
-                        context=state.user_intent,
-                        include_mind=INCLUDE_MIND_IN_MEMORY,
-                        trace_id=resolved_trace_id,
-                    )
-                    _mark("advisor_retrieval", t_live)
-                    route = "live"
+                advice_items = advise_on_tool(
+                    tool_name,
+                    tool_input or {},
+                    context=state.user_intent,
+                    include_mind=INCLUDE_MIND_IN_MEMORY,
+                    track_retrieval=False,  # track retrieval only for *delivered* advice (after gating)
+                    log_recent=False,  # recent_advice should reflect *delivered* advice, not retrieval fanout
+                    trace_id=resolved_trace_id,
+                )
+                _mark("advisor_retrieval", t_live)
+                route = "live"
             else:
                 t_live = time.time() * 1000.0
                 advice_items = advise_on_tool(
@@ -912,6 +1103,8 @@ def on_pre_tool(
                     tool_input or {},
                     context=state.user_intent,
                     include_mind=INCLUDE_MIND_IN_MEMORY,
+                    track_retrieval=False,  # track retrieval only for *delivered* advice (after gating)
+                    log_recent=False,  # recent_advice should reflect *delivered* advice, not retrieval fanout
                     trace_id=resolved_trace_id,
                 )
                 _mark("advisor_retrieval", t_live)
@@ -1093,6 +1286,151 @@ def on_pre_tool(
             emitted_advice.append(item)
         emitted_advice_source_counts = _advice_source_counts(emitted_advice)
 
+        # Cross-session dedupe for any emitted advice_id. This reduces repeated spam
+        # when session_id churns defeats per-session cooldowns. (Bench sessions bypass.)
+        try:
+            if (
+                GLOBAL_DEDUPE_ENABLED
+                and gate_result.emitted
+                and not str(session_id or "").startswith("advisory-bench-")
+            ):
+                now_ts = time.time()
+                cooldown = float(GLOBAL_DEDUPE_COOLDOWN_S)
+                kept = []
+                suppressed: List[Dict[str, Any]] = []
+                for decision in list(gate_result.emitted or []):
+                    aid = str(getattr(decision, "advice_id", "") or "").strip()
+                    if not aid:
+                        continue
+                    hit = _global_recently_emitted(
+                        tool_name=tool_name,
+                        advice_id=aid,
+                        now_ts=now_ts,
+                        cooldown_s=cooldown,
+                    )
+                    if hit:
+                        suppressed.append(
+                            {
+                                "advice_id": aid,
+                                "reason": "advice_id",
+                                "repeat_age_s": round(float(hit.get("age_s") or 0.0), 2),
+                                "repeat_cooldown_s": round(float(hit.get("cooldown_s") or cooldown), 2),
+                            }
+                        )
+                        continue
+                    if GLOBAL_DEDUPE_TEXT_ENABLED:
+                        try:
+                            item = advice_by_id.get(aid)
+                            sig = _text_fingerprint(str(getattr(item, "text", "") or "")) if item else ""
+                        except Exception:
+                            sig = ""
+                        if sig:
+                            hit_sig = _global_recently_emitted_text_sig(
+                                text_sig=sig,
+                                now_ts=now_ts,
+                                cooldown_s=cooldown,
+                            )
+                            if hit_sig:
+                                suppressed.append(
+                                    {
+                                        "advice_id": aid,
+                                        "reason": "text_sig",
+                                        "repeat_age_s": round(float(hit_sig.get("age_s") or 0.0), 2),
+                                        "repeat_cooldown_s": round(float(hit_sig.get("cooldown_s") or cooldown), 2),
+                                    }
+                                )
+                                continue
+                    kept.append(decision)
+
+                if suppressed:
+                    if not kept:
+                        save_state(state)
+                        _log_engine_event(
+                            "global_dedupe_suppressed",
+                            tool_name,
+                            len(advice_items),
+                            0,
+                            start_ms,
+                            extra={
+                                **_diag(route),
+                                "route": route,
+                                "intent_family": intent_family,
+                                "task_plane": task_plane,
+                                "packet_id": packet_id,
+                                "stage_ms": stage_ms,
+                                "delivery_mode": "none",
+                                "advice_source_counts": advice_source_counts,
+                                "error_kind": "policy",
+                                "error_code": "AE_GLOBAL_DEDUPE_SUPPRESSED",
+                                "suppressed_count": len(suppressed),
+                                "suppressed": suppressed[:8],
+                                "cooldown_s": round(float(cooldown), 2),
+                            },
+                        )
+                        return None
+
+                    gate_result.emitted = kept
+                    emitted_advice = []
+                    for decision in gate_result.emitted:
+                        item = advice_by_id.get(decision.advice_id)
+                        if item is None:
+                            continue
+                        item._authority = decision.authority
+                        emitted_advice.append(item)
+                    emitted_advice_source_counts = _advice_source_counts(emitted_advice)
+        except Exception:
+            pass
+
+        # Cross-session low-authority spam guard: if session_id churns, "already shown this session"
+        # doesn't help. Suppress repeated WHISPER/NOTE emissions globally (bench sessions bypass).
+        try:
+            top_decision = gate_result.emitted[0] if gate_result.emitted else None
+            top_authority = str(getattr(top_decision, "authority", "") or "")
+            top_advice_id = str(getattr(top_decision, "advice_id", "") or "")
+            if (
+                LOW_AUTH_GLOBAL_DEDUPE_ENABLED
+                and top_authority in {"whisper", "note"}
+                and top_advice_id
+                and not str(session_id or "").startswith("advisory-bench-")
+            ):
+                now_ts = time.time()
+                cooldown = float(LOW_AUTH_GLOBAL_COOLDOWN_S)
+                hit = _low_auth_recently_emitted(
+                    tool_name=tool_name,
+                    advice_id=top_advice_id,
+                    authority=top_authority,
+                    now_ts=now_ts,
+                    cooldown_s=cooldown,
+                )
+                if hit:
+                    save_state(state)
+                    _log_engine_event(
+                        "low_auth_global_suppressed",
+                        tool_name,
+                        len(advice_items),
+                        0,
+                        start_ms,
+                        extra={
+                            **_diag(route),
+                            "route": route,
+                            "intent_family": intent_family,
+                            "task_plane": task_plane,
+                            "packet_id": packet_id,
+                            "stage_ms": stage_ms,
+                            "delivery_mode": "none",
+                            "advice_source_counts": advice_source_counts,
+                            "error_kind": "policy",
+                            "error_code": "AE_LOW_AUTH_GLOBAL_SUPPRESSED",
+                            "advice_id": top_advice_id,
+                            "authority": top_authority,
+                            "repeat_age_s": round(float(hit.get("age_s") or 0.0), 2),
+                            "repeat_cooldown_s": round(float(hit.get("cooldown_s") or cooldown), 2),
+                        },
+                    )
+                    return None
+        except Exception:
+            pass
+
         elapsed_ms = (time.time() * 1000.0) - start_ms
         remaining_ms = MAX_ENGINE_MS - elapsed_ms
 
@@ -1181,6 +1519,94 @@ def on_pre_tool(
             shown_ids = [d.advice_id for d in gate_result.emitted]
             mark_advice_shown(state, shown_ids)
             suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
+            # Track retrieval only for delivered advice items (strict attribution).
+            try:
+                from .meta_ralph import get_meta_ralph
+
+                ralph = get_meta_ralph()
+                for adv in list(emitted_advice or [])[:4]:
+                    ralph.track_retrieval(
+                        str(getattr(adv, "advice_id", "") or ""),
+                        str(getattr(adv, "text", "") or ""),
+                        insight_key=str(getattr(adv, "insight_key", "") or "") or None,
+                        source=str(getattr(adv, "source", "") or "") or None,
+                        trace_id=resolved_trace_id,
+                    )
+            except Exception:
+                pass
+            # Write delivery-backed recent_advice entry for post-tool outcome linkage.
+            try:
+                from .advisor import record_recent_delivery
+
+                record_recent_delivery(
+                    tool=tool_name,
+                    advice_list=list(emitted_advice or [])[:4],
+                    trace_id=resolved_trace_id,
+                    route=route,
+                    delivered=True,
+                )
+            except Exception:
+                pass
+
+            # Update global low-authority dedupe log on successful WHISPER/NOTE emission.
+            try:
+                top_decision = gate_result.emitted[0] if gate_result.emitted else None
+                top_authority = str(getattr(top_decision, "authority", "") or "")
+                top_advice_id = str(getattr(top_decision, "advice_id", "") or "")
+                if (
+                    LOW_AUTH_GLOBAL_DEDUPE_ENABLED
+                    and top_authority in {"whisper", "note"}
+                    and top_advice_id
+                    and not str(session_id or "").startswith("advisory-bench-")
+                ):
+                    _append_jsonl_capped(
+                        LOW_AUTH_DEDUPE_LOG,
+                        {
+                            "ts": time.time(),
+                            "tool": tool_name,
+                            "advice_id": top_advice_id,
+                            "authority": top_authority,
+                            "trace_id": resolved_trace_id,
+                            "route": route,
+                        },
+                        max_lines=int(LOW_AUTH_DEDUPE_LOG_MAX),
+                    )
+            except Exception:
+                pass
+
+            # Update global dedupe log on successful emission (any authority).
+            try:
+                if (
+                    GLOBAL_DEDUPE_ENABLED
+                    and gate_result.emitted
+                    and not str(session_id or "").startswith("advisory-bench-")
+                ):
+                    for d in list(gate_result.emitted or [])[:4]:
+                        aid = str(getattr(d, "advice_id", "") or "").strip()
+                        if not aid:
+                            continue
+                        text_sig = ""
+                        if GLOBAL_DEDUPE_TEXT_ENABLED:
+                            try:
+                                item = advice_by_id.get(aid)
+                                text_sig = _text_fingerprint(str(getattr(item, "text", "") or "")) if item else ""
+                            except Exception:
+                                text_sig = ""
+                        _append_jsonl_capped(
+                            GLOBAL_DEDUPE_LOG,
+                            {
+                                "ts": time.time(),
+                                "tool": tool_name,
+                                "advice_id": aid,
+                                "authority": str(getattr(d, "authority", "") or ""),
+                                "trace_id": resolved_trace_id,
+                                "route": route,
+                                "text_sig": text_sig,
+                            },
+                            max_lines=int(GLOBAL_DEDUPE_LOG_MAX),
+                        )
+            except Exception:
+                pass
 
             if route == "live":
                 lineage_sources = []
@@ -1399,6 +1825,7 @@ def on_post_tool(
 def on_user_prompt(
     session_id: str,
     prompt_text: str,
+    trace_id: Optional[str] = None,
 ) -> None:
     if not ENGINE_ENABLED:
         return
@@ -1410,6 +1837,7 @@ def on_user_prompt(
 
         state = load_state(session_id)
         record_user_intent(state, prompt_text)
+        resolved_trace_id = str(trace_id or "").strip() or f"spark-auto-{session_id[:16]}-user_prompt-{int(time.time()*1000)}"
         intent_info = _intent_context(state, tool_name="*")
         project_key = _project_key()
         session_context_key = _session_context_key(state, tool_name="*")
@@ -1462,7 +1890,7 @@ def on_user_prompt(
                     "task_plane": task_plane,
                     "session_context_key": session_context_key,
                     "prompt_excerpt": (prompt_text or "")[:180],
-                    "trace_id": None,
+                    "trace_id": resolved_trace_id,
                 }
             )
             if ENABLE_INLINE_PREFETCH_WORKER:
@@ -1485,7 +1913,7 @@ def on_user_prompt(
             extra={
                 **_diagnostics_envelope(
                     session_id=session_id,
-                    trace_id=None,
+                    trace_id=resolved_trace_id,
                     route="user_prompt",
                     session_context_key=session_context_key,
                     scope="session",
@@ -1507,7 +1935,7 @@ def on_user_prompt(
             extra={
                 **_diagnostics_envelope(
                     session_id=session_id,
-                    trace_id=None,
+                    trace_id=str(trace_id or "").strip() or None,
                     route="user_prompt",
                     scope="session",
                 ),

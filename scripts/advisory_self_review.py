@@ -56,11 +56,23 @@ def _pct(n: float, d: float) -> float:
     return round((n / d) * 100.0, 2)
 
 
-def summarize_recent_advice(path: Path, window_s: float, now_ts: float) -> Dict[str, Any]:
+def summarize_recent_advice(
+    path: Path,
+    window_s: float,
+    now_ts: float,
+    *,
+    exclude_trace_prefixes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     rows = []
+    excluded = 0
+    prefixes = [str(p or "") for p in (exclude_trace_prefixes or []) if str(p or "")]
     for row in _load_jsonl(path):
         ts = _to_ts(row.get("ts"))
         if ts > 0 and (now_ts - ts) <= window_s:
+            trace_id = str(row.get("trace_id") or "")
+            if prefixes and trace_id and any(trace_id.startswith(p) for p in prefixes):
+                excluded += 1
+                continue
             rows.append(row)
 
     item_total = 0
@@ -115,6 +127,7 @@ def summarize_recent_advice(path: Path, window_s: float, now_ts: float) -> Dict[
 
     return {
         "rows": int(len(rows)),
+        "excluded": int(excluded),
         "trace_rows": int(trace_rows),
         "trace_coverage_pct": _pct(trace_rows, len(rows)),
         "item_total": int(item_total),
@@ -240,9 +253,10 @@ def summarize_outcomes(path: Path, window_s: float, now_ts: float) -> Dict[str, 
     }
 
 
-def build_report(summary: Dict[str, Any], window_hours: int, now_ts: float) -> str:
+def build_report(summary: Dict[str, Any], window_hours: float, now_ts: float) -> str:
     iso_now = datetime.fromtimestamp(now_ts, UTC).isoformat()
     ra = summary["recent_advice"]
+    ra_nonbench = summary.get("recent_advice_nonbench") or {}
     en = summary["engine"]
     oc = summary["outcomes"]
 
@@ -265,6 +279,12 @@ def build_report(summary: Dict[str, Any], window_hours: int, now_ts: float) -> s
         f"- Advisory rows: {ra['rows']}",
         f"- Advisory trace coverage: {ra['trace_rows']}/{ra['rows']} ({ra['trace_coverage_pct']}%)",
         f"- Advice items emitted: {ra['item_total']}",
+        (
+            f"- Non-benchmark advisory rows: {ra_nonbench.get('rows', 0)} "
+            f"(excluded {ra_nonbench.get('excluded', 0)})"
+            if ra_nonbench
+            else "- Non-benchmark advisory rows: unavailable"
+        ),
         f"- Engine events: {en['rows']}",
         f"- Engine trace coverage: {en['trace_rows']}/{en['rows']} ({en['trace_coverage_pct']}%)",
         f"- Fallback share (delivered): {en['fallback_share_pct']}%",
@@ -311,6 +331,12 @@ def build_report(summary: Dict[str, Any], window_hours: int, now_ts: float) -> s
     for row in rep:
         lines.append(f"- {row['count']}x ({row['share_pct_of_items']}%) {row['text'][:180]}")
 
+    if ra_nonbench and ra_nonbench.get("repeated_texts"):
+        lines.append("")
+        lines.append("## Top Repeated Advice (Non-Benchmark Window)")
+        for row in (ra_nonbench.get("repeated_texts") or [])[:6]:
+            lines.append(f"- {row['count']}x ({row['share_pct_of_items']}%) {row['text'][:180]}")
+
     lines.extend(["", "## Bad Outcome Records"])
     if oc["bad_records"]:
         for row in oc["bad_records"]:
@@ -341,17 +367,24 @@ def build_report(summary: Dict[str, Any], window_hours: int, now_ts: float) -> s
     return "\n".join(lines)
 
 
-def generate_summary(window_hours: int) -> Dict[str, Any]:
+def generate_summary(window_hours: float) -> Dict[str, Any]:
     now_ts = time.time()
-    window_s = max(1, int(window_hours)) * 3600
+    # Allow fractional hours for tighter live verification windows.
+    window_s = max(60, int(float(window_hours) * 3600))
     spark_dir = Path.home() / ".spark"
     return {
-        "window_hours": int(window_hours),
+        "window_hours": float(window_hours),
         "generated_at": datetime.fromtimestamp(now_ts, UTC).isoformat(),
         "recent_advice": summarize_recent_advice(
             spark_dir / "advisor" / "recent_advice.jsonl",
             window_s=window_s,
             now_ts=now_ts,
+        ),
+        "recent_advice_nonbench": summarize_recent_advice(
+            spark_dir / "advisor" / "recent_advice.jsonl",
+            window_s=window_s,
+            now_ts=now_ts,
+            exclude_trace_prefixes=["advisory-bench-"],
         ),
         "engine": summarize_engine(
             spark_dir / "advisory_engine.jsonl",
@@ -371,19 +404,19 @@ def write_report(summary: Dict[str, Any], out_dir: Path) -> Path:
     now = datetime.now(UTC)
     stamp = now.strftime("%Y-%m-%d_%H%M%S")
     out_file = out_dir / f"{stamp}_advisory_self_review.md"
-    report = build_report(summary, int(summary["window_hours"]), now.timestamp())
+    report = build_report(summary, float(summary["window_hours"]), now.timestamp())
     out_file.write_text(report, encoding="utf-8")
     return out_file
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Generate advisory self-review report")
-    ap.add_argument("--window-hours", type=int, default=12, help="Lookback window in hours")
+    ap.add_argument("--window-hours", type=float, default=12.0, help="Lookback window in hours (float allowed)")
     ap.add_argument("--out-dir", default="docs/reports", help="Output directory for markdown report")
     ap.add_argument("--json", action="store_true", help="Print JSON summary only")
     args = ap.parse_args()
 
-    summary = generate_summary(window_hours=max(1, int(args.window_hours)))
+    summary = generate_summary(window_hours=max(1.0 / 60.0, float(args.window_hours)))
     if args.json:
         print(json.dumps(summary, indent=2))
         return 0

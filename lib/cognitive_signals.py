@@ -153,6 +153,12 @@ def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str
     if not text or len(text) < 10:
         return
 
+    # Ignore synthetic pipeline test prompts. They are useful for validating
+    # ingestion, but they are not user learnings and they pollute Meta-Ralph
+    # quality-band metrics.
+    if "[PIPELINE_TEST" in text:
+        return
+
     text_lower = text.lower()
     signals_found = []
 
@@ -179,13 +185,48 @@ def extract_cognitive_signals(text: str, session_id: str, trace_id: Optional[str
                 signals_found.append(category)
                 break
 
+    def _derive_candidate(raw: str, signals: list[str]) -> Optional[str]:
+        """Derive a learning candidate from a raw user prompt.
+
+        Meta-Ralph is a quality gate for learnings, not a classifier for arbitrary chat text.
+        We try to extract the sentence/claim most likely to be a durable learning.
+        """
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+
+        sigset = set(signals or [])
+
+        # Only "remember" without any structure tends to be non-actionable.
+        if sigset == {"remember"}:
+            m = re.search(r"remember\\s*:\\s*(.+)$", raw, flags=re.IGNORECASE)
+            if not m:
+                return None
+            candidate = m.group(1).strip()
+            if not re.search(r"\\b(when|because|avoid|instead|must|should|always|never)\\b", candidate, flags=re.IGNORECASE):
+                return None
+            return candidate[:500]
+
+        # Prefer the first sentence with stronger learning signals.
+        parts = re.split(r"[\\n\\.\\!\\?]+", raw)
+        parts = [p.strip() for p in parts if p.strip()]
+        for p in parts:
+            if re.search(r"\\b(because|avoid|instead of|prefer|never|always|should|must)\\b", p, flags=re.IGNORECASE):
+                return p[:500]
+            if re.search(r"\\bwhen\\b.+\\bthen\\b", p, flags=re.IGNORECASE):
+                return p[:500]
+
+        return raw[:500]
+
     # If any cognitive signals found, extract and roast
     if signals_found:
         try:
             from lib.meta_ralph import get_meta_ralph
 
             ralph = get_meta_ralph()
-            learning = text[:500] if len(text) <= 500 else text[:500] + "..."
+            learning = _derive_candidate(text, signals_found)
+            if not learning:
+                return
 
             result = ralph.roast(
                 learning,

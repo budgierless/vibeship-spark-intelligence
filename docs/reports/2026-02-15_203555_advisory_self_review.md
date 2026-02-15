@@ -1,0 +1,70 @@
+# Advisory Self-Review (2026-02-15T20:35:55.561462+00:00)
+
+## Window
+- Hours analyzed: 1
+- State: unclear
+
+## Core Metrics
+- Advisory rows: 548
+- Advisory trace coverage: 548/548 (100.0%)
+- Advice items emitted: 1384
+- Engine events: 500
+- Engine trace coverage: 423/500 (84.6%)
+- Fallback share (delivered): 0.0%
+- Strict action rate: 0.622
+- Strict effectiveness rate: 0.8861
+- Trace mismatch count: 48
+
+## Honest Answers
+### Did learnings help make better decisions?
+- Yes, but unevenly. Trace-bound clusters show good outcomes, mostly from cognitive/self-awareness sources.
+- Mind usage exists but is still low-share in retrieval mix.
+
+### Examples with trace IDs
+- `trace-whisper-a2` | tool `Task` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0018` | tool `Task` | source `trigger` | Validate authentication inputs server-side and avoid trusting client checks.
+- `advisory-bench-strict-20260215202959-2d80b1-0017` | tool `Bash` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0016` | tool `Task` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0015` | tool `Task` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0013` | tool `Read` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0012` | tool `Task` | source `cognitive` | Constraint: in **exactly one state** at all times
+- `advisory-bench-strict-20260215202959-2d80b1-0011` | tool `Task` | source `cognitive` | Constraint: in **exactly one state** at all times
+
+### Were there misses despite memory existing?
+- Mixed. Fallback was not dominant in this window; evaluate misses via trace coverage and repeated-noise patterns.
+- Engine trace coverage is healthy enough for stronger attribution confidence.
+
+### Were unnecessary advisories/memories triggered?
+- Yes. Top repeated advisories account for ~89.52% of all advice items in this window.
+
+## Top Repeated Advice (Noise Candidates)
+- 310x (22.4%) When using Bash, remember: Do it, and is this system fully connected to spark intelligence flow right now, for spark to e
+- 307x (22.18%) lets push gitthub, and then clean up the whole system except this spark, and at some point we were thinking to bring the council of 50, as the agents can you se
+- 230x (16.62%) Constraint: in **exactly one state** at all times
+- 196x (14.16%) Always Read a file before Edit to verify current content
+- 104x (7.51%) [Caution] I struggle with WebFetch fails with other tasks
+- 92x (6.65%) [Caution] I struggle with WebFetch fails with other (recovered) tasks
+
+## Bad Outcome Records
+- trace `delta-variantB_post_bomfix-20260215_195701-0021` | source `auto_created` | insight `None` | 539a804371ba
+- trace `delta-variantB_post_bomfix-20260215_195701-0018` | source `auto_created` | insight `None` | b7ebfd1f4b57
+- trace `delta-variantB_post_bomfix-20260215_195701-0003` | source `auto_created` | insight `None` | 357187b902ca
+- trace `delta-variantB_post-20260215_195142-0021` | source `auto_created` | insight `None` | 7e6b6f2f77c8
+- trace `delta-variantB_post-20260215_195142-0018` | source `auto_created` | insight `None` | e9198ff05294
+- trace `delta-variantB_post-20260215_195142-0003` | source `auto_created` | insight `None` | 6296a96b34ab
+- trace `delta-variantB_pre-20260215_194731-0021` | source `auto_created` | insight `None` | 48c4e0225830
+- trace `delta-variantB_pre-20260215_194731-0018` | source `auto_created` | insight `None` | 670d3b74b591
+- trace `delta-variantB_pre-20260215_194731-0003` | source `auto_created` | insight `None` | 2b1f880bcdf5
+
+## Optimization (No New Features)
+- Increase advisory repeat cooldowns and tool cooldowns to reduce duplicate cautions.
+- Keep `include_mind=true` with stale gating and minimum salience to improve cross-session quality without flooding.
+- Prefer fewer higher-rank items (`advisor.max_items` and `advisor.min_rank_score`) to improve signal density.
+- Improve strict trace discipline in advisory engine events before trusting aggregate success counters.
+
+## Questions To Ask Every Review
+1. Which advisories changed a concrete decision, with trace IDs?
+2. Which advisories repeated without adding new actionability?
+3. Where did fallback dominate and why?
+4. Which sources had strict-good outcomes vs non-strict optimism?
+5. What is one simplification we can do before adding anything new?

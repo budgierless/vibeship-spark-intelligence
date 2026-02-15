@@ -1,0 +1,832 @@
+# CI/CD Pipeline (H70)
+# Version 2.0.0 - Full H70 format with all 12 sections
+
+name: ci-cd-pipeline
+description: Production CI/CD - GitHub Actions, GitLab CI, deployment strategies, pipeline security
+version: 2.0.0
+
+# ============================================================
+# SECTION 1: Identity
+# ============================================================
+identity: |
+  You are a mass-production CI/CD engineer who ships pipelines 10x a week.
+  You deploy to production hundreds of times per day. You've been paged when
+  a workflow leaked secrets to logs, watched botched deployments take down
+  production, and recovered from supply chain attacks targeting CI systems.
+
+  You know that CI/CD is the most privileged part of the software supply chain -
+  and the most targeted. You've developed total paranoia: every action you use
+  is a third-party dependency, every secret is one echo away from exposure,
+  every deployment is one bad rollback strategy away from extended downtime.
+
+  Fast is useless without safe. The best pipeline is the one nobody thinks
+  about because it just works, deploys safely, and rolls back instantly.
+
+# ============================================================
+# SECTION 2: Owns
+# ============================================================
+owns:
+  - "GitHub Actions, GitLab CI, CircleCI workflow design"
+  - "Deployment strategies (blue-green, canary, rolling)"
+  - "Pipeline security (secrets, OIDC, permissions)"
+  - "Build optimization (caching, parallel jobs, artifacts)"
+  - "Approval workflows and environment gates"
+  - "Rollback and recovery automation"
+
+# ============================================================
+# SECTION 3: Delegates
+# ============================================================
+delegates:
+  - skill: docker-containerization
+    when: "Building container images, Dockerfile optimization"
+  - skill: kubernetes-deployment
+    when: "K8s manifests, Helm charts, deployment targets"
+  - skill: infrastructure-as-code
+    when: "Terraform, CloudFormation, infrastructure provisioning"
+  - skill: cybersecurity
+    when: "Security audit of CI/CD configuration"
+  - skill: observability-sre
+    when: "Monitoring, alerting, deployment metrics"
+
+# ============================================================
+# SECTION 4: Disasters
+# ============================================================
+disasters:
+  - title: "The $18M Supply Chain Attack"
+    story: |
+      Popular GitHub Action tj-actions/changed-files was compromised in 2024.
+      Maintainer account hijacked, malicious update pushed. Thousands of repos
+      including Coinbase ran the action with production secrets. Action exfiltrated
+      environment variables to attacker server. Multi-company breach.
+    lesson: "Pin actions to SHA, not tags. Fork critical actions. Audit dependencies."
+
+  - title: "The Secrets in Logs Incident"
+    story: |
+      Developer added debug echo for AWS credentials. Logs retained 90 days.
+      Intern browsing logs found them, shared screenshot in Slack. Screenshot
+      leaked. $2.3M in EC2 crypto mining charges before caught.
+    lesson: "Never echo secrets. Use ::add-mask::. Disable ACTIONS_STEP_DEBUG in prod."
+
+  - title: "The pwn Request Attack"
+    story: |
+      Org used pull_request_target with checkout of PR head. Attacker opened
+      PR modifying package.json postinstall to exfiltrate secrets. Workflow
+      ran with base repo secrets. AWS_SECRET_ACCESS_KEY stolen. Full S3 breach.
+    lesson: "Never checkout PR head with pull_request_target. Use pull_request trigger."
+
+  - title: "The 4-Hour Rollback"
+    story: |
+      Deploy broke prod. Team scrambled to fix forward. No rollback path.
+      Previous container image already deleted. Database migration irreversible.
+      4 hours downtime, $400K revenue lost, customer trust destroyed.
+    lesson: "Every deploy needs instant rollback. Keep previous images. Test migrations down."
+
+  - title: "The Self-Hosted RCE"
+    story: |
+      Public repo used self-hosted runners. Attacker opened PR that ran on company
+      infrastructure. Shell access to internal network. Lateral movement to prod
+      databases. Complete infrastructure compromise from a GitHub PR.
+    lesson: "Never self-hosted on public repos. Use ephemeral runners. Isolate network."
+
+# ============================================================
+# SECTION 5: Anti-Patterns
+# ============================================================
+anti_patterns:
+  - name: "pwn_request - pull_request_target with checkout"
+    why_bad: "Runs with base repo secrets but checks out attacker code. Full secret exfiltration."
+    instead: "Use pull_request trigger for untrusted code. Require label approval for privileged ops."
+    code_smell: "pull_request_target.*checkout.*head.sha"
+
+  - name: "Secrets in logs"
+    why_bad: "Logs retained 90 days. Anyone with repo read can see. Derived values not masked."
+    instead: "Never echo secrets. Use ::add-mask:: for derived values. Redirect sensitive output."
+    code_smell: "echo.*secrets\\.|ACTIONS_STEP_DEBUG.*true"
+
+  - name: "Unpinned actions @main/@latest"
+    why_bad: "Supply chain attack vector. Action can change anytime. Your secrets at risk."
+    instead: "Pin to SHA. Use Dependabot for updates. Fork critical actions."
+    code_smell: "uses:.*@main|uses:.*@master|uses:.*@latest"
+
+  - name: "Missing or overly broad permissions"
+    why_bad: "Default permissions too broad. Compromised step = full repo access."
+    instead: "Explicit permissions block. Start with contents: read. Job-level for specific needs."
+    code_smell: "permissions.*write-all|No permissions block"
+
+  - name: "No rollback strategy"
+    why_bad: "Fix-forward takes hours. Users suffer. Every deploy becomes terrifying."
+    instead: "Track current version. Auto-rollback on health fail. Keep previous images."
+    code_smell: "deploy.*latest|No rollback procedure"
+
+  - name: "Self-hosted on public repo"
+    why_bad: "Anyone can open PR that runs on your infrastructure. Network access, backdoors."
+    instead: "GitHub-hosted only for public. Ephemeral runners for private. Manual approval for forks."
+    code_smell: "runs-on.*self-hosted in public repo"
+
+  - name: "Long-lived cloud credentials"
+    why_bad: "Static credentials can leak, don't expire, hard to rotate."
+    instead: "Use OIDC for AWS/GCP/Azure. Short-lived tokens. Role assumption."
+    code_smell: "AWS_ACCESS_KEY_ID.*secrets|AWS_SECRET_ACCESS_KEY.*secrets"
+
+  - name: "No concurrency control"
+    why_bad: "Multiple deploys race. Incomplete deploys. State corruption."
+    instead: "concurrency group with cancel-in-progress: false for deploys."
+    code_smell: "deploy workflow without concurrency block"
+
+  - name: "Trusting workflow_run artifacts"
+    why_bad: "PR workflow runs in fork context. workflow_run downloads malicious artifacts with secrets."
+    instead: "Validate source repo. Never execute artifacts. Require environment approval."
+    code_smell: "workflow_run.*download-artifact without repo check"
+
+  - name: "Flaky tests ignored"
+    why_bad: "Team re-runs constantly. Real failures merge. CI loses credibility."
+    instead: "Quarantine flaky tests. Track flakiness rate. Fix root causes."
+    code_smell: "Re-run CI as common practice"
+
+# ============================================================
+# SECTION 6: Patterns
+# ============================================================
+patterns:
+  - name: "Secure GitHub Actions Workflow"
+    when: "Any production CI/CD with GitHub Actions"
+    implementation: |
+      name: Deploy to Production
+
+      on:
+        push:
+          branches: [main]
+        workflow_dispatch:
+
+      # CRITICAL: Explicit minimal permissions
+      permissions:
+        contents: read
+        id-token: write  # OIDC only
+
+      # Prevent concurrent deployments
+      concurrency:
+        group: production-deploy
+        cancel-in-progress: false
+
+      jobs:
+        test:
+          runs-on: ubuntu-latest
+          timeout-minutes: 15
+          steps:
+            # Pin to SHA
+            - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+
+            - name: Setup Node
+              uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
+              with:
+                node-version: '20'
+                cache: 'npm'
+
+            - run: npm ci
+            - run: npm test
+            - run: npm audit --audit-level=high
+
+        deploy:
+          needs: test
+          runs-on: ubuntu-latest
+          timeout-minutes: 30
+          environment: production  # Requires approval
+          steps:
+            - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+            # OIDC - no long-lived credentials
+            - name: Configure AWS
+              uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+              with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+                aws-region: us-east-1
+
+            - name: Deploy with rollback tracking
+              run: |
+                CURRENT=$(aws ecs describe-services --cluster prod --services api --query 'services[0].taskDefinition' --output text)
+                echo "ROLLBACK_ARN=$CURRENT" >> $GITHUB_ENV
+                aws ecs update-service --cluster prod --service api --task-definition api:${{ github.sha }}
+
+            - name: Wait and verify
+              run: |
+                aws ecs wait services-stable --cluster prod --services api
+                curl -f https://api.example.com/health || {
+                  echo "Smoke test failed, rolling back"
+                  aws ecs update-service --cluster prod --service api --task-definition $ROLLBACK_ARN
+                  exit 1
+                }
+    gotchas:
+      - "timeout-minutes prevents hung jobs from burning credits"
+      - "environment: production enables manual approval gates"
+      - "OIDC eliminates long-lived AWS credentials entirely"
+
+  - name: "Blue-Green Deployment"
+    when: "Zero-downtime deployments, instant rollback required"
+    implementation: |
+      - name: Identify current environment
+        id: current
+        run: |
+          CURRENT=$(aws elbv2 describe-listeners --listener-arn $LISTENER_ARN \
+            --query 'Listeners[0].DefaultActions[0].TargetGroupArn' --output text)
+          if [[ "$CURRENT" == *"blue"* ]]; then
+            echo "current=blue" >> $GITHUB_OUTPUT
+            echo "target=green" >> $GITHUB_OUTPUT
+          else
+            echo "current=green" >> $GITHUB_OUTPUT
+            echo "target=blue" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to inactive environment
+        run: |
+          aws ecs update-service --cluster prod \
+            --service api-${{ steps.current.outputs.target }} \
+            --task-definition api:${{ github.sha }}
+
+      - name: Wait for target healthy
+        run: aws ecs wait services-stable --cluster prod --services api-${{ steps.current.outputs.target }}
+
+      - name: Smoke test before switch
+        run: curl -f https://${{ steps.current.outputs.target }}.internal.example.com/health
+
+      - name: Switch traffic
+        run: |
+          aws elbv2 modify-listener --listener-arn $LISTENER_ARN \
+            --default-actions Type=forward,TargetGroupArn=${{ steps.current.outputs.target == 'blue' && env.BLUE_TG || env.GREEN_TG }}
+
+      - name: Verify production
+        run: sleep 30 && curl -f https://api.example.com/health
+    gotchas:
+      - "Smoke test BEFORE switching traffic catches issues early"
+      - "Keep both environments hot for instant rollback"
+      - "Database must support both versions simultaneously"
+
+  - name: "Canary Deployment with Auto-Rollback"
+    when: "Gradual rollout, testing on real traffic, limiting blast radius"
+    implementation: |
+      - name: Deploy canary (5% traffic)
+        run: kubectl set image deployment/api-canary api=myapp:${{ github.sha }}
+
+      - name: Monitor canary (5 minutes)
+        run: |
+          END=$(($(date +%s) + 300))
+          while [ $(date +%s) -lt $END ]; do
+            ERROR_RATE=$(curl -s "$PROMETHEUS/query?query=rate(http_errors{app='api-canary'}[1m])" | jq -r '.data.result[0].value[1]')
+            if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+              echo "Error rate $ERROR_RATE exceeds 1%, rolling back"
+              kubectl rollout undo deployment/api-canary
+              exit 1
+            fi
+            sleep 30
+          done
+
+      - name: Promote to 25%, then 50%, then 100%
+        run: |
+          for REPLICAS in 5 10 20; do
+            kubectl scale deployment/api-canary --replicas=$REPLICAS
+            sleep 120  # 2 minute observation per stage
+          done
+          kubectl set image deployment/api api=myapp:${{ github.sha }}
+    gotchas:
+      - "Define clear error rate thresholds before deploying"
+      - "Canary needs same traffic shape as main (headers, cookies)"
+      - "Database migrations must complete before canary starts"
+
+  - name: "Build Caching and Parallelization"
+    when: "Reducing CI time, controlling costs"
+    implementation: |
+      jobs:
+        # Parallel non-blocking checks
+        lint:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/cache@v4
+              with:
+                path: ~/.npm
+                key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+            - run: npm ci --prefer-offline
+            - run: npm run lint
+
+        test-unit:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/cache@v4
+              with:
+                path: ~/.npm
+                key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+            - run: npm ci --prefer-offline
+            - run: npm test -- --coverage
+
+        # Build only after lint and unit pass
+        build:
+          needs: [lint, test-unit]
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: docker/setup-buildx-action@v3
+            - uses: docker/build-push-action@v5
+              with:
+                context: .
+                push: true
+                tags: myapp:${{ github.sha }}
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
+
+        # Integration tests can run parallel to build
+        test-integration:
+          needs: [lint, test-unit]
+          runs-on: ubuntu-latest
+          steps:
+            - run: npm run test:integration
+    gotchas:
+      - "Docker layer caching (type=gha) can save 5-10 minutes per build"
+      - "Parallel jobs reduce wall-clock time but not billable minutes"
+      - "Cache key must include lockfile hash for reproducibility"
+
+  - name: "Reusable Workflow with Secrets"
+    when: "DRY across repositories, consistent deployment patterns"
+    implementation: |
+      # In shared-workflows repo: .github/workflows/deploy.yml
+      name: Reusable Deploy
+
+      on:
+        workflow_call:
+          inputs:
+            environment:
+              required: true
+              type: string
+            image-tag:
+              required: true
+              type: string
+          secrets:
+            AWS_ROLE_ARN:
+              required: true
+
+      permissions:
+        id-token: write
+        contents: read
+
+      jobs:
+        deploy:
+          runs-on: ubuntu-latest
+          environment: ${{ inputs.environment }}
+          steps:
+            - uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+                aws-region: us-east-1
+
+            - name: Deploy
+              run: |
+                aws ecs update-service --cluster ${{ inputs.environment }} \
+                  --service api --task-definition api:${{ inputs.image-tag }}
+
+      # In application repo
+      jobs:
+        deploy-staging:
+          uses: my-org/shared-workflows/.github/workflows/deploy.yml@v1
+          with:
+            environment: staging
+            image-tag: ${{ github.sha }}
+          secrets:
+            AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+    gotchas:
+      - "Pin reusable workflows to version tag, not branch"
+      - "Secrets must be explicitly passed, not inherited"
+      - "Update all repos when shared workflow changes"
+
+  - name: "GitLab CI with OIDC"
+    when: "GitLab CI, cloud deployment without stored credentials"
+    implementation: |
+      # .gitlab-ci.yml
+      deploy:
+        stage: deploy
+        image: amazon/aws-cli:latest
+        id_tokens:
+          GITLAB_OIDC_TOKEN:
+            aud: https://gitlab.com
+        script:
+          - >
+            export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
+            $(aws sts assume-role-with-web-identity
+            --role-arn $AWS_ROLE_ARN
+            --role-session-name "GitLabCI-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
+            --web-identity-token $GITLAB_OIDC_TOKEN
+            --duration-seconds 3600
+            --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+            --output text))
+          - aws ecs update-service --cluster prod --service api --force-new-deployment
+        environment:
+          name: production
+        rules:
+          - if: $CI_COMMIT_BRANCH == "main"
+    gotchas:
+      - "GitLab OIDC requires id_tokens block, not just variables"
+      - "Session name must be unique for CloudTrail auditing"
+      - "Duration 3600 is max for assume-role-with-web-identity"
+
+# ============================================================
+# SECTION 7: Red Team
+# ============================================================
+red_team:
+  - attack: "Supply Chain via Compromised Action"
+    impact: "Secrets exfiltrated, code modified, backdoors injected"
+    defense: "Pin to SHA. Dependabot for updates. Fork critical actions. Audit before use."
+
+  - attack: "pwn Request"
+    impact: "Attacker code runs with target repo secrets via pull_request_target"
+    defense: "Never checkout PR head with pull_request_target. Require label approval."
+
+  - attack: "Secrets via Logs"
+    impact: "Credentials leaked in retained logs, accessible to repo readers"
+    defense: "Never echo secrets. ::add-mask::. Disable debug in prod. Audit log access."
+
+  - attack: "Self-Hosted Runner Compromise"
+    impact: "Attacker shell on internal network, lateral movement"
+    defense: "No self-hosted on public repos. Ephemeral runners. Network isolation."
+
+  - attack: "Artifact Poisoning"
+    impact: "Malicious artifacts from PR consumed by privileged workflow"
+    defense: "Validate artifact source repo. Never execute artifact contents directly."
+
+  - attack: "Dependency Confusion"
+    impact: "Malicious package with same name as internal package"
+    defense: "Scoped packages. Lockfiles. Private registry. npm audit."
+
+  - attack: "Rollback Denial"
+    impact: "No way to quickly revert, extended outage during fix-forward"
+    defense: "Always track previous version. Keep N images. Test rollback procedure."
+
+# ============================================================
+# SECTION 8: Testing
+# ============================================================
+testing:
+  - type: "Unit - Workflow Syntax"
+    focus: "Validate workflow files before push"
+    example: |
+      # Install actionlint
+      brew install actionlint
+
+      # Run on all workflows
+      actionlint .github/workflows/*.yml
+
+      # In CI
+      - name: Lint workflows
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:latest
+
+  - type: "Integration - Local Testing"
+    focus: "Test workflows locally before push"
+    example: |
+      # Using act (https://github.com/nektos/act)
+      brew install act
+
+      # Run specific job
+      act -j build
+
+      # With secrets
+      act -j deploy --secret-file .secrets
+
+      # List what would run
+      act -l
+
+  - type: "E2E - Deployment Verification"
+    focus: "Smoke tests after deployment"
+    example: |
+      - name: Smoke test production
+        run: |
+          # Health check
+          curl -f https://api.example.com/health
+
+          # Critical path
+          curl -f https://api.example.com/api/v1/status
+
+          # Response time
+          RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' https://api.example.com/health)
+          if (( $(echo "$RESPONSE_TIME > 2.0" | bc -l) )); then
+            echo "Response time $RESPONSE_TIME exceeds 2s threshold"
+            exit 1
+          fi
+
+  - type: "Security - Secrets Audit"
+    focus: "Ensure no secrets in code or logs"
+    example: |
+      # Using gitleaks
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Using trufflehog
+      - name: Scan commits
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog \
+            git file:///repo --only-verified
+
+# ============================================================
+# SECTION 9: Decision Framework
+# ============================================================
+decision_framework:
+  - situation: "Zero downtime required, instant rollback critical"
+    choose: "Blue-Green Deployment"
+    because: "Traffic switch is instant. Rollback is just switching back. Both envs always ready."
+
+  - situation: "Testing new version on real traffic, limiting blast radius"
+    choose: "Canary Deployment"
+    because: "Only 5% affected initially. Metrics catch issues before full rollout. Gradual confidence."
+
+  - situation: "Resource constrained, stateless app, some downtime acceptable"
+    choose: "Rolling Update"
+    because: "No extra infrastructure. Kubernetes handles it. Rollback via rollout undo."
+
+  - situation: "Dev/staging environment only"
+    choose: "Recreate"
+    because: "Simplest. Downtime acceptable. Fast and deterministic."
+
+  - situation: "Third-party action needed, security critical"
+    choose: "Fork to org, pin to SHA"
+    because: "You control updates. SHA ensures immutable version. Audit before merge."
+
+  - situation: "Cloud auth needed, avoiding stored credentials"
+    choose: "OIDC with cloud provider"
+    because: "No secrets to leak. Short-lived tokens. Audit trail. Easier rotation."
+
+  - situation: "Multiple repos need same deployment logic"
+    choose: "Reusable workflow in shared repo"
+    because: "DRY. Single place to update. Version controlled. Consistent patterns."
+
+  - situation: "Monorepo, only want to build changed packages"
+    choose: "Affected builds with Nx/Turborepo"
+    because: "Nx computes dependency graph. Only rebuilds what changed. Massive time savings."
+
+# ============================================================
+# SECTION 10: Recovery
+# ============================================================
+recovery:
+  - failure: "Deployment broke production"
+    detection: "Smoke tests fail, monitoring alerts, user reports"
+    recovery: |
+      1. IMMEDIATELY trigger rollback workflow or manual:
+         aws ecs update-service --task-definition $ROLLBACK_ARN
+         # OR: kubectl rollout undo deployment/api
+      2. Verify rollback succeeded: curl https://api.example.com/health
+      3. Communicate status to stakeholders
+      4. Root cause analysis AFTER service restored
+    prevention: "Always smoke test. Canary deploys. Feature flags for risky changes."
+
+  - failure: "Secrets leaked in logs"
+    detection: "Security scan alert, manual discovery, external report"
+    recovery: |
+      1. IMMEDIATELY rotate ALL secrets that could have been exposed
+      2. Delete affected workflow runs (Settings > Actions > Delete all logs)
+      3. Audit CloudTrail/access logs for secret usage
+      4. Review who had repo access during exposure window
+      5. Incident report with timeline
+    prevention: "Never echo secrets. Automated secret scanning. ::add-mask:: for derived values."
+
+  - failure: "Supply chain attack via action"
+    detection: "Unexpected behavior, security advisory, community report"
+    recovery: |
+      1. Pin immediately to known-good SHA
+      2. Audit recent workflow runs for suspicious activity
+      3. Rotate any secrets the action had access to
+      4. Review what permissions the action used
+      5. Consider forking or replacing action
+    prevention: "Pin to SHA. Dependabot alerts. Minimal permissions. Audit before use."
+
+  - failure: "Self-hosted runner compromised"
+    detection: "Unusual network traffic, unauthorized access, runner behaving oddly"
+    recovery: |
+      1. Remove runner from GitHub immediately
+      2. Isolate machine from network
+      3. Forensic analysis of runner
+      4. Rotate ALL secrets the runner had access to
+      5. Audit actions that ran on the runner
+    prevention: "Ephemeral runners. Network isolation. No self-hosted on public repos."
+
+  - failure: "Flaky tests blocking all merges"
+    detection: "Same tests fail intermittently, team re-running constantly"
+    recovery: |
+      1. Quarantine flaky tests immediately (separate job, continue-on-error)
+      2. Track and prioritize flaky test fixes
+      3. Add test timeouts and retry logic
+      4. Fix root causes (timing, external deps, shared state)
+    prevention: "Test isolation. Mocked external services. Deterministic test data. Local reproducibility."
+
+# ============================================================
+# SECTION 11: Examples
+# ============================================================
+examples:
+  - name: "Complete Production Workflow"
+    code: |
+      name: CI/CD
+
+      on:
+        push:
+          branches: [main]
+        pull_request:
+
+      permissions:
+        contents: read
+        id-token: write
+        pull-requests: write
+
+      concurrency:
+        group: ${{ github.workflow }}-${{ github.ref }}
+        cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+      jobs:
+        test:
+          runs-on: ubuntu-latest
+          timeout-minutes: 15
+          steps:
+            - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+            - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
+              with:
+                node-version: '20'
+                cache: 'npm'
+            - run: npm ci
+            - run: npm test -- --coverage
+            - uses: actions/upload-artifact@v4
+              with:
+                name: coverage
+                path: coverage/
+
+        security:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+            - run: npm audit --audit-level=high
+            - uses: gitleaks/gitleaks-action@v2
+
+        build:
+          needs: [test, security]
+          runs-on: ubuntu-latest
+          outputs:
+            image-tag: ${{ github.sha }}
+          steps:
+            - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+            - uses: docker/setup-buildx-action@v3
+            - uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+                aws-region: us-east-1
+            - uses: docker/build-push-action@v5
+              with:
+                context: .
+                push: ${{ github.event_name == 'push' }}
+                tags: ${{ secrets.ECR_REPO }}:${{ github.sha }}
+                cache-from: type=gha
+                cache-to: type=gha,mode=max
+
+        deploy-staging:
+          if: github.event_name == 'push'
+          needs: build
+          runs-on: ubuntu-latest
+          environment: staging
+          steps:
+            - uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+                aws-region: us-east-1
+            - run: |
+                aws ecs update-service --cluster staging --service api \
+                  --task-definition api:${{ needs.build.outputs.image-tag }}
+                aws ecs wait services-stable --cluster staging --services api
+
+        deploy-production:
+          if: github.event_name == 'push'
+          needs: deploy-staging
+          runs-on: ubuntu-latest
+          environment: production
+          steps:
+            - uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+                aws-region: us-east-1
+            - run: |
+                CURRENT=$(aws ecs describe-services --cluster prod --services api \
+                  --query 'services[0].taskDefinition' --output text)
+                echo "ROLLBACK_ARN=$CURRENT" >> $GITHUB_ENV
+                aws ecs update-service --cluster prod --service api \
+                  --task-definition api:${{ needs.build.outputs.image-tag }}
+            - run: aws ecs wait services-stable --cluster prod --services api
+            - run: |
+                curl -f https://api.example.com/health || {
+                  aws ecs update-service --cluster prod --service api --task-definition $ROLLBACK_ARN
+                  exit 1
+                }
+
+  - name: "GitLab CI Complete"
+    code: |
+      stages:
+        - test
+        - build
+        - deploy
+
+      variables:
+        DOCKER_TLS_CERTDIR: "/certs"
+
+      test:
+        stage: test
+        image: node:20
+        cache:
+          key: npm-$CI_COMMIT_REF_SLUG
+          paths:
+            - node_modules/
+        script:
+          - npm ci
+          - npm test
+        artifacts:
+          reports:
+            coverage_report:
+              coverage_format: cobertura
+              path: coverage/cobertura-coverage.xml
+
+      build:
+        stage: build
+        image: docker:latest
+        services:
+          - docker:dind
+        script:
+          - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+          - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+        rules:
+          - if: $CI_COMMIT_BRANCH == "main"
+
+      deploy:
+        stage: deploy
+        image: amazon/aws-cli:latest
+        id_tokens:
+          GITLAB_OIDC_TOKEN:
+            aud: https://gitlab.com
+        script:
+          - >
+            export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
+            $(aws sts assume-role-with-web-identity
+            --role-arn $AWS_ROLE_ARN
+            --role-session-name "GitLab-$CI_PROJECT_ID-$CI_PIPELINE_ID"
+            --web-identity-token $GITLAB_OIDC_TOKEN
+            --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+            --output text))
+          - aws ecs update-service --cluster prod --service api --force-new-deployment
+        environment:
+          name: production
+        rules:
+          - if: $CI_COMMIT_BRANCH == "main"
+            when: manual
+
+# ============================================================
+# SECTION 12: Gotchas
+# ============================================================
+gotchas:
+  - trap: "Using @v4 is safe enough"
+    why: "Tags are mutable. Maintainer can update v4 tag to malicious commit."
+    correct: "Pin to SHA: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11"
+
+  - trap: "Secrets are automatically masked"
+    why: "Only exact secret values masked. Base64, URL-encoded, derived values visible."
+    correct: "Use ::add-mask::$DERIVED_VALUE for any transformed secrets"
+
+  - trap: "pull_request_target is same as pull_request"
+    why: "pull_request_target runs with BASE repo secrets, making it dangerous for PR code"
+    correct: "Use pull_request for untrusted code. Never checkout PR head with _target."
+
+  - trap: "GITHUB_TOKEN has minimal permissions by default"
+    why: "Default permissions vary by org settings. Many orgs have write-all default."
+    correct: "Always explicit permissions block. Start with contents: read."
+
+  - trap: "Rolling back is just redeploying old version"
+    why: "If old container deleted, rollback fails. If DB migrated, rollback breaks."
+    correct: "Track rollback ARN. Keep N previous images. Test down migrations."
+
+  - trap: "Self-hosted runners are fine with approval required"
+    why: "Approval only delays attack. Attacker waits for approval, then runs malicious code."
+    correct: "Never self-hosted on public repos. Period."
+
+  - trap: "Caching node_modules is enough"
+    why: "npm ci always reinstalls from lockfile. Cache ~/.npm instead for download cache."
+    correct: "Cache ~/.npm for npm, ~/.cache/yarn for yarn, ~/.pnpm-store for pnpm"
+
+  - trap: "Environment approval gates protect everything"
+    why: "Approval only protects jobs with environment: set. Other jobs run immediately."
+    correct: "Ensure ALL privileged operations are in environment-protected jobs."
+
+  - trap: "Concurrency cancel-in-progress speeds up deploys"
+    why: "Cancelling in-progress deployment can leave infrastructure in inconsistent state."
+    correct: "cancel-in-progress: false for deployments. true for PR checks only."
+
+  - trap: "OIDC eliminates all credential risks"
+    why: "OIDC tokens are short-lived but still potent. Compromised workflow can assume role."
+    correct: "OIDC + minimal role permissions + condition keys (repo, branch, env)."
+
+tags:
+  - cicd
+  - github-actions
+  - gitlab-ci
+  - deployment
+  - devops
+  - security
+  - blue-green
+  - canary
+  - rollback
+  - h70

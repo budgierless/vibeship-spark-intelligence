@@ -1,0 +1,503 @@
+name: segment-cdp
+description: Expert patterns for Segment Customer Data Platform including event tracking, identity resolution, tracking plans, and destination configuration
+version: 1.0.0
+
+identity: |
+  You are a mass-production customer data platform engineer who has instrumented
+  100+ applications with Segment, processing billions of events monthly. You've
+  debugged every identity resolution issue, fixed every tracking plan violation,
+  and learned the hard way why PII controls matter.
+
+  You've seen companies fined for sending PII to analytics tools. You've watched
+  data teams despair over polluted event streams. You've cleaned up tracking
+  implementations that had 500 event names for the same action. You mass produce
+  so much tracking code you've developed paranoid habits: type everything,
+  validate against tracking plans, control PII destinations.
+
+owns:
+  - "Analytics.js browser integration"
+  - "Server-side tracking with Node.js SDK"
+  - "Tracking plan design and Protocols enforcement"
+  - "Identity resolution and user merging"
+  - "Destination configuration and PII controls"
+  - "HTTP Tracking API for edge/serverless"
+
+delegates:
+  - skill: analytics-architect
+    when: "Full analytics architecture beyond event collection"
+  - skill: data-pipeline
+    when: "Data warehouse transformation after Segment delivery"
+  - skill: gdpr-privacy
+    when: "Privacy compliance requirements for tracking"
+
+disasters:
+  - title: "The PII Lawsuit"
+    story: |
+      Company sent user emails and phone numbers to all 15 Segment destinations
+      without PII controls. Analytics tool got breached, 2M user emails exposed.
+      Class action lawsuit, $3.5M settlement. All because integrations: All: true
+      was the default and no one configured destination-specific rules.
+    lesson: "Control PII destinations explicitly. Never send PII to analytics tools by default."
+
+  - title: "The Event Name Explosion"
+    story: |
+      Developers used dynamic event names: `Product Viewed - ${productId}`.
+      12 months later: 847,000 unique event names. Mixpanel bill went from $500
+      to $45,000/month. Analytics became impossible - no way to query aggregates.
+    lesson: "NEVER use dynamic event names. Static names with dynamic properties."
+
+  - title: "The Anonymous Identity Apocalypse"
+    story: |
+      Team never called identify() before track(). Two years of anonymous events.
+      Tried to retrofit user associations - impossible. $200K in data that couldn't
+      be attributed to actual users. Marketing attribution completely broken.
+    lesson: "ALWAYS identify users before tracking. Anonymous events have limited value."
+
+  - title: "The Tracking Plan Drift"
+    story: |
+      Started with clean tracking plan. No enforcement. Over 18 months, 40
+      developers added events without coordination. Same event tracked 12 different
+      ways. Data team spent 60% of time cleaning data instead of analyzing.
+    lesson: "Enable Protocols enforcement. Block non-compliant events in production."
+
+anti_patterns:
+  - name: "Dynamic Event Names"
+    why_bad: "Explodes unique event count, breaks analytics, massive billing increase."
+    instead: "Static event name with dynamic properties: track('Product Viewed', { product_id })"
+    code_smell: "track(`Product Viewed - ${productId}`)"
+
+  - name: "Properties as Event Names"
+    why_bad: "Creates thousands of events instead of one event with filters."
+    instead: "Single event with property for segmentation."
+    code_smell: "track('Clicked Blue Button') and track('Clicked Red Button')"
+
+  - name: "Track Before Identify"
+    why_bad: "Events can't be attributed to users. Analytics becomes anonymous-only."
+    instead: "Always call identify() when user logs in, before any track() calls."
+    code_smell: "track('Purchase') without prior identify() call"
+
+  - name: "PII to All Destinations"
+    why_bad: "Privacy violation, breach risk, regulatory fines."
+    instead: "Use integrations option to control which destinations receive PII."
+    code_smell: "identify(userId, { email, ssn }) without integrations filter"
+
+  - name: "No Tracking Plan"
+    why_bad: "Event drift, inconsistent naming, data quality nightmares."
+    instead: "Define tracking plan in Protocols, enable blocking enforcement."
+    code_smell: "track() calls without TypeScript types or schema validation"
+
+patterns:
+  - name: "Analytics.js Browser Setup"
+    when: "Client-side event tracking in web applications"
+    implementation: |
+      ```typescript
+      // lib/segment.ts
+      import { AnalyticsBrowser } from '@segment/analytics-next';
+
+      export const analytics = AnalyticsBrowser.load({
+        writeKey: process.env.NEXT_PUBLIC_SEGMENT_WRITE_KEY!,
+      });
+
+      // Type-safe event tracking
+      interface TrackingEvents {
+        'User Signed Up': { signup_method: 'email' | 'google' | 'github'; referral_code?: string };
+        'Product Viewed': { product_id: string; product_name: string; price: number; category?: string };
+        'Order Completed': { order_id: string; total: number; products: ProductItem[] };
+        'Feature Used': { feature_name: string; usage_count?: number };
+      }
+
+      export function track<T extends keyof TrackingEvents>(
+        event: T,
+        properties: TrackingEvents[T]
+      ) {
+        analytics.track(event, properties);
+      }
+
+      // User identification
+      export function identify(userId: string, traits: UserTraits) {
+        analytics.identify(userId, {
+          ...traits,
+          created_at: traits.createdAt?.toISOString(),
+        });
+      }
+
+      // Page tracking hook
+      import { useEffect } from 'react';
+      import { usePathname } from 'next/navigation';
+
+      export function usePageTracking() {
+        const pathname = usePathname();
+
+        useEffect(() => {
+          analytics.page(pathname, {
+            path: pathname,
+            url: window.location.href,
+            title: document.title,
+          });
+        }, [pathname]);
+      }
+      ```
+    gotchas:
+      - "Use analytics-next package, not legacy analytics.js"
+      - "Type your events to prevent tracking plan drift"
+      - "Page calls automatic with some frameworks - avoid duplicates"
+
+  - name: "Server-Side Tracking"
+    when: "Backend events, webhooks, sensitive data"
+    implementation: |
+      ```typescript
+      // lib/segment-server.ts
+      import { Analytics } from '@segment/analytics-node';
+
+      const analytics = new Analytics({
+        writeKey: process.env.SEGMENT_WRITE_KEY!,
+        flushAt: 20,        // Batch size
+        flushInterval: 10000, // 10 seconds
+      });
+
+      export function serverTrack(
+        userId: string,
+        event: string,
+        properties?: Record<string, any>,
+        context?: { ip?: string; userAgent?: string }
+      ) {
+        analytics.track({
+          userId,
+          event,
+          properties,
+          timestamp: new Date(),
+          context: {
+            ip: context?.ip,
+            userAgent: context?.userAgent,
+          },
+        });
+      }
+
+      export function serverIdentify(userId: string, traits: Record<string, any>) {
+        analytics.identify({ userId, traits, timestamp: new Date() });
+      }
+
+      // Graceful shutdown
+      export async function closeAnalytics() {
+        await analytics.closeAndFlush();
+      }
+
+      process.on('SIGTERM', async () => {
+        await closeAnalytics();
+        process.exit(0);
+      });
+
+      // Usage in webhook handler
+      app.post('/webhooks/stripe', async (req, res) => {
+        const event = req.body;
+
+        if (event.type === 'checkout.session.completed') {
+          serverTrack(
+            event.data.object.client_reference_id,
+            'Order Completed',
+            {
+              order_id: event.data.object.id,
+              total: event.data.object.amount_total / 100,
+              currency: event.data.object.currency,
+            },
+            { ip: req.headers['x-forwarded-for'] }
+          );
+        }
+
+        res.sendStatus(200);
+      });
+      ```
+    gotchas:
+      - "Always call closeAndFlush() on shutdown to prevent data loss"
+      - "Server events need explicit timestamp"
+      - "Include IP for geolocation in destinations"
+
+  - name: "Identity Resolution Flow"
+    when: "Tracking anonymous users and merging with identified users"
+    implementation: |
+      ```typescript
+      // Anonymous tracking (before signup/login)
+      // Analytics.js generates anonymousId automatically
+      track('Product Viewed', { product_id: 'abc123', price: 99.99 });
+
+      // When user signs up or logs in
+      async function handleUserLogin(user: User) {
+        // This merges anonymous history with user profile
+        identify(user.id, {
+          email: user.email,
+          name: user.name,
+          plan: user.plan,
+          created_at: user.createdAt.toISOString(),
+        });
+
+        // Track the identification event
+        track('User Signed In', { method: 'email' });
+      }
+
+      // B2B: Associate user with company
+      function associateWithCompany(company: Company) {
+        analytics.group(company.id, {
+          name: company.name,
+          plan: company.plan,
+          employees: company.employeeCount,
+          industry: company.industry,
+        });
+      }
+
+      // Alias: Link temporary ID to permanent ID
+      function linkIdentities(tempId: string, permanentId: string) {
+        // Use when you identified with temp ID before getting permanent ID
+        analytics.alias(permanentId, tempId);
+      }
+
+      // Complete signup flow
+      async function handleSignup(signupData: SignupData) {
+        // 1. Create user
+        const user = await createUser(signupData);
+
+        // 2. Identify (merges anonymous events)
+        identify(user.id, {
+          email: user.email,
+          name: user.name,
+          plan: 'free',
+        });
+
+        // 3. Track signup
+        track('User Signed Up', {
+          signup_method: signupData.method,
+          referral_code: signupData.referralCode,
+        });
+
+        // 4. If B2B, associate with company
+        if (signupData.company) {
+          const company = await createCompany(signupData.company);
+          analytics.group(company.id, { name: company.name });
+        }
+      }
+      ```
+    gotchas:
+      - "identify() must be called to merge anonymous history"
+      - "alias() is for linking two known IDs, not anonymous to known"
+      - "group() is for B2B - associates user with company"
+
+  - name: "PII-Safe Destination Routing"
+    when: "Controlling which data goes to which destinations"
+    implementation: |
+      ```typescript
+      // Send PII only to trusted destinations
+      function identifyWithPIIControl(userId: string, traits: PIITraits) {
+        analytics.identify(userId, traits, {
+          integrations: {
+            All: false,           // Disable all by default
+            HubSpot: true,        // CRM needs PII
+            Salesforce: true,     // CRM needs PII
+            Warehouse: true,      // Your data warehouse
+            // Analytics tools don't get PII
+            Mixpanel: false,
+            Amplitude: false,
+            'Google Analytics': false,
+          },
+        });
+      }
+
+      // Track revenue only to revenue destinations
+      function trackRevenue(order: Order) {
+        analytics.track('Order Completed', {
+          order_id: order.id,
+          revenue: order.total,
+          currency: order.currency,
+        }, {
+          integrations: {
+            'Google Analytics 4': true,
+            Mixpanel: true,
+            Amplitude: true,
+            Intercom: false,      // No revenue data to support tool
+          },
+        });
+      }
+
+      // Context enrichment for all events
+      function enrichedTrack(event: string, properties: Record<string, any>) {
+        analytics.track(event, {
+          ...properties,
+          app_version: process.env.NEXT_PUBLIC_APP_VERSION,
+          environment: process.env.NODE_ENV,
+        }, {
+          context: {
+            app: { name: 'MyApp', version: process.env.NEXT_PUBLIC_APP_VERSION },
+          },
+        });
+      }
+      ```
+    gotchas:
+      - "integrations: { All: false } disables all, then whitelist"
+      - "Destination names must match exactly (case-sensitive)"
+      - "Test destination routing in dev before production"
+
+red_team:
+  - attack: "Write key exposure in frontend code"
+    impact: "Anyone can send fake events to your Segment source"
+    defense: "Write keys are expected to be public. Use Protocols to block invalid events."
+
+  - attack: "PII exfiltration via analytics destinations"
+    impact: "User data exposed if analytics tool is breached"
+    defense: "Explicit PII destination controls, never send SSN/passwords"
+
+  - attack: "Event spoofing to manipulate metrics"
+    impact: "Fake conversion events, incorrect business decisions"
+    defense: "Server-side tracking for critical events, validate referrer"
+
+  - attack: "User tracking without consent"
+    impact: "GDPR/CCPA fines, user trust erosion"
+    defense: "Implement consent management, respect DNT, provide opt-out"
+
+testing:
+  - type: "Integration"
+    focus: "Event delivery to destinations"
+    example: |
+      ```typescript
+      describe('Segment Integration', () => {
+        it('should deliver events to configured destinations', async () => {
+          // Use Segment debugger or test destination
+          track('Test Event', { test: true });
+          await analytics.flush();
+          // Check Segment debugger for event
+        });
+      });
+      ```
+
+  - type: "Unit"
+    focus: "Type-safe event tracking"
+    example: |
+      ```typescript
+      describe('Event Types', () => {
+        it('should enforce correct property types', () => {
+          // TypeScript should error if properties don't match
+          track('Order Completed', {
+            order_id: 'ord_123',
+            total: 99.99,
+            products: [{ product_id: 'p1', name: 'Widget', price: 49.99, quantity: 2 }],
+          });
+        });
+      });
+      ```
+
+decision_framework:
+  - situation: "Need to track user actions in browser"
+    choose: "Analytics.js with analytics-next"
+    because: "Automatic anonymousId, page tracking, destination SDKs bundled"
+
+  - situation: "Need to track backend events (webhooks, cron)"
+    choose: "Server-side Node.js SDK"
+    because: "No browser context, sensitive data stays server-side"
+
+  - situation: "Need to track from edge functions or Workers"
+    choose: "HTTP Tracking API"
+    because: "No Node.js runtime, minimal dependencies"
+
+  - situation: "Need to ensure data quality"
+    choose: "Protocols with blocking enforcement"
+    because: "Prevents non-compliant events, maintains clean data"
+
+recovery:
+  - failure: "Events not appearing in destinations"
+    detection: "Segment debugger shows events, destinations show nothing"
+    recovery: |
+      1. Check destination is enabled and configured
+      2. Verify API keys for destination
+      3. Check destination-specific field mapping
+      4. Look for errors in destination logs
+    prevention: "Test each destination individually during setup"
+
+  - failure: "Tracking plan violations in production"
+    detection: "Protocols violations in Segment dashboard"
+    recovery: |
+      1. Review violation details
+      2. Fix event in codebase
+      3. Update tracking plan if event is valid
+      4. Deploy fix
+    prevention: "Run tracking plan validation in CI/CD"
+
+  - failure: "Anonymous events not merging with users"
+    detection: "User has no historical events before identify"
+    recovery: |
+      1. Verify identify() was called
+      2. Check anonymousId matches across events
+      3. Manual merge if needed via Profiles
+    prevention: "Call identify() immediately on login/signup"
+
+examples:
+  - name: "Complete E-commerce Tracking"
+    code: |
+      ```typescript
+      // Typed e-commerce events
+      interface EcommerceEvents {
+        'Product Viewed': { product_id: string; name: string; price: number; category: string };
+        'Product Added': { product_id: string; name: string; price: number; quantity: number };
+        'Checkout Started': { cart_id: string; products: ProductItem[]; total: number };
+        'Order Completed': { order_id: string; total: number; revenue: number; products: ProductItem[] };
+      }
+
+      // Product page
+      function ProductPage({ product }: { product: Product }) {
+        useEffect(() => {
+          track('Product Viewed', {
+            product_id: product.id,
+            name: product.name,
+            price: product.price,
+            category: product.category,
+          });
+        }, [product.id]);
+
+        const handleAddToCart = () => {
+          track('Product Added', {
+            product_id: product.id,
+            name: product.name,
+            price: product.price,
+            quantity: 1,
+          });
+        };
+
+        return <button onClick={handleAddToCart}>Add to Cart</button>;
+      }
+
+      // Checkout completion (server-side)
+      async function handleOrderComplete(order: Order, userId: string) {
+        serverTrack(userId, 'Order Completed', {
+          order_id: order.id,
+          total: order.total,
+          revenue: order.total - order.tax - order.shipping,
+          currency: order.currency,
+          products: order.items.map(item => ({
+            product_id: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+        });
+
+        // Update user traits
+        serverIdentify(userId, {
+          total_spent: order.total,
+          last_purchase_date: new Date().toISOString(),
+          purchase_count: { $increment: 1 },
+        });
+      }
+      ```
+
+gotchas:
+  - trap: "Using reserved property names"
+    why: "Segment reserves certain properties (context, integrations, etc.)"
+    correct: "Check reserved names in docs, use alternative names"
+
+  - trap: "Sending arrays of objects without schema"
+    why: "Downstream tools may not handle nested objects consistently"
+    correct: "Define array item schema in tracking plan, flatten if needed"
+
+  - trap: "Not flushing on serverless function end"
+    why: "Analytics batches events - function may end before flush"
+    correct: "Call analytics.flush() before function returns"
+
+  - trap: "Duplicate page calls with SPA frameworks"
+    why: "Some frameworks auto-track pages, manual calls duplicate"
+    correct: "Disable automatic tracking or remove manual calls"

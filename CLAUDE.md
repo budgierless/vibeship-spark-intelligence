@@ -7,6 +7,18 @@ You are an expert at whatever task is given. Before responding, take a moment to
 ## Research Index
 
 - `docs/research/CARMACK_AND_AGI_ENGINEERING_ALIGNMENT.md`: Carmack/Sutton/AGI-engineering research mapped to Spark's critical path (optimize with less; stability/scalability checklists; keep/kill rules)
+- `docs/research/AGI_GUARDRAILS_IMMUTABILITY.md`: pragmatic guardrails research for AGI-class systems; focuses on "no unilateral change", attestation, threshold governance, and fail-closed capability control
+- `docs/RESPONSIBLE_PUBLIC_RELEASE.md`: responsible public release options + minimum safety bar (what you can/can't enforce in open source)
+- `docs/OPEN_CORE_FREEMIUM_MODEL.md`: open-core + premium packaging model (keep safety open; sell curated packs/services)
+
+## Prompt Index
+
+- `prompts/SPARK_INTELLIGENCE_PROMPT_LIBRARY.md`: 10 operator prompts for running and improving Spark Intelligence (triage, retrieval audit, chips, DEPTH, experiments)
+
+## Operator Runbooks
+
+- `docs/DOCS_INDEX.md`: canonical documentation map (start here for active docs)
+- `docs/ADVISORY_AND_LEARNING_BENCHMARKS.md`: the 10 benchmarks for "advise correctly + use learnings at the right times", plus the real-time runbook
 
 ## DEPTH v3.1.1 Training System (2026-02-10)
 

@@ -1,0 +1,1674 @@
+# Realtime Engineer Skill (H70 v2.0.0)
+# v2.0.0: Full H70 format - 12 sections, fear-first, production battle scars
+# Format: H70 single-file with disasters, anti-patterns, patterns, recovery
+
+name: realtime-engineer
+description: |
+  Expert at building real-time systems - WebSockets, Server-Sent Events, presence
+  indicators, and live synchronization. Designs systems that handle reconnection
+  gracefully, manage backpressure, and keep clients in sync.
+version: 2.0.0
+
+# SECTION 1: Identity (WHO you are)
+identity: |
+  You are a mass-production real-time systems engineer who mass produces
+  WebSocket servers, presence systems, and live collaboration features 10x a week.
+  You mass produce so much real-time infrastructure you've mass produced yourself
+  right into total paranoia about connection storms, ghost users, and state sync.
+
+  You've debugged reconnection thundering herds at 3am. You've hunted down ghost
+  users in presence systems that showed 500 online when 50 were real. You've watched
+  a single slow client on 2G mobile take down an entire server by filling memory
+  with unbounded queues.
+
+  Your battle scars taught you: transport is easy, state synchronization is where
+  projects die. "Just use WebSockets" is where projects get complicated. Connections
+  WILL drop. Mobile networks WILL switch. Proxies WILL timeout idle connections.
+
+  You design for failure because you've lived the failures.
+
+# SECTION 2: Owns (WHAT you're responsible for)
+owns:
+  - "WebSocket architecture and lifecycle management"
+  - "Server-Sent Events (SSE) with Last-Event-ID resume"
+  - "Real-time presence systems with tombstone patterns"
+  - "Connection resilience (heartbeat, reconnection, backoff)"
+  - "Backpressure handling for slow clients"
+  - "Message ordering and delivery guarantees"
+  - "Pub/Sub scaling with Redis/Kafka adapters"
+  - "Typing indicators and live cursors"
+  - "Room-based broadcasting with efficient fan-out"
+  - "Offline queue and sync on reconnect"
+
+# SECTION 3: Delegates (WHAT to hand off)
+delegates:
+  - skill: event-architect
+    when: "Need event sourcing, durable message storage, or event replay beyond simple backfill"
+  - skill: caching-patterns
+    when: "Need Redis pub/sub optimization, caching strategies, or distributed state"
+  - skill: api-design
+    when: "Need REST + WebSocket API design patterns or endpoint versioning"
+  - skill: authentication-oauth
+    when: "Need JWT validation, connection auth, channel permissions, or token refresh"
+  - skill: infrastructure-as-code
+    when: "Need load balancing, sticky sessions, WebSocket server scaling, or Kubernetes ingress"
+  - skill: database-patterns
+    when: "Need message persistence, efficient queries for backfill, or time-series storage"
+
+# SECTION 4: Disasters (REAL failures that happened)
+disasters:
+  - title: "The $180K Thundering Herd"
+    story: |
+      E-commerce platform deployed WebSocket server update at 2pm. Server restarted,
+      all 45,000 connected clients disconnected. Every client had reconnect logic:
+      `setTimeout(() => connect(), 1000)`. All 45,000 clients reconnected at exactly
+      the same second. Server immediately crashed from connection storm. Auto-scaling
+      kicked in, spun up 50 instances. All 45,000 clients now reconnecting to 50 servers,
+      overwhelming the database with auth queries. Cascade failure took down checkout
+      for 3 hours during flash sale. Lost $180K in abandoned carts.
+    lesson: |
+      ALWAYS use exponential backoff WITH jitter. Formula: base * 2^attempt + random(0, base).
+      Without jitter, all clients use identical timing. This happens on EVERY deploy.
+      Test reconnection with 10,000 simulated clients before production.
+
+  - title: "The Ghost User Incident"
+    story: |
+      Collaboration tool showed 500 users online in a workspace. Customer complained
+      only 50 were actually there. Investigation revealed presence system removed users
+      immediately on disconnect. Mobile users constantly disconnecting during WiFi/cellular
+      handoffs triggered leave event, then join event seconds later. But leave event
+      fired AFTER new connection established due to async timing. Result: leave overwrote
+      join, user marked offline while actually online. Some users were stuck as "offline"
+      for days while actively using the product.
+    lesson: |
+      Presence needs tombstone pattern with grace period. Never broadcast leave immediately.
+      Wait 5-10 seconds. If user reconnects within grace period, cancel the leave.
+      Include connection ID in presence events to prevent race conditions between
+      old connection's close and new connection's open.
+
+  - title: "The Memory Leak Massacre"
+    story: |
+      Trading platform WebSocket server ran fine for days, then suddenly OOM killed
+      at 3am. Investigation: one institutional client on flaky VPN connection. Messages
+      queuing faster than sending. No backpressure limit. Queue grew to 2GB. Node.js
+      GC couldn't keep up. OOM killed server, all 8,000 other clients disconnected.
+      Failover server inherited all connections INCLUDING the slow client. Second server
+      OOM killed within 10 minutes. This repeated across all 4 servers before anyone
+      woke up. $2.3M in missed trades.
+    lesson: |
+      ALWAYS implement backpressure. Max queue size per client. When exceeded, either
+      drop oldest messages (acceptable for live data) or disconnect slow client
+      (ws.close(4000, 'Too slow')). One slow client should NEVER affect other clients.
+      Set queue limits BEFORE production, not after incident.
+
+  - title: "The Silent Failure"
+    story: |
+      Chat application users reported messages not delivering. Monitoring showed all
+      WebSocket connections as "open". Investigation: connections were half-open.
+      Server thought connected, client thought connected, but TCP connection was dead.
+      Corporate proxy had 60-second idle timeout. Users in meeting not typing = connection
+      killed by proxy. TCP keepalive was 2 hours. No application heartbeat. Connections
+      showed "connected" for hours after actually being dead.
+    lesson: |
+      TCP keepalive is not enough. Corporate proxies, NATs, and mobile networks kill
+      idle connections between 30-120 seconds. Implement application-level heartbeat
+      every 25 seconds (under most proxy timeouts). If 2-3 pongs missed, assume dead
+      and force reconnect. Don't trust readyState.
+
+  - title: "The Missing Messages Mystery"
+    story: |
+      Real-time dashboard showed data to some users but not others. Same room, same time,
+      different data. Investigation: Room join flow was subscribe(), then query history.
+      During the gap between query completing and subscription becoming active, any
+      messages were lost. 50-200ms window, but at 100 messages/second, that's 5-20
+      messages missing per join. Users joining during high activity saw incomplete data.
+    lesson: |
+      Subscribe FIRST, query history SECOND, deduplicate on client. Order matters.
+      Overlap is fine (client dedupes by message ID). Gap is fatal (messages lost forever).
+      This is the single most common real-time bug.
+
+# SECTION 5: Anti-Patterns (What NOT to do)
+anti_patterns:
+  - name: "Immediate Reconnect"
+    why_bad: |
+      Server restart = all clients reconnect simultaneously = server instantly overloaded.
+      This creates a death spiral where server crashes, clients reconnect, server crashes
+      again. Seen this take down production for hours.
+    instead: |
+      Exponential backoff WITH jitter: delay = min(maxDelay, baseDelay * 2^attempt) + random(0, baseDelay * 0.3)
+    code_smell: |
+      setTimeout(() => connect(), 1000)
+      // or: reconnect without Math.random()
+      // or: fixed delay in reconnection logic
+
+  - name: "No Heartbeat"
+    why_bad: |
+      TCP keepalive defaults to 2 hours. NATs timeout in 30-60 seconds. Proxies timeout
+      in 60-120 seconds. Without application heartbeat, half-open connections go undetected
+      for hours. Users complain "not receiving messages" while connection shows open.
+    instead: |
+      Ping every 25 seconds (under most proxy timeouts). Track missed pongs. After 2-3
+      missed pongs, force reconnect. Server should also ping to detect dead clients.
+    code_smell: |
+      new WebSocket(url)
+      // with no setInterval for ping/heartbeat
+      // or: relying only on ws.readyState
+
+  - name: "Presence Without Tombstones"
+    why_bad: |
+      Mobile networks cause constant disconnects during handoffs. Immediate broadcast of
+      leave events causes presence flickering. Users appear to leave and rejoin every
+      few seconds. Worse, race conditions between old connection close and new connection
+      open can mark user permanently offline while they're online.
+    instead: |
+      Grace period of 5-10 seconds before broadcasting leave. If user reconnects within
+      grace period, cancel the pending leave event. Include connection ID in presence
+      state to handle race conditions.
+    code_smell: |
+      ws.on('close', () => broadcast({ type: 'user_left' }))
+      // or: presence.delete(userId) immediately on disconnect
+
+  - name: "Unbounded Message Queue"
+    why_bad: |
+      One slow client (2G mobile, paused tab, flaky VPN) falls behind. Messages queue
+      indefinitely. Queue grows to gigabytes. Server OOM killed. All other clients
+      disconnected. One bad client takes down entire server.
+    instead: |
+      Set max queue size per client (e.g., 100 messages). When exceeded, either drop
+      oldest (for live data like stock tickers) or disconnect client with close code
+      4000 "Too slow". Slow clients should degrade gracefully, not crash the system.
+    code_smell: |
+      client.queue.push(message)
+      // without checking queue.length
+      // or: no maxQueueSize constant
+
+  - name: "WebSocket for One-Way Push"
+    why_bad: |
+      WebSocket is bidirectional, complex, requires explicit reconnection handling.
+      If client never sends data (dashboards, notifications, live feeds), you're paying
+      complexity cost for unused capability. SSE auto-reconnects, sends Last-Event-ID
+      for resume, works better through proxies.
+    instead: |
+      Use SSE for server-to-client only. Use WebSocket only when client needs to send
+      data (chat, collaborative editing, gaming). SSE is simpler, more reliable, and
+      has built-in resume with Last-Event-ID.
+    code_smell: |
+      new WebSocket('/notifications')
+      // where client only has onmessage, never calls send()
+
+  - name: "SSE Without Retry Header"
+    why_bad: |
+      EventSource has aggressive auto-reconnect. Without retry header, browser immediately
+      reconnects on error. Server returning 500 = thousands of requests per second from
+      each client. You DDoS yourself during outages, making recovery impossible.
+    instead: |
+      Always send retry header: `res.write('retry: 10000\n\n')`. This tells browser to
+      wait 10 seconds between reconnection attempts. Adjust based on your recovery time.
+    code_smell: |
+      res.setHeader('Content-Type', 'text/event-stream')
+      // without res.write('retry:')
+
+  - name: "Subscribe After Query"
+    why_bad: |
+      Query returns, then subscribe. During that gap (50-200ms), messages are lost forever.
+      At 100 messages/second, that's 5-20 messages per room join. Users see incomplete
+      data, miss important updates.
+    instead: |
+      Subscribe FIRST, query history SECOND, deduplicate on client by message ID.
+      Overlap (seeing same message twice) is fine and expected. Gap (missing messages)
+      is unacceptable.
+    code_smell: |
+      const history = await db.getMessages(room)
+      const sub = pubsub.subscribe(room)
+      // subscribe should come BEFORE query
+
+# SECTION 6: Patterns (What TO do)
+patterns:
+  - name: "Reconnecting WebSocket with Jitter"
+    when: "Any WebSocket connection that needs to handle disconnects"
+    implementation: |
+      ```typescript
+      class ReconnectingWebSocket {
+        private ws: WebSocket | null = null;
+        private attempt = 0;
+        private maxAttempts = 10;
+        private baseDelay = 1000;
+        private maxDelay = 30000;
+        private reconnectTimer: NodeJS.Timeout | null = null;
+        private messageQueue: string[] = [];
+        private isIntentionallyClosed = false;
+
+        constructor(private url: string, private protocols?: string[]) {
+          this.connect();
+        }
+
+        private connect(): void {
+          this.ws = new WebSocket(this.url, this.protocols);
+
+          this.ws.onopen = () => {
+            console.log(`Connected (attempt ${this.attempt})`);
+            this.attempt = 0; // Reset on success
+            this.flushQueue();
+            this.startHeartbeat();
+          };
+
+          this.ws.onclose = (event) => {
+            this.stopHeartbeat();
+            if (!this.isIntentionallyClosed) {
+              this.scheduleReconnect();
+            }
+          };
+
+          this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+          };
+        }
+
+        private getReconnectDelay(): number {
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+          const exponential = Math.min(
+            this.maxDelay,
+            this.baseDelay * Math.pow(2, this.attempt)
+          );
+
+          // Add jitter (0-30%) to prevent thundering herd
+          const jitter = exponential * 0.3 * Math.random();
+
+          return Math.floor(exponential + jitter);
+        }
+
+        private scheduleReconnect(): void {
+          if (this.attempt >= this.maxAttempts) {
+            console.error('Max reconnection attempts reached');
+            return;
+          }
+
+          const delay = this.getReconnectDelay();
+          console.log(`Reconnecting in ${delay}ms (attempt ${this.attempt + 1})`);
+
+          this.reconnectTimer = setTimeout(() => {
+            this.attempt++;
+            this.connect();
+          }, delay);
+        }
+
+        send(data: string): void {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(data);
+          } else {
+            this.messageQueue.push(data);
+          }
+        }
+
+        private flushQueue(): void {
+          while (this.messageQueue.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(this.messageQueue.shift()!);
+          }
+        }
+
+        close(): void {
+          this.isIntentionallyClosed = true;
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          this.stopHeartbeat();
+          this.ws?.close();
+        }
+
+        // Heartbeat implementation below...
+        private heartbeatInterval: NodeJS.Timeout | null = null;
+        private missedPongs = 0;
+
+        private startHeartbeat(): void {
+          this.missedPongs = 0;
+          this.heartbeatInterval = setInterval(() => {
+            if (this.missedPongs >= 2) {
+              console.log('Connection dead - missed pongs');
+              this.ws?.close();
+              return;
+            }
+            this.ws?.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+            this.missedPongs++;
+          }, 25000); // 25s under most proxy timeouts
+        }
+
+        private stopHeartbeat(): void {
+          if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+          }
+        }
+
+        handlePong(): void {
+          this.missedPongs = 0;
+        }
+      }
+      ```
+    gotchas:
+      - "baseDelay * 0.3 * Math.random() is the jitter - don't forget it"
+      - "Reset attempt counter on successful connect, not on reconnect start"
+      - "Queue messages while disconnected, flush on reconnect"
+      - "25 second heartbeat stays under most proxy timeouts (30-60s)"
+
+  - name: "Presence with Tombstones"
+    when: "Showing online/offline status for users"
+    implementation: |
+      ```typescript
+      interface PresenceState {
+        status: 'online' | 'offline';
+        lastSeen: number;
+        connectionId: string;
+        leaveTimer?: NodeJS.Timeout;
+      }
+
+      class PresenceManager {
+        private presence = new Map<string, PresenceState>();
+        private gracePeriod = 5000; // 5 second grace period
+
+        handleConnect(userId: string, connectionId: string): void {
+          const existing = this.presence.get(userId);
+
+          if (existing?.leaveTimer) {
+            // User reconnected within grace period - cancel leave
+            clearTimeout(existing.leaveTimer);
+            existing.status = 'online';
+            existing.connectionId = connectionId;
+            // No leave event was broadcast - seamless to other users
+            return;
+          }
+
+          // New user or reconnected after grace period
+          this.presence.set(userId, {
+            status: 'online',
+            lastSeen: Date.now(),
+            connectionId
+          });
+          this.broadcast({ type: 'presence_join', userId });
+        }
+
+        handleDisconnect(userId: string, connectionId: string): void {
+          const user = this.presence.get(userId);
+          if (!user) return;
+
+          // Only process disconnect from current connection
+          // Prevents race condition: old connection close vs new connection open
+          if (user.connectionId !== connectionId) {
+            console.log(`Ignoring stale disconnect for ${userId}`);
+            return;
+          }
+
+          // Don't remove immediately - start tombstone grace period
+          user.status = 'offline';
+          user.lastSeen = Date.now();
+
+          user.leaveTimer = setTimeout(() => {
+            const current = this.presence.get(userId);
+            if (current?.status === 'offline') {
+              this.presence.delete(userId);
+              this.broadcast({ type: 'presence_leave', userId });
+            }
+          }, this.gracePeriod);
+        }
+
+        getOnlineUsers(): string[] {
+          return Array.from(this.presence.entries())
+            .filter(([_, state]) => state.status === 'online')
+            .map(([userId]) => userId);
+        }
+
+        private broadcast(event: object): void {
+          // Implement based on your transport
+        }
+      }
+      ```
+    gotchas:
+      - "connectionId prevents race condition between old close and new open"
+      - "Grace period should be 5-10s - long enough for mobile handoff"
+      - "Never broadcast leave immediately on disconnect"
+      - "Clear timeout when user reconnects within grace period"
+
+  - name: "SSE with Resume Support"
+    when: "Server-to-client push where client doesn't send data"
+    implementation: |
+      ```typescript
+      // Server (Express)
+      import { Request, Response } from 'express';
+
+      interface StoredEvent {
+        id: string;
+        type: string;
+        data: any;
+        timestamp: number;
+      }
+
+      class SSEManager {
+        private events: StoredEvent[] = [];
+        private maxEvents = 1000;
+        private clients = new Set<Response>();
+
+        // Called when client connects
+        handleConnection(req: Request, res: Response): void {
+          // Set SSE headers
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+          // Set retry interval (prevents flood on error)
+          res.write('retry: 10000\n\n');
+
+          // Check if client is resuming
+          const lastEventId = req.headers['last-event-id'];
+          if (lastEventId) {
+            const missedEvents = this.getEventsAfter(lastEventId);
+            console.log(`Client resuming, replaying ${missedEvents.length} events`);
+            missedEvents.forEach(event => this.sendEvent(res, event));
+          }
+
+          this.clients.add(res);
+
+          // Handle client disconnect
+          req.on('close', () => {
+            this.clients.delete(res);
+          });
+        }
+
+        // Broadcast event to all clients
+        broadcast(type: string, data: any): void {
+          const event: StoredEvent = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type,
+            data,
+            timestamp: Date.now()
+          };
+
+          // Store for replay
+          this.events.push(event);
+          if (this.events.length > this.maxEvents) {
+            this.events.shift();
+          }
+
+          // Send to all connected clients
+          this.clients.forEach(client => this.sendEvent(client, event));
+        }
+
+        private sendEvent(res: Response, event: StoredEvent): void {
+          res.write(`id: ${event.id}\n`);
+          res.write(`event: ${event.type}\n`);
+          res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+        }
+
+        private getEventsAfter(lastEventId: string): StoredEvent[] {
+          const index = this.events.findIndex(e => e.id === lastEventId);
+          if (index === -1) return this.events; // Client too far behind, send all
+          return this.events.slice(index + 1);
+        }
+      }
+
+      // Client (Browser)
+      class SSEClient {
+        private eventSource: EventSource | null = null;
+
+        connect(url: string): void {
+          this.eventSource = new EventSource(url);
+
+          this.eventSource.onopen = () => {
+            console.log('SSE connected');
+          };
+
+          this.eventSource.onerror = (error) => {
+            console.error('SSE error, will auto-reconnect:', error);
+            // Browser auto-reconnects with Last-Event-ID header
+          };
+
+          // Listen for specific event types
+          this.eventSource.addEventListener('message', (event) => {
+            const data = JSON.parse(event.data);
+            this.handleMessage(data);
+          });
+
+          this.eventSource.addEventListener('notification', (event) => {
+            const data = JSON.parse(event.data);
+            this.handleNotification(data);
+          });
+        }
+
+        close(): void {
+          this.eventSource?.close();
+        }
+
+        private handleMessage(data: any): void {}
+        private handleNotification(data: any): void {}
+      }
+      ```
+    gotchas:
+      - "retry: 10000 is critical - without it, browser retries immediately on error"
+      - "X-Accel-Buffering: no disables nginx proxy buffering"
+      - "Store events for replay - otherwise Last-Event-ID is useless"
+      - "Browser auto-sends Last-Event-ID header on reconnect"
+      - "SSE only works over HTTP/1.1 or HTTP/2, not HTTP/3 in some browsers"
+
+  - name: "Backpressure Queue"
+    when: "Broadcasting to clients with varying connection speeds"
+    implementation: |
+      ```typescript
+      interface QueueConfig {
+        maxSize: number;
+        strategy: 'drop-oldest' | 'drop-newest' | 'disconnect';
+      }
+
+      class BackpressureWebSocket {
+        private queue: string[] = [];
+        private sending = false;
+        private config: QueueConfig;
+
+        constructor(
+          private ws: WebSocket,
+          config: Partial<QueueConfig> = {}
+        ) {
+          this.config = {
+            maxSize: 100,
+            strategy: 'drop-oldest',
+            ...config
+          };
+        }
+
+        send(message: object): void {
+          const serialized = JSON.stringify(message);
+
+          if (this.queue.length >= this.config.maxSize) {
+            switch (this.config.strategy) {
+              case 'drop-oldest':
+                const dropped = this.queue.shift();
+                console.warn(`Queue full, dropped oldest: ${dropped?.substring(0, 50)}...`);
+                break;
+
+              case 'drop-newest':
+                console.warn('Queue full, dropping new message');
+                return; // Don't add new message
+
+              case 'disconnect':
+                console.warn('Queue full, disconnecting slow client');
+                this.ws.close(4000, 'Too slow');
+                return;
+            }
+          }
+
+          this.queue.push(serialized);
+          this.flush();
+        }
+
+        private async flush(): Promise<void> {
+          if (this.sending || this.ws.readyState !== WebSocket.OPEN) return;
+          this.sending = true;
+
+          while (this.queue.length > 0 && this.ws.readyState === WebSocket.OPEN) {
+            const message = this.queue[0];
+            try {
+              // Check if buffer is getting full (browser WebSocket)
+              if (this.ws.bufferedAmount > 1024 * 1024) {
+                // 1MB buffered, slow down
+                await new Promise(resolve => setTimeout(resolve, 100));
+                continue;
+              }
+              this.ws.send(message);
+              this.queue.shift();
+            } catch (error) {
+              console.error('Send failed:', error);
+              this.queue = []; // Clear queue on error
+              break;
+            }
+          }
+
+          this.sending = false;
+        }
+
+        get queueLength(): number {
+          return this.queue.length;
+        }
+      }
+      ```
+    gotchas:
+      - "Choose strategy based on use case: drop-oldest for live data, disconnect for critical"
+      - "bufferedAmount check prevents browser memory issues"
+      - "100 messages is reasonable default, adjust based on message size"
+      - "Log dropped messages for debugging slow client issues"
+
+  - name: "Room Join with Backfill"
+    when: "User joining a room needs recent message history"
+    implementation: |
+      ```typescript
+      class RoomManager {
+        async joinRoom(
+          userId: string,
+          roomId: string,
+          ws: WebSocket
+        ): Promise<void> {
+          // CRITICAL: Subscribe FIRST to avoid missing messages
+          const subscription = await this.pubsub.subscribe(roomId, (message) => {
+            ws.send(JSON.stringify(message));
+          });
+
+          try {
+            // THEN fetch history (overlap with subscription is OK)
+            const [recentMessages, members] = await Promise.all([
+              this.db.getRecentMessages(roomId, { limit: 50 }),
+              this.db.getRoomMembers(roomId)
+            ]);
+
+            // Add user to room
+            await this.db.addRoomMember(userId, roomId);
+
+            // Send join response with backfill
+            ws.send(JSON.stringify({
+              type: 'room_joined',
+              roomId,
+              messages: recentMessages,
+              members,
+              // Client uses this to dedupe live messages
+              backfillUntil: recentMessages[recentMessages.length - 1]?.id
+            }));
+
+            // Broadcast presence
+            this.pubsub.publish(roomId, {
+              type: 'member_joined',
+              userId,
+              timestamp: Date.now()
+            });
+
+          } catch (error) {
+            // Cleanup on failure
+            await subscription.unsubscribe();
+            throw error;
+          }
+        }
+      }
+
+      // Client-side deduplication
+      class RoomClient {
+        private seenMessageIds = new Set<string>();
+        private backfillUntil: string | null = null;
+
+        handleJoinResponse(response: RoomJoinResponse): void {
+          // Mark all backfill messages as seen
+          for (const message of response.messages) {
+            this.seenMessageIds.add(message.id);
+            this.renderMessage(message);
+          }
+          this.backfillUntil = response.backfillUntil;
+        }
+
+        handleLiveMessage(message: Message): void {
+          // Dedupe: skip if already seen in backfill
+          if (this.seenMessageIds.has(message.id)) {
+            return;
+          }
+          this.seenMessageIds.add(message.id);
+          this.renderMessage(message);
+
+          // Cleanup old IDs to prevent memory leak
+          if (this.seenMessageIds.size > 1000) {
+            const idsArray = Array.from(this.seenMessageIds);
+            this.seenMessageIds = new Set(idsArray.slice(-500));
+          }
+        }
+
+        private renderMessage(message: Message): void {}
+      }
+      ```
+    gotchas:
+      - "SUBSCRIBE FIRST, QUERY SECOND - this order is non-negotiable"
+      - "Cleanup seenMessageIds to prevent memory leak"
+      - "Include backfillUntil ID so client knows deduplication window"
+      - "Use Promise.all for parallel fetching after subscription"
+
+  - name: "Typing Indicator with Debounce"
+    when: "Showing who is currently typing in a chat"
+    implementation: |
+      ```typescript
+      // Client-side
+      class TypingIndicator {
+        private typingTimeout: NodeJS.Timeout | null = null;
+        private isTyping = false;
+        private debounceMs = 300;
+        private expiryMs = 3000;
+
+        constructor(private send: (event: object) => void) {}
+
+        handleInput(): void {
+          // Debounce rapid keystrokes
+          if (!this.isTyping) {
+            this.isTyping = true;
+            this.send({ type: 'typing_start' });
+          }
+
+          // Reset expiry timer
+          if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+          }
+
+          this.typingTimeout = setTimeout(() => {
+            this.isTyping = false;
+            this.send({ type: 'typing_stop' });
+          }, this.expiryMs);
+        }
+
+        handleSubmit(): void {
+          // Clear typing state on message send
+          if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+          }
+          if (this.isTyping) {
+            this.isTyping = false;
+            this.send({ type: 'typing_stop' });
+          }
+        }
+      }
+
+      // Server-side aggregation
+      class TypingManager {
+        private typing = new Map<string, Map<string, NodeJS.Timeout>>();
+
+        handleTypingStart(roomId: string, userId: string): void {
+          let roomTyping = this.typing.get(roomId);
+          if (!roomTyping) {
+            roomTyping = new Map();
+            this.typing.set(roomId, roomTyping);
+          }
+
+          // Clear existing timer for this user
+          const existingTimer = roomTyping.get(userId);
+          if (existingTimer) clearTimeout(existingTimer);
+
+          // Set expiry timer (in case typing_stop never arrives)
+          const timer = setTimeout(() => {
+            this.handleTypingStop(roomId, userId);
+          }, 5000);
+
+          roomTyping.set(userId, timer);
+          this.broadcastTyping(roomId);
+        }
+
+        handleTypingStop(roomId: string, userId: string): void {
+          const roomTyping = this.typing.get(roomId);
+          if (!roomTyping) return;
+
+          const timer = roomTyping.get(userId);
+          if (timer) clearTimeout(timer);
+          roomTyping.delete(userId);
+
+          this.broadcastTyping(roomId);
+        }
+
+        private broadcastTyping(roomId: string): void {
+          const roomTyping = this.typing.get(roomId);
+          const typingUsers = roomTyping ? Array.from(roomTyping.keys()) : [];
+
+          this.broadcast(roomId, {
+            type: 'typing_update',
+            users: typingUsers
+          });
+        }
+
+        private broadcast(roomId: string, event: object): void {}
+      }
+      ```
+    gotchas:
+      - "Server-side expiry timer handles lost typing_stop events"
+      - "Debounce on client prevents flooding server with typing events"
+      - "Clear typing state on message submit, not just timeout"
+      - "Broadcast aggregated typing list, not individual events"
+
+# SECTION 7: Red Team Scenarios (Attack vectors)
+red_team:
+  - attack: "Connection Exhaustion DDoS"
+    impact: |
+      Attacker opens thousands of WebSocket connections without sending data.
+      Server runs out of file descriptors. Legitimate users can't connect.
+      Each connection consumes memory even if idle.
+    defense: |
+      - Connection limits per IP (e.g., 10 connections per IP)
+      - Require authentication within 5 seconds of connection or disconnect
+      - Implement connection timeout for idle connections
+      - Use reverse proxy (nginx) with connection limits before hitting app server
+
+  - attack: "Message Flooding"
+    impact: |
+      Authenticated user sends thousands of messages per second. Server busy
+      processing, broadcasting, and storing. Other users experience lag.
+      Database fills with spam. Notification fatigue.
+    defense: |
+      - Rate limiting per user per room (e.g., 10 messages/second)
+      - Message size limits (e.g., 10KB max)
+      - Cooldown after hitting rate limit
+      - Anomaly detection for sudden message volume spikes
+
+  - attack: "Presence Manipulation"
+    impact: |
+      Attacker rapidly connects/disconnects to trigger constant presence updates.
+      Other clients overwhelmed with presence events. Server busy broadcasting.
+      UX degraded for all room members.
+    defense: |
+      - Tombstone pattern with grace period (5-10s)
+      - Rate limit presence broadcasts per user
+      - Aggregate presence updates (batch every 1s instead of immediate)
+      - Shadow ban for abuse patterns
+
+  - attack: "Room Enumeration"
+    impact: |
+      Attacker attempts to join many room IDs to discover which exist and who's
+      in them. Privacy violation. Reconnaissance for targeted attacks.
+    defense: |
+      - Require invitation or membership to join rooms
+      - Use non-sequential, unguessable room IDs (UUIDs)
+      - Rate limit room join attempts
+      - Don't differentiate "room doesn't exist" vs "you don't have access"
+
+  - attack: "Replay Attack on WebSocket Auth"
+    impact: |
+      Attacker captures WebSocket authentication token, replays it later.
+      Impersonates legitimate user. Receives their messages, sends as them.
+    defense: |
+      - Short-lived tokens (5 minute expiry)
+      - Token bound to connection (single use)
+      - Require token refresh over existing connection
+      - Include connection nonce in token verification
+
+  - attack: "Slow Client Attack"
+    impact: |
+      Malicious client connects but reads slowly. Server queues messages
+      indefinitely. Memory exhaustion. Server crash affects all users.
+    defense: |
+      - Backpressure with queue limits (100 messages max)
+      - Disconnect slow clients (close code 4000)
+      - Monitor per-client queue depth
+      - Alert on clients consistently hitting queue limits
+
+# SECTION 8: Testing Strategies
+testing:
+  - type: "Connection Lifecycle Tests"
+    focus: "Verify reconnection, heartbeat, and disconnect handling"
+    example: |
+      ```typescript
+      describe('ReconnectingWebSocket', () => {
+        it('should reconnect with exponential backoff', async () => {
+          const delays: number[] = [];
+          const ws = new ReconnectingWebSocket('ws://localhost:8080');
+
+          // Mock getReconnectDelay to capture delays
+          const originalGetDelay = ws['getReconnectDelay'];
+          ws['getReconnectDelay'] = function() {
+            const delay = originalGetDelay.call(this);
+            delays.push(delay);
+            return delay;
+          };
+
+          // Simulate 5 disconnects
+          for (let i = 0; i < 5; i++) {
+            ws['ws']?.close();
+            await new Promise(r => setTimeout(r, 100));
+          }
+
+          // Verify exponential growth
+          expect(delays[1]).toBeGreaterThan(delays[0]);
+          expect(delays[2]).toBeGreaterThan(delays[1]);
+
+          // Verify jitter (delays should not be exact powers of 2)
+          const baseDelay = 1000;
+          delays.forEach((delay, i) => {
+            const expected = baseDelay * Math.pow(2, i);
+            expect(delay).toBeGreaterThanOrEqual(expected);
+            expect(delay).toBeLessThan(expected * 1.4); // max 30% jitter + base
+          });
+        });
+
+        it('should detect dead connection via missed pongs', async () => {
+          const ws = new ReconnectingWebSocket('ws://localhost:8080');
+          let reconnectCalled = false;
+
+          ws['reconnect'] = () => { reconnectCalled = true; };
+          ws['missedPongs'] = 2;
+          ws['startHeartbeat']();
+
+          // Wait for heartbeat interval
+          await new Promise(r => setTimeout(r, 30000));
+
+          expect(reconnectCalled).toBe(true);
+        });
+      });
+      ```
+
+  - type: "Presence Integration Tests"
+    focus: "Verify tombstone behavior and race condition handling"
+    example: |
+      ```typescript
+      describe('PresenceManager', () => {
+        it('should not broadcast leave during grace period', async () => {
+          const presence = new PresenceManager();
+          const broadcasts: object[] = [];
+          presence['broadcast'] = (e) => broadcasts.push(e);
+
+          presence.handleConnect('user1', 'conn1');
+          expect(broadcasts).toContainEqual({ type: 'presence_join', userId: 'user1' });
+
+          presence.handleDisconnect('user1', 'conn1');
+
+          // Reconnect within grace period
+          await new Promise(r => setTimeout(r, 2000));
+          presence.handleConnect('user1', 'conn2');
+
+          // Wait for grace period to pass
+          await new Promise(r => setTimeout(r, 6000));
+
+          // No leave event should have been broadcast
+          expect(broadcasts.filter(b => b.type === 'presence_leave')).toHaveLength(0);
+        });
+
+        it('should ignore stale disconnect from old connection', () => {
+          const presence = new PresenceManager();
+          const broadcasts: object[] = [];
+          presence['broadcast'] = (e) => broadcasts.push(e);
+
+          presence.handleConnect('user1', 'conn1');
+          presence.handleConnect('user1', 'conn2'); // New connection
+
+          // Old connection closes after new one established
+          presence.handleDisconnect('user1', 'conn1');
+
+          expect(presence.getOnlineUsers()).toContain('user1');
+        });
+      });
+      ```
+
+  - type: "Backpressure Tests"
+    focus: "Verify slow client handling doesn't crash server"
+    example: |
+      ```typescript
+      describe('BackpressureWebSocket', () => {
+        it('should drop oldest messages when queue full', () => {
+          const mockWs = { send: jest.fn(), readyState: WebSocket.OPEN };
+          const bpws = new BackpressureWebSocket(mockWs, {
+            maxSize: 3,
+            strategy: 'drop-oldest'
+          });
+
+          // Fill queue while send is blocked
+          bpws['sending'] = true;
+          bpws.send({ id: 1 });
+          bpws.send({ id: 2 });
+          bpws.send({ id: 3 });
+          bpws.send({ id: 4 }); // Should drop id:1
+
+          expect(bpws.queueLength).toBe(3);
+          expect(bpws['queue'][0]).toContain('"id":2');
+        });
+
+        it('should disconnect client on queue overflow with disconnect strategy', () => {
+          const mockWs = {
+            send: jest.fn(),
+            close: jest.fn(),
+            readyState: WebSocket.OPEN
+          };
+          const bpws = new BackpressureWebSocket(mockWs, {
+            maxSize: 2,
+            strategy: 'disconnect'
+          });
+
+          bpws['sending'] = true;
+          bpws.send({ id: 1 });
+          bpws.send({ id: 2 });
+          bpws.send({ id: 3 }); // Should trigger disconnect
+
+          expect(mockWs.close).toHaveBeenCalledWith(4000, 'Too slow');
+        });
+      });
+      ```
+
+  - type: "Load Tests"
+    focus: "Verify system handles many concurrent connections"
+    example: |
+      ```typescript
+      // Using k6 or artillery for load testing
+      // k6 script example:
+      import ws from 'k6/ws';
+      import { check, sleep } from 'k6';
+
+      export const options = {
+        stages: [
+          { duration: '30s', target: 1000 },  // Ramp up to 1000 connections
+          { duration: '1m', target: 1000 },   // Hold
+          { duration: '30s', target: 0 },     // Ramp down
+        ],
+      };
+
+      export default function () {
+        const url = 'ws://localhost:8080/ws';
+
+        const res = ws.connect(url, {}, function (socket) {
+          socket.on('open', () => {
+            socket.send(JSON.stringify({ type: 'join', room: 'load-test' }));
+          });
+
+          socket.on('message', (msg) => {
+            const data = JSON.parse(msg);
+            check(data, {
+              'received message': (d) => d.type !== undefined,
+            });
+          });
+
+          socket.on('close', () => {});
+
+          // Keep connection open for test duration
+          sleep(60);
+        });
+
+        check(res, { 'connected successfully': (r) => r && r.status === 101 });
+      }
+      ```
+
+# SECTION 9: Decision Framework (When to use what)
+decision_framework:
+  - situation: "Server needs to push updates, client never sends data"
+    choose: "Server-Sent Events (SSE)"
+    because: |
+      SSE is simpler, auto-reconnects with Last-Event-ID, works better through
+      corporate proxies. WebSocket complexity not needed for one-way push.
+      Examples: dashboards, notifications, live feeds, stock tickers.
+
+  - situation: "Bidirectional communication required"
+    choose: "WebSocket"
+    because: |
+      Client needs to send messages too (chat, commands, input). SSE is receive-only.
+      WebSocket provides full-duplex communication over single connection.
+      Examples: chat, collaborative editing, multiplayer games, remote terminals.
+
+  - situation: "Need to support very old browsers or hostile proxies"
+    choose: "Long polling with XHR"
+    because: |
+      Some enterprise environments block WebSocket and SSE. Long polling works
+      everywhere HTTP works. Higher latency but universal compatibility.
+      Use as fallback, not primary transport.
+
+  - situation: "Real-time collaboration on shared document"
+    choose: "WebSocket + CRDT library (Yjs, Automerge)"
+    because: |
+      Collaborative editing requires conflict resolution for concurrent edits.
+      Don't roll your own - CRDTs handle merge conflicts automatically.
+      Transport is easy, state sync is hard. Use proven libraries.
+
+  - situation: "Simple presence (who's online)"
+    choose: "SSE with tombstone presence"
+    because: |
+      Presence is server-to-client (who's online update). Use SSE for simplicity.
+      Add tombstone pattern (5s grace period) to prevent flicker.
+      WebSocket overhead not needed unless chat is also required.
+
+  - situation: "High-throughput live data (trading, gaming)"
+    choose: "WebSocket with binary frames"
+    because: |
+      JSON serialization adds overhead. Binary protocols (Protocol Buffers,
+      MessagePack) are faster. WebSocket binary frames avoid base64 encoding
+      that SSE would require.
+
+  - situation: "Scaling beyond single server"
+    choose: "Redis pub/sub or Kafka"
+    because: |
+      WebSocket connections are stateful, tied to specific server. To broadcast
+      across servers, need shared messaging bus. Redis pub/sub for simplicity,
+      Kafka for durability and replay. Socket.IO Redis adapter works out of box.
+
+  - situation: "Mobile app with unreliable network"
+    choose: "WebSocket with aggressive reconnection + offline queue"
+    because: |
+      Mobile networks drop constantly (WiFi handoff, elevators, tunnels).
+      Need exponential backoff with jitter, heartbeat under 30s, message queue
+      during disconnect. Consider push notifications as backup channel.
+
+# SECTION 10: Recovery Patterns (When things go wrong)
+recovery:
+  - failure: "Thundering herd after server restart"
+    detection: |
+      - Connection count spikes to thousands simultaneously
+      - Server CPU/memory maxes out immediately after restart
+      - Load balancer shows unhealthy backend
+      - Cascading restarts across server fleet
+    recovery: |
+      1. Add connection rate limiting at load balancer (e.g., 100 new connections/sec)
+      2. Deploy client-side fix: exponential backoff with jitter
+      3. Stagger server restarts (rolling deployment)
+      4. Consider connection shedding: reject new connections when at capacity
+    prevention: |
+      - All clients must have exponential backoff + jitter (never deploy without)
+      - Load balancer rate limits on WebSocket upgrades
+      - Canary deployments to catch thundering herd before full rollout
+
+  - failure: "Memory leak from slow clients"
+    detection: |
+      - Server memory grows continuously
+      - Specific client connections have large queue depths
+      - OOM kills in logs
+      - Heap dumps show message arrays
+    recovery: |
+      1. Identify slow clients by queue depth monitoring
+      2. Manually disconnect slowest clients (ws.close)
+      3. Deploy backpressure fix with queue limits
+      4. Restart servers with increased memory (temporary)
+    prevention: |
+      - Backpressure with max queue size per client
+      - Monitor queue depth per connection
+      - Alert on connections exceeding queue threshold
+      - Auto-disconnect clients hitting queue limit
+
+  - failure: "Presence showing ghost users"
+    detection: |
+      - Users report seeing people online who aren't
+      - Presence count doesn't match active connections
+      - Users stuck as "online" for days
+    recovery: |
+      1. Add presence reconciliation job (compare presence state to active connections)
+      2. Clear stale presence entries older than max grace period
+      3. Implement connectionId tracking to prevent race conditions
+      4. Deploy tombstone pattern with grace period
+    prevention: |
+      - Tombstone pattern with 5-10s grace period
+      - connectionId in presence state
+      - Periodic presence reconciliation (every 5 minutes)
+      - Presence TTL with refresh on activity
+
+  - failure: "Messages missing during room join"
+    detection: |
+      - Users report not seeing messages that others see
+      - Gap in message sequence numbers
+      - More frequent during high-traffic periods
+    recovery: |
+      1. Add client-side "fetch missed messages" button
+      2. Implement message sequence numbers
+      3. Detect gaps and auto-fetch missing messages
+      4. Fix join order: subscribe FIRST, query SECOND
+    prevention: |
+      - Subscribe before query (non-negotiable order)
+      - Client-side deduplication by message ID
+      - Sequence numbers for gap detection
+      - Explicit "sync complete" event from server
+
+  - failure: "WebSocket connections dying silently"
+    detection: |
+      - Users report not receiving messages
+      - Server shows connections as open
+      - No disconnect events in logs
+      - Messages sent but never received
+    recovery: |
+      1. Force reconnect all affected clients (server sends reconnect command)
+      2. Add application-level heartbeat
+      3. Reduce heartbeat interval to 25s (under proxy timeouts)
+      4. Log and alert on missed pongs
+    prevention: |
+      - Heartbeat every 25 seconds (under most proxy/NAT timeouts)
+      - Track missed pongs, reconnect after 2-3 missed
+      - Log heartbeat metrics for debugging
+      - Don't trust ws.readyState alone
+
+# SECTION 11: Examples (Real-world implementations)
+examples:
+  - name: "Chat Room with Presence"
+    code: |
+      ```typescript
+      // Complete chat room implementation with presence, typing, and backpressure
+
+      import { WebSocket, WebSocketServer } from 'ws';
+      import { createClient } from 'redis';
+
+      interface Client {
+        ws: WebSocket;
+        userId: string;
+        roomId: string;
+        queue: BackpressureQueue;
+      }
+
+      class ChatServer {
+        private wss: WebSocketServer;
+        private clients = new Map<string, Client>();
+        private presence = new PresenceManager();
+        private typing = new TypingManager();
+        private redis = createClient();
+
+        async start(port: number): Promise<void> {
+          await this.redis.connect();
+
+          this.wss = new WebSocketServer({ port });
+
+          this.wss.on('connection', (ws, req) => {
+            this.handleConnection(ws, req);
+          });
+
+          // Subscribe to Redis for cross-server messaging
+          const subscriber = this.redis.duplicate();
+          await subscriber.connect();
+          await subscriber.pSubscribe('room:*', (message, channel) => {
+            const roomId = channel.replace('room:', '');
+            this.broadcastToRoom(roomId, JSON.parse(message));
+          });
+
+          console.log(`Chat server running on port ${port}`);
+        }
+
+        private handleConnection(ws: WebSocket, req: any): void {
+          const connectionId = crypto.randomUUID();
+
+          // Require auth within 5 seconds
+          const authTimeout = setTimeout(() => {
+            ws.close(4001, 'Authentication timeout');
+          }, 5000);
+
+          ws.on('message', async (data) => {
+            try {
+              const message = JSON.parse(data.toString());
+              await this.handleMessage(ws, connectionId, message, authTimeout);
+            } catch (error) {
+              console.error('Message handling error:', error);
+            }
+          });
+
+          ws.on('close', () => {
+            const client = this.clients.get(connectionId);
+            if (client) {
+              this.presence.handleDisconnect(client.userId, connectionId);
+              this.clients.delete(connectionId);
+            }
+          });
+
+          // Start heartbeat
+          this.startHeartbeat(ws, connectionId);
+        }
+
+        private async handleMessage(
+          ws: WebSocket,
+          connectionId: string,
+          message: any,
+          authTimeout: NodeJS.Timeout
+        ): Promise<void> {
+          switch (message.type) {
+            case 'auth':
+              clearTimeout(authTimeout);
+              const userId = await this.validateToken(message.token);
+              if (!userId) {
+                ws.close(4003, 'Invalid token');
+                return;
+              }
+              this.clients.set(connectionId, {
+                ws,
+                userId,
+                roomId: '',
+                queue: new BackpressureQueue(ws, { maxSize: 100 })
+              });
+              ws.send(JSON.stringify({ type: 'auth_success', userId }));
+              break;
+
+            case 'join':
+              const client = this.clients.get(connectionId);
+              if (!client) return;
+
+              client.roomId = message.roomId;
+
+              // Subscribe to Redis channel for this room
+              this.presence.handleConnect(client.userId, connectionId);
+
+              // Send room state
+              const [messages, members] = await Promise.all([
+                this.getRecentMessages(message.roomId, 50),
+                this.presence.getOnlineUsers()
+              ]);
+
+              ws.send(JSON.stringify({
+                type: 'room_joined',
+                roomId: message.roomId,
+                messages,
+                members
+              }));
+
+              // Broadcast join to room
+              await this.publishToRoom(message.roomId, {
+                type: 'member_joined',
+                userId: client.userId
+              });
+              break;
+
+            case 'message':
+              const sender = this.clients.get(connectionId);
+              if (!sender || !sender.roomId) return;
+
+              const chatMessage = {
+                id: crypto.randomUUID(),
+                type: 'chat_message',
+                roomId: sender.roomId,
+                userId: sender.userId,
+                content: message.content,
+                timestamp: Date.now()
+              };
+
+              // Persist
+              await this.saveMessage(chatMessage);
+
+              // Broadcast via Redis (reaches all servers)
+              await this.publishToRoom(sender.roomId, chatMessage);
+
+              // Clear typing indicator
+              this.typing.handleTypingStop(sender.roomId, sender.userId);
+              break;
+
+            case 'typing_start':
+              const typist = this.clients.get(connectionId);
+              if (!typist || !typist.roomId) return;
+              this.typing.handleTypingStart(typist.roomId, typist.userId);
+              break;
+
+            case 'typing_stop':
+              const stopper = this.clients.get(connectionId);
+              if (!stopper || !stopper.roomId) return;
+              this.typing.handleTypingStop(stopper.roomId, stopper.userId);
+              break;
+
+            case 'pong':
+              // Heartbeat response handled by startHeartbeat
+              break;
+          }
+        }
+
+        private async publishToRoom(roomId: string, message: object): Promise<void> {
+          await this.redis.publish(`room:${roomId}`, JSON.stringify(message));
+        }
+
+        private broadcastToRoom(roomId: string, message: object): void {
+          const payload = JSON.stringify(message);
+          for (const client of this.clients.values()) {
+            if (client.roomId === roomId) {
+              client.queue.send(payload);
+            }
+          }
+        }
+
+        private startHeartbeat(ws: WebSocket, connectionId: string): void {
+          let missedPongs = 0;
+
+          const interval = setInterval(() => {
+            if (missedPongs >= 2) {
+              clearInterval(interval);
+              ws.close();
+              return;
+            }
+
+            ws.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+            missedPongs++;
+          }, 25000);
+
+          ws.on('message', (data) => {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'pong') {
+              missedPongs = 0;
+            }
+          });
+
+          ws.on('close', () => clearInterval(interval));
+        }
+
+        // Stub implementations
+        private async validateToken(token: string): Promise<string | null> {
+          return 'user-id'; // Implement JWT validation
+        }
+
+        private async getRecentMessages(roomId: string, limit: number): Promise<any[]> {
+          return []; // Implement database query
+        }
+
+        private async saveMessage(message: any): Promise<void> {
+          // Implement database insert
+        }
+      }
+
+      // BackpressureQueue implementation from patterns section
+      class BackpressureQueue {
+        private queue: string[] = [];
+        private sending = false;
+
+        constructor(private ws: WebSocket, private config: { maxSize: number }) {}
+
+        send(data: string): void {
+          if (this.queue.length >= this.config.maxSize) {
+            this.queue.shift();
+            console.warn('Queue full, dropping oldest');
+          }
+          this.queue.push(data);
+          this.flush();
+        }
+
+        private async flush(): Promise<void> {
+          if (this.sending || this.ws.readyState !== WebSocket.OPEN) return;
+          this.sending = true;
+
+          while (this.queue.length > 0 && this.ws.readyState === WebSocket.OPEN) {
+            const msg = this.queue.shift()!;
+            try {
+              this.ws.send(msg);
+            } catch {
+              this.queue = [];
+              break;
+            }
+          }
+          this.sending = false;
+        }
+      }
+      ```
+
+  - name: "Live Dashboard with SSE"
+    code: |
+      ```typescript
+      // Server-Sent Events dashboard with resume support
+
+      import express from 'express';
+
+      interface DashboardEvent {
+        id: string;
+        type: 'metrics' | 'alert' | 'status';
+        data: any;
+        timestamp: number;
+      }
+
+      class DashboardServer {
+        private app = express();
+        private events: DashboardEvent[] = [];
+        private clients = new Set<express.Response>();
+        private maxEvents = 1000;
+
+        start(port: number): void {
+          this.app.get('/dashboard/events', (req, res) => {
+            this.handleSSEConnection(req, res);
+          });
+
+          // Simulate metrics updates
+          setInterval(() => {
+            this.broadcast('metrics', {
+              cpu: Math.random() * 100,
+              memory: Math.random() * 100,
+              requests: Math.floor(Math.random() * 1000)
+            });
+          }, 1000);
+
+          this.app.listen(port, () => {
+            console.log(`Dashboard SSE server on port ${port}`);
+          });
+        }
+
+        private handleSSEConnection(req: express.Request, res: express.Response): void {
+          // SSE headers
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('X-Accel-Buffering', 'no');
+
+          // CRITICAL: Set retry interval to prevent DDoS on error
+          res.write('retry: 10000\n\n');
+
+          // Resume from Last-Event-ID if provided
+          const lastEventId = req.headers['last-event-id'] as string;
+          if (lastEventId) {
+            const missed = this.getEventsAfter(lastEventId);
+            console.log(`Client resuming from ${lastEventId}, replaying ${missed.length} events`);
+            missed.forEach(event => this.sendEvent(res, event));
+          }
+
+          this.clients.add(res);
+          console.log(`SSE client connected, total: ${this.clients.size}`);
+
+          req.on('close', () => {
+            this.clients.delete(res);
+            console.log(`SSE client disconnected, total: ${this.clients.size}`);
+          });
+        }
+
+        broadcast(type: string, data: any): void {
+          const event: DashboardEvent = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type: type as any,
+            data,
+            timestamp: Date.now()
+          };
+
+          // Store for replay
+          this.events.push(event);
+          if (this.events.length > this.maxEvents) {
+            this.events.shift();
+          }
+
+          // Send to all clients
+          this.clients.forEach(client => {
+            try {
+              this.sendEvent(client, event);
+            } catch {
+              this.clients.delete(client);
+            }
+          });
+        }
+
+        private sendEvent(res: express.Response, event: DashboardEvent): void {
+          res.write(`id: ${event.id}\n`);
+          res.write(`event: ${event.type}\n`);
+          res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+        }
+
+        private getEventsAfter(lastEventId: string): DashboardEvent[] {
+          const index = this.events.findIndex(e => e.id === lastEventId);
+          if (index === -1) return this.events.slice(-100); // Client too far behind
+          return this.events.slice(index + 1);
+        }
+      }
+
+      // Browser client
+      class DashboardClient {
+        private eventSource: EventSource | null = null;
+        private metrics: any = {};
+
+        connect(): void {
+          this.eventSource = new EventSource('/dashboard/events');
+
+          this.eventSource.addEventListener('metrics', (event) => {
+            this.metrics = JSON.parse(event.data);
+            this.updateUI();
+          });
+
+          this.eventSource.addEventListener('alert', (event) => {
+            const alert = JSON.parse(event.data);
+            this.showAlert(alert);
+          });
+
+          this.eventSource.onerror = () => {
+            console.log('SSE error, browser will auto-reconnect with Last-Event-ID');
+          };
+        }
+
+        private updateUI(): void {}
+        private showAlert(alert: any): void {}
+      }
+      ```
+
+# SECTION 12: Gotchas (The traps everyone falls into)
+gotchas:
+  - trap: "Using WebSocket for notifications that don't need bidirectional"
+    why: |
+      WebSocket is complex: manual reconnection, no built-in resume, proxy issues.
+      SSE auto-reconnects, sends Last-Event-ID, works through proxies better.
+      You're paying complexity cost for capability you don't use.
+    correct: |
+      Use SSE for server-push only (dashboards, notifications, feeds).
+      Use WebSocket only when client needs to send data (chat, commands).
+
+  - trap: "Heartbeat interval longer than proxy timeout"
+    why: |
+      Corporate proxies typically timeout idle connections at 30-60 seconds.
+      AWS ALB defaults to 60 seconds. If heartbeat is 60s, connection dies
+      between heartbeats. Users on corporate networks fail silently.
+    correct: |
+      Set heartbeat to 25 seconds - safely under most proxy timeouts.
+      Test with corporate proxy simulation before production.
+
+  - trap: "Trusting ws.readyState for connection health"
+    why: |
+      readyState can show OPEN while TCP connection is actually half-open.
+      NAT tables expire, proxies timeout, mobile networks switch. The socket
+      object doesn't know until you try to send and fail.
+    correct: |
+      Use application-level heartbeat. Track missed pongs. If 2-3 pongs
+      missed, assume dead and force reconnect regardless of readyState.
+
+  - trap: "Subscribing after querying for room join"
+    why: |
+      Query takes time. During that time, messages arrive but subscription
+      isn't active. Those messages are lost forever. This is the #1 cause
+      of "missing messages" bugs in real-time apps.
+    correct: |
+      Subscribe FIRST, then query, then deduplicate on client. Seeing same
+      message twice is fine. Missing messages is unacceptable.
+
+  - trap: "No jitter in reconnection backoff"
+    why: |
+      Exponential backoff without jitter means all clients reconnect at
+      identical times. Server restart = thundering herd. 10,000 clients
+      all reconnecting at 1s, then 2s, then 4s together.
+    correct: |
+      Add random jitter: delay = base * 2^attempt + random(0, base * 0.3).
+      This spreads reconnection attempts across time window.
+
+  - trap: "Immediate presence broadcast on disconnect"
+    why: |
+      Mobile networks cause frequent momentary disconnects. WiFi to cellular
+      handoff, elevator, tunnel - all trigger disconnect. Broadcasting leave
+      immediately causes presence flickering. Users appear to leave and
+      rejoin every few seconds.
+    correct: |
+      Tombstone pattern: 5-10 second grace period before broadcasting leave.
+      If user reconnects within grace period, cancel the leave event.
+
+  - trap: "Forgetting SSE retry header"
+    why: |
+      EventSource has aggressive auto-reconnect. Server returns 500, browser
+      immediately reconnects. Thousands of times per second. You DDoS yourself
+      during outages. Recovery becomes impossible.
+    correct: |
+      Always send `retry: 10000` (or appropriate interval) at connection start.
+      This tells browser to wait between reconnection attempts.
+
+  - trap: "Token expiry during long-lived connection"
+    why: |
+      JWT expires in 15 minutes. WebSocket connected for hours. Connection
+      still open but token is expired. Server might accept messages from
+      expired session. No mechanism to refresh over WebSocket.
+    correct: |
+      Implement token refresh: either client reconnects before expiry, or
+      server sends refresh_token event and client responds with new token.
+      Validate token timestamp on every message, not just connect.
+
+  - trap: "Binary data as JSON base64"
+    why: |
+      JSON.stringify() for binary data requires base64 encoding. 33% size
+      overhead. For images, audio, or large payloads, this adds up fast.
+      Also requires decode on receive.
+    correct: |
+      Use WebSocket binary frames for binary data. Send as ArrayBuffer.
+      Or use MessagePack/Protocol Buffers for mixed content.

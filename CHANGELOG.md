@@ -4,6 +4,15 @@ All notable changes to Spark Intelligence are documented here.
 
 ---
 
+## [Launch Readiness Updates] - 2026-02-15
+
+### Theme: Public Alpha Readiness
+
+- Added launch scope + strict go/no-go gates (`docs/launch/LAUNCH_SCOPE_AND_GATES.md`).
+- Added responsible release threat model + secrets/release checklist (`docs/security/*`).
+- Added newcomer-first docs and examples (`docs/GETTING_STARTED_5_MIN.md`, `examples/*`).
+- Added RC build notes and build manifest script (`docs/release/RELEASE_CANDIDATE.md`, `scripts/build_rc.ps1`).
+
 ## [Phase 3.4 Complete] - 2026-02-02
 
 ### Theme: Final Hardening - Resilient Intelligence

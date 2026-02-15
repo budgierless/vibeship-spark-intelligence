@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    about: Report security/safety issues privately (do not open public issues)
+    url: https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/SECURITY.md

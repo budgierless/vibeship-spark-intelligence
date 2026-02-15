@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import hashlib
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -139,7 +140,12 @@ class SessionState:
 
 def _state_path(session_id: str) -> Path:
     """Get file path for a session's state."""
-    safe_id = session_id.replace("/", "_").replace("\\", "_")[:64]
+    raw = str(session_id or "unknown")
+    digest = hashlib.sha1(raw.encode("utf-8", errors="ignore")).hexdigest()[:16]
+    prefix = raw.replace("/", "_").replace("\\", "_")
+    prefix = "".join(ch for ch in prefix if ch.isalnum() or ch in {"_", "-", "."})
+    prefix = prefix[:32].strip("_- .") or "session"
+    safe_id = f"{prefix}_{digest}"
     return STATE_DIR / f"{safe_id}.json"
 
 

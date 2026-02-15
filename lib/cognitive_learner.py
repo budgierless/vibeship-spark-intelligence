@@ -191,9 +191,10 @@ def _flatten_evidence(items: List[Any]) -> List[str]:
 class _insights_lock:
     """Best-effort lock using an exclusive lock file."""
 
-    def __init__(self, lock_file: Path, timeout_s: float = 0.5):
+    def __init__(self, lock_file: Path, timeout_s: float = 0.5, stale_s: float = 60.0):
         self.lock_file = lock_file
         self.timeout_s = timeout_s
+        self.stale_s = stale_s
         self.fd = None
         self.acquired = False
 
@@ -203,9 +204,26 @@ class _insights_lock:
         while True:
             try:
                 self.fd = os.open(str(self.lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                # Best-effort metadata to help diagnose stale locks.
+                try:
+                    os.write(self.fd, f"pid={os.getpid()} ts={time.time():.3f}\n".encode("utf-8", errors="ignore"))
+                except Exception:
+                    pass
                 self.acquired = True
                 return self
             except FileExistsError:
+                # If a prior writer crashed, the lock file can be left behind forever.
+                # Treat very old locks as stale and clear them.
+                try:
+                    age_s = time.time() - float(self.lock_file.stat().st_mtime or 0.0)
+                    if age_s >= float(self.stale_s):
+                        try:
+                            self.lock_file.unlink()
+                            continue
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 if time.time() - start >= self.timeout_s:
                     return self
                 time.sleep(0.01)
@@ -927,6 +945,8 @@ class CognitiveLearner:
             "continue to do", "i would say", "yeah,", "yeah ", "yep,",
             "sure,", "right,", "no,", "nah,", "i mean,",
             "it's probably", "it's not", "we already", "we were ",
+            # Captured transcript fragments often drop apostrophes ("lets" vs "let's").
+            "lets ",
         ]
         if any(tl.startswith(cs) for cs in conversational_starts):
             return True
@@ -950,7 +970,22 @@ class CognitiveLearner:
 
         # 29. Garbled "When using X" fragments from truncated transcription
         # e.g., "When using Bash, prefer 'ver hallucinating'" -- mid-word cutoff
-        if re.match(r"^when using \w+, (prefer|remember)", tl):
+        if re.match(r"^when using \w+,\s*(prefer|remember)[:\s]", tl):
+            # Reject long rambling continuations ("... and is this system ...") which are almost
+            # always raw transcript fragments rather than durable advice.
+            if len(t) > 90 and any(
+                frag in tl
+                for frag in (
+                    " and is this ",
+                    " can you ",
+                    " do you think",
+                    " at some point",
+                    " council of ",
+                    " lets push",
+                    " let's push",
+                )
+            ):
+                return True
             # Check for truncated single-quoted fragment (starts with lowercase mid-word)
             m = re.search(r"'([a-z])", t)
             if m:
@@ -998,7 +1033,15 @@ class CognitiveLearner:
         # Also catches indented code blocks
         if re.match(r"^[A-Z][A-Z_]+\s*=\s*\S+", t):
             return True
+        # Indented assignments / expressions (often copied from code or logs)
+        # e.g., "    current.confidence = max(...)" (including with dots)
+        if re.match(r"^\s{4,}[\w.]+\s*=\s*.+", t):
+            return True
         if re.match(r"^\s{4,}(if |for |def |class |return |import |from |try:|except)", t):
+            return True
+        # Multi-line blocks are almost never durable "insights" and usually indicate a pasted code
+        # fragment, transcript chunk, or doc section.
+        if "\n" in t:
             return True
 
         # 34. Docstring/comment fragments (triple-quoted strings, JSDoc, etc.)

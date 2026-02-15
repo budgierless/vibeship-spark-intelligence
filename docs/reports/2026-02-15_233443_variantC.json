@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-02-15T20:50:07.313183+00:00",
+  "start_ts": 1771188513.0766752,
+  "rounds": 120,
+  "emitted_returns": 11,
+  "engine": {
+    "rows": 240,
+    "trace_rows": 240,
+    "trace_coverage_pct": 100.0,
+    "events": {
+      "user_prompt_prefetch": 120,
+      "emitted": 11,
+      "no_emit": 83,
+      "no_advice": 26
+    },
+    "routes": {
+      "live": 120
+    },
+    "fallback_share_pct": 0.0,
+    "latency": {
+      "n": 11,
+      "p50_ms": 454.7,
+      "p90_ms": 546.9,
+      "p95_ms": 758.8,
+      "p99_ms": 758.8,
+      "max_ms": 758.8
+    }
+  },
+  "feedback_requests": {
+    "rows": 4,
+    "trace_rows": 4,
+    "trace_coverage_pct": 100.0,
+    "item_total": 4,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 2
+      },
+      {
+        "text": "Constraint: in **exactly one state** at all times",
+        "count": 1
+      },
+      {
+        "text": "[Caution] I struggle with WebFetch fails with other tasks",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 50.0,
+    "unique_ratio_pct": 75.0
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "session_key_include_recent_tools": false,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "emit_whispers": true,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 3,
+      "min_rank_score": 0.45
+    }
+  },
+  "force_live": true,
+  "label": "variantC",
+  "trace_prefix": "delta-variantC-20260215_204832",
+  "session_prefix": "delta-variantC"
+}

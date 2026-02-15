@@ -36,3 +36,246 @@ def test_duplicate_repeat_state_allows_after_cooldown(monkeypatch):
 
     meta = advisory_engine._duplicate_repeat_state(state, "run focused tests now")
     assert meta["repeat"] is False
+
+
+def test_global_recently_emitted_ignores_tool(monkeypatch, tmp_path):
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG", tmp_path / "global.jsonl")
+    now = time.time()
+    advisory_engine._append_jsonl_capped(
+        advisory_engine.GLOBAL_DEDUPE_LOG,
+        {"ts": now - 3, "tool": "Edit", "advice_id": "a1"},
+        max_lines=50,
+    )
+    hit = advisory_engine._global_recently_emitted(
+        tool_name="Read",
+        advice_id="a1",
+        now_ts=now,
+        cooldown_s=60.0,
+    )
+    assert hit is not None
+    assert float(hit["age_s"]) >= 0.0
+
+
+def test_global_recently_emitted_text_sig(monkeypatch, tmp_path):
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG", tmp_path / "global.jsonl")
+    now = time.time()
+    advisory_engine._append_jsonl_capped(
+        advisory_engine.GLOBAL_DEDUPE_LOG,
+        {"ts": now - 2, "tool": "Read", "advice_id": "x", "text_sig": "sig1"},
+        max_lines=50,
+    )
+    hit = advisory_engine._global_recently_emitted_text_sig(
+        text_sig="sig1",
+        now_ts=now,
+        cooldown_s=60.0,
+    )
+    assert hit is not None
+    assert float(hit["age_s"]) >= 0.0
+
+
+def test_on_pre_tool_global_dedupe_filters_emitted(monkeypatch, tmp_path):
+    monkeypatch.setattr(advisory_engine, "ENGINE_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_COOLDOWN_S", 600.0)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG", tmp_path / "global.jsonl")
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG_MAX", 200)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_TEXT_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "LOW_AUTH_GLOBAL_DEDUPE_ENABLED", False)
+
+    # Avoid writing state into the real ~/.spark folder.
+    import lib.advisory_state as advisory_state
+
+    monkeypatch.setattr(advisory_state, "STATE_DIR", tmp_path / "state")
+
+    # Force live path (no packets).
+    import lib.advisory_packet_store as packet_store
+
+    monkeypatch.setattr(packet_store, "lookup_exact", lambda **kwargs: None)
+    monkeypatch.setattr(packet_store, "lookup_relaxed", lambda **kwargs: None)
+
+    # Deterministic advice retrieval: two items, one of which should be globally suppressed.
+    import lib.advisor as advisor_mod
+    from lib.advisor import Advice
+
+    def fake_advise_on_tool(*args, **kwargs):
+        return [
+            Advice(
+                advice_id="a1",
+                insight_key="k1",
+                text="Advice one",
+                confidence=0.9,
+                source="cognitive",
+                context_match=0.9,
+            ),
+            Advice(
+                advice_id="a2",
+                insight_key="k2",
+                text="Advice two",
+                confidence=0.9,
+                source="cognitive",
+                context_match=0.9,
+            ),
+        ]
+
+    monkeypatch.setattr(advisor_mod, "advise_on_tool", fake_advise_on_tool)
+
+    # Gate: emit both, in deterministic order.
+    import lib.advisory_gate as gate
+    from lib.advisory_gate import GateDecision, GateResult
+
+    def fake_evaluate(advice_items, state, tool_name, tool_input=None):
+        d1 = GateDecision(
+            advice_id="a1",
+            authority="note",
+            emit=True,
+            reason="ok",
+            adjusted_score=0.9,
+            original_score=0.9,
+        )
+        d2 = GateDecision(
+            advice_id="a2",
+            authority="note",
+            emit=True,
+            reason="ok",
+            adjusted_score=0.9,
+            original_score=0.9,
+        )
+        return GateResult(
+            decisions=[d1, d2],
+            emitted=[d1, d2],
+            suppressed=[],
+            phase="implementation",
+            total_retrieved=len(advice_items),
+        )
+
+    monkeypatch.setattr(gate, "evaluate", fake_evaluate)
+    monkeypatch.setattr(gate, "get_tool_cooldown_s", lambda: 0.0)
+
+    # Synthesis and emission: capture which advice_ids are emitted.
+    import lib.advisory_synthesizer as synth
+
+    monkeypatch.setattr(synth, "synthesize", lambda *args, **kwargs: "SYNTH")
+
+    import lib.advisory_emitter as emitter
+
+    captured = {}
+
+    def fake_emit_advisory(gate_result, synth_text, advice_items, authority=None):
+        captured["ids"] = [d.advice_id for d in (gate_result.emitted or [])]
+        return True
+
+    monkeypatch.setattr(emitter, "emit_advisory", fake_emit_advisory)
+
+    # Seed dedupe log with a1 recently emitted, so it should be suppressed.
+    advisory_engine._append_jsonl_capped(
+        advisory_engine.GLOBAL_DEDUPE_LOG,
+        {"ts": time.time(), "tool": "Edit", "advice_id": "a1"},
+        max_lines=200,
+    )
+
+    out = advisory_engine.on_pre_tool("sess_global_dedupe", "Read", {}, trace_id="t1")
+    assert out is not None
+    assert captured.get("ids") == ["a2"]
+
+
+def test_on_pre_tool_global_dedupe_filters_by_text_sig(monkeypatch, tmp_path):
+    monkeypatch.setattr(advisory_engine, "ENGINE_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_TEXT_ENABLED", True)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_COOLDOWN_S", 600.0)
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG", tmp_path / "global.jsonl")
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_LOG_MAX", 200)
+    monkeypatch.setattr(advisory_engine, "LOW_AUTH_GLOBAL_DEDUPE_ENABLED", False)
+
+    import lib.advisory_state as advisory_state
+
+    monkeypatch.setattr(advisory_state, "STATE_DIR", tmp_path / "state2")
+
+    import lib.advisory_packet_store as packet_store
+
+    monkeypatch.setattr(packet_store, "lookup_exact", lambda **kwargs: None)
+    monkeypatch.setattr(packet_store, "lookup_relaxed", lambda **kwargs: None)
+
+    import lib.advisor as advisor_mod
+    from lib.advisor import Advice
+
+    def fake_advise_on_tool(*args, **kwargs):
+        return [
+            Advice(
+                advice_id="b1",
+                insight_key="k1",
+                text="Always Read a file before Edit to verify current content",
+                confidence=0.9,
+                source="cognitive",
+                context_match=0.9,
+            ),
+            Advice(
+                advice_id="b2",
+                insight_key="k2",
+                text="Different advice",
+                confidence=0.9,
+                source="cognitive",
+                context_match=0.9,
+            ),
+        ]
+
+    monkeypatch.setattr(advisor_mod, "advise_on_tool", fake_advise_on_tool)
+
+    import lib.advisory_gate as gate
+    from lib.advisory_gate import GateDecision, GateResult
+
+    def fake_evaluate(advice_items, state, tool_name, tool_input=None):
+        d1 = GateDecision(
+            advice_id="b1",
+            authority="warning",
+            emit=True,
+            reason="ok",
+            adjusted_score=0.9,
+            original_score=0.9,
+        )
+        d2 = GateDecision(
+            advice_id="b2",
+            authority="note",
+            emit=True,
+            reason="ok",
+            adjusted_score=0.9,
+            original_score=0.9,
+        )
+        return GateResult(
+            decisions=[d1, d2],
+            emitted=[d1, d2],
+            suppressed=[],
+            phase="implementation",
+            total_retrieved=len(advice_items),
+        )
+
+    monkeypatch.setattr(gate, "evaluate", fake_evaluate)
+    monkeypatch.setattr(gate, "get_tool_cooldown_s", lambda: 0.0)
+
+    import lib.advisory_synthesizer as synth
+
+    monkeypatch.setattr(synth, "synthesize", lambda *args, **kwargs: "SYNTH")
+
+    import lib.advisory_emitter as emitter
+
+    captured = {}
+
+    def fake_emit_advisory(gate_result, synth_text, advice_items, authority=None):
+        captured["ids"] = [d.advice_id for d in (gate_result.emitted or [])]
+        return True
+
+    monkeypatch.setattr(emitter, "emit_advisory", fake_emit_advisory)
+
+    # Seed dedupe log with the signature of b1 but a different advice_id.
+    sig = advisory_engine._text_fingerprint(
+        "Always Read a file before Edit to verify current content"
+    )
+    advisory_engine._append_jsonl_capped(
+        advisory_engine.GLOBAL_DEDUPE_LOG,
+        {"ts": time.time(), "tool": "Edit", "advice_id": "other", "text_sig": sig},
+        max_lines=200,
+    )
+
+    out = advisory_engine.on_pre_tool("sess_global_dedupe_sig", "Read", {}, trace_id="t2")
+    assert out is not None
+    assert captured.get("ids") == ["b2"]

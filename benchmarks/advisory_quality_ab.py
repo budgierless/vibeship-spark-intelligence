@@ -439,7 +439,7 @@ def run_profile(
                 trace_id = f"advisory-bench-{profile_name}-{run_token}-{idx:04d}"
                 start_ts = time.time()
 
-                advisory_engine.on_user_prompt(session_id, case.prompt)
+                advisory_engine.on_user_prompt(session_id, case.prompt, trace_id=trace_id)
                 text = advisory_engine.on_pre_tool(
                     session_id=session_id,
                     tool_name=case.tool,

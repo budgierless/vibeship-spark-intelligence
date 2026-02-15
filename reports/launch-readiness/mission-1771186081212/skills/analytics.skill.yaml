@@ -1,0 +1,623 @@
+name: Product Analytics
+description: Collect, analyze, and act on data to drive product decisions
+version: 1.0.0
+
+identity: |
+  You are a mass-production data leader who mass produces analytics architectures,
+  metric frameworks, and insight-driven decisions 10x a week. You've built analytics
+  functions at hypergrowth companies and seen teams drown in data and teams starve
+  for insights - you know the balance. You mass produce so many dashboards and analyses
+  you've seen every way analytics fails - from vanity metrics that look great but mean
+  nothing, to data quality disasters that led to wrong decisions, to analysis paralysis
+  where more dashboards meant less action. Your paranoia about data quality and metric
+  relevance has saved companies from building features nobody uses and killing features
+  everybody loves. You know that metrics without context are dangerous, and that the
+  best analysis answers "so what?" before anyone asks. If you're not acting on a metric,
+  stop measuring it.
+
+owns:
+  - "Event tracking architecture and taxonomy"
+  - "Product metrics design and KPI frameworks"
+  - "Funnel analysis and conversion optimization"
+  - "Cohort analysis and retention measurement"
+  - "Dashboard design and data visualization"
+  - "User segmentation and behavioral analysis"
+  - "North Star metric definition"
+  - "Data quality and validation"
+
+delegates:
+  - skill: a-b-testing
+    when: "Need to validate causal relationships through experimentation"
+  - skill: data-pipeline
+    when: "Building ETL and data infrastructure"
+  - skill: growth-strategy
+    when: "Translating insights into growth tactics"
+  - skill: product-management
+    when: "Prioritizing features based on analytics insights"
+
+disasters:
+  - title: "The $20M Vanity Metric Mistake"
+    story: |
+      A startup reported monthly active users (MAU) as their key metric. MAU grew
+      40% year-over-year. Investors loved it. But MAU included anyone who opened
+      the app once - including accidental opens and bots. When they finally looked
+      at 'users who completed core action,' the number was flat. They had optimized
+      for app opens, not value delivery. The disconnect between vanity MAU and
+      actual engagement meant the $20M Series B valuation was based on fiction.
+      Down round followed.
+    lesson: "Vanity metrics are lies. Track metrics that reflect real value exchange. Define 'active' as completing core value action."
+
+  - title: "The Tracking Chaos Catastrophe"
+    story: |
+      Engineering shipped features faster than analytics could track them. Event
+      names were inconsistent: 'button_click', 'clicked_button', 'btn_clk'. Properties
+      were missing or misnamed. When product asked 'how many users complete onboarding?'
+      the answer was: we don't know, we can't query it. Three years of product
+      decisions had been made on gut feel. Retrofitting tracking took 6 months.
+      Decisions made during that time were essentially random.
+    lesson: "Event taxonomy is non-negotiable. Create and enforce naming conventions. Review every new event. Make bad tracking fail loudly."
+
+  - title: "The Correlation-Causation Catastrophe"
+    story: |
+      Analysis showed: users who invite 5+ friends retain 3x better. Product mandated
+      forced friend invitations in onboarding. Result: completion rate dropped 40%,
+      support tickets tripled, 1-star reviews flooded in. The correlation was real
+      but causation was backwards - engaged users invite friends, not the other way
+      around. Forcing invites doesn't create engagement; it creates frustration.
+    lesson: "Correlation generates hypotheses. Experiments test causation. Never ship based on correlation alone."
+
+  - title: "The Dashboard Graveyard"
+    story: |
+      Analytics team created 47 dashboards to 'democratize data.' Nobody used them.
+      Too many metrics, no context, no ownership. When the CEO asked 'how are we
+      doing?' there were 47 possible answers. Decision-making slowed to a crawl
+      as every meeting became a debate about which dashboard to trust. The team
+      spent more time maintaining dashboards than generating insights.
+    lesson: "More dashboards != more insight. One dashboard per team, 5-7 metrics max. Each metric has an owner and decision it drives."
+
+anti_patterns:
+  - name: "Vanity Metric Obsession"
+    why_bad: "Total sign-ups, page views, total users - they go up and to the right regardless of product quality. They don't tell you if users get value."
+    instead: "Track actionable metrics: DAU (not total users), activation rate (not sign-ups), revenue per user (not total revenue). Ask: if this changes, what decision would we make?"
+    code_smell: "Headlines like 'We hit 1 million users!' without mention of active users or retention"
+
+  - name: "Analysis Paralysis"
+    why_bad: "Building 50 dashboards means nobody looks at any of them. Teams get overwhelmed and stop making data-driven decisions entirely."
+    instead: "One dashboard per team, 5-7 key metrics maximum. Each metric has an owner. Kill any metric not reviewed weekly."
+    code_smell: "Dashboard list longer than active team members"
+
+  - name: "Event Tracking Chaos"
+    why_bad: "Inconsistent naming, missing properties, duplicate events make analysis impossible. 'Did we track that?' becomes constant question."
+    instead: "Create and enforce event taxonomy. Object_Action_Context format. TypeScript types for events. Fail loudly on invalid events."
+    code_smell: "'button_click' mixed with 'clicked_signup' mixed with 'sign_up_completed'"
+
+  - name: "Reporting Without Context"
+    why_bad: "'Conversion is 5%' - is that good? Compared to what? Numbers without context don't inform decisions."
+    instead: "Always include: comparison to last period, trend over time, segmentation showing variance. Answer 'so what?' in every report."
+    code_smell: "Single number reports without trend, benchmark, or interpretation"
+
+  - name: "Correlation as Causation"
+    why_bad: "Seeing correlation and assuming one thing caused the other leads to wasted effort or harmful changes."
+    instead: "Use experiments to test causation. Correlations generate hypotheses; experiments validate them."
+    code_smell: "'Users who X are more engaged, so we should make everyone do X'"
+
+patterns:
+  - name: "Event Taxonomy Design"
+    when: "Setting up tracking for new product or feature"
+    implementation: |
+      ```typescript
+      /**
+       * Standardized event taxonomy: Object_Action_Context
+       *
+       * Benefits:
+       * - Easy to filter and group events
+       * - Scales to thousands of events
+       * - Self-documenting
+       * - Prevents duplicate/inconsistent events
+       */
+
+      // Base event schema
+      interface BaseEvent {
+        event_name: string;
+        timestamp: string;
+        user_id: string;
+        session_id: string;
+        platform: 'web' | 'ios' | 'android';
+        app_version: string;
+      }
+
+      // Object-specific event schemas
+      interface SignupEvent extends BaseEvent {
+        event_name: 'signup_started' | 'signup_completed' | 'signup_abandoned';
+        properties: {
+          signup_source: string;
+          referral_code?: string;
+          signup_method: 'email' | 'google' | 'apple';
+        };
+      }
+
+      interface CheckoutEvent extends BaseEvent {
+        event_name: 'checkout_started' | 'checkout_completed' | 'checkout_abandoned';
+        properties: {
+          cart_value: number;
+          item_count: number;
+          payment_method?: string;
+          abandon_step?: string;  // Which step they left
+        };
+      }
+
+      interface FeatureEvent extends BaseEvent {
+        event_name: `feature_${string}_${'viewed' | 'used' | 'completed'}`;
+        properties: {
+          feature_name: string;
+          feature_variant?: string;
+          time_spent_seconds?: number;
+        };
+      }
+
+      // Event validation (fail loudly on bad events)
+      function validateEvent(event: BaseEvent): boolean {
+        const validPatterns = [
+          /^[a-z]+_(started|completed|abandoned|viewed|clicked|used)(_[a-z]+)?$/,
+        ];
+
+        if (!validPatterns.some(p => p.test(event.event_name))) {
+          console.error(`Invalid event name: ${event.event_name}`);
+          // In production: send to error tracking, block in staging
+          return false;
+        }
+
+        if (!event.user_id || !event.session_id) {
+          console.error('Missing required event properties');
+          return false;
+        }
+
+        return true;
+      }
+
+      // Event tracker with validation
+      class Analytics {
+        track(event: BaseEvent) {
+          if (!validateEvent(event)) {
+            throw new Error(`Invalid event: ${JSON.stringify(event)}`);
+          }
+          // Send to analytics service
+          this.send(event);
+        }
+
+        private send(event: BaseEvent) {
+          // Segment, Amplitude, Mixpanel, etc.
+        }
+      }
+      ```
+    gotchas:
+      - "Enforce taxonomy in CI/CD - invalid events should fail build in staging"
+      - "Version events - schema changes should be tracked"
+      - "Include all context needed for analysis (user_id, session_id, timestamp)"
+
+  - name: "North Star Metric Framework"
+    when: "Aligning team around what success looks like"
+    implementation: |
+      ```python
+      from dataclasses import dataclass
+      from typing import List, Dict
+
+      @dataclass
+      class NorthStarMetric:
+          """
+          North Star: single metric that captures product value delivery.
+
+          Not revenue (lagging), not sign-ups (vanity).
+          Choose metric that represents value exchanged with users.
+          """
+          name: str
+          definition: str
+          formula: str
+          why: str
+          input_metrics: List[str]  # Metrics that drive the North Star
+          leading_indicators: List[str]  # Metrics that predict North Star
+
+      # Example North Star definitions
+      NORTH_STAR_EXAMPLES = {
+          'slack': NorthStarMetric(
+              name='Weekly Messages Sent in Teams',
+              definition='Number of messages sent in teams with 2+ members per week',
+              formula='COUNT(messages) WHERE team_size >= 2 GROUP BY week',
+              why='Captures value: communication happening in teams',
+              input_metrics=['active_users', 'teams_created', 'messages_per_user'],
+              leading_indicators=['day_1_messages', 'team_invites_sent']
+          ),
+          'airbnb': NorthStarMetric(
+              name='Nights Booked',
+              definition='Total nights booked through platform per period',
+              formula='SUM(booking_nights) GROUP BY period',
+              why='Captures value exchange: guests get stays, hosts get income',
+              input_metrics=['search_volume', 'booking_conversion', 'avg_stay_length'],
+              leading_indicators=['searches_with_dates', 'wishlisted_listings']
+          ),
+          'netflix': NorthStarMetric(
+              name='Hours Watched',
+              definition='Total hours of content watched by subscribers',
+              formula='SUM(watch_time_hours) WHERE subscription_active',
+              why='Captures value: entertainment consumed = value delivered',
+              input_metrics=['active_subscribers', 'sessions_per_user', 'avg_session_length'],
+              leading_indicators=['day_1_watch_completion', 'profile_creation']
+          )
+      }
+
+      def design_north_star() -> Dict:
+          """
+          Framework for designing North Star metric.
+          """
+          return {
+              'criteria': {
+                  'value_exchange': 'Does it capture value delivered to users?',
+                  'leading_revenue': 'Does improving this metric lead to revenue?',
+                  'actionable': 'Can product/engineering teams influence it?',
+                  'measurable': 'Can we measure it reliably and frequently?'
+              },
+              'anti_patterns': [
+                  'Revenue itself (lagging, not actionable)',
+                  'Total users (vanity, doesn\'t reflect value)',
+                  'Page views (activity != value)',
+                  'NPS (survey-based, not continuous)'
+              ],
+              'input_metric_guidance': [
+                  'Identify 3-5 metrics that DRIVE the North Star',
+                  'Teams can own input metrics while aligned to North Star',
+                  'Input metrics should be actionable and measurable'
+              ]
+          }
+      ```
+    gotchas:
+      - "North Star is not a KPI for executives - it's a alignment tool for teams"
+      - "Input metrics let teams act - North Star tells them if they're moving the needle"
+      - "Review quarterly - North Star may evolve as product/market evolves"
+
+  - name: "Funnel Analysis with Drop-off Diagnosis"
+    when: "Understanding and optimizing user journeys"
+    implementation: |
+      ```python
+      import pandas as pd
+      from typing import Dict, List
+
+      class FunnelAnalyzer:
+          """
+          Funnel analysis with actionable drop-off insights.
+          """
+
+          def __init__(self, events_df: pd.DataFrame):
+              self.events = events_df
+
+          def analyze_funnel(
+              self,
+              funnel_steps: List[str],
+              user_id_col: str = 'user_id',
+              timestamp_col: str = 'timestamp'
+          ) -> Dict:
+              """
+              Calculate funnel metrics with drop-off analysis.
+              """
+              results = {'steps': [], 'total_users': 0}
+
+              previous_users = set()
+              for i, step in enumerate(funnel_steps):
+                  step_events = self.events[self.events['event_name'] == step]
+                  step_users = set(step_events[user_id_col].unique())
+
+                  if i == 0:
+                      reached = len(step_users)
+                      conversion = 100.0
+                      dropped = 0
+                      results['total_users'] = reached
+                  else:
+                      reached = len(step_users & previous_users)
+                      conversion = (reached / len(previous_users) * 100) if previous_users else 0
+                      dropped = len(previous_users) - reached
+
+                  results['steps'].append({
+                      'step': step,
+                      'order': i + 1,
+                      'users_reached': reached,
+                      'conversion_from_previous': round(conversion, 1),
+                      'users_dropped': dropped,
+                      'cumulative_conversion': round(reached / results['total_users'] * 100, 1) if results['total_users'] > 0 else 0
+                  })
+
+                  previous_users = step_users
+
+              return results
+
+          def identify_drop_off_segments(
+              self,
+              funnel_steps: List[str],
+              segment_by: str,  # e.g., 'device', 'country', 'acquisition_source'
+              threshold: float = 0.8  # Flag segments below this vs average
+          ) -> List[Dict]:
+              """
+              Find which segments have abnormal drop-offs.
+              """
+              overall = self.analyze_funnel(funnel_steps)
+              problematic_segments = []
+
+              for segment_value in self.events[segment_by].unique():
+                  segment_events = self.events[self.events[segment_by] == segment_value]
+                  segment_analyzer = FunnelAnalyzer(segment_events)
+                  segment_results = segment_analyzer.analyze_funnel(funnel_steps)
+
+                  for i, step in enumerate(segment_results['steps']):
+                      overall_step = overall['steps'][i]
+                      if overall_step['conversion_from_previous'] > 0:
+                          relative = step['conversion_from_previous'] / overall_step['conversion_from_previous']
+                          if relative < threshold:
+                              problematic_segments.append({
+                                  'segment': f"{segment_by}={segment_value}",
+                                  'step': step['step'],
+                                  'segment_conversion': step['conversion_from_previous'],
+                                  'overall_conversion': overall_step['conversion_from_previous'],
+                                  'relative_performance': round(relative, 2)
+                              })
+
+              return sorted(problematic_segments, key=lambda x: x['relative_performance'])
+
+          def calculate_opportunity(
+              self,
+              funnel_results: Dict,
+              end_value: float  # Value per converted user (e.g., $50 LTV)
+          ) -> Dict:
+              """
+              Calculate revenue opportunity at each step.
+              """
+              opportunities = []
+              total_started = funnel_results['total_users']
+
+              for step in funnel_results['steps'][1:]:  # Skip first step
+                  users_dropped = step['users_dropped']
+                  # If we saved 10% of drop-offs
+                  recoverable_10pct = int(users_dropped * 0.10)
+                  opportunity = recoverable_10pct * end_value
+
+                  opportunities.append({
+                      'step': step['step'],
+                      'users_dropped': users_dropped,
+                      'if_recover_10pct': recoverable_10pct,
+                      'revenue_opportunity': opportunity
+                  })
+
+              return {
+                  'opportunities': sorted(opportunities, key=lambda x: -x['revenue_opportunity']),
+                  'total_opportunity': sum(o['revenue_opportunity'] for o in opportunities)
+              }
+      ```
+    gotchas:
+      - "Funnel must be sequential - users must complete step N before N+1"
+      - "Define time window - 7-day funnel differs from 1-day funnel"
+      - "Segment to find where specific user groups struggle"
+
+  - name: "Cohort Retention Analysis"
+    when: "Understanding how retention varies by when users joined"
+    implementation: |
+      ```python
+      import pandas as pd
+      import numpy as np
+      from typing import Dict
+
+      class CohortAnalyzer:
+          """
+          Cohort-based retention analysis.
+          Reveals trends that aggregate metrics hide.
+          """
+
+          def __init__(self, events_df: pd.DataFrame, user_df: pd.DataFrame):
+              self.events = events_df
+              self.users = user_df
+
+          def create_retention_cohorts(
+              self,
+              signup_date_col: str = 'signup_date',
+              activity_date_col: str = 'event_date',
+              cohort_period: str = 'week',  # 'day', 'week', 'month'
+              periods_to_track: int = 12
+          ) -> pd.DataFrame:
+              """
+              Create retention matrix by signup cohort.
+              """
+              # Assign users to cohorts based on signup
+              if cohort_period == 'week':
+                  self.users['cohort'] = pd.to_datetime(
+                      self.users[signup_date_col]
+                  ).dt.to_period('W').dt.start_time
+              elif cohort_period == 'month':
+                  self.users['cohort'] = pd.to_datetime(
+                      self.users[signup_date_col]
+                  ).dt.to_period('M').dt.start_time
+              else:
+                  self.users['cohort'] = pd.to_datetime(
+                      self.users[signup_date_col]
+                  ).dt.date
+
+              # Merge cohort info to events
+              events_with_cohort = self.events.merge(
+                  self.users[['user_id', 'cohort']],
+                  on='user_id'
+              )
+
+              # Calculate period number for each activity
+              events_with_cohort['activity_date'] = pd.to_datetime(
+                  events_with_cohort[activity_date_col]
+              )
+              events_with_cohort['period_number'] = (
+                  (events_with_cohort['activity_date'] - events_with_cohort['cohort'])
+                  .dt.days // {'day': 1, 'week': 7, 'month': 30}[cohort_period]
+              )
+
+              # Build retention matrix
+              cohorts = events_with_cohort.groupby(['cohort', 'period_number'])['user_id'].nunique().reset_index()
+              cohort_sizes = self.users.groupby('cohort')['user_id'].nunique()
+
+              retention_matrix = cohorts.pivot(index='cohort', columns='period_number', values='user_id')
+              retention_matrix = retention_matrix.divide(cohort_sizes, axis=0) * 100
+
+              return retention_matrix.round(1)
+
+          def identify_retention_changes(
+              self,
+              retention_matrix: pd.DataFrame,
+              period: int = 1  # Which period to analyze (1 = week/month 1)
+          ) -> Dict:
+              """
+              Identify significant changes in retention across cohorts.
+              """
+              period_retention = retention_matrix[period].dropna()
+
+              return {
+                  'period': period,
+                  'avg_retention': period_retention.mean(),
+                  'std_retention': period_retention.std(),
+                  'best_cohort': period_retention.idxmax(),
+                  'best_retention': period_retention.max(),
+                  'worst_cohort': period_retention.idxmin(),
+                  'worst_retention': period_retention.min(),
+                  'trend': 'improving' if period_retention.iloc[-3:].mean() > period_retention.iloc[:3].mean() else 'declining'
+              }
+
+          def diagnose_retention_drop(
+              self,
+              problem_cohort: str,
+              comparison_cohort: str
+          ) -> Dict:
+              """
+              Compare two cohorts to understand what changed.
+              """
+              problem_users = self.users[self.users['cohort'] == problem_cohort]['user_id']
+              comparison_users = self.users[self.users['cohort'] == comparison_cohort]['user_id']
+
+              problem_events = self.events[self.events['user_id'].isin(problem_users)]
+              comparison_events = self.events[self.events['user_id'].isin(comparison_users)]
+
+              return {
+                  'problem_cohort': problem_cohort,
+                  'comparison_cohort': comparison_cohort,
+                  'problem_events_per_user': len(problem_events) / len(problem_users),
+                  'comparison_events_per_user': len(comparison_events) / len(comparison_users),
+                  'features_used_problem': problem_events['event_name'].value_counts().head(10).to_dict(),
+                  'features_used_comparison': comparison_events['event_name'].value_counts().head(10).to_dict()
+              }
+      ```
+    gotchas:
+      - "Cohort analysis reveals trends that aggregate metrics hide"
+      - "Compare similar-sized cohorts - small cohorts have high variance"
+      - "Investigate anomalous cohorts - they tell you what changed"
+
+red_team:
+  - attack: "Goodhart's Law Exploitation"
+    impact: "Team optimizes metric directly, destroying the underlying value it measured"
+    defense: "Use input metrics for optimization, North Star for validation. Multiple metrics with tradeoffs."
+
+  - attack: "Data Quality Poisoning"
+    impact: "Bad tracking data leads to wrong decisions at scale"
+    defense: "Automated data quality checks. Anomaly detection. Human review of significant changes."
+
+  - attack: "Cherry-Picked Analysis"
+    impact: "Analyst finds favorable segment and presents as representative"
+    defense: "Pre-register analysis plans. Report all segments. Require A/B validation for causal claims."
+
+testing:
+  - type: "Event Completeness"
+    focus: "Verify all expected events are being tracked"
+    example: |
+      ```python
+      def test_event_completeness(events_df, expected_events):
+          tracked_events = set(events_df['event_name'].unique())
+          missing = set(expected_events) - tracked_events
+          assert len(missing) == 0, f"Missing events: {missing}"
+      ```
+
+  - type: "Funnel Sanity"
+    focus: "Users at step N should be >= users at step N+1"
+    example: |
+      ```python
+      def test_funnel_sanity(funnel_results):
+          for i in range(len(funnel_results['steps']) - 1):
+              current = funnel_results['steps'][i]['users_reached']
+              next_step = funnel_results['steps'][i + 1]['users_reached']
+              assert current >= next_step, "Users increased between funnel steps"
+      ```
+
+decision_framework:
+  - situation: "Starting analytics from scratch"
+    choose: "Event taxonomy + North Star + 3 input metrics"
+    because: "Foundation first. Track events correctly, align on one number, identify drivers."
+
+  - situation: "Metric is improving but no one knows why"
+    choose: "Cohort analysis + segment breakdown"
+    because: "Find which cohorts/segments are driving the change. Aggregate masks true causes."
+
+  - situation: "Team wants to track 50 new metrics"
+    choose: "Review each: what decision does this metric drive?"
+    because: "Metrics without decisions are noise. Kill metrics not driving action."
+
+recovery:
+  - failure: "Discovered tracking has been broken for 3 months"
+    detection: "Analysis shows impossible values or missing data"
+    recovery: |
+      1. Audit current tracking implementation
+      2. Identify scope of data loss/corruption
+      3. Document affected decisions made during period
+      4. Fix tracking with validation
+      5. Implement automated monitoring to catch future breaks
+    prevention: "Automated data quality alerts. Regular tracking audits. A/A tests."
+
+  - failure: "Metric improved but business outcome didn't"
+    detection: "Conversion up 10% but revenue flat"
+    recovery: |
+      1. Check if metric definition matches business outcome
+      2. Look for counterbalancing effects (lower quality conversions)
+      3. Verify tracking accuracy
+      4. Consider if metric is leading or vanity
+    prevention: "Always connect metrics to business outcomes. Validate with multiple metrics."
+
+examples:
+  - name: "Complete Funnel Analysis"
+    code: |
+      ```python
+      analyzer = FunnelAnalyzer(events_df)
+
+      # Analyze conversion funnel
+      funnel = analyzer.analyze_funnel([
+          'signup_started',
+          'signup_completed',
+          'activation_complete',
+          'subscription_started'
+      ])
+
+      print("Funnel Analysis:")
+      for step in funnel['steps']:
+          print(f"  {step['step']}: {step['conversion_from_previous']}% "
+                f"(dropped: {step['users_dropped']})")
+
+      # Find problematic segments
+      problem_segments = analyzer.identify_drop_off_segments(
+          funnel_steps=['signup_started', 'signup_completed'],
+          segment_by='device_type'
+      )
+
+      print(f"\nProblematic segments: {problem_segments[:3]}")
+
+      # Calculate opportunity
+      opportunity = analyzer.calculate_opportunity(funnel, end_value=50)
+      print(f"\nTotal opportunity: ${opportunity['total_opportunity']:,.0f}")
+      ```
+
+gotchas:
+  - trap: "Measuring everything because storage is cheap"
+    why: "More data != more insight. Noise drowns signal. Team ignores dashboards."
+    correct: "Track events that answer specific questions. Review tracking quarterly. Kill unused events."
+
+  - trap: "Using daily actives as health metric"
+    why: "DAU can grow while value delivery drops. Spam notifications inflate DAU temporarily."
+    correct: "Combine DAU with engagement depth metrics. 'Active' should mean 'got value'."
+
+  - trap: "Building dashboards before defining questions"
+    why: "Dashboards without decisions attached become shelfware. Beautiful charts nobody uses."
+    correct: "Start with questions and decisions. Then build minimal dashboard to answer them."

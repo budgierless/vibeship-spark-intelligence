@@ -2,6 +2,7 @@
 
 Get Spark running in 5 minutes.
 
+If you are brand new, start with `docs/GETTING_STARTED_5_MIN.md` (shorter, newcomer path).
 For the full active documentation map, see `docs/DOCS_INDEX.md`.
 For term-based navigation, see `docs/GLOSSARY.md`.
 

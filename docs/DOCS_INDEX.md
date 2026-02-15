@@ -1,4 +1,4 @@
-# Documentation Index
+﻿# Documentation Index
 
 This index is the canonical map of active Spark documentation.
 Primary navigation hub: `docs/GLOSSARY.md`.
@@ -6,6 +6,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 ## Start Here
 
 - `README.md`: project entry point
+- `docs/GETTING_STARTED_5_MIN.md`: newcomer 5-minute path (install -> start -> health -> dashboards)
 - `docs/QUICKSTART.md`: setup and daily operations
 - `docs/OPPORTUNITIES.md`: Opportunity Scanner (self-evolution) methodology + inbox workflow
 - `Intelligence_Flow.md`: runtime flow, data stores, tuneables
@@ -14,18 +15,33 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 ## Integrations
 
-- `docs/OPENCLAW_OPERATIONS.md`: **Start here** — session startup, how Spark works in OpenClaw, services, troubleshooting
+- `docs/OPENCLAW_OPERATIONS.md`: **Start here** â€” session startup, how Spark works in OpenClaw, services, troubleshooting
 - `docs/OPENCLAW_INTEGRATION.md`: Technical integration details (capture, context sync, notifications)
 - `docs/LLM_INTEGRATION.md`: Claude CLI LLM integration (advisory synthesis, EIDOS distillation, PowerShell bridge)
 
 ## Operator Runbooks
 
 - `TUNEABLES.md`: tuneable parameters and thresholds
+- `docs/launch/LAUNCH_SCOPE_AND_GATES.md`: ship-now vs later, release gates, go/no-go, owners, rollback
+- `docs/launch/LAUNCH_ASSETS.md`: landing copy, demo script, and screenshot/GIF checklist
+- `docs/launch/ANNOUNCEMENT_PACK.md`: X thread + announcement drafts + tracking plan
+- `docs/launch/POST_LAUNCH_MONITORING.md`: monitoring loop + 48h retro template
+- `docs/RESPONSIBLE_PUBLIC_RELEASE.md`: responsible public release options and minimum safety bar for dual-use systems
+- `docs/security/THREAT_MODEL.md`: practical threat model for public alpha
+- `docs/security/SECRETS_AND_RELEASE_CHECKLIST.md`: pre-public secrets + exposure checklist
+- `docs/release/RELEASE_CANDIDATE.md`: RC build, smoke test, and rollback minimums
+- `docs/observability/HEALTH_CONTRACT.md`: liveness vs readiness endpoints and expected fields
+- `docs/observability/SLOS.md`: local-first SLOs and alert thresholds
+- `docs/observability/ONCALL_AND_INCIDENTS.md`: triage, containment, recovery, postmortems
+- `docs/token/TOKEN_LAUNCH_COMMS_AND_RISK.md`: non-legal advice checklist and safe comms defaults (requires counsel review)
+- `docs/support/SUPPORT_PLAYBOOK.md`: triage, KB, macros, escalation, daily tracking
+- `docs/OPEN_CORE_FREEMIUM_MODEL.md`: open-core boundaries and how to ship premium modules without weakening safety
 - `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`: lightweight optimization policy (why, KPI gate, delete-pass rules, docs integration checklist)
 - `docs/SPARK_CARMACK_OPTIMIZATION_IMPLEMENTATION.md`: implemented Carmack optimization changes (core-only sync, advisory fallback policy, memory/chip noise controls)
 - `docs/RETRIEVAL_LEVELS.md`: 3-level memory retrieval operating model (local-free, balanced, quality-max) + auto-router controls
 - `docs/ADVISORY_BENCHMARK_SYSTEM.md`: advisory-quality benchmark design, scoring model, and iteration loop
 - `docs/ADVISORY_REALISM_PLAYBOOK.md`: cross-system advisory realism loop (depth tiers, theory seeding, source-alignment gates)
+- `docs/ADVISORY_AND_LEARNING_BENCHMARKS.md`: top-10 benchmark map tying advisory correctness to learning capture/retrieval/utilization (what to run, where to look)
 - `scripts/run_advisory_realism_domain_matrix.py`: multi-domain advisory realism matrix runner (10+ domain slices per run)
 - `scripts/run_advisory_chip_experiments.py`: chip strategy experiment runner (A/B/C/D off/on/targeted segment plans)
 - `scripts/run_chip_schema_experiments.py`: schema-capture A/B/C/D runner for chip observer quality and distillation readiness
@@ -75,6 +91,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-13_chip_schema_randomized_benchmark_pass_v2.md`: trigger-tightening follow-up, multi-seed gate outcomes, and merge-activation profile results
 - `docs/reports/2026-02-13_chip_r3_runtime_rollout_v1.md`: live R3 rollout, startup/runtime profile apply, reproducibility fix, and deterministic rerun recheck outcomes
 - `prompts/TOMORROW_CHIP_ADVISORY_CONTINUATION_PROMPT.md`: tomorrow handoff prompt for continuing chip/advisory optimization loop
+- `prompts/SPARK_INTELLIGENCE_PROMPT_LIBRARY.md`: 10 operator prompts for running and improving Spark Intelligence
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log
@@ -87,6 +104,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `path-to-AGI/index.md` (living glossary/reports/experiments corpus)
 - `docs/research/CARMACK_AND_AGI_ENGINEERING_ALIGNMENT.md`: Carmack/Sutton/AGI-engineering research mapped onto Spark's critical path (optimize with less, stability/scalability checklist)
 - `docs/research/AGI_SCIENTIST_MATRIX.md`: "who/what/how-it-maps/what-to-steal" matrix for AGI-adjacent scientists, translated into Spark surfaces and Carmack-style implementation constraints
+- `docs/research/AGI_GUARDRAILS_IMMUTABILITY.md`: guardrails research for AGI-class systems with an emphasis on operator-immutable enforcement (threshold governance, attestation, fail-closed capabilities)
 
 ## Archived and Historical
 

@@ -66,6 +66,9 @@ Run these each loop before calling a release candidate "ready":
 7. If counter integrity fails: `python scripts/repair_effectiveness_counters.py` then re-run steps 4-5.
 8. If chip ratio fails: `python scripts/compact_chip_insights.py --apply` then re-run step 5.
 
+If step 4 reports no `pre_tool`/`post_tool` events, run the hook smoke test (see `docs/claude_code.md`):
+- Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\claude_hook_smoke_test.ps1`
+
 Core gate targets enforced by `lib/production_gates.py`:
 - `helpful <= followed <= total advice`
 - retrieval rate `>= 10%`

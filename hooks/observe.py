@@ -69,6 +69,7 @@ ADVICE_FEEDBACK_ENABLED = os.environ.get("SPARK_ADVICE_FEEDBACK", "1") == "1"
 ADVICE_FEEDBACK_PROMPT = os.environ.get("SPARK_ADVICE_FEEDBACK_PROMPT", "1") == "1"
 ADVICE_FEEDBACK_MIN_S = int(os.environ.get("SPARK_ADVICE_FEEDBACK_MIN_S", "600"))
 PRETOOL_BUDGET_MS = float(os.environ.get("SPARK_OBSERVE_PRETOOL_BUDGET_MS", "2500"))
+EIDOS_ENFORCE_BLOCK = os.environ.get("SPARK_EIDOS_ENFORCE_BLOCK", "0") == "1"
 
 # ===== Session Failure Tracking =====
 # Track which tools failed in this session so we can detect recovery patterns.
@@ -505,6 +506,10 @@ def main():
                     sys.stderr.write(f"[EIDOS] BLOCKED: {decision.message}\n")
                     if decision.required_action:
                         sys.stderr.write(f"[EIDOS] Required: {decision.required_action}\n")
+                    # Optional enforcement: if the host supports aborting tool execution on non-zero exit.
+                    if EIDOS_ENFORCE_BLOCK:
+                        sys.stderr.write("[EIDOS] Enforcement enabled (SPARK_EIDOS_ENFORCE_BLOCK=1). Exiting non-zero.\n")
+                        raise SystemExit(2)
             except Exception as e:
                 log_debug("observe", "EIDOS pre-action failed", e)
     
@@ -696,7 +701,7 @@ def main():
             # Advisory Engine: capture user intent for contextual retrieval
             try:
                 from lib.advisory_engine import on_user_prompt
-                on_user_prompt(session_id, txt)
+                on_user_prompt(session_id, txt, trace_id=trace_id)
             except Exception as e:
                 log_debug("observe", "advisory engine intent capture failed", e)
 

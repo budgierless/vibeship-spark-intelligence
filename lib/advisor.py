@@ -451,6 +451,36 @@ def _append_jsonl_capped(path: Path, entry: Dict[str, Any], max_lines: int) -> N
         pass
 
 
+def record_recent_delivery(
+    *,
+    tool: str,
+    advice_list: List["Advice"],
+    trace_id: Optional[str] = None,
+    route: str = "",
+    delivered: bool = True,
+) -> None:
+    """Record advice that was actually surfaced to the agent.
+
+    This is intentionally separate from retrieval logging: advisory_engine may retrieve
+    many candidates but only emit a small subset; recent_advice should reflect delivery.
+    """
+    if not tool or not advice_list:
+        return
+    recent = {
+        "ts": time.time(),
+        "tool": tool,
+        "trace_id": trace_id,
+        "advice_ids": [a.advice_id for a in advice_list],
+        "advice_texts": [a.text[:160] for a in advice_list],
+        "insight_keys": [a.insight_key for a in advice_list],
+        "sources": [a.source for a in advice_list],
+        "delivered": bool(delivered),
+        "route": str(route or ""),
+    }
+    # Keep this bounded but roomy enough for short windows + debugging.
+    _append_jsonl_capped(RECENT_ADVICE_LOG, recent, max_lines=max(500, RECENT_ADVICE_MAX_LINES * 10))
+
+
 # ============= Data Classes =============
 @dataclass
 class Advice:
@@ -773,10 +803,39 @@ class SparkAdvisor:
 
         return inc_followed, inc_helpful
 
-    def _generate_advice_id(self, context: str) -> str:
-        """Generate unique advice ID."""
-        ts = str(time.time())
-        payload = f"{context}:{ts}"
+    def _generate_advice_id(
+        self,
+        text: str,
+        *,
+        insight_key: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> str:
+        """Generate a stable advice ID.
+
+        Important: this must be deterministic across sessions so we can:
+        - dedupe repeats reliably (avoid advice spam)
+        - attribute outcomes to the right learning over time
+
+        When we have a durable `insight_key` for durable sources (cognitive/mind/bank/etc),
+        prefer that as the stable ID anchor (so minor text edits don't reset the ID).
+        """
+
+        def _norm_text(value: str) -> str:
+            t = str(value or "").strip().lower()
+            t = re.sub(r"\s+", " ", t).strip()
+            return t[:400]
+
+        src = str(source or "").strip().lower()
+        # Canonicalize semantic retrieval route labels back to the underlying learning store.
+        # Otherwise the same insight would churn IDs when retrieval strategy changes.
+        if src.startswith("semantic") or src == "trigger":
+            src = "cognitive"
+
+        key = str(insight_key or "").strip()
+        if key and src in {"cognitive", "bank", "mind", "chip", "skill", "niche", "convo", "eidos", "engagement"}:
+            return f"{src}:{key}"
+
+        payload = "|".join([src, key, _norm_text(text)])
         return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()[:12]
 
     def _cache_key(
@@ -839,6 +898,7 @@ class SparkAdvisor:
         try:
             tuneables = Path.home() / ".spark" / "tuneables.json"
             if tuneables.exists():
+                # Windows editors commonly write UTF-8 with BOM; accept both.
                 data = json.loads(tuneables.read_text(encoding="utf-8-sig"))
                 advisor = data.get("advisor") or {}
                 if isinstance(advisor, dict):
@@ -1133,6 +1193,7 @@ class SparkAdvisor:
         task_context: str = "",
         include_mind: bool = True,
         track_retrieval: bool = True,
+        log_recent: bool = True,
         trace_id: Optional[str] = None,
     ) -> List[Advice]:
         """
@@ -1147,6 +1208,9 @@ class SparkAdvisor:
             include_mind: Whether to query Mind for additional context
             track_retrieval: Whether to track this retrieval for outcome measurement.
                 Set to False for sampling/analysis to avoid polluting metrics.
+            log_recent: Whether to write to recent_advice.jsonl for outcome linkage.
+                For advisory_engine paths, prefer recording only *delivered* advice via
+                record_recent_delivery().
             trace_id: Optional trace_id for linking advice retrievals to traces.
 
         Returns:
@@ -1186,6 +1250,32 @@ class SparkAdvisor:
         )
         cached = self._get_cached_advice(cache_key)
         if cached:
+            # Even on cache hits, emit observability/attribution when requested.
+            # Otherwise outcome tracking can mismatch traces (same advice_id reused
+            # across tool calls but Meta-Ralph sees only the first retrieval).
+            if track_retrieval:
+                try:
+                    self._record_cognitive_surface(cached)
+                except Exception:
+                    pass
+                try:
+                    self._log_advice(cached, tool_name, context, trace_id=trace_id, log_recent=log_recent)
+                except Exception:
+                    pass
+                try:
+                    from .meta_ralph import get_meta_ralph
+
+                    ralph = get_meta_ralph()
+                    for adv in cached:
+                        ralph.track_retrieval(
+                            adv.advice_id,
+                            adv.text,
+                            insight_key=adv.insight_key,
+                            source=adv.source,
+                            trace_id=trace_id,
+                        )
+                except Exception:
+                    pass
             return cached
 
         advice_list: List[Advice] = []
@@ -1250,7 +1340,7 @@ class SparkAdvisor:
         # Log advice given (only for operational use, not sampling)
         if track_retrieval:
             self._record_cognitive_surface(advice_list)
-            self._log_advice(advice_list, tool_name, context, trace_id=trace_id)
+            self._log_advice(advice_list, tool_name, context, trace_id=trace_id, log_recent=log_recent)
 
             # Track retrievals in Meta-Ralph for outcome tracking
             try:
@@ -1516,7 +1606,9 @@ class SparkAdvisor:
 
             advice.append(
                 Advice(
-                    advice_id=self._generate_advice_id(r.insight_text),
+                    advice_id=self._generate_advice_id(
+                        r.insight_text, insight_key=r.insight_key, source=source
+                    ),
                     insight_key=r.insight_key,
                     text=r.insight_text,
                     confidence=confidence,
@@ -1725,7 +1817,9 @@ class SparkAdvisor:
                 reason = f"From context: {insight.context[:80]}"
 
             advice.append(Advice(
-                advice_id=self._generate_advice_id(insight.insight),
+                advice_id=self._generate_advice_id(
+                    insight.insight, insight_key=insight_key, source="cognitive"
+                ),
                 insight_key=insight_key,
                 text=insight.insight,
                 confidence=insight.reliability,
@@ -1766,7 +1860,9 @@ class SparkAdvisor:
                     reason = f"Stored: {created[:10]}"
 
             advice.append(Advice(
-                advice_id=self._generate_advice_id(text),
+                advice_id=self._generate_advice_id(
+                    text, insight_key=f"bank:{mem.get('entry_id', '')}", source="bank"
+                ),
                 insight_key=f"bank:{mem.get('entry_id', '')}",
                 text=text[:200],
                 confidence=0.65,
@@ -1808,7 +1904,9 @@ class SparkAdvisor:
                     reason = f"{levels.get(mem['temporal_level'], 'memory')} level memory"
 
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(content),
+                    advice_id=self._generate_advice_id(
+                        content, insight_key=f"mind:{mem.get('memory_id', 'unknown')[:12]}", source="mind"
+                    ),
                     insight_key=f"mind:{mem.get('memory_id', 'unknown')[:12]}",
                     text=content[:200],
                     confidence=salience,
@@ -1882,7 +1980,11 @@ class SparkAdvisor:
             )
 
             advice.append(Advice(
-                advice_id=self._generate_advice_id(insight_text),
+                advice_id=self._generate_advice_id(
+                    f"[Caution] {insight_text}",
+                    insight_key=f"tool:{tool_name}",
+                    source="self_awareness",
+                ),
                 insight_key=f"tool:{tool_name}",
                 text=f"[Caution] {insight_text}",
                 confidence=reliability,
@@ -1930,7 +2032,11 @@ class SparkAdvisor:
                 text = f"{text} Next: {next_step}"
             out.append(
                 Advice(
-                    advice_id=self._generate_advice_id(f"opportunity:{tool_name}:{question}"),
+                    advice_id=self._generate_advice_id(
+                        f"opportunity:{tool_name}:{question}",
+                        insight_key=f"opportunity:{str(row.get('category') or 'general')}",
+                        source="opportunity",
+                    ),
                     insight_key=f"opportunity:{str(row.get('category') or 'general')}",
                     text=text,
                     confidence=float(row.get("confidence") or 0.65),
@@ -2022,7 +2128,11 @@ class SparkAdvisor:
             reason = f"{item['chip_id']}/{item['observer']} quality={item['score']:.2f}"
             advice.append(
                 Advice(
-                    advice_id=self._generate_advice_id(item["text"]),
+                    advice_id=self._generate_advice_id(
+                        f"[Chip:{item['chip_id']}] {item['text'][:220]}",
+                        insight_key=f"chip:{item['chip_id']}:{item['observer']}",
+                        source="chip",
+                    ),
                     insight_key=f"chip:{item['chip_id']}:{item['observer']}",
                     text=f"[Chip:{item['chip_id']}] {item['text'][:220]}",
                     confidence=min(1.0, max(item["confidence"], item["score"])),
@@ -2098,7 +2208,11 @@ class SparkAdvisor:
                     reason += f" in {str(surprise.context)[:30]}"
 
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(lesson),
+                    advice_id=self._generate_advice_id(
+                        f"[Past Failure] {lesson}",
+                        insight_key=f"surprise:{surprise.surprise_type}",
+                        source="surprise",
+                    ),
                     insight_key=f"surprise:{surprise.surprise_type}",
                     text=f"[Past Failure] {lesson}",
                     confidence=0.8,
@@ -2132,7 +2246,7 @@ class SparkAdvisor:
             reason = f"Matched: {s.get('match_reason', 'context keywords')}" if s.get('match_reason') else "Relevant to context"
 
             advice.append(Advice(
-                advice_id=self._generate_advice_id(text),
+                advice_id=self._generate_advice_id(text, insight_key=f"skill:{sid}", source="skill"),
                 insight_key=f"skill:{sid}",
                 text=text,
                 confidence=0.6,
@@ -2172,7 +2286,11 @@ class SparkAdvisor:
                 eidos_match = self._calculate_context_match(d.statement, context)
 
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(d.statement),
+                    advice_id=self._generate_advice_id(
+                        f"[EIDOS {type_label}] {d.statement}",
+                        insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
+                        source="eidos",
+                    ),
                     insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
                     text=f"[EIDOS {type_label}] {d.statement}",
                     confidence=d.confidence,
@@ -2217,7 +2335,9 @@ class SparkAdvisor:
                     f"tone: {opp.suggested_tone})"
                 )
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(text),
+                    advice_id=self._generate_advice_id(
+                        text, insight_key=f"niche:opp:{opp.target}", source="niche"
+                    ),
                     insight_key=f"niche:opp:{opp.target}",
                     text=text,
                     confidence=min(0.8, opp.urgency * 0.15),
@@ -2237,7 +2357,9 @@ class SparkAdvisor:
                             f"topics: {', '.join(acct.topics[:3])})"
                         )
                         advice.append(Advice(
-                            advice_id=self._generate_advice_id(text),
+                            advice_id=self._generate_advice_id(
+                                text, insight_key=f"niche:warmth:{handle}", source="niche"
+                            ),
                             insight_key=f"niche:warmth:{handle}",
                             text=text,
                             confidence=0.75,
@@ -2282,7 +2404,9 @@ class SparkAdvisor:
                     f"(avg ratio: {accuracy.get('avg_ratio', 0)}x)"
                 )
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(text),
+                    advice_id=self._generate_advice_id(
+                        text, insight_key="engagement:accuracy", source="engagement"
+                    ),
                     insight_key="engagement:accuracy",
                     text=text,
                     confidence=0.7,
@@ -2301,7 +2425,11 @@ class SparkAdvisor:
                     f"'{s.content_preview[:60]}' ({s.surprise_ratio}x prediction)"
                 )
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(text),
+                    advice_id=self._generate_advice_id(
+                        text,
+                        insight_key=f"engagement:surprise:{s.tweet_id[:8]}",
+                        source="engagement",
+                    ),
                     insight_key=f"engagement:surprise:{s.tweet_id[:8]}",
                     text=text,
                     confidence=0.65,
@@ -2350,7 +2478,9 @@ class SparkAdvisor:
                         context,
                     )
                     advice.append(Advice(
-                        advice_id=self._generate_advice_id(text),
+                        advice_id=self._generate_advice_id(
+                            text, insight_key=f"convo:dna:{dna_key}", source="convo"
+                        ),
                         insight_key=f"convo:dna:{dna_key}",
                         text=text,
                         confidence=min(0.9, 0.5 + dna.times_seen * 0.1),
@@ -2368,7 +2498,9 @@ class SparkAdvisor:
                     f"{rec.reasoning}"
                 )
                 advice.append(Advice(
-                    advice_id=self._generate_advice_id(text),
+                    advice_id=self._generate_advice_id(
+                        text, insight_key=f"convo:hook:{rec.hook_type}", source="convo"
+                    ),
                     insight_key=f"convo:hook:{rec.hook_type}",
                     text=text,
                     confidence=rec.confidence,
@@ -2526,6 +2658,7 @@ class SparkAdvisor:
         tool: str,
         context: str,
         trace_id: Optional[str] = None,
+        log_recent: bool = True,
     ):
         """Log advice given for later analysis."""
         if not advice_list:
@@ -2542,27 +2675,20 @@ class SparkAdvisor:
             "sources": [a.source for a in advice_list],
         }
 
-        with open(ADVICE_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
+        _append_jsonl_capped(ADVICE_LOG, entry, max_lines=4000)
 
         self.effectiveness["total_advice_given"] += len(advice_list)
         self._save_effectiveness()
 
-        # Keep a lightweight recent-advice log for outcome linkage.
-        recent = {
-            "ts": time.time(),
-            "tool": tool,
-            "trace_id": trace_id,
-            "advice_ids": [a.advice_id for a in advice_list],
-            "advice_texts": [a.text[:160] for a in advice_list],
-            "insight_keys": [a.insight_key for a in advice_list],
-            "sources": [a.source for a in advice_list],
-        }
-        try:
-            with open(RECENT_ADVICE_LOG, "a", encoding="utf-8") as f:
-                f.write(json.dumps(recent) + "\n")
-        except Exception:
-            pass
+        if log_recent:
+            # Default direct-advisor semantics: advice retrieved is assumed delivered.
+            record_recent_delivery(
+                tool=tool,
+                advice_list=advice_list,
+                trace_id=trace_id,
+                route="advisor",
+                delivered=True,
+            )
 
     def _get_recent_advice_entry(
         self,
@@ -2703,7 +2829,38 @@ class SparkAdvisor:
             )
             # Avoid overwriting an existing explicit outcome with "unknown".
             if outcome_str:
-                ralph.track_outcome(advice_id, outcome_str, notes, trace_id=trace_id)
+                # Best-effort: enrich with insight_key/source and trace binding so outcomes
+                # can flow back to the correct learning and be strictly attributable.
+                ik = None
+                src = None
+                derived_trace = None
+                try:
+                    entry = self._find_recent_advice_by_id(advice_id)
+                    if entry:
+                        ids = entry.get("advice_ids") or []
+                        idx = ids.index(advice_id) if advice_id in ids else -1
+                        if idx >= 0:
+                            iks = entry.get("insight_keys") or []
+                            srcs = entry.get("sources") or []
+                            if idx < len(iks):
+                                ik = iks[idx]
+                            if idx < len(srcs):
+                                src = srcs[idx]
+                        derived_trace = entry.get("trace_id")
+                except Exception:
+                    pass
+
+                ralph.track_outcome(
+                    advice_id,
+                    outcome_str,
+                    notes,
+                    # Prefer the retrieval trace (from recent advice log) when available,
+                    # so strict attribution remains trace-bound even if callers report
+                    # the outcome under a follow-on trace.
+                    trace_id=derived_trace or trace_id,
+                    insight_key=ik,
+                    source=src,
+                )
         except Exception:
             pass  # Don't break outcome flow if tracking fails
 
@@ -3064,6 +3221,8 @@ def advise_on_tool(
     tool_input: Dict = None,
     context: str = "",
     include_mind: bool = True,
+    track_retrieval: bool = True,
+    log_recent: bool = True,
     trace_id: Optional[str] = None,
 ) -> List[Advice]:
     """Get advice before using a tool."""
@@ -3072,6 +3231,8 @@ def advise_on_tool(
         tool_input or {},
         context,
         include_mind=include_mind,
+        track_retrieval=track_retrieval,
+        log_recent=log_recent,
         trace_id=trace_id,
     )
 
