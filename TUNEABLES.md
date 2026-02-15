@@ -1161,6 +1161,7 @@ This is the active hot-path advisory stack used by hooks:
 | `SPARK_ADVISORY_STALE_S` | `900` | Delivery badge stale window for `live|fallback|blocked|stale` classification. |
 | `SPARK_ADVISORY_TEXT_REPEAT_COOLDOWN_S` | `1800` | Suppress re-emitting same advisory text during cooldown window. |
 | `SPARK_ADVISORY_REQUIRE_ACTION` | `1` | Enforce actionable next-check text when advisory is too generic. |
+| `SPARK_ADVISORY_FORCE_PROGRAMMATIC_SYNTH` | `0` | Force programmatic synthesis (no AI/network) on the pre-tool hot path. Tuneable `advisory_engine.force_programmatic_synth` (if set) overrides this. |
 | `SPARK_ADVISORY_PREFETCH_QUEUE` | `1` | Enables enqueueing background prefetch jobs from user prompts. |
 | `SPARK_ADVISORY_PACKET_FALLBACK_EMIT` | `0` | Enables packet no-emit deterministic fallback emission. Default `0` keeps fallback output opt-in. |
 | `SPARK_ADVISORY_FALLBACK_RATE_GUARD` | `1` | Enables rate guard for packet no-emit fallback emissions. |

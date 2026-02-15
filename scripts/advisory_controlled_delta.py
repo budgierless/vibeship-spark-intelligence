@@ -99,6 +99,7 @@ def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     trace_rows = 0
     fallback_events = 0
     delivered = 0
+    elapsed_ms: List[float] = []
     for row in engine_rows:
         ev = str(row.get("event") or "")
         rt = str(row.get("route") or "")
@@ -112,6 +113,18 @@ def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             fallback_events += 1
         if ev in {"emitted", "fallback_emit"}:
             delivered += 1
+            ems = _safe_float(row.get("elapsed_ms"), 0.0)
+            if ems > 0:
+                elapsed_ms.append(ems)
+
+    elapsed_ms.sort()
+    def _pct(p: float) -> float:
+        if not elapsed_ms:
+            return 0.0
+        idx = int(round((p / 100.0) * (len(elapsed_ms) - 1)))
+        idx = max(0, min(len(elapsed_ms) - 1, idx))
+        return float(elapsed_ms[idx])
+
     return {
         "rows": len(engine_rows),
         "trace_rows": trace_rows,
@@ -119,6 +132,14 @@ def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "events": dict(events),
         "routes": dict(routes),
         "fallback_share_pct": round((fallback_events / max(1, delivered)) * 100.0, 2),
+        "latency": {
+            "n": len(elapsed_ms),
+            "p50_ms": round(_pct(50), 2),
+            "p90_ms": round(_pct(90), 2),
+            "p95_ms": round(_pct(95), 2),
+            "p99_ms": round(_pct(99), 2),
+            "max_ms": round(float(elapsed_ms[-1]), 2) if elapsed_ms else 0.0,
+        },
     }
 
 

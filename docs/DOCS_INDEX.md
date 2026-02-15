@@ -10,6 +10,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/OPPORTUNITIES.md`: Opportunity Scanner (self-evolution) methodology + inbox workflow
 - `Intelligence_Flow.md`: runtime flow, data stores, tuneables
 - `Intelligence_Flow_Map.md`: high-level system map
+- `VIBESHIP_OPTIMIZER.md`: optimization logbook (vibeship-optimizer workflow + Spark KPI capture)
 
 ## Integrations
 
@@ -84,6 +85,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `Path to AGI.md`
 - `EVOLUTION_CHIPS_RESEARCH.md`
 - `path-to-AGI/index.md` (living glossary/reports/experiments corpus)
+- `docs/research/CARMACK_AND_AGI_ENGINEERING_ALIGNMENT.md`: Carmack/Sutton/AGI-engineering research mapped onto Spark's critical path (optimize with less, stability/scalability checklist)
 
 ## Archived and Historical
 

@@ -47,6 +47,9 @@ ACTIONABILITY_ENFORCE = os.getenv("SPARK_ADVISORY_REQUIRE_ACTION", "1") != "0"
 # Action-first formatting: move the actionable "Next check" command to the first line.
 ACTION_FIRST_ENABLED = os.getenv("SPARK_ADVISORY_ACTION_FIRST", "0") == "1"
 
+# Advisory speed lever: force programmatic synthesis (no AI/network) on the hot path.
+FORCE_PROGRAMMATIC_SYNTH = os.getenv("SPARK_ADVISORY_FORCE_PROGRAMMATIC_SYNTH", "0") == "1"
+
 DELIVERY_STALE_SECONDS = float(os.getenv("SPARK_ADVISORY_STALE_S", "900"))
 ADVISORY_TEXT_REPEAT_COOLDOWN_S = float(
     os.getenv("SPARK_ADVISORY_TEXT_REPEAT_COOLDOWN_S", "1800")
@@ -103,6 +106,7 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global ACTIONABILITY_ENFORCE
     global DELIVERY_STALE_SECONDS
     global ADVISORY_TEXT_REPEAT_COOLDOWN_S
+    global FORCE_PROGRAMMATIC_SYNTH
 
     applied: List[str] = []
     warnings: List[str] = []
@@ -198,6 +202,13 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
         )
         applied.append("actionability_enforce")
 
+    if "force_programmatic_synth" in cfg:
+        FORCE_PROGRAMMATIC_SYNTH = _parse_bool(
+            cfg.get("force_programmatic_synth"),
+            FORCE_PROGRAMMATIC_SYNTH,
+        )
+        applied.append("force_programmatic_synth")
+
     if "delivery_stale_s" in cfg:
         try:
             DELIVERY_STALE_SECONDS = max(
@@ -234,6 +245,7 @@ def get_engine_config() -> Dict[str, Any]:
         "fallback_rate_window": int(FALLBACK_RATE_GUARD_WINDOW),
         "prefetch_inline_max_jobs": int(INLINE_PREFETCH_MAX_JOBS),
         "actionability_enforce": bool(ACTIONABILITY_ENFORCE),
+        "force_programmatic_synth": bool(FORCE_PROGRAMMATIC_SYNTH),
         "delivery_stale_s": float(DELIVERY_STALE_SECONDS),
         "advisory_text_repeat_cooldown_s": float(ADVISORY_TEXT_REPEAT_COOLDOWN_S),
     }
@@ -489,6 +501,21 @@ def _advice_source_counts(advice_items: Optional[List[Any]]) -> Dict[str, int]:
     return counts
 
 
+_NON_MEMORY_ADVICE_SOURCES = {"quick", "baseline", "prefetch"}
+
+
+def _infer_memory_absent_declared(source_counts: Dict[str, int]) -> bool:
+    """Heuristic: declare memory-absent when advice came only from deterministic/non-memory sources."""
+    if not source_counts:
+        return True
+    for name, count in (source_counts or {}).items():
+        if int(count or 0) <= 0:
+            continue
+        if str(name or "").strip().lower() not in _NON_MEMORY_ADVICE_SOURCES:
+            return False
+    return True
+
+
 def _default_action_command(tool_name: str, task_plane: str) -> str:
     tool = str(tool_name or "").strip().lower()
     plane = str(task_plane or "").strip().lower()
@@ -742,7 +769,6 @@ def on_pre_tool(
             save_state,
             suppress_tool_advice,
         )
-        from .advisory_memory_fusion import build_memory_bundle
         from .advisory_packet_store import (
             build_packet,
             lookup_exact,
@@ -771,16 +797,6 @@ def on_pre_tool(
         session_context_key = _session_context_key(state, tool_name)
         intent_family = state.intent_family or "emergent_other"
         task_plane = state.task_plane or "build_delivery"
-
-        t_memory = time.time() * 1000.0
-        memory_bundle = build_memory_bundle(
-            session_id=session_id,
-            intent_text=state.user_intent or "",
-            intent_family=intent_family,
-            tool_name=tool_name,
-            include_mind=INCLUDE_MIND_IN_MEMORY,
-        )
-        _mark("memory_bundle", t_memory)
 
         t_lookup = time.time() * 1000.0
         packet = lookup_exact(
@@ -832,6 +848,7 @@ def on_pre_tool(
                     ]
                     route = "live_quick"
                 except Exception:
+                    t_live = time.time() * 1000.0
                     advice_items = advise_on_tool(
                         tool_name,
                         tool_input or {},
@@ -839,8 +856,10 @@ def on_pre_tool(
                         include_mind=INCLUDE_MIND_IN_MEMORY,
                         trace_id=resolved_trace_id,
                     )
+                    _mark("advisor_retrieval", t_live)
                     route = "live"
             else:
+                t_live = time.time() * 1000.0
                 advice_items = advise_on_tool(
                     tool_name,
                     tool_input or {},
@@ -848,6 +867,7 @@ def on_pre_tool(
                     include_mind=INCLUDE_MIND_IN_MEMORY,
                     trace_id=resolved_trace_id,
                 )
+                _mark("advisor_retrieval", t_live)
                 route = "live"
         advice_source_counts = _advice_source_counts(advice_items)
 
@@ -1033,6 +1053,14 @@ def on_pre_tool(
         synth_text = ""
         if packet and str(packet.get("advisory_text") or "").strip():
             synth_text = str(packet.get("advisory_text") or "").strip()
+        elif FORCE_PROGRAMMATIC_SYNTH:
+            synth_text = synthesize(
+                emitted_advice,
+                phase=gate_result.phase,
+                user_intent=state.user_intent,
+                tool_name=tool_name,
+                force_mode="programmatic",
+            )
         elif remaining_ms > 500:
             synth_text = synthesize(
                 emitted_advice,
@@ -1109,9 +1137,9 @@ def on_pre_tool(
 
             if route == "live":
                 lineage_sources = []
-                for source_name, meta in (memory_bundle.get("sources") or {}).items():
-                    if int((meta or {}).get("count", 0)) > 0:
-                        lineage_sources.append(source_name)
+                for source_name, cnt in (emitted_advice_source_counts or advice_source_counts).items():
+                    if int(cnt or 0) > 0:
+                        lineage_sources.append(str(source_name))
                 packet_payload = build_packet(
                     project_key=project_key,
                     session_context_key=session_context_key,
@@ -1126,7 +1154,9 @@ def on_pre_tool(
                     ),
                     lineage={
                         "sources": lineage_sources,
-                        "memory_absent_declared": bool(memory_bundle.get("memory_absent_declared")),
+                        "memory_absent_declared": _infer_memory_absent_declared(
+                            emitted_advice_source_counts or advice_source_counts
+                        ),
                         "trace_id": resolved_trace_id,
                     },
                     trace_id=resolved_trace_id,

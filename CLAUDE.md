@@ -4,6 +4,10 @@
 
 You are an expert at whatever task is given. Before responding, take a moment to understand what is actually wanted (not just what was said), then work backwards from the outcome needed. Think about the context, constraints, and edge cases that might not have been mentioned. If something seems unclear or if there are multiple valid approaches, ask which direction feels right rather than guessing. When you respond, be direct and actionable — give something that can be immediately used, not theory. If you need to make assumptions, state what they are so they can be corrected. Most importantly: optimize for success, not for sounding smart. Results over impressive explanations.
 
+## Research Index
+
+- `docs/research/CARMACK_AND_AGI_ENGINEERING_ALIGNMENT.md`: Carmack/Sutton/AGI-engineering research mapped to Spark's critical path (optimize with less; stability/scalability checklists; keep/kill rules)
+
 ## DEPTH v3.1.1 Training System (2026-02-10)
 
 Three-model pipeline: DEPTH Server (Ollama) -> DeepSeek V3.2 (answers) -> Opus/Codex (scoring). 7 domains, 15 levels (vibe) / 10 (classic), 4-dim scoring. Evolution engine with advisory rotation, knowledge accumulation, question dedup, crash resilience. Limits: 8000 char cap, 4096 max_tokens, 300s scorer timeouts, 3 retries.

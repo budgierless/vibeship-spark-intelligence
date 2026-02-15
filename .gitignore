@@ -78,12 +78,18 @@ htmlcov/
 # Local runtime artifacts
 logs/
 tmp/
+_tmp/
+
+# vibeship-optimizer (project state is local; keep config/logbook/reports tracked)
+.vibeship-optimizer/
+.vibeship_optimizer/
 
 # Run artifacts (keep canonical summaries tracked; stash per-run outputs)
 docs/reports/_runs/
 dashboard_out.txt
 dashboard_err.txt
 reports/tune_replay_*.md
+reports/preflight_check_attest.md
 
 # Large generated artifacts (keep repo lightweight)
 reports/advisory_auto_score_*.json

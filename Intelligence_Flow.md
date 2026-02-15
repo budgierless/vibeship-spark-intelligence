@@ -120,13 +120,14 @@ Dashboards and ops:
    - packet no-emit fallback emission is opt-in (`SPARK_ADVISORY_PACKET_FALLBACK_EMIT=1` or `advisory_engine.packet_fallback_emit_enabled=true`).
    - packet no-emit fallback is additionally rate-guarded (`fallback_rate_guard_enabled`, `fallback_rate_max_ratio`, `fallback_rate_window`) to prevent fallback-heavy advisory loops.
    - live retrieval now receives the same Mind policy (`include_mind`) as memory fusion, so packet/live paths no longer drift on Mind usage.
-5) Engine builds memory evidence bundle via lib.advisory_memory_fusion and records `memory_absent_declared` when needed.
-   - memory fusion filters primitive/tool-error telemetry before ranking evidence.
+5) Hot path is optimized for advisory speed: engine does not build the multi-source memory bundle during PreToolUse.
+   - Packet lineage is inferred from emitted advice source labels.
+   - `lib.advisory_memory_fusion` remains available for offline diagnostics and future non-hot-path use.
 6) Engine persists baseline/live packets and enqueues background prefetch jobs from UserPromptSubmit.
 7) PostToolUse/PostToolUseFailure call advisory_engine.on_post_tool for implicit feedback and packet invalidation on Edit/Write.
 8) Advisor still logs retrievals/outcomes and Meta-Ralph updates quality via outcome-linked feedback.
 9) Advisory event logs now carry diagnostics envelope fields for explainability and debugging:
-   - `session_id`, `trace_id`, `session_context_key`, `scope`, `provider_path`, `source_counts`, `missing_sources`.
+   - `session_id`, `trace_id`, `session_context_key`, `scope`, `provider_path`, `source_counts`, `missing_sources` (may be empty on hot path).
 10) Advisory actionability is enforced on emitted guidance:
    - when no concrete command/check is present, engine appends `Next check: <command>`.
 11) Engine status derives a delivery badge from recent events:

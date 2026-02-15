@@ -2,6 +2,11 @@
 
 This file is the **post-optimization validation playbook**.
 
+This repo also uses `vibeship-optimizer` as the standard optimization change tracker:
+- Durable optimization logbook: `VIBESHIP_OPTIMIZER.md`
+- Config (tracked): `vibeship_optimizer.json`
+- Reports (tracked): `reports/optimizer/`
+
 ---
 
 ## Shipped optimization changelog (rollback map)

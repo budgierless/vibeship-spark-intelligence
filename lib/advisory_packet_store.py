@@ -55,6 +55,9 @@ REQUIRED_PACKET_FIELDS = {
 }
 REQUIRED_LINEAGE_FIELDS = {"sources", "memory_absent_declared"}
 
+_INDEX_CACHE: Optional[Dict[str, Any]] = None
+_INDEX_CACHE_MTIME_NS: Optional[int] = None
+
 
 def _to_int(value: Any, default: int = 0) -> int:
     try:
@@ -165,15 +168,36 @@ def _make_packet_id(
 def _load_index() -> Dict[str, Any]:
     _ensure_dirs()
     default = {"by_exact": {}, "packet_meta": {}}
+    global _INDEX_CACHE, _INDEX_CACHE_MTIME_NS
+
+    try:
+        mtime_ns = int(INDEX_FILE.stat().st_mtime_ns) if INDEX_FILE.exists() else None
+    except Exception:
+        mtime_ns = None
+
+    # Hot-path optimization: lookups happen on pre-tool advisory. Avoid re-parsing
+    # the index JSON unless the file changed.
+    if _INDEX_CACHE is not None and mtime_ns is not None and _INDEX_CACHE_MTIME_NS == mtime_ns:
+        return _INDEX_CACHE
+
     data = _read_json(INDEX_FILE, default)
     data.setdefault("by_exact", {})
     data.setdefault("packet_meta", {})
+    _INDEX_CACHE = data
+    _INDEX_CACHE_MTIME_NS = mtime_ns
     return data
 
 
 def _save_index(index: Dict[str, Any]) -> None:
     _ensure_dirs()
     _atomic_write_json(INDEX_FILE, index)
+    # Keep cache coherent for subsequent reads in this process.
+    global _INDEX_CACHE, _INDEX_CACHE_MTIME_NS
+    _INDEX_CACHE = index
+    try:
+        _INDEX_CACHE_MTIME_NS = int(INDEX_FILE.stat().st_mtime_ns) if INDEX_FILE.exists() else None
+    except Exception:
+        _INDEX_CACHE_MTIME_NS = None
 
 
 def build_packet(

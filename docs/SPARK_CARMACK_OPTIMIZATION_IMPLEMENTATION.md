@@ -34,7 +34,11 @@ Critical path:
 - tool-error style telemetry and primitive operational text are filtered from advisory memory fusion
 - duplicate memory evidence is deduped before ranking
 
-4. Chip merge duplicate churn throttling:
+4. Advisory hot path trimmed:
+- pre-tool advisory no longer builds the multi-source memory bundle on the critical path
+- packet lineage is inferred from emitted advice source labels
+
+5. Chip merge duplicate churn throttling:
 - when merge cycles are mostly duplicates with no new merges, merge enters cooldown
 - throttle thresholds are tuneable
 

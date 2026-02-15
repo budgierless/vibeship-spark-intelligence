@@ -24,6 +24,9 @@ def _patch_state_and_store(monkeypatch, tmp_path):
 
     monkeypatch.setattr(engine, "ENGINE_LOG", tmp_path / "advisory_engine.jsonl")
     monkeypatch.setattr(engine, "_project_key", lambda: "proj")
+    # Make tests independent of host env vars (e.g. SPARK_ADVISORY_ACTION_FIRST=1).
+    monkeypatch.setattr(engine, "ACTION_FIRST_ENABLED", False)
+    monkeypatch.setattr(engine, "ACTIONABILITY_ENFORCE", True)
 
 
 def _allow_all_gate(advice_items, state, tool_name, tool_input=None):
