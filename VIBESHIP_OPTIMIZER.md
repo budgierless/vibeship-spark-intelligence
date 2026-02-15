@@ -110,7 +110,7 @@ git revert <sha>
 
 - Status: **SHIPPED**
 - Started: `2026-02-15T14:29:35Z`
-- Commit: ``
+- Commit: `a50bda1`
 - Baseline snapshot: `reports/optimizer/chg-20260215-142935-step1-advisory-speed-default-force_p_before_snapshot.json`
 - After snapshot: `reports/optimizer/chg-20260215-142935-step1-advisory-speed-default-force_p_after_snapshot.json`
 - Snapshot compare: `reports/optimizer/chg-20260215-142935-step1-advisory-speed-default-force_p_compare.md`
