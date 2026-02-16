@@ -12,6 +12,9 @@ This log tracks Spark x OpenClaw integration changes that should be easy to audi
   - `docs/openclaw/INTEGRATION_BACKLOG.md`
 - Added OpenClaw config snippet/runbook reference:
   - `docs/openclaw/OPENCLAW_CONFIG_SNIPPETS.md`
+- Added audit tooling + workflow docs:
+  - `scripts/openclaw_integration_audit.py`
+  - `docs/openclaw/OPERATIONS_WORKFLOW.md`
 
 ### Observed operational gaps
 
@@ -27,3 +30,9 @@ This log tracks Spark x OpenClaw integration changes that should be easy to audi
 1. Apply config hardening from `docs/openclaw/OPENCLAW_CONFIG_SNIPPETS.md`.
 2. Validate telemetry joins and strict attribution rates after config rollout.
 3. Keep each change as a separate commit for rollback clarity.
+
+### Audit artifact
+
+- Generated report:
+  - `docs/reports/openclaw/2026-02-16_160848_openclaw_integration_audit.md`
+  - `docs/reports/openclaw/2026-02-16_160848_openclaw_integration_audit.json`

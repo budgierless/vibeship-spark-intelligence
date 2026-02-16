@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-02-16T12:08:48.572695+00:00",
+  "paths": {
+    "openclaw_config": "C:\\Users\\USER\\.openclaw\\openclaw.json",
+    "cron_jobs": "C:\\Users\\USER\\.openclaw\\cron\\jobs.json",
+    "openclaw_package": "C:\\Users\\USER\\.npm-global\\node_modules\\openclaw\\package.json"
+  },
+  "openclaw": {
+    "version": "2026.2.15",
+    "subagents": {
+      "maxConcurrent": 8,
+      "maxSpawnDepth": null,
+      "maxChildrenPerAgent": null,
+      "depth2_enabled": false
+    },
+    "cron": {
+      "webhook_configured": false,
+      "webhook_token_configured": false
+    },
+    "hooks": {
+      "llm_input_output_configured": false
+    }
+  },
+  "spark_health_job": {
+    "present": true,
+    "command_has_alert_json": true,
+    "command_has_confirm": true,
+    "command_has_auto_remediate": true,
+    "command_has_fail_on_breach": true
+  },
+  "sensitive_fields": {
+    "count": 4,
+    "secret_like_count": 4,
+    "fields": [
+      {
+        "path": "channels.telegram.botToken",
+        "masked_value": "835...uuA",
+        "secret_like": "true"
+      },
+      {
+        "path": "gateway.auth.token",
+        "masked_value": "pul...ken",
+        "secret_like": "true"
+      },
+      {
+        "path": "skills.entries.nano-banana-pro.apiKey",
+        "masked_value": "AIz...g0M",
+        "secret_like": "true"
+      },
+      {
+        "path": "skills.entries.sag.apiKey",
+        "masked_value": "sk_...e8a",
+        "secret_like": "true"
+      }
+    ]
+  }
+}

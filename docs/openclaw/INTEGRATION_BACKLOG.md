@@ -25,6 +25,7 @@ Maintain an auditable backlog for Spark x OpenClaw integration changes, with:
 - [ ] Make KPI auto-remediation resilient in all invocation contexts (module/script execution modes).
 - [ ] Add schema-transition dashboards for advisory feedback (`legacy` vs `schema_version=2`).
 - [ ] Add weekly "strict quality" rollup report with source/tool/session lineage slices.
+- [x] Add redacted OpenClaw integration audit tooling (`scripts/openclaw_integration_audit.py`).
 
 3. P2: Governance and lifecycle
 - [ ] Add formal advisory promotion/decay policy doc with exploration budget.
