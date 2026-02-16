@@ -1,0 +1,52 @@
+{
+  "default": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15,
+    "non_empty_rate_min": 0.55,
+    "error_rate_max": 0.1
+  },
+  "memory": {
+    "mrr_min": 0.42,
+    "top1_hit_rate_min": 0.25
+  },
+  "coding": {
+    "mrr_min": 0.38,
+    "top1_hit_rate_min": 0.22
+  },
+  "testing": {
+    "mrr_min": 0.36,
+    "top1_hit_rate_min": 0.2
+  },
+  "x_social": {
+    "mrr_min": 0.25,
+    "top1_hit_rate_min": 0.1
+  },
+  "strategy": {
+    "mrr_min": 0.28,
+    "top1_hit_rate_min": 0.12
+  },
+  "marketing": {
+    "mrr_min": 0.28,
+    "top1_hit_rate_min": 0.12
+  },
+  "ui_design": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15
+  },
+  "research": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15
+  },
+  "prompting": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15
+  },
+  "conversation": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15
+  },
+  "general": {
+    "mrr_min": 0.3,
+    "top1_hit_rate_min": 0.15
+  }
+}

@@ -248,6 +248,22 @@ python scripts/run_chip_learning_diagnostics.py \
   --out-prefix chip_learning_diagnostics_v1
 ```
 
+Build a multidomain retrieval case set from real-user + advisory corpora:
+
+```bash
+python scripts/build_multidomain_memory_retrieval_cases.py \
+  --out benchmarks/data/memory_retrieval_eval_multidomain_real_user_2026_02_16.json
+```
+
+Run canary apply + benchmark + rollback loop (auto rollback on gate failure):
+
+```bash
+python scripts/run_advisory_retrieval_canary.py \
+  --memory-cases benchmarks/data/memory_retrieval_eval_multidomain_real_user_2026_02_16.json \
+  --memory-gates benchmarks/data/memory_retrieval_domain_gates_multidomain_v1.json \
+  --advisory-cases benchmarks/data/advisory_quality_eval_seed.json
+```
+
 Threshold sensitivity pass (to test whether tuneables are the bottleneck):
 
 ```bash

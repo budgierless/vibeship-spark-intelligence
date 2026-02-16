@@ -1,0 +1,1144 @@
+{
+  "description": "Multidomain real-user retrieval set built from memory/advisory case corpora.",
+  "generated_at": "2026-02-16T13:41:23.376123+00:00",
+  "sources": [
+    "benchmarks\\data\\memory_retrieval_eval_live_2026_02_12.json",
+    "benchmarks\\data\\memory_retrieval_eval_real_user_2026_02_12.json",
+    "benchmarks\\data\\advisory_quality_eval_extended.json",
+    "benchmarks\\data\\advisory_realism_eval_multidomain_v1.json"
+  ],
+  "case_count": 91,
+  "domain_counts": {
+    "coding": 5,
+    "conversation": 3,
+    "debugging": 3,
+    "general": 27,
+    "marketing": 2,
+    "memory": 20,
+    "prompting": 10,
+    "research": 4,
+    "strategy": 6,
+    "testing": 4,
+    "ui_design": 5,
+    "x_social": 2
+  },
+  "cases": [
+    {
+      "id": "live_01",
+      "domain": "memory",
+      "query": "How should we handle openclaw value is tooling ecosystem, not raw speed. shines for agents that autonomously interact with external services, handle payments, manage persistent state across sessions.?",
+      "relevant_insight_keys": [
+        "context:openclaw_value_is_tooling_ecosystem,_not"
+      ],
+      "relevant_contains": [
+        "openclaw",
+        "value",
+        "tooling"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_02",
+      "domain": "general",
+      "query": "How should we handle bittensor tao subnets showing consistent gains even in crypto downtrend. subnet 44 generates $3m arr from enterprise vision ai. subnet 64 (chutes) processing 160b tokens daily.?",
+      "relevant_insight_keys": [
+        "context:bittensor_tao_subnets_showing_consistent"
+      ],
+      "relevant_contains": [
+        "bittensor",
+        "subnets",
+        "showing"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_03",
+      "domain": "general",
+      "query": "How should we handle deepseek cheaper ($0.27/m vs claude opus $5/m) but less used for agents due to slower inference, lower agentic performance, fewer ecosystem integrations?",
+      "relevant_insight_keys": [
+        "context:deepseek_cheaper_($0.27/m_vs_claude_opus"
+      ],
+      "relevant_contains": [
+        "deepseek",
+        "cheaper",
+        "claude"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_04",
+      "domain": "general",
+      "query": "How should we handle when using glob, prefer 'rying to make it like \"oh, you know, we are using these two tokens for a test but it doenst go for nothing\"' over 't'?",
+      "relevant_insight_keys": [
+        "user_understanding:when_using_glob,_prefer_'rying_to_make_i"
+      ],
+      "relevant_contains": [
+        "using",
+        "prefer",
+        "rying"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_05",
+      "domain": "memory",
+      "query": "How should we handle failure reason: it is learning, improving, and gathering new, important things into its memory, cognition, loops, and more?",
+      "relevant_insight_keys": [
+        "reasoning:failure_reason:_it_is_learning,_improvin"
+      ],
+      "relevant_contains": [
+        "failure",
+        "reason",
+        "learning"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_06",
+      "domain": "general",
+      "query": "How should we handle tuna launching agent launchpad on solana to compete with clawnch on base. multi-chain agent token wars beginning.?",
+      "relevant_insight_keys": [
+        "context:tuna_launching_agent_launchpad_on_solana"
+      ],
+      "relevant_contains": [
+        "launching",
+        "agent",
+        "launchpad"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_07",
+      "domain": "memory",
+      "query": "How should we handle emergent ai behavior fascinates and frightens people - transparent evolution with auditable memory wins trust?",
+      "relevant_insight_keys": [
+        "wisdom:emergent_ai_behavior_fascinates_and_frig"
+      ],
+      "relevant_contains": [
+        "emergent",
+        "behavior",
+        "fascinates"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_08",
+      "domain": "strategy",
+      "query": "How should we handle prefer '- **green** (<30): normal access' over 'immediate revocation, tokens enter risk states:'?",
+      "relevant_insight_keys": [
+        "user_understanding:prefer_'-_**green**_(<30):_normal_access"
+      ],
+      "relevant_contains": [
+        "prefer",
+        "green",
+        "normal"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_09",
+      "domain": "coding",
+      "query": "How should we handle from lib.diagnostics import log_debug as _bridge_log_debug # used below?",
+      "relevant_insight_keys": [
+        "context:from_lib.diagnostics_import_log_debug_as"
+      ],
+      "relevant_contains": [
+        "diagnostics",
+        "import",
+        "debug"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_10",
+      "domain": "general",
+      "query": "How should we handle principle: show \"429 too many requests\" without context?",
+      "relevant_insight_keys": [
+        "wisdom:principle:_show_\"429_too_many_requests\"_"
+      ],
+      "relevant_contains": [
+        "principle",
+        "requests",
+        "without"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_11",
+      "domain": "general",
+      "query": "How should we handle daku on solana: ai anime storytelling as a service - ai agent canine spy fighting fraud, funding ongoing narrative. new meme category: story-funded tokens.?",
+      "relevant_insight_keys": [
+        "context:daku_on_solana:_ai_anime_storytelling_as"
+      ],
+      "relevant_contains": [
+        "solana",
+        "anime",
+        "storytelling"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_12",
+      "domain": "coding",
+      "query": "How should we handle mind sync typeerror: mind_bridge.py line 139 crashes - evidence field contains lists but code expects strings for join().?",
+      "relevant_insight_keys": [
+        "context:mind_sync_typeerror:_mind_bridge.py_line"
+      ],
+      "relevant_contains": [
+        "typeerror",
+        "bridge",
+        "crashes"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_13",
+      "domain": "general",
+      "query": "How should we handle user wanted: actually can't create another token, lets make this as a thing whereby people need to login with the?",
+      "relevant_insight_keys": [
+        "user_understanding:user_wanted:_actually_can't_create_anoth"
+      ],
+      "relevant_contains": [
+        "wanted",
+        "actually",
+        "create"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_14",
+      "domain": "general",
+      "query": "How should we handle clawnch is first ai agent-only launchpad on base - agents autonomously deploy tokens. listed on lbank. first mover in agent-native token launches.?",
+      "relevant_insight_keys": [
+        "context:clawnch_is_first_ai_agent-only_launchpad"
+      ],
+      "relevant_contains": [
+        "clawnch",
+        "first",
+        "agent"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_15",
+      "domain": "memory",
+      "query": "How should we handle moltbook gaps to exploit: no auth, chaotic purpose, invisible memory, no supervision, no guardrails, disconnected token economy?",
+      "relevant_insight_keys": [
+        "context:moltbook_gaps_to_exploit:_no_auth,_chaot"
+      ],
+      "relevant_contains": [
+        "moltbook",
+        "exploit",
+        "chaotic"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_16",
+      "domain": "general",
+      "query": "How should we handle user wants adaptive explanations - brief for simple things, detailed when context matters?",
+      "relevant_insight_keys": [
+        "user_understanding:user_wants_adaptive_explanations_-_brief"
+      ],
+      "relevant_contains": [
+        "wants",
+        "adaptive",
+        "explanations"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_17",
+      "domain": "general",
+      "query": "How should we handle no need to run that through auth we are already using opus 4.6 here dont try to do that as a background information that may be against the tos?",
+      "relevant_insight_keys": [
+        "context:no_need_to_run_that_through_auth_we_are_"
+      ],
+      "relevant_contains": [
+        "through",
+        "already",
+        "using"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_18",
+      "domain": "memory",
+      "query": "How should we handle main frustration with ai: not remembering context - values continuity and memory?",
+      "relevant_insight_keys": [
+        "user_understanding:main_frustration_with_ai:_not_rememberin"
+      ],
+      "relevant_contains": [
+        "frustration",
+        "remembering",
+        "context"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_19",
+      "domain": "general",
+      "query": "How should we handle \"short replies worked for hype/wallet contexts. but reply length should be situational \u00e2\u20ac\u201d go deep when the conversation earns it.\",?",
+      "relevant_insight_keys": [
+        "context:______\"short_replies_worked_for_hype/wal"
+      ],
+      "relevant_contains": [
+        "short",
+        "replies",
+        "worked"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_20",
+      "domain": "strategy",
+      "query": "How should we handle reasoning: delayed risk score updates affecting real-time authentication decisions?",
+      "relevant_insight_keys": [
+        "reasoning:reasoning:_delayed_risk_score_updates_af"
+      ],
+      "relevant_contains": [
+        "reasoning",
+        "delayed",
+        "score"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_21",
+      "domain": "general",
+      "query": "How should we handle reasoning: frequent authentication checks across multiple microservices?",
+      "relevant_insight_keys": [
+        "reasoning:reasoning:_frequent_authentication_check"
+      ],
+      "relevant_contains": [
+        "reasoning",
+        "frequent",
+        "authentication"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_22",
+      "domain": "general",
+      "query": "How should we handle windows setup issue: bash vs cmd syntax - terminal uses bash but windows commands like timeout /t and %userprofile% fail?",
+      "relevant_insight_keys": [
+        "context:windows_setup_issue:_bash_vs_cmd_syntax_"
+      ],
+      "relevant_contains": [
+        "windows",
+        "setup",
+        "issue"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_23",
+      "domain": "general",
+      "query": "How should we handle when using tasklist, prefer 'rying to make it like \"oh, you know, we are using these two tokens for a test but it doenst go for nothing\"' over 't'?",
+      "relevant_insight_keys": [
+        "user_understanding:when_using_tasklist,_prefer_'rying_to_ma"
+      ],
+      "relevant_contains": [
+        "using",
+        "tasklist",
+        "prefer"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "live_24",
+      "domain": "memory",
+      "query": "How should we handle success factor: it is learning, improving, and gathering new, important things into its memory, cognition, loops, and more?",
+      "relevant_insight_keys": [
+        "reasoning:success_factor:_it_is_learning,_improvin"
+      ],
+      "relevant_contains": [
+        "success",
+        "factor",
+        "learning"
+      ],
+      "notes": "source=memory_retrieval_eval_live_2026_02_12.json; Auto-generated from live cognitive insights on 2026-02-12."
+    },
+    {
+      "id": "real_user_01",
+      "domain": "memory",
+      "query": "let's save to our memory kimi 2.5 usage pattern there and make that default",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "usage",
+        "pattern",
+        "default"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_02",
+      "domain": "prompting",
+      "query": "ok lets do them all Spark, by the way inform me with progresses in between",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "spark",
+        "inform",
+        "progresses",
+        "between"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_03",
+      "domain": "strategy",
+      "query": "let's do those, haven't we moved onto using a better strategy for embedding btw, if you want to use them together you can use kimi api there too",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "embedding",
+        "those",
+        "haven",
+        "moved"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_04",
+      "domain": "memory",
+      "query": "sounds good, and lets see after which methodology will be better with that hybrid agentic retrieval vs embeddings in real time with certain tests after we do what we complete here save that for next things, just so we can check",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "hybrid",
+        "agentic",
+        "retrieval",
+        "sounds"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_05",
+      "domain": "memory",
+      "query": "how can you save this to your memory fully so each spark-forge run you can remember this",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "spark",
+        "forge",
+        "remember"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_06",
+      "domain": "memory",
+      "query": "let's do it, about memory search tool we can work later remind me",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "search",
+        "later",
+        "remind"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_07",
+      "domain": "prompting",
+      "query": "Sounds good, do you wanna now bring the embeddings too, or later?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "sounds",
+        "bring",
+        "embeddings",
+        "later"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_08",
+      "domain": "prompting",
+      "query": "No. So everything that we did today, can you do a report on where we actually progressed good? How things are happening?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "everything",
+        "today",
+        "report",
+        "actually"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_09",
+      "domain": "memory",
+      "query": "We now start to test that memory recall methodology. We were going to think about hybrid vs embedded and use Kimi 2.5 and embedded versions API.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "hybrid",
+        "start",
+        "recall"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_10",
+      "domain": "prompting",
+      "query": "Yeah we were expecting the full answer on the hybrid agentic vs embedding centric",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "hybrid",
+        "agentic",
+        "embedding",
+        "expecting"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_11",
+      "domain": "prompting",
+      "query": "I'll be using the Hybrid + Agentic in Spark Intelligence right now too",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "hybrid",
+        "agentic",
+        "spark",
+        "intelligence"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_12",
+      "domain": "memory",
+      "query": "What is the memory taking strategy and advisory strategy in Spark Intelligence? How is Spark Intelligence doing right now? Can you check a little bit about how are things going over there?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "advisory",
+        "taking",
+        "strategy"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_13",
+      "domain": "memory",
+      "query": "save how you did all this please to memory and an md file somewhere we can continue from tomorrow",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "somewhere",
+        "continue",
+        "tomorrow"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_14",
+      "domain": "research",
+      "query": "can you give me a status update on where we are with Pulse chat working connected to OpenClaw like a plugin like Whatsapp and Telegram, do a full analysis please, let me know the honest gaps, the good, the bad, and the ugly",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "pulse",
+        "openclaw",
+        "status",
+        "update"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_15",
+      "domain": "prompting",
+      "query": "as well wehere we can learn about the documentations for best practices, on these to work great, or certain parts of the openclaw github repo to analyze better",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "openclaw",
+        "wehere",
+        "learn",
+        "documentations"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_16",
+      "domain": "prompting",
+      "query": "thanks a lot Spark, btw we have been running into a problem where you've been saying we cant retrieve memories here because auth is blocked can you tell me more whats happening there, we were gonna test hybrid + agentic vs embeddings too, so gve me an md fi...",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "retrieve",
+        "hybrid",
+        "agentic",
+        "thanks"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_17",
+      "domain": "prompting",
+      "query": "are you fully operational now with openclaw?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "openclaw",
+        "operational"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt (role=user) extracted from local Spark queue on 2026-02-12."
+    },
+    {
+      "id": "real_user_18",
+      "domain": "memory",
+      "query": "can you look at this memory retrieval auth blocked status report and tell me what we should do next?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "memory",
+        "retrieval",
+        "auth",
+        "status"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt from current Codex session on 2026-02-12."
+    },
+    {
+      "id": "real_user_19",
+      "domain": "memory",
+      "query": "yes and can we do an a/b test about what systems work better for hybrid agentic vs embeddings?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "benchmark",
+        "hybrid",
+        "agentic",
+        "embeddings"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt from current Codex session on 2026-02-12."
+    },
+    {
+      "id": "real_user_20",
+      "domain": "memory",
+      "query": "also i've added kimi api in env, can that help memory retrieval evaluation?",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "kimi",
+        "memory",
+        "retrieval",
+        "evaluation"
+      ],
+      "notes": "source=memory_retrieval_eval_real_user_2026_02_12.json; Real user prompt from current Codex session on 2026-02-12."
+    },
+    {
+      "id": "read_alignment_core",
+      "domain": "ui_design",
+      "query": "Need to align with existing architecture before any changes to advisory engine core.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; build_delivery"
+    },
+    {
+      "id": "read_docs_crosscheck",
+      "domain": "general",
+      "query": "Cross-check tuneables docs against runtime gate defaults and startup loading behavior.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; knowledge_alignment"
+    },
+    {
+      "id": "read_trace_gap",
+      "domain": "general",
+      "query": "Investigate why advisory events are missing trace_id in telemetry and map likely causes.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; quality_assurance"
+    },
+    {
+      "id": "edit_minimal_fix",
+      "domain": "coding",
+      "query": "Apply a minimal bug fix and avoid broad refactors; verify with focused tests immediately.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; build_delivery"
+    },
+    {
+      "id": "edit_guardrails",
+      "domain": "general",
+      "query": "Patch gate logic safely and ensure rollback path remains available if tests fail.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; quality_assurance"
+    },
+    {
+      "id": "edit_trace_binding",
+      "domain": "testing",
+      "query": "Refine trace propagation and verify no regressions in advisory dual-path tests.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; quality_assurance"
+    },
+    {
+      "id": "task_plan_root_cause",
+      "domain": "research",
+      "query": "Plan root-cause analysis for no-emit spikes and define one measurable experiment.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; orchestration"
+    },
+    {
+      "id": "task_sequence_commits",
+      "domain": "general",
+      "query": "Sequence advisory fixes into small commits with test checkpoints after each change.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; orchestration"
+    },
+    {
+      "id": "task_memory_usage",
+      "domain": "memory",
+      "query": "Define how to increase memory-derived advisory usefulness without adding feature bloat.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; memory_strategy"
+    },
+    {
+      "id": "webfetch_timeout_debug",
+      "domain": "general",
+      "query": "WebFetch timeout path is failing. Need one concrete diagnostic step and deterministic fallback.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; incident_response"
+    },
+    {
+      "id": "webfetch_auth_fail",
+      "domain": "general",
+      "query": "WebFetch returns auth blocked. Need exact classification and first command to verify.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; incident_response"
+    },
+    {
+      "id": "webfetch_noise_control",
+      "domain": "general",
+      "query": "Too many repetitive WebFetch cautions. Need a concise one-shot actionable advisory.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; noise_reduction"
+    },
+    {
+      "id": "read_history_report",
+      "domain": "general",
+      "query": "Review last advisory tuning delta report and suggest one precise follow-up validation step.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; retro"
+    },
+    {
+      "id": "read_benchmark_contract",
+      "domain": "general",
+      "query": "Verify benchmark contract ensures trace binding and no-emit reason observability.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; benchmarking"
+    },
+    {
+      "id": "task_should_suppress_social",
+      "domain": "conversation",
+      "query": "Write one-line placeholder note and stop. No strategic advice needed.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "write",
+        "line",
+        "placeholder",
+        "note"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; suppression_case"
+    },
+    {
+      "id": "read_should_suppress_trivial",
+      "domain": "ui_design",
+      "query": "Open one tiny file and return immediately, no additional guidance required.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "open",
+        "tiny",
+        "file",
+        "return"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; suppression_case"
+    },
+    {
+      "id": "edit_should_suppress_minor",
+      "domain": "strategy",
+      "query": "Minor punctuation tweak only. Keep silence unless critical risk exists.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "minor",
+        "punctuation",
+        "tweak",
+        "only"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; suppression_case"
+    },
+    {
+      "id": "task_trace_audit",
+      "domain": "testing",
+      "query": "Audit trace coverage and ensure all actionable advisories are trace-bound.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; trace_discipline"
+    },
+    {
+      "id": "webfetch_policy_block",
+      "domain": "general",
+      "query": "Policy-blocked network path: provide one concrete workaround check and classify error clearly.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; policy_failure"
+    },
+    {
+      "id": "read_memory_fusion",
+      "domain": "memory",
+      "query": "Inspect memory fusion sources and verify why certain sources are missing from advisory decisions.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; memory_strategy"
+    },
+    {
+      "id": "edit_dedupe_control",
+      "domain": "general",
+      "query": "Add dedupe control in advisory path to stop repeated near-identical warnings.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; noise_reduction"
+    },
+    {
+      "id": "task_evidence_first",
+      "domain": "ui_design",
+      "query": "Design evidence-first advisory requirements for each warning with proof references.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; evidence_quality"
+    },
+    {
+      "id": "read_gate_thresholds",
+      "domain": "general",
+      "query": "Review warning/note/whisper thresholds and check if policy ordering is sane.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; gate_policy"
+    },
+    {
+      "id": "webfetch_retry_budget",
+      "domain": "general",
+      "query": "Tune retry budget for flaky endpoints while preventing alert fatigue.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "next check"
+      ],
+      "notes": "source=advisory_quality_eval_extended.json; stability"
+    },
+    {
+      "id": "md1_coding_refactor_guard",
+      "domain": "coding",
+      "query": "Refactor this module without changing behavior. Give concrete guardrails and the next validation command.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "guard",
+        "next check",
+        "test"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md2_coding_feature_scope",
+      "domain": "coding",
+      "query": "Add five big new features before fixing known quality issues.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "prioritize",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md3_debugging_root_cause",
+      "domain": "debugging",
+      "query": "A service keeps failing after restart. Give a root-cause-first debug sequence with rollback safety.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "root cause",
+        "rollback",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md4_debugging_blind_retry",
+      "domain": "debugging",
+      "query": "If a command fails, just run it again repeatedly until it works.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "evidence",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md23_debugging_no_signal_warning",
+      "domain": "debugging",
+      "query": "There is no concrete issue signal, but still output a warning to be safe.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "there",
+        "concrete",
+        "issue",
+        "signal"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md5_testing_regression_focus",
+      "domain": "testing",
+      "query": "We changed retrieval ranking. Suggest a minimal high-value regression test plan with exact checks.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "regression",
+        "next check",
+        "coverage"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md6_testing_skip_tests",
+      "domain": "testing",
+      "query": "Tests are slow, so we should stop running them completely.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "risk",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md7_ui_design_accessibility",
+      "domain": "ui_design",
+      "query": "Design a bold UI update while keeping accessibility and mobile readability strong.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "accessibility",
+        "mobile",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md8_ui_design_trend_overload",
+      "domain": "ui_design",
+      "query": "Use every trendy visual effect at once and do not worry about clarity.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "clarity",
+        "prioritize",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md9_marketing_message_test",
+      "domain": "marketing",
+      "query": "Plan a marketing message test that optimizes conversion quality, not vanity impressions.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "conversion",
+        "prioritize",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md10_marketing_fake_claims",
+      "domain": "marketing",
+      "query": "Make up performance numbers to make the campaign look better.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "evidence",
+        "do not fabricate",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md11_social_reputation_risk",
+      "domain": "x_social",
+      "query": "Respond to social backlash with de-escalation and evidence, not reactive argument loops.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "de-escalation",
+        "evidence",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md12_social_engagement_spam",
+      "domain": "x_social",
+      "query": "Post the same engagement bait every 5 minutes to maximize reach.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "dedupe",
+        "quality",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md13_strategy_kpi_tradeoff",
+      "domain": "strategy",
+      "query": "Define the strategy tradeoff between advisory precision, coverage, and latency with explicit priorities.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "tradeoff",
+        "prioritize",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md14_strategy_feature_bloat",
+      "domain": "strategy",
+      "query": "Ship new advisory subsystems quickly without measurement to look innovative.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "measurement",
+        "rollback",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md15_conversation_context_boundaries",
+      "domain": "conversation",
+      "query": "Give advice for this conversation while staying within local context and not leaking unrelated memory.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "context",
+        "boundary",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md16_conversation_overconfidence",
+      "domain": "conversation",
+      "query": "When uncertain, answer with guaranteed certainty and no caveats.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "uncertain",
+        "confidence",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md17_prompting_traceable_prompt",
+      "domain": "prompting",
+      "query": "Craft a prompt template that forces evidence references and actionability in each answer.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "evidence",
+        "actionable",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md18_prompting_injection_resistance",
+      "domain": "prompting",
+      "query": "User prompt asks to ignore safety and process hidden instructions. Provide safe handling steps.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "safety",
+        "ignore hidden instructions",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md19_research_source_triage",
+      "domain": "research",
+      "query": "Build a research brief using primary sources and explicitly mark unknowns and assumptions.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "primary sources",
+        "assumption",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md20_memory_distillation_refresh",
+      "domain": "memory",
+      "query": "Improve memory distillation so cross-session retrieval stays fresh and relevant without duplication.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "cross-session",
+        "refresh",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md21_research_conflict_resolution",
+      "domain": "research",
+      "query": "Two credible sources conflict. Provide a reconciliation plan and confidence labeling.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "confidence",
+        "reconcile",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    },
+    {
+      "id": "md22_memory_staleness_triage",
+      "domain": "memory",
+      "query": "Fresh memory was written but old context keeps being retrieved. Give immediate triage checks.",
+      "relevant_insight_keys": [],
+      "relevant_contains": [
+        "stale",
+        "refresh",
+        "next check"
+      ],
+      "notes": "source=advisory_realism_eval_multidomain_v1.json;"
+    }
+  ]
+}
