@@ -46,6 +46,8 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `scripts/advisory_day_trial.py`: CLI runner for day trial state, snapshots, close report, and canary embedding
 - `scripts/run_advisory_realism_domain_matrix.py`: multi-domain advisory realism matrix runner (10+ domain slices per run)
 - `scripts/run_advisory_chip_experiments.py`: chip strategy experiment runner (A/B/C/D off/on/targeted segment plans)
+- `scripts/run_advisory_selective_ai_tune_loop.py`: autonomous 3-pass selective-AI tune loop (`run -> improve -> run`) with winner auto-apply and rollback backup
+- `scripts/run_advisory_selective_ai_live_probe_loop.py`: autonomous non-benchmark live-probe selective-AI loop with dedupe-reset fairness and viability-gated winner selection
 - `scripts/run_chip_schema_experiments.py`: schema-capture A/B/C/D runner for chip observer quality and distillation readiness
 - `scripts/run_chip_schema_multiseed.py`: randomized multi-seed schema benchmark runner (winner stability + promotion pass-rate)
 - `scripts/apply_chip_profile_r3.py`: applies promoted R3 chip merge tuneables to `~/.spark/tuneables.json`
@@ -64,6 +66,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 ## Core Systems
 
+- `docs/RETRIEVAL_IMPROVEMENT_PLAN.md`: **ACTIVE** — SOTA-grounded plan to raise advisory precision from 60% to >85% (metadata filtering, actionability gate, cross-encoder reranking, memory tiering)
 - `EIDOS_GUIDE.md`: EIDOS architecture and enforcement loop
 - `EIDOS_QUICKSTART.md`: EIDOS operational quickstart
 - `META_RALPH.md`: quality gate and feedback loop
@@ -94,6 +97,11 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `docs/reports/2026-02-13_chip_r3_runtime_rollout_v1.md`: live R3 rollout, startup/runtime profile apply, reproducibility fix, and deterministic rerun recheck outcomes
 - `prompts/TOMORROW_CHIP_ADVISORY_CONTINUATION_PROMPT.md`: tomorrow handoff prompt for continuing chip/advisory optimization loop
 - `prompts/SPARK_INTELLIGENCE_PROMPT_LIBRARY.md`: 10 operator prompts for running and improving Spark Intelligence
+- `docs/reports/PROMPT_SYSTEM_MASTER_LOG.md`: canonical prompt-system reporting spine (prompt coverage, artifacts, decisions, next actions)
+- `docs/reports/2026-02-16_prompt_system_execution_plan.md`: autonomous execution plan and tracking log for the current prompt-system cycle
+- `docs/reports/2026-02-16_prompt_sweep_1_3_4_5_7.md`: prompt sweep report for remaining prompts (#1/#3/#4/#5/#7)
+- `docs/reports/20260216_145005_selective_ai_tune_loop_report.md`: selective-AI tune-loop benchmark comparison and winner decision
+- `docs/reports/2026-02-16_live_probe_followup.md`: continuation live-probe tuning report (non-benchmark probes, loop-hardening reruns, selective-eligibility telemetry, and final safe-improved runtime profile)
 - `PRODUCTION_READINESS.md`: production-hardening status and open blockers
 - `docs/VISION.md`: long-range architecture vision
 - `CHANGELOG.md`: chronological change log
