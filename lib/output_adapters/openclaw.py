@@ -7,14 +7,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from ..openclaw_paths import discover_openclaw_workspaces
 from .common import write_marked_section
 
+FALLBACK_ADVISORY_FILE = Path.home() / ".spark" / "llm_advisory.md"
 
-def _resolve_workspace() -> Path:
+
+def _resolve_workspaces() -> list[Path]:
     explicit = os.environ.get("SPARK_OPENCLAW_WORKSPACE") or os.environ.get("OPENCLAW_WORKSPACE")
     if explicit:
-        return Path(explicit).expanduser()
-    return Path.home() / ".openclaw" / "workspace"
+        return [Path(explicit).expanduser()]
+    return discover_openclaw_workspaces(include_nonexistent=True)
 
 
 def _format_context(context: str, config: Optional[dict] = None) -> str:
@@ -97,9 +100,6 @@ def write(context: str, config: Optional[dict] = None) -> bool:
     Uses marker-bounded sections so the file can coexist with other content.
     Caps output at ~2KB to avoid bloating agent context.
     """
-    workspace = _resolve_workspace()
-    path = workspace / "SPARK_CONTEXT.md"
-
     # Format with template
     formatted = _format_context(context, config)
 
@@ -117,10 +117,27 @@ def write(context: str, config: Optional[dict] = None) -> bool:
             size += line_bytes
         formatted = "".join(trimmed).rstrip() + "\n... [truncated to ~2KB]"
 
-    return write_marked_section(
-        path,
-        formatted,
-        create_header="# Spark Intelligence Context",
-        marker_start="<!-- SPARK:BEGIN -->",
-        marker_end="<!-- SPARK:END -->",
-    )
+    ok = False
+    for workspace in _resolve_workspaces():
+        path = workspace / "SPARK_CONTEXT.md"
+        result = write_marked_section(
+            path,
+            formatted,
+            create_header="# Spark Intelligence Context",
+            marker_start="<!-- SPARK:BEGIN -->",
+            marker_end="<!-- SPARK:END -->",
+        )
+        # Keep advisory visible in profile workspaces even when only the fallback
+        # advisory file was updated in this cycle.
+        if FALLBACK_ADVISORY_FILE.exists():
+            advisory_path = workspace / "SPARK_ADVISORY.md"
+            src_mtime = FALLBACK_ADVISORY_FILE.stat().st_mtime
+            dst_mtime = advisory_path.stat().st_mtime if advisory_path.exists() else 0.0
+            if src_mtime > dst_mtime:
+                advisory_path.parent.mkdir(parents=True, exist_ok=True)
+                advisory_path.write_text(
+                    FALLBACK_ADVISORY_FILE.read_text(encoding="utf-8", errors="replace"),
+                    encoding="utf-8",
+                )
+        ok = ok or bool(result)
+    return ok

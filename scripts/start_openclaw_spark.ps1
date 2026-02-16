@@ -74,13 +74,14 @@ if ($WithCore) {
 
 # 3) openclaw_tailer (always owned by this script)
 $existingTailer = Get-ProcessByPattern "openclaw_tailer.py"
+$hookSpool = Join-Path $env:USERPROFILE ".spark\openclaw_hook_events.jsonl"
 if ($existingTailer) {
     Write-Host "[3/3] openclaw_tailer already running (PID $($existingTailer.ProcessId)); reusing." -ForegroundColor DarkGray
     $tailerPid = [int]$existingTailer.ProcessId
 } else {
     Write-Host "[3/3] Starting openclaw_tailer (with subagents)..." -ForegroundColor Yellow
     $tailer = Start-Process -FilePath python -ArgumentList `
-        "$RepoRoot\adapters\openclaw_tailer.py","--include-subagents" `
+        "$RepoRoot\adapters\openclaw_tailer.py","--include-subagents","--hook-events-file",$hookSpool `
         -WorkingDirectory $RepoRoot -WindowStyle Hidden -PassThru
     $tailerPid = [int]$tailer.Id
     Write-Host "  PID: $tailerPid"

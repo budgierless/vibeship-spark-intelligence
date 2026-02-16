@@ -22,6 +22,18 @@ Notes:
 
 - `maxSpawnDepth: 2` enables orchestrator pattern.
 - Keep `maxChildrenPerAgent` conservative to avoid fan-out instability.
+- Why `maxSpawnDepth=2`:
+  - depth 1 = primary agent, depth 2 = specialized worker.
+  - usually enough for research/eval delegation without recursive runaway trees.
+  - keeps trace lineage and attribution joins understandable.
+- Why `maxChildrenPerAgent=3`:
+  - allows parallel option exploration (A/B/C) while capping token and tool burst cost.
+  - reduces parent/child advisory collisions and dedupe pressure.
+  - keeps scheduler/queue load bounded during spikes.
+- Increase these only when:
+  - queue depth and heartbeat remain healthy under load,
+  - strict outcome quality is stable, and
+  - you have a clear workload that needs deeper or wider trees.
 
 ## 2) Cron finished-run webhook auth
 

@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from .openclaw_paths import discover_openclaw_advisory_files
+
 REQUESTS_FILE = Path.home() / ".spark" / "advice_feedback_requests.jsonl"
 SPARK_ADVISORY_FILE = Path.home() / ".openclaw" / "workspace" / "SPARK_ADVISORY.md"
 SPARK_ADVISORY_FALLBACK_FILE = Path.home() / ".spark" / "llm_advisory.md"
@@ -183,7 +185,9 @@ def load_advisories(
 ) -> List[Dict[str, Any]]:
     advisories = parse_feedback_requests(request_file, limit=limit_requests)
     if advisory_paths is None:
-        advisory_paths = [SPARK_ADVISORY_FILE, SPARK_ADVISORY_FALLBACK_FILE]
+        discovered = discover_openclaw_advisory_files()
+        advisory_paths = discovered or [SPARK_ADVISORY_FILE]
+        advisory_paths = [*advisory_paths, SPARK_ADVISORY_FALLBACK_FILE]
     for p in advisory_paths:
         advisories.extend(parse_advisory_markdown(Path(p)))
     if include_engine_fallback and not advisories:

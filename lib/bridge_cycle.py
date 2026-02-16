@@ -16,6 +16,7 @@ from threading import Lock
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from lib.bridge import update_spark_context
+from lib.openclaw_paths import discover_openclaw_workspaces
 from lib.memory_capture import process_recent_memory_events
 from lib.tastebank import parse_like_message, add_item
 from lib.queue import read_recent_events, EventType
@@ -815,10 +816,9 @@ def _write_llm_advisory(advisory: str) -> None:
         content = f"# Spark Advisory ({timestamp})\n\n{advisory}\n"
         advisory_file.write_text(content, encoding="utf-8")
 
-        # Also append to OpenClaw workspace if available
-        workspace = Path.home() / ".openclaw" / "workspace"
-        if workspace.exists():
+        for workspace in discover_openclaw_workspaces(include_nonexistent=True):
             ctx_file = workspace / "SPARK_ADVISORY.md"
+            ctx_file.parent.mkdir(parents=True, exist_ok=True)
             ctx_file.write_text(content, encoding="utf-8")
     except Exception as e:
         log_debug("bridge_worker", f"Failed to write advisory: {e}", None)

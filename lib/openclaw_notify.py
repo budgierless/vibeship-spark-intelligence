@@ -6,20 +6,15 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from .diagnostics import log_debug
+from .openclaw_paths import discover_openclaw_workspaces, read_openclaw_config
 
 
 def _read_openclaw_config() -> dict:
     """Read OpenClaw config from ~/.openclaw/openclaw.json."""
-    config_path = Path.home() / ".openclaw" / "openclaw.json"
-    if not config_path.exists():
-        return {}
-    try:
-        return json.loads(config_path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return read_openclaw_config()
 
 
 def _get_gateway_url() -> str:
@@ -33,11 +28,11 @@ def _get_gateway_token() -> Optional[str]:
     return cfg.get("gateway", {}).get("auth", {}).get("token")
 
 
-def _workspace_path() -> Path:
+def _workspace_paths() -> List[Path]:
     explicit = os.environ.get("SPARK_OPENCLAW_WORKSPACE") or os.environ.get("OPENCLAW_WORKSPACE")
     if explicit:
-        return Path(explicit).expanduser()
-    return Path.home() / ".openclaw" / "workspace"
+        return [Path(explicit).expanduser()]
+    return discover_openclaw_workspaces(include_nonexistent=True)
 
 
 def notify_agent(message: str, priority: str = "normal") -> bool:
@@ -47,10 +42,6 @@ def notify_agent(message: str, priority: str = "normal") -> bool:
     Returns True if notification was written successfully.
     """
     try:
-        # Write individual notification file
-        notif_dir = _workspace_path() / "spark_notifications"
-        notif_dir.mkdir(parents=True, exist_ok=True)
-
         ts = time.time()
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
         filename = f"notif_{int(ts * 1000)}.json"
@@ -62,25 +53,25 @@ def notify_agent(message: str, priority: str = "normal") -> bool:
             "priority": priority,
             "source": "spark_bridge",
         }
-        (notif_dir / filename).write_text(
-            json.dumps(payload, indent=2), encoding="utf-8"
-        )
+        wrote_any = False
+        for workspace in _workspace_paths():
+            notif_dir = workspace / "spark_notifications"
+            notif_dir.mkdir(parents=True, exist_ok=True)
+            (notif_dir / filename).write_text(
+                json.dumps(payload, indent=2), encoding="utf-8"
+            )
+            _update_notifications_md(workspace / "SPARK_NOTIFICATIONS.md", ts_str, message)
+            _cleanup_notification_files(notif_dir, keep=20)
+            wrote_any = True
 
-        # Update SPARK_NOTIFICATIONS.md (keep last 5)
-        _update_notifications_md(ts_str, message)
-
-        # Cleanup old notification files (keep last 20)
-        _cleanup_notification_files(notif_dir, keep=20)
-
-        return True
+        return wrote_any
     except Exception as e:
         log_debug("openclaw_notify", "notify_agent failed", e)
         return False
 
 
-def _update_notifications_md(ts_str: str, message: str) -> None:
+def _update_notifications_md(md_path: Path, ts_str: str, message: str) -> None:
     """Append to SPARK_NOTIFICATIONS.md, keeping only last 5 entries."""
-    md_path = _workspace_path() / "SPARK_NOTIFICATIONS.md"
     header = "# Spark Notifications\n\nLatest findings pushed by Spark Intelligence.\n\n"
 
     entries: list[str] = []

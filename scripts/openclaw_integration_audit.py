@@ -23,7 +23,7 @@ def _load_json(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
@@ -36,6 +36,8 @@ def _bool(value: Any) -> bool:
 def _secret_like(value: str) -> bool:
     text = str(value or "").strip()
     if len(text) < 12:
+        return False
+    if text.startswith("${") and text.endswith("}"):
         return False
     for pat in SECRET_LIKE_PATTERNS:
         if pat.match(text):
@@ -95,10 +97,16 @@ def _has_llm_hooks(cfg: Dict[str, Any]) -> bool:
     entries = plugins.get("entries") or {}
     if not isinstance(entries, dict):
         return False
-    telemetry = entries.get("spark-telemetry-hooks") or {}
-    if not isinstance(telemetry, dict):
+    telemetry_raw = entries.get("spark-telemetry-hooks")
+    if not isinstance(telemetry_raw, dict):
         return False
-    return telemetry.get("enabled") is not False
+    if telemetry_raw.get("enabled") is False:
+        return False
+    cfg = telemetry_raw.get("config") or {}
+    if isinstance(cfg, dict) and str(cfg.get("spoolFile") or "").strip():
+        return True
+    # Allow explicit enabled=true even when config is inherited externally.
+    return telemetry_raw.get("enabled") is True
 
 
 def build_report(

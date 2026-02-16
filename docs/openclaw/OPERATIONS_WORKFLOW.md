@@ -25,6 +25,10 @@ Do not batch unrelated changes into one commit.
 - Run targeted tests for touched areas.
 - Run audit:
   - `python scripts/openclaw_integration_audit.py`
+- Run realtime benchmark (live canary + strict loop checks):
+  - `python scripts/openclaw_realtime_e2e_benchmark.py --window-minutes 90 --run-canary --canary-agent spark-speed`
+- Prompt template for running the same benchmark from OpenClaw:
+  - `docs/openclaw/REALTIME_E2E_PROMPT.md`
 
 4. Commit and push
 - Use explicit messages with scope:
