@@ -27,7 +27,7 @@ DEFAULT_CONFIG = {
     "enabled": True,  # Enabled by default — falls back gracefully if fastembed unavailable
     "embedding_provider": "local",
     "embedding_model": "BAAI/bge-small-en-v1.5",
-    "min_similarity": 0.55,
+    "min_similarity": 0.50,
     "min_fusion_score": 0.45,
     # Avoid total empty collapse when strict gates over-filter all candidates.
     "empty_result_rescue_enabled": True,
