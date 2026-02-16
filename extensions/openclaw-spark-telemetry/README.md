@@ -22,7 +22,10 @@ OpenClaw `openclaw.json` snippet:
           "spoolFile": "C:\\Users\\USER\\.spark\\openclaw_hook_events.jsonl",
           "includePromptPreview": false,
           "includeOutputPreview": false,
-          "previewChars": 240
+          "previewChars": 240,
+          "buildIntegrityEnabled": true,
+          "injectNoHallucinationGuard": true,
+          "stallSeconds": 300
         }
       }
     }
@@ -33,5 +36,12 @@ OpenClaw `openclaw.json` snippet:
 ## Runtime contract
 
 - Hook rows are written to JSONL with `hook` = `llm_input` or `llm_output`.
+- Build integrity rows are emitted with `hook` = `build_integrity` and kinds like:
+  - `contract_declared`
+  - `start_proof`
+  - `stall_alert`
+  - `final_state_done|failed|paused`
+- Optional guardrail injection appends a build-integrity policy to the system prompt
+  before model calls (`injectNoHallucinationGuard`).
 - Prompt/output previews are off by default.
 - `adapters/openclaw_tailer.py` ingests the spool with `--hook-events-file`.

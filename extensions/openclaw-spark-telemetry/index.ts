@@ -16,11 +16,32 @@ type TelemetryConfig = {
   includePromptPreview: boolean;
   includeOutputPreview: boolean;
   previewChars: number;
+  // New: lightweight build-integrity guardrails
+  buildIntegrityEnabled: boolean;
+  injectNoHallucinationGuard: boolean;
+  stallSeconds: number;
+};
+
+type BuildState = {
+  active: boolean;
+  awaitingStartProof: boolean;
+  mode: "building" | "paused" | "idle";
+  startedAtMs?: number;
+  lastProgressAtMs?: number;
+  contractAtMs?: number;
+  lastRunId?: string;
+  baselineToolishCount?: number;
+  lastStallAlertAtMs?: number;
 };
 
 const PLUGIN_ID = "spark-telemetry-hooks";
 const DEFAULT_SPOOL_FILE = process.env.SPARK_OPENCLAW_HOOK_EVENTS_FILE
   || path.join(os.homedir(), ".spark", "openclaw_hook_events.jsonl");
+
+const BUILD_PROMISE_RE = /\b(i\s*(?:am|'m)\s*(?:building|working\s+on|implementing|shipping)|i\s+will\s+(?:build|implement|ship|report\s+back)|resuming\s+now|on\s+it\s+now|build\s+mode|in\s+progress)\b/i;
+const BUILD_DONE_RE = /\b(done|completed|shipped|commit\s*[:#]|ready\s+to\s+wire|finalized|finished)\b/i;
+const BUILD_FAIL_RE = /\b(failed|error|blocked|stalled|cannot\s+proceed|rollback)\b/i;
+const BUILD_PAUSE_RE = /\b(paused|parked|on\s+hold|resume\s+later)\b/i;
 
 function asObject(value: unknown): Json {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -88,6 +109,9 @@ function readPluginConfig(api: OpenClawPluginApi): TelemetryConfig {
     includePromptPreview: asBool(raw.includePromptPreview, false),
     includeOutputPreview: asBool(raw.includeOutputPreview, false),
     previewChars: asInt(raw.previewChars, 240),
+    buildIntegrityEnabled: asBool(raw.buildIntegrityEnabled, true),
+    injectNoHallucinationGuard: asBool(raw.injectNoHallucinationGuard, true),
+    stallSeconds: asInt(raw.stallSeconds, 300),
   };
 }
 
@@ -98,7 +122,7 @@ function appendSpoolRow(spoolFile: string, payload: Json): void {
 }
 
 function baseRow(
-  hook: "llm_input" | "llm_output",
+  hook: "llm_input" | "llm_output" | "build_integrity",
   cfg: TelemetryConfig,
   event: Json,
   ctx: PluginHookAgentContext,
@@ -179,6 +203,28 @@ function mapLlmOutput(
   return row;
 }
 
+function resolveSessionKey(ctx: PluginHookAgentContext, event: Json): string {
+  return asString(event.sessionId)
+    || asString(event.session_id)
+    || asString(ctx.sessionKey)
+    || asString(ctx.sessionId)
+    || "unknown";
+}
+
+function appendBuildIntegrityRow(
+  cfg: TelemetryConfig,
+  ctx: PluginHookAgentContext,
+  event: Json,
+  kind: string,
+  detail: Json = {},
+): void {
+  appendSpoolRow(cfg.spoolFile, {
+    ...baseRow("build_integrity", cfg, event, ctx),
+    kind,
+    ...detail,
+  });
+}
+
 const plugin = {
   id: PLUGIN_ID,
   name: "Spark Telemetry Hooks",
@@ -187,9 +233,78 @@ const plugin = {
     const cfg = readPluginConfig(api);
     api.logger.info(`[${PLUGIN_ID}] spoolFile=${cfg.spoolFile}`);
 
+    const buildBySession = new Map<string, BuildState>();
+
+    const getBuildState = (session: string): BuildState => {
+      const state = buildBySession.get(session);
+      if (state) return state;
+      const initial: BuildState = {
+        active: false,
+        awaitingStartProof: false,
+        mode: "idle",
+      };
+      buildBySession.set(session, initial);
+      return initial;
+    };
+
+    if (cfg.buildIntegrityEnabled) {
+      setInterval(() => {
+        const now = Date.now();
+        for (const [session, state] of buildBySession.entries()) {
+          if (!state.awaitingStartProof && !state.active) continue;
+          const last = state.lastProgressAtMs ?? state.contractAtMs ?? now;
+          const stalledFor = now - last;
+          if (stalledFor < cfg.stallSeconds * 1000) continue;
+          if (state.lastStallAlertAtMs && now - state.lastStallAlertAtMs < cfg.stallSeconds * 1000) continue;
+          state.lastStallAlertAtMs = now;
+          appendSpoolRow(cfg.spoolFile, {
+            schema_version: 1,
+            ts: now / 1000,
+            source: "openclaw_plugin",
+            plugin_id: PLUGIN_ID,
+            hook: "build_integrity",
+            kind: "stall_alert",
+            session_key: session,
+            stalled_seconds: Math.floor(stalledFor / 1000),
+            awaiting_start_proof: state.awaitingStartProof,
+            mode: state.mode,
+          });
+        }
+      }, 15_000);
+    }
+
     api.on("llm_input", (event, ctx) => {
       try {
-        appendSpoolRow(cfg.spoolFile, mapLlmInput(cfg, event, ctx));
+        if (cfg.injectNoHallucinationGuard && typeof (event as any).systemPrompt === "string") {
+          const guard = "\n\nBuild-status integrity:\n- Do not claim active building unless a real action already started in this run/session.\n- If work is paused/stalled, say so explicitly.\n- End build-mode updates with one of: done, failed, paused.";
+          if (!String((event as any).systemPrompt).includes("Build-status integrity:")) {
+            (event as any).systemPrompt = `${(event as any).systemPrompt}${guard}`;
+          }
+        }
+
+        const row = mapLlmInput(cfg, event, ctx);
+        appendSpoolRow(cfg.spoolFile, row);
+
+        if (cfg.buildIntegrityEnabled) {
+          const session = resolveSessionKey(ctx, event as unknown as Json);
+          const state = getBuildState(session);
+          const toolishCount = Number(row.history_toolish_count ?? 0);
+
+          if (state.awaitingStartProof && state.baselineToolishCount !== undefined) {
+            if (toolishCount > state.baselineToolishCount) {
+              state.awaitingStartProof = false;
+              state.active = true;
+              state.mode = "building";
+              state.startedAtMs = Date.now();
+              state.lastProgressAtMs = Date.now();
+              appendBuildIntegrityRow(cfg, ctx, event as unknown as Json, "start_proof", {
+                session_key: session,
+                baseline_toolish_count: state.baselineToolishCount,
+                current_toolish_count: toolishCount,
+              });
+            }
+          }
+        }
       } catch (err) {
         api.logger.warn(`[${PLUGIN_ID}] failed to write llm_input row: ${String(err)}`);
       }
@@ -197,7 +312,57 @@ const plugin = {
 
     api.on("llm_output", (event, ctx) => {
       try {
-        appendSpoolRow(cfg.spoolFile, mapLlmOutput(cfg, event, ctx));
+        const row = mapLlmOutput(cfg, event, ctx);
+        appendSpoolRow(cfg.spoolFile, row);
+
+        if (!cfg.buildIntegrityEnabled) return;
+
+        const session = resolveSessionKey(ctx, event as unknown as Json);
+        const state = getBuildState(session);
+        const texts = Array.isArray(event.assistantTexts)
+          ? event.assistantTexts.filter((v): v is string => typeof v === "string")
+          : [];
+        const combined = texts.join("\n");
+        const now = Date.now();
+
+        if (BUILD_PROMISE_RE.test(combined)) {
+          state.awaitingStartProof = true;
+          state.contractAtMs = now;
+          state.lastProgressAtMs = now;
+          state.baselineToolishCount = Number((row as any).history_toolish_count ?? state.baselineToolishCount ?? 0);
+          appendBuildIntegrityRow(cfg, ctx, event as unknown as Json, "contract_declared", {
+            session_key: session,
+            snippet: preview(combined, 180),
+          });
+        }
+
+        if (state.active || state.awaitingStartProof) {
+          if (BUILD_DONE_RE.test(combined)) {
+            state.active = false;
+            state.awaitingStartProof = false;
+            state.mode = "idle";
+            state.lastProgressAtMs = now;
+            appendBuildIntegrityRow(cfg, ctx, event as unknown as Json, "final_state_done", {
+              session_key: session,
+            });
+          } else if (BUILD_FAIL_RE.test(combined)) {
+            state.active = false;
+            state.awaitingStartProof = false;
+            state.mode = "idle";
+            state.lastProgressAtMs = now;
+            appendBuildIntegrityRow(cfg, ctx, event as unknown as Json, "final_state_failed", {
+              session_key: session,
+            });
+          } else if (BUILD_PAUSE_RE.test(combined)) {
+            state.active = false;
+            state.awaitingStartProof = false;
+            state.mode = "paused";
+            state.lastProgressAtMs = now;
+            appendBuildIntegrityRow(cfg, ctx, event as unknown as Json, "final_state_paused", {
+              session_key: session,
+            });
+          }
+        }
       } catch (err) {
         api.logger.warn(`[${PLUGIN_ID}] failed to write llm_output row: ${String(err)}`);
       }
