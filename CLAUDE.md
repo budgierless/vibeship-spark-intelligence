@@ -14,12 +14,14 @@ You are an expert at whatever task is given. Before responding, take a moment to
 ## Prompt Index
 
 - `prompts/SPARK_INTELLIGENCE_PROMPT_LIBRARY.md`: 10 operator prompts for running and improving Spark Intelligence (triage, retrieval audit, chips, DEPTH, experiments)
+- `docs/reports/PROMPT_SYSTEM_MASTER_LOG.md`: canonical prompt-system reporting spine (invocation status, artifacts, decisions, next actions)
 
 ## Operator Runbooks
 
 - `docs/DOCS_INDEX.md`: canonical documentation map (start here for active docs)
 - `docs/ADVISORY_AND_LEARNING_BENCHMARKS.md`: the 10 benchmarks for "advise correctly + use learnings at the right times", plus the real-time runbook
 - `docs/reports/2026-02-16_advisory_preferences_two_question_flow.md`: shipped 2-question advisory setup flow (API + CLI + runtime hot-reload)
+- `docs/OPENCLAW_PATHS_AND_DATA_BOUNDARIES.md`: canonical OpenClaw/Spark local path map and sensitivity boundaries
 
 ## DEPTH v3.1.1 Training System (2026-02-10)
 
