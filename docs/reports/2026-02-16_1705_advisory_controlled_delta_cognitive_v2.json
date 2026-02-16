@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-02-16T11:43:10.351621+00:00",
+  "start_ts": 1771242182.0465314,
+  "end_ts": 1771242190.0307434,
+  "rounds": 12,
+  "emitted_returns": 3,
+  "engine": {
+    "rows": 24,
+    "trace_rows": 24,
+    "trace_coverage_pct": 100.0,
+    "events": {
+      "user_prompt_prefetch": 12,
+      "emitted": 3,
+      "no_emit": 3,
+      "no_advice": 6
+    },
+    "routes": {
+      "live": 12
+    },
+    "fallback_share_pct": 0.0,
+    "latency": {
+      "n": 3,
+      "p50_ms": 311.8,
+      "p90_ms": 599.1,
+      "p95_ms": 599.1,
+      "p99_ms": 599.1,
+      "max_ms": 599.1
+    }
+  },
+  "feedback_requests": {
+    "rows": 1,
+    "trace_rows": 1,
+    "trace_coverage_pct": 100.0,
+    "item_total": 1,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 1
+      }
+    ],
+    "top_repeat_share_pct": 100.0,
+    "unique_ratio_pct": 100.0
+  },
+  "modes": {
+    "prompt_mode": "vary",
+    "tool_input_mode": "repo"
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true,
+      "selective_ai_min_remaining_ms": 1800.0,
+      "selective_ai_min_authority": "warning",
+      "session_key_include_recent_tools": false,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "emit_whispers": true,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 8,
+      "min_rank_score": 0.55
+    }
+  },
+  "force_live": true,
+  "label": "cognitive_retrieval_v2",
+  "trace_prefix": "delta-cognitive_retrieval_v2-20260216_114301",
+  "session_prefix": "advisory-bench-cognitive_retrieval_v2"
+}

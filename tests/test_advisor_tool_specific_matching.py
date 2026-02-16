@@ -124,6 +124,23 @@ def test_tool_specific_advice_filters_telemetry_error_labels(monkeypatch, tmp_pa
     assert all("webfetch_error" not in text for text in texts)
 
 
+def test_tool_specific_advice_filters_webfetch_fails_with_other_noise(monkeypatch, tmp_path):
+    cognitive = _CognitiveWithInsights(
+        [
+            _FakeInsight("I struggle with WebFetch fails with other tasks"),
+            _FakeInsight("I fail when WebFetch retries are too aggressive."),
+        ]
+    )
+    _patch_runtime(monkeypatch, tmp_path, cognitive)
+    advisor = advisor_mod.SparkAdvisor()
+
+    out = advisor._get_tool_specific_advice("WebFetch")
+    texts = [row.text.lower() for row in out]
+
+    assert any("retries are too aggressive" in text for text in texts)
+    assert all("fails with other tasks" not in text for text in texts)
+
+
 def test_rank_score_heavily_penalizes_low_signal_telemetry_cautions(monkeypatch, tmp_path):
     cognitive = _CognitiveWithInsights([])
     _patch_runtime(monkeypatch, tmp_path, cognitive)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def _load_module():
@@ -93,3 +94,112 @@ def test_hybrid_lexical_scores_boost_term_frequency():
     )
     assert len(scores) == 2
     assert scores[1] > scores[0]
+
+
+def test_retrieve_hybrid_filters_low_signal_candidates():
+    mod = _load_module()
+
+    class _Retriever:
+        def retrieve(self, _query: str, _insights, limit: int = 8):
+            return [
+                SimpleNamespace(
+                    insight_key="noise-1",
+                    insight_text="I struggle with WebFetch_error tasks",
+                    semantic_sim=0.86,
+                    trigger_conf=0.0,
+                    fusion_score=0.86,
+                    source_type="semantic",
+                    why="noise",
+                ),
+                SimpleNamespace(
+                    insight_key="good-1",
+                    insight_text="Use jittered retries to stabilize WebFetch transport timeouts.",
+                    semantic_sim=0.83,
+                    trigger_conf=0.0,
+                    fusion_score=0.83,
+                    source_type="semantic",
+                    why="good",
+                ),
+            ][:limit]
+
+    insights = {
+        "noise-1": SimpleNamespace(insight="I struggle with WebFetch_error tasks", reliability=0.4),
+        "good-1": SimpleNamespace(insight="Use jittered retries to stabilize WebFetch transport timeouts.", reliability=0.7),
+    }
+    out = mod.retrieve_hybrid(
+        retriever=_Retriever(),
+        insights=insights,
+        query="webfetch transport timeout retries",
+        top_k=3,
+        candidate_k=8,
+        lexical_weight=0.3,
+        intent_coverage_weight=0.25,
+        support_boost_weight=0.12,
+        reliability_weight=0.1,
+        semantic_intent_min=0.0,
+        strict_filter=True,
+        agentic=False,
+    )
+    keys = [row.insight_key for row in out]
+    assert "noise-1" not in keys
+    assert "good-1" in keys
+
+
+def test_retrieve_hybrid_support_boost_rewards_cross_query_consistency():
+    mod = _load_module()
+
+    class _Retriever:
+        def retrieve(self, query: str, _insights, limit: int = 8):
+            if "failure pattern and fix" in query:
+                return [
+                    SimpleNamespace(
+                        insight_key="shared",
+                        insight_text="auth token session rollback fallback checklist",
+                        semantic_sim=0.72,
+                        trigger_conf=0.0,
+                        fusion_score=0.72,
+                        source_type="semantic",
+                        why="facet",
+                    )
+                ][:limit]
+            return [
+                SimpleNamespace(
+                    insight_key="shared",
+                    insight_text="auth token session rollback fallback checklist",
+                    semantic_sim=0.72,
+                    trigger_conf=0.0,
+                    fusion_score=0.72,
+                    source_type="semantic",
+                    why="primary",
+                ),
+                SimpleNamespace(
+                    insight_key="one-off",
+                    insight_text="auth token rollback note",
+                    semantic_sim=0.78,
+                    trigger_conf=0.0,
+                    fusion_score=0.78,
+                    source_type="semantic",
+                    why="primary",
+                ),
+            ][:limit]
+
+    insights = {
+        "shared": SimpleNamespace(insight="auth token session rollback fallback checklist", reliability=0.6),
+        "one-off": SimpleNamespace(insight="auth token rollback note", reliability=0.6),
+    }
+    out = mod.retrieve_hybrid(
+        retriever=_Retriever(),
+        insights=insights,
+        query="auth token session rollback investigation",
+        top_k=2,
+        candidate_k=10,
+        lexical_weight=0.0,
+        intent_coverage_weight=0.0,
+        support_boost_weight=0.35,
+        reliability_weight=0.0,
+        semantic_intent_min=0.0,
+        strict_filter=True,
+        agentic=True,
+    )
+    assert out
+    assert out[0].insight_key == "shared"

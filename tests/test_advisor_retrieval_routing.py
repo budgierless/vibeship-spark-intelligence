@@ -352,6 +352,130 @@ def test_prefilter_limits_active_insight_set(monkeypatch, tmp_path):
     assert fake.insight_sizes[0] <= 30
 
 
+def test_prefilter_drops_low_signal_struggle_rows(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _InspectingRetriever:
+        def __init__(self):
+            self.insight_texts = []
+
+        def retrieve(self, _query: str, insights, limit: int = 8):
+            self.insight_texts.append([str(getattr(v, "insight", "") or "") for v in insights.values()])
+            return [
+                SimpleNamespace(
+                    insight_key="good-key",
+                    insight_text="Use jittered retries for WebFetch timeout recovery.",
+                    semantic_sim=0.88,
+                    trigger_conf=0.0,
+                    fusion_score=0.88,
+                    source_type="semantic",
+                    why="prefilter",
+                )
+            ][:limit]
+
+    fake = _InspectingRetriever()
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: fake)
+
+    advisor = advisor_mod.SparkAdvisor()
+    large = {
+        "noise-key": SimpleNamespace(
+            insight="I struggle with WebFetch_error tasks",
+            reliability=0.9,
+            context="webfetch",
+        ),
+        "good-key": SimpleNamespace(
+            insight="Use jittered retries for WebFetch timeout recovery.",
+            reliability=0.8,
+            context="webfetch timeout",
+        ),
+    }
+    for i in range(50):
+        large[f"k{i}"] = SimpleNamespace(insight=f"misc context note {i}", reliability=0.5, context="misc")
+    advisor.cognitive.insights = large
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        prefilter_enabled=True,
+        prefilter_max_insights=20,
+        prefilter_drop_low_signal=True,
+        mode="embeddings_only",
+        semantic_context_min=0.0,
+        semantic_lexical_min=0.0,
+        semantic_intent_min=0.0,
+        semantic_strong_override=0.0,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Read", "webfetch timeout retries")
+    assert advice
+    assert fake.insight_texts
+    flat = " | ".join(fake.insight_texts[0]).lower()
+    assert "webfetch_error tasks" not in flat
+
+
+def test_semantic_rerank_boosts_multi_query_support(monkeypatch, tmp_path):
+    _patch_advisor_runtime(monkeypatch, tmp_path)
+
+    class _SupportRetriever:
+        def retrieve(self, query: str, _insights, limit: int = 8):
+            if "failure pattern and fix" in query:
+                return [
+                    SimpleNamespace(
+                        insight_key="shared",
+                        insight_text="auth token session rollback fallback checklist",
+                        semantic_sim=0.72,
+                        trigger_conf=0.0,
+                        fusion_score=0.72,
+                        source_type="semantic",
+                        why="facet",
+                    )
+                ][:limit]
+            return [
+                SimpleNamespace(
+                    insight_key="shared",
+                    insight_text="auth token session rollback fallback checklist",
+                    semantic_sim=0.72,
+                    trigger_conf=0.0,
+                    fusion_score=0.72,
+                    source_type="semantic",
+                    why="primary",
+                ),
+                SimpleNamespace(
+                    insight_key="one-off",
+                    insight_text="auth token rollback note",
+                    semantic_sim=0.78,
+                    trigger_conf=0.0,
+                    fusion_score=0.78,
+                    source_type="semantic",
+                    why="primary",
+                ),
+            ][:limit]
+
+    monkeypatch.setattr(semantic_retriever_mod, "get_semantic_retriever", lambda: _SupportRetriever())
+
+    advisor = advisor_mod.SparkAdvisor()
+    advisor.cognitive.insights = {
+        "shared": SimpleNamespace(insight="auth token session rollback fallback checklist", reliability=0.6, context="auth"),
+        "one-off": SimpleNamespace(insight="auth token rollback note", reliability=0.6, context="auth"),
+    }
+    advisor.retrieval_policy = _policy_with(
+        advisor,
+        mode="hybrid_agentic",
+        max_queries=4,
+        agentic_query_limit=3,
+        lexical_weight=0.0,
+        intent_coverage_weight=0.0,
+        support_boost_weight=0.35,
+        reliability_weight=0.0,
+        semantic_context_min=0.0,
+        semantic_lexical_min=0.0,
+        semantic_intent_min=0.0,
+        semantic_strong_override=0.0,
+    )
+
+    advice = advisor._get_semantic_cognitive_advice("Read", "auth token session rollback investigation")
+    assert advice
+    assert advice[0].insight_key == "shared"
+
+
 def test_semantic_route_filters_low_match_irrelevant_rows(monkeypatch, tmp_path):
     _patch_advisor_runtime(monkeypatch, tmp_path)
 

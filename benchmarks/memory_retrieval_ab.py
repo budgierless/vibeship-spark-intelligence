@@ -46,6 +46,52 @@ from lib.semantic_retriever import SemanticRetriever
 
 
 SUPPORTED_SYSTEMS = ("embeddings_only", "hybrid", "hybrid_agentic")
+INTENT_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "be",
+    "but",
+    "by",
+    "for",
+    "from",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "so",
+    "that",
+    "the",
+    "then",
+    "to",
+    "we",
+    "with",
+}
+LOW_SIGNAL_STRUGGLE_PATTERNS = (
+    re.compile(r"\bi struggle with\s+(?:tool[_\s-]*)?\d+[_\s-]*error\s+tasks\b", re.I),
+    re.compile(r"\bi struggle with\s+[a-z0-9_]+_error\s+tasks\b", re.I),
+    re.compile(r"\bi struggle with\s+[a-z0-9_]+\s+fails with other(?:\s+\(recovered\))?\s+tasks\b", re.I),
+)
+TRANSCRIPT_ARTIFACT_PATTERNS = (
+    re.compile(r"^\s*said it like this[:\s]", re.I),
+    re.compile(r"^\s*another reply is[:\s]", re.I),
+    re.compile(r"^\s*user wanted[:\s]", re.I),
+    re.compile(r"^\s*#\s*spark\s", re.I),
+)
+METADATA_TELEMETRY_HINTS = (
+    "event_type",
+    "tool_name",
+    "file_path",
+    "status:",
+    "user_prompt_signal",
+    "source: spark_advisory",
+)
 
 
 @dataclass
@@ -171,6 +217,115 @@ def hybrid_lexical_scores(
     return [(blend * bm) + ((1.0 - blend) * ov) for bm, ov in zip(bm25, overlap)]
 
 
+def intent_terms(text: str) -> set:
+    tokens = {t for t in re.findall(r"[a-z0-9_]+", str(text or "").lower()) if len(t) >= 3}
+    return {t for t in tokens if t not in INTENT_STOPWORDS and not t.isdigit()}
+
+
+def intent_coverage_score(query_terms: set, text: str) -> float:
+    if not query_terms:
+        return 0.0
+    doc_terms = intent_terms(text)
+    if not doc_terms:
+        return 0.0
+    return len(query_terms & doc_terms) / max(1, len(query_terms))
+
+
+def is_low_signal_struggle_text(text: str) -> bool:
+    sample = str(text or "").strip().lower()
+    if not sample:
+        return False
+    normalized = re.sub(r"^\[[^\]]+\]\s*", "", sample)
+    if any(rx.search(normalized) for rx in LOW_SIGNAL_STRUGGLE_PATTERNS):
+        return True
+    if "i struggle with" not in normalized:
+        return False
+    noisy_tokens = (
+        "_error",
+        "mcp__",
+        "command_not_found",
+        "permission_denied",
+        "file_not_found",
+        "syntax_error",
+        "fails with other",
+    )
+    return any(tok in normalized for tok in noisy_tokens)
+
+
+def is_transcript_artifact(text: str) -> bool:
+    sample = str(text or "").strip()
+    if not sample:
+        return False
+    lowered = sample.lower()
+    if any(rx.match(sample) for rx in TRANSCRIPT_ARTIFACT_PATTERNS):
+        return True
+    if lowered.startswith("from lib.") and " import " in lowered:
+        return True
+    return False
+
+
+def is_metadata_pattern(text: str) -> bool:
+    text_stripped = str(text or "").strip()
+    if not text_stripped:
+        return False
+    if re.match(r"^[A-Za-z\s]+:\s*[a-z_]+\s*=\s*.+$", text_stripped):
+        return True
+    if re.match(r"^(Principle|Style|Setting|Config|Meta|Mode|Level|Type):\s*", text_stripped, re.I):
+        action_verbs = [
+            "use",
+            "avoid",
+            "check",
+            "verify",
+            "ensure",
+            "always",
+            "never",
+            "remember",
+            "prefer",
+            "try",
+            "run",
+        ]
+        lowered = text_stripped.lower()
+        if not any(v in lowered for v in action_verbs):
+            return True
+    if re.match(r"^[a-z_]+\s*[:=]\s*.+$", text_stripped):
+        return True
+    if len(text_stripped) < 15 and ":" in text_stripped:
+        return True
+    incomplete_endings = (
+        " that",
+        " the",
+        " a",
+        " an",
+        " of",
+        " to",
+        " for",
+        " with",
+        " and",
+        " or",
+        " but",
+        " in",
+        " on",
+        " we",
+    )
+    return any(text_stripped.lower().endswith(e) for e in incomplete_endings)
+
+
+def should_drop_candidate_text(text: str, strict_filter: bool) -> bool:
+    if not strict_filter:
+        return False
+    body = str(text or "").strip()
+    if not body:
+        return True
+    lowered = body.lower()
+    if is_low_signal_struggle_text(lowered):
+        return True
+    if is_transcript_artifact(body):
+        return True
+    if is_metadata_pattern(body):
+        return True
+    return any(marker in lowered for marker in METADATA_TELEMETRY_HINTS)
+
+
 def extract_agentic_queries(context: str, limit: int = 3) -> List[str]:
     tokens = []
     skip = {
@@ -292,6 +447,7 @@ def retrieve_embeddings_only(
     top_k: int,
     candidate_k: int,
     noise_filter: Any,
+    strict_filter: bool,
 ) -> List[RetrievedItem]:
     retriever.index.ensure_index(insights, max_items=max(candidate_k * 50, 300), noise_filter=noise_filter)
     qvec = embed_text(query)
@@ -301,6 +457,8 @@ def retrieve_embeddings_only(
         for key, insight in insights.items():
             text = get_insight_text(insight)
             if not text:
+                continue
+            if should_drop_candidate_text(text, strict_filter):
                 continue
             if noise_filter and noise_filter(text):
                 continue
@@ -329,6 +487,8 @@ def retrieve_embeddings_only(
             continue
         text = get_insight_text(insight)
         if not text:
+            continue
+        if should_drop_candidate_text(text, strict_filter):
             continue
         if noise_filter and noise_filter(text):
             continue
@@ -364,42 +524,80 @@ def retrieve_hybrid(
     top_k: int,
     candidate_k: int,
     lexical_weight: float,
+    intent_coverage_weight: float,
+    support_boost_weight: float,
+    reliability_weight: float,
+    semantic_intent_min: float,
+    strict_filter: bool,
     agentic: bool,
 ) -> List[RetrievedItem]:
     merged: Dict[str, RetrievedItem] = {}
-    candidates: List[RetrievedItem] = []
+    support_counts: Dict[str, int] = {}
+    seen_query_tags: Dict[str, set] = {}
     queries = [query]
     if agentic:
         queries.extend(extract_agentic_queries(query))
 
     for q in queries[:4]:
+        query_tag = "primary" if q == query else q
         results = retriever.retrieve(q, insights, limit=max(candidate_k, top_k))
         for row in results:
             text = str(row.insight_text or "").strip()
             if not text:
                 continue
+            if should_drop_candidate_text(text, strict_filter):
+                continue
             base = float(getattr(row, "fusion_score", 0.0) or 0.0)
             source = "hybrid_agentic" if agentic else "hybrid"
-            candidates.append(
-                RetrievedItem(
-                insight_key=str(row.insight_key or ""),
+            insight_key = str(row.insight_key or "")
+            item = RetrievedItem(
+                insight_key=insight_key,
                 text=text,
                 source=source,
                 semantic_score=float(getattr(row, "semantic_sim", 0.0) or 0.0),
                 fusion_score=base,
                 score=base,
                 why=str(getattr(row, "why", "") or ""),
-                )
             )
+            if insight_key:
+                tags = seen_query_tags.setdefault(insight_key, set())
+                if query_tag not in tags:
+                    tags.add(query_tag)
+                    support_counts[insight_key] = int(support_counts.get(insight_key, 0)) + 1
+                prev = merged.get(insight_key)
+                if prev is None or item.fusion_score > prev.fusion_score:
+                    merged[insight_key] = item
 
-    lexical_scores = hybrid_lexical_scores(query, [item.text for item in candidates], bm25_mix=0.75, k1=1.2, b=0.75)
-    for idx, item in enumerate(candidates):
+    if not merged:
+        return []
+
+    query_terms = intent_terms(query)
+    merged_items = list(merged.values())
+    lexical_scores = hybrid_lexical_scores(query, [item.text for item in merged_items], bm25_mix=0.75, k1=1.2, b=0.75)
+    max_support = max(support_counts.values()) if support_counts else 1
+    ranked_candidates: List[RetrievedItem] = []
+    for idx, item in enumerate(merged_items):
         lex = lexical_scores[idx] if idx < len(lexical_scores) else 0.0
-        item.score = float(item.fusion_score) + (lexical_weight * lex)
-        if item.insight_key:
-            _merge_best(merged, item)
+        coverage = intent_coverage_score(query_terms, item.text)
+        support = max(1, int(support_counts.get(item.insight_key, 1)))
+        support_norm = (support - 1) / max(1, max_support - 1) if max_support > 1 else 0.0
+        insight = insights.get(item.insight_key)
+        reliability = float(getattr(insight, "reliability", 0.5) or 0.5)
+        if item.semantic_score < semantic_intent_min and coverage < semantic_intent_min and item.fusion_score < 0.9:
+            continue
+        item.score = (
+            float(item.fusion_score)
+            + (lexical_weight * lex)
+            + (intent_coverage_weight * coverage)
+            + (support_boost_weight * support_norm)
+            + (reliability_weight * reliability)
+        )
+        item.why = (
+            f"{item.why} [lex={lex:.2f} coverage={coverage:.2f} support={support} rel={reliability:.2f}]"
+        ).strip()
+        ranked_candidates.append(item)
 
-    ranked = sorted(merged.values(), key=lambda item: item.score, reverse=True)
+    ranked = sorted(ranked_candidates, key=lambda item: item.score, reverse=True)
     return ranked[:top_k]
 
 
@@ -413,6 +611,11 @@ def run_system_for_case(
     top_k: int,
     candidate_k: int,
     lexical_weight: float,
+    intent_coverage_weight: float = 0.0,
+    support_boost_weight: float = 0.0,
+    reliability_weight: float = 0.0,
+    semantic_intent_min: float = 0.0,
+    strict_filter: bool = True,
 ) -> Dict[str, Any]:
     t0 = time.perf_counter()
     try:
@@ -424,6 +627,7 @@ def run_system_for_case(
                 top_k=top_k,
                 candidate_k=candidate_k,
                 noise_filter=noise_filter,
+                strict_filter=strict_filter,
             )
         elif system == "hybrid":
             items = retrieve_hybrid(
@@ -433,6 +637,11 @@ def run_system_for_case(
                 top_k=top_k,
                 candidate_k=candidate_k,
                 lexical_weight=lexical_weight,
+                intent_coverage_weight=intent_coverage_weight,
+                support_boost_weight=support_boost_weight,
+                reliability_weight=reliability_weight,
+                semantic_intent_min=semantic_intent_min,
+                strict_filter=strict_filter,
                 agentic=False,
             )
         elif system == "hybrid_agentic":
@@ -443,6 +652,11 @@ def run_system_for_case(
                 top_k=top_k,
                 candidate_k=candidate_k,
                 lexical_weight=lexical_weight,
+                intent_coverage_weight=intent_coverage_weight,
+                support_boost_weight=support_boost_weight,
+                reliability_weight=reliability_weight,
+                semantic_intent_min=semantic_intent_min,
+                strict_filter=strict_filter,
                 agentic=True,
             )
         else:
@@ -617,6 +831,15 @@ def main() -> int:
     parser.add_argument("--top-k", type=int, default=5, help="Top-K results for scoring")
     parser.add_argument("--candidate-k", type=int, default=20, help="Candidate pool per system")
     parser.add_argument("--lexical-weight", type=float, default=0.35, help="Lexical rerank weight")
+    parser.add_argument("--intent-coverage-weight", type=float, default=0.0, help="Intent coverage rerank weight")
+    parser.add_argument("--support-boost-weight", type=float, default=0.0, help="Cross-query support rerank weight")
+    parser.add_argument("--reliability-weight", type=float, default=0.0, help="Insight reliability rerank weight")
+    parser.add_argument("--semantic-intent-min", type=float, default=0.0, help="Minimum semantic/intent threshold for non-trigger rows")
+    parser.add_argument(
+        "--disable-strict-filter",
+        action="store_true",
+        help="Disable low-signal cognitive candidate filtering in benchmark retrieval",
+    )
     parser.add_argument(
         "--min-similarity",
         type=float,
@@ -705,6 +928,11 @@ def main() -> int:
                 top_k=max(1, int(args.top_k)),
                 candidate_k=max(1, int(args.candidate_k)),
                 lexical_weight=float(args.lexical_weight),
+                intent_coverage_weight=float(args.intent_coverage_weight),
+                support_boost_weight=float(args.support_boost_weight),
+                reliability_weight=float(args.reliability_weight),
+                semantic_intent_min=float(args.semantic_intent_min),
+                strict_filter=not bool(args.disable_strict_filter),
             )
             by_system[system].append(row)
             per_case["runs"][system] = row
@@ -721,6 +949,11 @@ def main() -> int:
             "top_k": int(args.top_k),
             "candidate_k": int(args.candidate_k),
             "lexical_weight": float(args.lexical_weight),
+            "intent_coverage_weight": float(args.intent_coverage_weight),
+            "support_boost_weight": float(args.support_boost_weight),
+            "reliability_weight": float(args.reliability_weight),
+            "semantic_intent_min": float(args.semantic_intent_min),
+            "strict_filter": not bool(args.disable_strict_filter),
             "min_similarity": retriever.config.get("min_similarity"),
             "min_fusion_score": retriever.config.get("min_fusion_score"),
             "stale_index_pruned": False if args.no_prune_stale_index else True,

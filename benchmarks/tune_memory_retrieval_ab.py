@@ -89,6 +89,11 @@ def _evaluate(
     top_k: int,
     candidate_k: int,
     lexical_weight: float,
+    intent_coverage_weight: float,
+    support_boost_weight: float,
+    reliability_weight: float,
+    semantic_intent_min: float,
+    strict_filter: bool,
     min_similarity: float,
     min_fusion_score: float,
 ) -> Dict[str, Any]:
@@ -110,6 +115,11 @@ def _evaluate(
                 top_k=top_k,
                 candidate_k=candidate_k,
                 lexical_weight=lexical_weight,
+                intent_coverage_weight=intent_coverage_weight,
+                support_boost_weight=support_boost_weight,
+                reliability_weight=reliability_weight,
+                semantic_intent_min=semantic_intent_min,
+                strict_filter=strict_filter,
             )
         )
     summary = summarize_system(system, rows)
@@ -119,6 +129,11 @@ def _evaluate(
         "params": {
             "candidate_k": candidate_k,
             "lexical_weight": lexical_weight,
+            "intent_coverage_weight": intent_coverage_weight,
+            "support_boost_weight": support_boost_weight,
+            "reliability_weight": reliability_weight,
+            "semantic_intent_min": semantic_intent_min,
+            "strict_filter": bool(strict_filter),
             "min_similarity": min_similarity,
             "min_fusion_score": min_fusion_score,
         },
@@ -134,6 +149,11 @@ def _search_best(
     top_k: int,
     candidate_grid: Sequence[int],
     lexical_grid: Sequence[float],
+    intent_coverage_grid: Sequence[float],
+    support_boost_grid: Sequence[float],
+    reliability_grid: Sequence[float],
+    semantic_intent_min_grid: Sequence[float],
+    strict_filter: bool,
     min_similarity_grid: Sequence[float],
     min_fusion_grid: Sequence[float],
 ) -> Dict[str, Any]:
@@ -142,25 +162,38 @@ def _search_best(
     for candidate_k in candidate_grid:
         # embeddings_only does not use lexical/fusion gates in its path.
         effective_lexical = lexical_grid if system != "embeddings_only" else [0.0]
+        effective_intent_coverage = intent_coverage_grid if system != "embeddings_only" else [0.0]
+        effective_support = support_boost_grid if system != "embeddings_only" else [0.0]
+        effective_reliability = reliability_grid if system != "embeddings_only" else [0.0]
+        effective_semantic_intent = semantic_intent_min_grid if system != "embeddings_only" else [0.0]
         effective_min_sim = min_similarity_grid if system != "embeddings_only" else [0.0]
         effective_min_fusion = min_fusion_grid if system != "embeddings_only" else [0.0]
         for lexical in effective_lexical:
-            for min_sim in effective_min_sim:
-                for min_fusion in effective_min_fusion:
-                    trials += 1
-                    run = _evaluate(
-                        system=system,
-                        cases=train_cases,
-                        insights=insights,
-                        noise_filter=noise_filter,
-                        top_k=top_k,
-                        candidate_k=int(candidate_k),
-                        lexical_weight=float(lexical),
-                        min_similarity=float(min_sim),
-                        min_fusion_score=float(min_fusion),
-                    )
-                    if best is None or _score(run["summary"]) > _score(best["summary"]):
-                        best = run
+            for intent_coverage in effective_intent_coverage:
+                for support_boost in effective_support:
+                    for reliability in effective_reliability:
+                        for semantic_intent in effective_semantic_intent:
+                            for min_sim in effective_min_sim:
+                                for min_fusion in effective_min_fusion:
+                                    trials += 1
+                                    run = _evaluate(
+                                        system=system,
+                                        cases=train_cases,
+                                        insights=insights,
+                                        noise_filter=noise_filter,
+                                        top_k=top_k,
+                                        candidate_k=int(candidate_k),
+                                        lexical_weight=float(lexical),
+                                        intent_coverage_weight=float(intent_coverage),
+                                        support_boost_weight=float(support_boost),
+                                        reliability_weight=float(reliability),
+                                        semantic_intent_min=float(semantic_intent),
+                                        strict_filter=bool(strict_filter),
+                                        min_similarity=float(min_sim),
+                                        min_fusion_score=float(min_fusion),
+                                    )
+                                    if best is None or _score(run["summary"]) > _score(best["summary"]):
+                                        best = run
     assert best is not None
     best["trials"] = trials
     return best
@@ -183,8 +216,17 @@ def main() -> int:
     parser.add_argument("--train-ratio", type=float, default=0.7, help="Train split ratio")
     parser.add_argument("--candidate-grid", default="20,40,60")
     parser.add_argument("--lexical-grid", default="0.15,0.35,0.55,0.75")
+    parser.add_argument("--intent-coverage-grid", default="0.0,0.15,0.25,0.35")
+    parser.add_argument("--support-boost-grid", default="0.0,0.05,0.12,0.2")
+    parser.add_argument("--reliability-grid", default="0.0,0.05,0.1,0.2")
+    parser.add_argument("--semantic-intent-min-grid", default="0.0,0.03,0.06")
     parser.add_argument("--min-similarity-grid", default="0.0,0.2,0.35,0.5")
     parser.add_argument("--min-fusion-grid", default="0.0,0.15,0.3,0.45")
+    parser.add_argument(
+        "--disable-strict-filter",
+        action="store_true",
+        help="Disable strict low-signal cognitive filtering during tuning runs",
+    )
     parser.add_argument("--case-limit", type=int, default=0)
     parser.add_argument("--out", default=str(Path("benchmarks") / "out" / "memory_retrieval_ab_tuning_report.json"))
     args = parser.parse_args()
@@ -207,6 +249,10 @@ def main() -> int:
 
     candidate_grid = _parse_int_grid(args.candidate_grid)
     lexical_grid = _parse_float_grid(args.lexical_grid)
+    intent_coverage_grid = _parse_float_grid(args.intent_coverage_grid)
+    support_boost_grid = _parse_float_grid(args.support_boost_grid)
+    reliability_grid = _parse_float_grid(args.reliability_grid)
+    semantic_intent_min_grid = _parse_float_grid(args.semantic_intent_min_grid)
     min_similarity_grid = _parse_float_grid(args.min_similarity_grid)
     min_fusion_grid = _parse_float_grid(args.min_fusion_grid)
 
@@ -223,6 +269,11 @@ def main() -> int:
             top_k=max(1, int(args.top_k)),
             candidate_grid=candidate_grid,
             lexical_grid=lexical_grid,
+            intent_coverage_grid=intent_coverage_grid,
+            support_boost_grid=support_boost_grid,
+            reliability_grid=reliability_grid,
+            semantic_intent_min_grid=semantic_intent_min_grid,
+            strict_filter=not bool(args.disable_strict_filter),
             min_similarity_grid=min_similarity_grid,
             min_fusion_grid=min_fusion_grid,
         )
@@ -236,6 +287,11 @@ def main() -> int:
             top_k=max(1, int(args.top_k)),
             candidate_k=int(params["candidate_k"]),
             lexical_weight=float(params["lexical_weight"]),
+            intent_coverage_weight=float(params["intent_coverage_weight"]),
+            support_boost_weight=float(params["support_boost_weight"]),
+            reliability_weight=float(params["reliability_weight"]),
+            semantic_intent_min=float(params["semantic_intent_min"]),
+            strict_filter=bool(params.get("strict_filter", True)),
             min_similarity=float(params["min_similarity"]),
             min_fusion_score=float(params["min_fusion_score"]),
         )
@@ -247,6 +303,11 @@ def main() -> int:
             top_k=max(1, int(args.top_k)),
             candidate_k=int(params["candidate_k"]),
             lexical_weight=float(params["lexical_weight"]),
+            intent_coverage_weight=float(params["intent_coverage_weight"]),
+            support_boost_weight=float(params["support_boost_weight"]),
+            reliability_weight=float(params["reliability_weight"]),
+            semantic_intent_min=float(params["semantic_intent_min"]),
+            strict_filter=bool(params.get("strict_filter", True)),
             min_similarity=float(params["min_similarity"]),
             min_fusion_score=float(params["min_fusion_score"]),
         )
@@ -284,8 +345,13 @@ def main() -> int:
             "top_k": int(args.top_k),
             "candidate_grid": candidate_grid,
             "lexical_grid": lexical_grid,
+            "intent_coverage_grid": intent_coverage_grid,
+            "support_boost_grid": support_boost_grid,
+            "reliability_grid": reliability_grid,
+            "semantic_intent_min_grid": semantic_intent_min_grid,
             "min_similarity_grid": min_similarity_grid,
             "min_fusion_grid": min_fusion_grid,
+            "strict_filter": not bool(args.disable_strict_filter),
             "insight_count": len(insights),
             "python": sys.version.split()[0],
         },

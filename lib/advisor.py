@@ -71,6 +71,7 @@ CHIP_TELEMETRY_MARKERS = (
 _LOW_SIGNAL_STRUGGLE_PATTERNS = (
     re.compile(r"\bi struggle with\s+(?:tool[_\s-]*)?\d+[_\s-]*error\s+tasks\b", re.I),
     re.compile(r"\bi struggle with\s+[a-z0-9_]+_error\s+tasks\b", re.I),
+    re.compile(r"\bi struggle with\s+[a-z0-9_]+\s+fails with other(?:\s+\(recovered\))?\s+tasks\b", re.I),
 )
 _TRANSCRIPT_ARTIFACT_PATTERNS = (
     re.compile(r"^\s*said it like this[:\s]", re.I),
@@ -123,9 +124,14 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "deny_escalation_when_over_budget": True,
         "prefilter_enabled": True,
         "prefilter_max_insights": 300,
+        "prefilter_drop_low_signal": True,
         "lexical_weight": 0.25,
+        "intent_coverage_weight": 0.0,
+        "support_boost_weight": 0.0,
+        "reliability_weight": 0.0,
         "semantic_context_min": 0.15,
         "semantic_lexical_min": 0.03,
+        "semantic_intent_min": 0.0,
         "semantic_strong_override": 0.90,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
@@ -151,9 +157,14 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "deny_escalation_when_over_budget": True,
         "prefilter_enabled": True,
         "prefilter_max_insights": 500,
+        "prefilter_drop_low_signal": True,
         "lexical_weight": 0.30,
+        "intent_coverage_weight": 0.0,
+        "support_boost_weight": 0.0,
+        "reliability_weight": 0.0,
         "semantic_context_min": 0.15,
         "semantic_lexical_min": 0.03,
+        "semantic_intent_min": 0.0,
         "semantic_strong_override": 0.90,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
@@ -179,9 +190,14 @@ DEFAULT_RETRIEVAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "deny_escalation_when_over_budget": False,
         "prefilter_enabled": True,
         "prefilter_max_insights": 800,
+        "prefilter_drop_low_signal": True,
         "lexical_weight": 0.35,
+        "intent_coverage_weight": 0.10,
+        "support_boost_weight": 0.10,
+        "reliability_weight": 0.10,
         "semantic_context_min": 0.12,
         "semantic_lexical_min": 0.02,
+        "semantic_intent_min": 0.02,
         "semantic_strong_override": 0.88,
         "bm25_k1": 1.2,
         "bm25_b": 0.75,
@@ -249,6 +265,41 @@ X_SOCIAL_MARKERS = (
     "engagement bait",
     "tao subnet",
     "mac mini + ai",
+)
+_INTENT_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "be",
+    "but",
+    "by",
+    "for",
+    "from",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "so",
+    "that",
+    "the",
+    "then",
+    "to",
+    "we",
+    "with",
+}
+_METADATA_TELEMETRY_HINTS = (
+    "event_type",
+    "tool_name",
+    "file_path",
+    "status:",
+    "user_prompt_signal",
+    "source: spark_advisory",
 )
 
 
@@ -422,8 +473,12 @@ def _maybe_warn_deprecated_advisor_retrieval_policy(
     keys = (
         "semantic_context_min",
         "semantic_lexical_min",
+        "semantic_intent_min",
         "semantic_strong_override",
         "lexical_weight",
+        "intent_coverage_weight",
+        "support_boost_weight",
+        "reliability_weight",
     )
     present = [k for k in keys if k in advisor_policy]
     if not present:
@@ -1005,6 +1060,10 @@ class SparkAdvisor:
                             "semantic_lexical_min",
                             "semantic_strong_override",
                             "lexical_weight",
+                            "semantic_intent_min",
+                            "intent_coverage_weight",
+                            "support_boost_weight",
+                            "reliability_weight",
                         ):
                             if key in overrides:
                                 retrieval_keys_present.add(key)
@@ -1026,10 +1085,15 @@ class SparkAdvisor:
                         "deny_escalation_when_over_budget",
                         "prefilter_enabled",
                         "prefilter_max_insights",
+                        "prefilter_drop_low_signal",
                         "lexical_weight",
+                        "intent_coverage_weight",
+                        "support_boost_weight",
+                        "reliability_weight",
                         "bm25_k1",
                         "bm25_b",
                         "bm25_mix",
+                        "semantic_intent_min",
                         "complexity_threshold",
                         "min_results_no_escalation",
                         "min_top_score_no_escalation",
@@ -1044,6 +1108,10 @@ class SparkAdvisor:
                                 "semantic_lexical_min",
                                 "semantic_strong_override",
                                 "lexical_weight",
+                                "semantic_intent_min",
+                                "intent_coverage_weight",
+                                "support_boost_weight",
+                                "reliability_weight",
                             }:
                                 retrieval_keys_present.add(key)
         except Exception:
@@ -1097,10 +1165,23 @@ class SparkAdvisor:
         if prefilter_raw is None:
             prefilter_raw = 500
         policy["prefilter_max_insights"] = max(20, int(prefilter_raw))
+        policy["prefilter_drop_low_signal"] = bool(policy.get("prefilter_drop_low_signal", True))
         policy["lexical_weight"] = max(0.0, min(1.0, float(policy.get("lexical_weight", 0.25) or 0.25)))
+        policy["intent_coverage_weight"] = max(
+            0.0, min(1.0, float(policy.get("intent_coverage_weight", 0.0) or 0.0))
+        )
+        policy["support_boost_weight"] = max(
+            0.0, min(1.0, float(policy.get("support_boost_weight", 0.0) or 0.0))
+        )
+        policy["reliability_weight"] = max(
+            0.0, min(1.0, float(policy.get("reliability_weight", 0.0) or 0.0))
+        )
         policy["bm25_k1"] = max(0.1, float(policy.get("bm25_k1", 1.2) or 1.2))
         policy["bm25_b"] = max(0.0, min(1.0, float(policy.get("bm25_b", 0.75) or 0.75)))
         policy["bm25_mix"] = max(0.0, min(1.0, float(policy.get("bm25_mix", 0.75) or 0.75)))
+        policy["semantic_intent_min"] = max(
+            0.0, min(1.0, float(policy.get("semantic_intent_min", 0.0) or 0.0))
+        )
         policy["complexity_threshold"] = max(1, int(policy.get("complexity_threshold", 2) or 2))
         policy["min_results_no_escalation"] = max(1, int(policy.get("min_results_no_escalation", 3) or 3))
         policy["min_top_score_no_escalation"] = max(
@@ -1214,20 +1295,35 @@ class SparkAdvisor:
         if not insights:
             return insights
         limit = max(20, int(max_items or 500))
+        drop_low_signal = bool((self.retrieval_policy or {}).get("prefilter_drop_low_signal", True))
         if len(insights) <= limit:
-            return insights
+            if not drop_low_signal:
+                return insights
+            filtered: Dict[str, Any] = {}
+            for key, insight in insights.items():
+                _, blob = self._prefilter_cached_blob_tokens(str(key), insight)
+                if self._should_drop_low_signal_candidate(blob):
+                    continue
+                filtered[key] = insight
+            return filtered or insights
 
-        query_tokens = {t for t in re.findall(r"[a-z0-9_]+", (context or "").lower()) if len(t) >= 3}
+        query_tokens = self._intent_terms(context)
+        if not query_tokens:
+            query_tokens = {t for t in re.findall(r"[a-z0-9_]+", (context or "").lower()) if len(t) >= 3}
         tool = str(tool_name or "").strip().lower()
         scored: List[Tuple[float, str, Any]] = []
         fallback: List[Tuple[float, str, Any]] = []
         for key, insight in insights.items():
             blob_tokens, blob = self._prefilter_cached_blob_tokens(str(key), insight)
-            overlap = len(query_tokens & blob_tokens) if query_tokens else 0
+            if drop_low_signal and self._should_drop_low_signal_candidate(blob):
+                continue
+            blob_terms = {t for t in blob_tokens if t not in _INTENT_STOPWORDS}
+            overlap = len(query_tokens & blob_terms) if query_tokens else 0
+            intent_coverage = (overlap / max(1, len(query_tokens))) if query_tokens else 0.0
             metadata_boost = 2.0 if tool and tool in blob else 0.0
             reliability = float(getattr(insight, "reliability", 0.5) or 0.5)
-            score = (overlap * 3.0) + metadata_boost + reliability
-            if overlap > 0 or metadata_boost > 0:
+            score = (overlap * 3.5) + (intent_coverage * 2.0) + metadata_boost + reliability
+            if overlap > 0 or metadata_boost > 0 or intent_coverage >= 0.2:
                 scored.append((score, key, insight))
             else:
                 fallback.append((reliability, key, insight))
@@ -1500,10 +1596,14 @@ class SparkAdvisor:
         lexical_weight = float(policy.get("lexical_weight", 0.25) or 0.25)
         semantic_context_min = float(policy.get("semantic_context_min", 0.15) or 0.15)
         semantic_lexical_min = float(policy.get("semantic_lexical_min", 0.03) or 0.03)
+        semantic_intent_min = float(policy.get("semantic_intent_min", 0.0) or 0.0)
         semantic_strong_override = float(policy.get("semantic_strong_override", 0.90) or 0.90)
         bm25_k1 = float(policy.get("bm25_k1", 1.2) or 1.2)
         bm25_b = float(policy.get("bm25_b", 0.75) or 0.75)
         bm25_mix = float(policy.get("bm25_mix", 0.75) or 0.75)
+        intent_coverage_weight = float(policy.get("intent_coverage_weight", 0.0) or 0.0)
+        support_boost_weight = float(policy.get("support_boost_weight", 0.0) or 0.0)
+        reliability_weight = float(policy.get("reliability_weight", 0.0) or 0.0)
 
         analysis = self._analyze_query_complexity(tool_name, context)
         high_risk_hits = list(analysis.get("high_risk_hits") or [])
@@ -1587,12 +1687,27 @@ class SparkAdvisor:
             facet_queries = facet_queries[: max(0, max_queries - 1)]
         deadline_ts = (time.perf_counter() + (agentic_deadline_ms / 1000.0)) if should_escalate and agentic_deadline_ms > 0 else None
 
-        merged: Dict[str, Any] = {}
+        merged: Dict[str, Dict[str, Any]] = {}
+
+        def _merge_result(row: Any, query_tag: str) -> None:
+            key = row.insight_key or self._generate_advice_id(row.insight_text)
+            bucket = merged.get(key)
+            if bucket is None:
+                bucket = {
+                    "row": row,
+                    "support_count": 0,
+                    "query_tags": set(),
+                }
+                merged[key] = bucket
+            if query_tag not in bucket["query_tags"]:
+                bucket["query_tags"].add(query_tag)
+                bucket["support_count"] += 1
+            prev = bucket.get("row")
+            if prev is None or float(getattr(row, "fusion_score", 0.0) or 0.0) > float(getattr(prev, "fusion_score", 0.0) or 0.0):
+                bucket["row"] = row
+
         for r in primary_results:
-            key = r.insight_key or self._generate_advice_id(r.insight_text)
-            prev = merged.get(key)
-            if prev is None or float(getattr(r, "fusion_score", 0.0) or 0.0) > float(getattr(prev, "fusion_score", 0.0) or 0.0):
-                merged[key] = r
+            _merge_result(r, "primary")
 
         for q in facet_queries:
             if deadline_ts is not None and time.perf_counter() >= deadline_ts:
@@ -1605,10 +1720,7 @@ class SparkAdvisor:
             except Exception:
                 continue
             for r in query_results:
-                key = r.insight_key or self._generate_advice_id(r.insight_text)
-                prev = merged.get(key)
-                if prev is None or float(getattr(r, "fusion_score", 0.0) or 0.0) > float(getattr(prev, "fusion_score", 0.0) or 0.0):
-                    merged[key] = r
+                _merge_result(r, q)
 
         if not merged:
             self._log_retrieval_route(
@@ -1639,19 +1751,50 @@ class SparkAdvisor:
 
         used_agentic = bool(facet_queries_executed)
         semantic_source = "semantic-agentic" if used_agentic else "semantic"
-        merged_values = list(merged.values())
+        merged_items = list(merged.items())
         lexical_scores = self._hybrid_lexical_scores(
             query=context,
-            docs=[str(getattr(r, "insight_text", "") or "") for r in merged_values],
+            docs=[str(getattr((bucket.get("row") or None), "insight_text", "") or "") for _, bucket in merged_items],
             bm25_mix=bm25_mix,
             k1=bm25_k1,
             b=bm25_b,
         )
+        query_terms = self._intent_terms(context)
+        max_support_count = max(
+            (int(bucket.get("support_count") or 1) for _, bucket in merged_items),
+            default=1,
+        )
+        rank_features: Dict[str, Dict[str, float]] = {}
         scored: List[Tuple[Any, float]] = []
-        for idx, row in enumerate(merged_values):
+        for idx, (insight_key, bucket) in enumerate(merged_items):
+            row = bucket.get("row")
+            if row is None:
+                continue
             base = float(getattr(row, "fusion_score", 0.0) or 0.0)
             lex = lexical_scores[idx] if idx < len(lexical_scores) else 0.0
-            scored.append((row, base + (lexical_weight * lex)))
+            text = str(getattr(row, "insight_text", "") or "")
+            if self._should_drop_low_signal_candidate(text):
+                continue
+            intent_coverage = self._intent_coverage_score(query_terms, text)
+            support_count = max(1, int(bucket.get("support_count") or 1))
+            support_norm = (support_count - 1) / max(1, max_support_count - 1) if max_support_count > 1 else 0.0
+            source_insight = active_insights.get(insight_key)
+            reliability = float(getattr(source_insight, "reliability", getattr(row, "outcome_score", 0.5)) or 0.5)
+            rank_features[insight_key] = {
+                "lex": lex,
+                "intent_coverage": intent_coverage,
+                "support_count": float(support_count),
+                "support_norm": support_norm,
+                "reliability": reliability,
+            }
+            rerank_score = (
+                base
+                + (lexical_weight * lex)
+                + (intent_coverage_weight * intent_coverage)
+                + (support_boost_weight * support_norm)
+                + (reliability_weight * reliability)
+            )
+            scored.append((row, rerank_score))
         ranked = sorted(
             scored,
             key=lambda pair: pair[1],
@@ -1667,24 +1810,32 @@ class SparkAdvisor:
         for r in ranked_rows[:semantic_limit]:
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(r.insight_text):
                 continue
+            insight_key = str(getattr(r, "insight_key", "") or "")
+            features = rank_features.get(insight_key, {})
             confidence = max(0.6, float(getattr(r, "fusion_score", 0.0) or 0.0))
             if str(getattr(r, "source_type", "") or "") == "trigger":
                 confidence = max(0.8, confidence)
+            support_count = int(features.get("support_count", 1.0) or 1.0)
+            if support_count > 1:
+                confidence = min(0.98, confidence + min(0.12, 0.04 * float(support_count - 1)))
             source = "trigger" if str(getattr(r, "source_type", "") or "") == "trigger" else semantic_source
             if (not social_query) and self._is_x_social_insight(str(getattr(r, "insight_text", "") or "")):
                 filtered_domain_mismatch += 1
                 continue
             semantic_sim = float(getattr(r, "semantic_sim", 0.0) or 0.0)
             trigger_conf = float(getattr(r, "trigger_conf", 0.0) or 0.0)
-            lexical_match = self._lexical_overlap_score(context, str(getattr(r, "insight_text", "") or ""))
+            insight_text = str(getattr(r, "insight_text", "") or "")
+            lexical_match = self._lexical_overlap_score(context, insight_text)
+            intent_coverage = float(features.get("intent_coverage", self._intent_coverage_score(query_terms, insight_text)))
             if source != "trigger":
                 has_context_match = semantic_sim >= semantic_context_min
                 has_lexical_match = lexical_match >= semantic_lexical_min
+                has_intent_match = intent_coverage >= semantic_intent_min
                 strong_override = semantic_sim >= semantic_strong_override
-                if not (has_context_match or has_lexical_match or strong_override):
+                if not (has_context_match or has_lexical_match or has_intent_match or strong_override):
                     filtered_low_match += 1
                     continue
-            context_match = max(semantic_sim, lexical_match, trigger_conf)
+            context_match = max(semantic_sim, lexical_match, intent_coverage, trigger_conf)
             if source == "trigger":
                 context_match = max(0.7, context_match)
             base_reason = str(getattr(r, "why", "") or "").strip()
@@ -1728,9 +1879,14 @@ class SparkAdvisor:
                 "agentic_recent_rate": round(self._agentic_recent_rate(agentic_rate_window), 4),
                 "active_insights": len(active_insights),
                 "lexical_weight": lexical_weight,
+                "intent_coverage_weight": intent_coverage_weight,
+                "support_boost_weight": support_boost_weight,
+                "reliability_weight": reliability_weight,
                 "semantic_context_min": semantic_context_min,
                 "semantic_lexical_min": semantic_lexical_min,
+                "semantic_intent_min": semantic_intent_min,
                 "semantic_strong_override": semantic_strong_override,
+                "max_support_count": max_support_count,
                 "filtered_low_match": filtered_low_match,
                 "filtered_domain_mismatch": filtered_domain_mismatch,
                 "bm25_k1": bm25_k1,
@@ -1786,6 +1942,32 @@ class SparkAdvisor:
         if not body:
             return False
         return any(marker in body for marker in X_SOCIAL_MARKERS)
+
+    def _intent_terms(self, text: str) -> set:
+        tokens = {t for t in re.findall(r"[a-z0-9_]+", str(text or "").lower()) if len(t) >= 3}
+        return {t for t in tokens if t not in _INTENT_STOPWORDS and not t.isdigit()}
+
+    def _intent_coverage_score(self, query_terms: set, text: str) -> float:
+        if not query_terms:
+            return 0.0
+        doc_terms = self._intent_terms(text)
+        if not doc_terms:
+            return 0.0
+        overlap = len(query_terms & doc_terms)
+        return overlap / max(1, len(query_terms))
+
+    def _should_drop_low_signal_candidate(self, text: str) -> bool:
+        body = str(text or "").strip()
+        if not body:
+            return True
+        lowered = body.lower()
+        if self._is_low_signal_struggle_text(lowered):
+            return True
+        if self._is_transcript_artifact(body):
+            return True
+        if self._is_metadata_pattern(body):
+            return True
+        return any(marker in lowered for marker in _METADATA_TELEMETRY_HINTS)
 
     def _filter_cross_domain_advice(self, advice_list: List[Advice], context: str) -> List[Advice]:
         """Drop cross-domain social advice when the current query is not social."""
@@ -2961,6 +3143,7 @@ class SparkAdvisor:
             "permission_denied",
             "file_not_found",
             "syntax_error",
+            "fails with other",
         )
         return any(tok in normalized for tok in noisy_tokens)
 
