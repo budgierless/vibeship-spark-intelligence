@@ -115,6 +115,19 @@ def test_build_scorecard_reads_files_and_computes_core_reliability(tmp_path, mon
     assert round(score["core"]["core_reliability"], 4) == 0.75
 
 
+def test_core_reliability_uses_effective_service_signals():
+    status = {
+        "sparkd": {"running": False, "healthy": True},
+        "bridge_worker": {"running": False, "process_running": True, "heartbeat_fresh": False},
+        "scheduler": {"running": False, "process_running": False, "heartbeat_fresh": True},
+        "watchdog": {"running": False, "pid": 1234},
+    }
+    core = ck._core_reliability(status)
+    assert core["core_running"] == 4
+    assert core["core_reliability"] == 1.0
+    assert core["core_effective_running"]["sparkd"] is True
+
+
 def test_build_health_alert_ok_when_thresholds_clear(monkeypatch):
     monkeypatch.setattr(ck, "_sample_failure_snapshot", lambda limit=12: {"sampled_failures": [], "sample_count": 0})
     score = {

@@ -168,15 +168,51 @@ def _trend(current: Optional[float], previous: Optional[float], eps: float = 1e-
     return "flat"
 
 
+def _service_effective_running(name: str, svc: Dict[str, Any]) -> bool:
+    """Robust running/health interpretation for core reliability scoring."""
+    if not isinstance(svc, dict):
+        return False
+    if bool(svc.get("running")):
+        return True
+
+    # HTTP services may report running=False transiently; healthy endpoint implies alive.
+    if name in {"sparkd", "dashboard", "pulse", "meta_ralph"} and bool(svc.get("healthy")):
+        return True
+
+    # Loop workers: process_running and heartbeat freshness are stronger signals.
+    if name in {"bridge_worker", "scheduler"}:
+        if bool(svc.get("process_running")):
+            return True
+        if bool(svc.get("heartbeat_fresh")):
+            return True
+
+    # Watchdog: a PID usually means active management loop.
+    if name == "watchdog":
+        try:
+            return int(svc.get("pid") or 0) > 0
+        except Exception:
+            return False
+
+    return False
+
+
 def _core_reliability(status: Dict[str, Any]) -> Dict[str, Any]:
     core_keys = ("sparkd", "bridge_worker", "scheduler", "watchdog")
     running = 0
+    details: Dict[str, bool] = {}
     for key in core_keys:
         svc = status.get(key) if isinstance(status, dict) else {}
-        if isinstance(svc, dict) and bool(svc.get("running")):
+        ok = _service_effective_running(key, svc if isinstance(svc, dict) else {})
+        details[key] = ok
+        if ok:
             running += 1
     ratio = _safe_ratio(running, len(core_keys))
-    return {"core_running": running, "core_total": len(core_keys), "core_reliability": ratio}
+    return {
+        "core_running": running,
+        "core_total": len(core_keys),
+        "core_reliability": ratio,
+        "core_effective_running": details,
+    }
 
 
 def _service_status_snapshot() -> Dict[str, Any]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -92,6 +93,13 @@ def _render_text(score: Dict[str, Any]) -> str:
     return "\n".join(rows)
 
 
+def _has_breach_kind(alert: Dict[str, Any], kinds: set[str]) -> bool:
+    for row in list(alert.get("breaches") or []):
+        if str(row.get("kind") or "") in kinds:
+            return True
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Compute aligned Carmack KPI scorecard.")
     ap.add_argument("--window-hours", type=float, default=4.0, help="Window size in hours.")
@@ -108,6 +116,22 @@ def main() -> int:
         action="store_true",
         help="Exit non-zero when alert status is breach (for cron/webhook gating).",
     )
+    ap.add_argument(
+        "--confirm-seconds",
+        type=int,
+        default=0,
+        help="If breached, recheck after N seconds before declaring final breach.",
+    )
+    ap.add_argument(
+        "--auto-remediate-core",
+        action="store_true",
+        help="If still breached after confirm, run service ensure/recheck for core-flow breaches.",
+    )
+    ap.add_argument(
+        "--remediate-on",
+        default="core_reliability_low,bridge_heartbeat_stale",
+        help="Comma-separated breach kinds eligible for auto-remediation.",
+    )
     args = ap.parse_args()
 
     score = build_scorecard(window_hours=args.window_hours)
@@ -115,6 +139,43 @@ def main() -> int:
 
     if args.alert_json:
         alert = build_health_alert(score, thresholds=threshold_overrides)
+        # False-breach guard: confirm once after a short delay.
+        if str(alert.get("status")) == "breach" and int(args.confirm_seconds or 0) > 0:
+            time.sleep(max(0, int(args.confirm_seconds)))
+            score_confirm = build_scorecard(window_hours=args.window_hours)
+            alert_confirm = build_health_alert(score_confirm, thresholds=threshold_overrides)
+            alert = {
+                **alert_confirm,
+                "precheck": {
+                    "status": str(alert.get("status") or ""),
+                    "breach_count": int(alert.get("breach_count") or 0),
+                },
+                "confirmed": True,
+            }
+
+        # Optional auto-remediation for persistent core-flow breaches.
+        if str(alert.get("status")) == "breach" and args.auto_remediate_core:
+            requested = {
+                x.strip()
+                for x in str(args.remediate_on or "").split(",")
+                if x.strip()
+            }
+            if _has_breach_kind(alert, requested):
+                from lib.service_control import ensure_services
+
+                remediation = ensure_services()
+                time.sleep(8)
+                score_post = build_scorecard(window_hours=args.window_hours)
+                alert_post = build_health_alert(score_post, thresholds=threshold_overrides)
+                alert = {
+                    **alert_post,
+                    "auto_remediation": {
+                        "applied": True,
+                        "requested_kinds": sorted(requested),
+                        "service_actions": remediation,
+                    },
+                }
+
         print(json.dumps(alert, indent=2))
         if args.fail_on_breach and str(alert.get("status")) == "breach":
             return 2
