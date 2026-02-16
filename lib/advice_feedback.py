@@ -19,6 +19,59 @@ STATE_FILE = Path.home() / ".spark" / "advice_feedback_state.json"
 CORRELATION_SCHEMA_VERSION = 2
 
 
+def _session_lineage(session_id: Optional[str]) -> Dict[str, Any]:
+    """Best-effort session lineage metadata for parent/child attribution."""
+    sid = str(session_id or "").strip()
+    if not sid:
+        return {
+            "session_kind": "unknown",
+            "is_subagent": False,
+            "depth_hint": 0,
+            "session_tree_key": "",
+            "root_session_hint": "",
+            "parent_session_hint": "",
+        }
+
+    if ":subagent:" in sid:
+        head = sid.split(":subagent:", 1)[0]
+        return {
+            "session_kind": "subagent",
+            "is_subagent": True,
+            "depth_hint": 2,
+            "session_tree_key": head,
+            "root_session_hint": f"{head}:main",
+            "parent_session_hint": f"{head}:main",
+        }
+    if ":cron:" in sid:
+        head = sid.split(":cron:", 1)[0]
+        return {
+            "session_kind": "cron",
+            "is_subagent": False,
+            "depth_hint": 1,
+            "session_tree_key": head,
+            "root_session_hint": sid,
+            "parent_session_hint": "",
+        }
+    if sid.endswith(":main"):
+        return {
+            "session_kind": "main",
+            "is_subagent": False,
+            "depth_hint": 1,
+            "session_tree_key": sid.rsplit(":main", 1)[0],
+            "root_session_hint": sid,
+            "parent_session_hint": "",
+        }
+
+    return {
+        "session_kind": "other",
+        "is_subagent": False,
+        "depth_hint": 1,
+        "session_tree_key": sid,
+        "root_session_hint": sid,
+        "parent_session_hint": "",
+    }
+
+
 def _correlation_ids(
     *,
     session_id: Optional[str],
@@ -98,6 +151,7 @@ def record_advice_request(
             advice_ids=advice_ids,
             run_id=run_id,
         )
+        lineage = _session_lineage(session_id)
         # Deterministic joins require trace_id for high-confidence attribution.
         if not corr.get("trace_id"):
             log_debug("advice_feedback", "record_advice_request skipped: missing trace_id", None)
@@ -114,6 +168,12 @@ def record_advice_request(
             "run_id": corr.get("run_id"),
             "primary_advisory_id": corr.get("primary_advisory_id"),
             "advisory_group_key": corr.get("advisory_group_key"),
+            "session_kind": lineage.get("session_kind"),
+            "is_subagent": bool(lineage.get("is_subagent")),
+            "depth_hint": int(lineage.get("depth_hint") or 0),
+            "session_tree_key": str(lineage.get("session_tree_key") or ""),
+            "root_session_hint": str(lineage.get("root_session_hint") or ""),
+            "parent_session_hint": str(lineage.get("parent_session_hint") or ""),
             "route": (str(route)[:80] if route else None),
             "packet_id": (str(packet_id)[:120] if packet_id else None),
             "created_at": now,
@@ -165,6 +225,7 @@ def record_feedback(
     outcome: Optional[str] = None,
     trace_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     packet_id: Optional[str] = None,
     route: Optional[str] = None,
     notes: str = "",
@@ -180,12 +241,13 @@ def record_feedback(
         if oc and oc not in {"good", "bad", "neutral"}:
             oc = ""
         corr = _correlation_ids(
-            session_id=None,
+            session_id=session_id,
             tool=tool,
             trace_id=trace_id,
             advice_ids=advice_ids,
             run_id=run_id,
         )
+        lineage = _session_lineage(session_id)
         row = {
             "schema_version": CORRELATION_SCHEMA_VERSION,
             "advice_ids": advice_ids[:20],
@@ -200,6 +262,13 @@ def record_feedback(
             "run_id": corr.get("run_id"),
             "primary_advisory_id": corr.get("primary_advisory_id"),
             "advisory_group_key": corr.get("advisory_group_key"),
+            "session_id": (str(session_id)[:160] if session_id else None),
+            "session_kind": lineage.get("session_kind"),
+            "is_subagent": bool(lineage.get("is_subagent")),
+            "depth_hint": int(lineage.get("depth_hint") or 0),
+            "session_tree_key": str(lineage.get("session_tree_key") or ""),
+            "root_session_hint": str(lineage.get("root_session_hint") or ""),
+            "parent_session_hint": str(lineage.get("parent_session_hint") or ""),
             "packet_id": (str(packet_id)[:120] if packet_id else None),
             "route": (str(route)[:80] if route else None),
             "notes": notes[:200] if notes else "",

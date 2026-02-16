@@ -93,6 +93,8 @@ except Exception:
     GLOBAL_DEDUPE_COOLDOWN_S = 600.0
 GLOBAL_DEDUPE_LOG = Path.home() / ".spark" / "advisory_global_dedupe.jsonl"
 GLOBAL_DEDUPE_LOG_MAX = 5000
+# Dedupe scope: global (all sessions) or tree (main + subagents under same agent tree).
+GLOBAL_DEDUPE_SCOPE = str(os.getenv("SPARK_ADVISORY_GLOBAL_DEDUPE_SCOPE", "global") or "global").strip().lower()
 
 # (pytest hygiene handled in *_recently_emitted helpers)
 
@@ -210,6 +212,7 @@ def _global_recently_emitted(
     advice_id: str,
     now_ts: float,
     cooldown_s: float,
+    scope_key: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     # Keep tests hermetic: don't consult the user's real ~/.spark dedupe logs.
     # (Allow tests that monkeypatch the log path to still exercise the logic.)
@@ -227,9 +230,12 @@ def _global_recently_emitted(
         rows = _tail_jsonl(GLOBAL_DEDUPE_LOG, 400)
     except Exception:
         return None
+    scope = str(scope_key or "").strip()
     for row in reversed(rows):
         try:
             if str(row.get("advice_id") or "").strip() != aid:
+                continue
+            if scope and str(row.get("scope_key") or "").strip() not in {"", scope}:
                 continue
             ts = float(row.get("ts") or 0.0)
         except Exception:
@@ -250,6 +256,7 @@ def _global_recently_emitted_text_sig(
     text_sig: str,
     now_ts: float,
     cooldown_s: float,
+    scope_key: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     # Keep tests hermetic: don't consult the user's real ~/.spark dedupe logs.
     # (Allow tests that monkeypatch the log path to still exercise the logic.)
@@ -267,9 +274,12 @@ def _global_recently_emitted_text_sig(
         rows = _tail_jsonl(GLOBAL_DEDUPE_LOG, 400)
     except Exception:
         return None
+    scope = str(scope_key or "").strip()
     for row in reversed(rows):
         try:
             if str(row.get("text_sig") or "").strip() != sig:
+                continue
+            if scope and str(row.get("scope_key") or "").strip() not in {"", scope}:
                 continue
             ts = float(row.get("ts") or 0.0)
         except Exception:
@@ -718,6 +728,67 @@ def _provider_path_from_route(route: str) -> str:
     return "unknown"
 
 
+def _session_lineage(session_id: str) -> Dict[str, Any]:
+    sid = str(session_id or "").strip()
+    if not sid:
+        return {
+            "session_kind": "unknown",
+            "is_subagent": False,
+            "depth_hint": 0,
+            "session_tree_key": "",
+            "root_session_hint": "",
+            "parent_session_hint": "",
+        }
+
+    if ":subagent:" in sid:
+        head = sid.split(":subagent:", 1)[0]
+        return {
+            "session_kind": "subagent",
+            "is_subagent": True,
+            "depth_hint": 2,
+            "session_tree_key": head,
+            "root_session_hint": f"{head}:main",
+            "parent_session_hint": f"{head}:main",
+        }
+    if ":cron:" in sid:
+        head = sid.split(":cron:", 1)[0]
+        return {
+            "session_kind": "cron",
+            "is_subagent": False,
+            "depth_hint": 1,
+            "session_tree_key": head,
+            "root_session_hint": sid,
+            "parent_session_hint": "",
+        }
+    if sid.endswith(":main"):
+        return {
+            "session_kind": "main",
+            "is_subagent": False,
+            "depth_hint": 1,
+            "session_tree_key": sid.rsplit(":main", 1)[0],
+            "root_session_hint": sid,
+            "parent_session_hint": "",
+        }
+
+    return {
+        "session_kind": "other",
+        "is_subagent": False,
+        "depth_hint": 1,
+        "session_tree_key": sid,
+        "root_session_hint": sid,
+        "parent_session_hint": "",
+    }
+
+
+def _dedupe_scope_key(session_id: str) -> str:
+    scope = str(GLOBAL_DEDUPE_SCOPE or "global").strip().lower()
+    if scope == "tree":
+        lineage = _session_lineage(session_id)
+        key = str(lineage.get("session_tree_key") or "").strip()
+        return key or str(session_id or "")
+    return "global"
+
+
 def _diagnostics_envelope(
     *,
     session_id: str,
@@ -739,6 +810,7 @@ def _diagnostics_envelope(
         missing_sources = [name for name, count in source_counts.items() if count <= 0]
 
     resolved_scope = str(scope or bundle.get("scope") or MEMORY_SCOPE_DEFAULT).strip() or "session"
+    lineage = _session_lineage(session_id)
     envelope: Dict[str, Any] = {
         "session_id": str(session_id or ""),
         "trace_id": str(trace_id or ""),
@@ -747,6 +819,12 @@ def _diagnostics_envelope(
         "provider_path": _provider_path_from_route(route),
         "source_counts": source_counts,
         "missing_sources": missing_sources,
+        "session_kind": lineage.get("session_kind"),
+        "is_subagent": bool(lineage.get("is_subagent")),
+        "depth_hint": int(lineage.get("depth_hint") or 0),
+        "session_tree_key": str(lineage.get("session_tree_key") or ""),
+        "root_session_hint": str(lineage.get("root_session_hint") or ""),
+        "parent_session_hint": str(lineage.get("parent_session_hint") or ""),
     }
     if "memory_absent_declared" in bundle:
         envelope["memory_absent_declared"] = bool(bundle.get("memory_absent_declared"))
@@ -1350,6 +1428,7 @@ def on_pre_tool(
             ):
                 now_ts = time.time()
                 cooldown = float(GLOBAL_DEDUPE_COOLDOWN_S)
+                dedupe_scope = _dedupe_scope_key(session_id)
                 kept = []
                 suppressed: List[Dict[str, Any]] = []
                 for decision in list(gate_result.emitted or []):
@@ -1361,6 +1440,7 @@ def on_pre_tool(
                         advice_id=aid,
                         now_ts=now_ts,
                         cooldown_s=cooldown,
+                        scope_key=dedupe_scope,
                     )
                     if hit:
                         suppressed.append(
@@ -1383,6 +1463,7 @@ def on_pre_tool(
                                 text_sig=sig,
                                 now_ts=now_ts,
                                 cooldown_s=cooldown,
+                                scope_key=dedupe_scope,
                             )
                             if hit_sig:
                                 suppressed.append(
@@ -1419,6 +1500,7 @@ def on_pre_tool(
                                 "suppressed_count": len(suppressed),
                                 "suppressed": suppressed[:8],
                                 "cooldown_s": round(float(cooldown), 2),
+                                "dedupe_scope": dedupe_scope,
                             },
                         )
                         return None
@@ -1571,6 +1653,8 @@ def on_pre_tool(
         effective_text = str(effective_action_meta.get("text") or effective_text)
         if emitted:
             shown_ids = [d.advice_id for d in gate_result.emitted]
+            dedupe_scope = _dedupe_scope_key(session_id)
+            session_lineage = _session_lineage(session_id)
             mark_advice_shown(state, shown_ids)
             suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
             # Track retrieval only for delivered advice items (strict attribution).
@@ -1622,6 +1706,8 @@ def on_pre_tool(
                             "authority": top_authority,
                             "trace_id": resolved_trace_id,
                             "route": route,
+                            "scope_key": dedupe_scope,
+                            "session_kind": session_lineage.get("session_kind"),
                         },
                         max_lines=int(LOW_AUTH_DEDUPE_LOG_MAX),
                     )
@@ -1655,6 +1741,8 @@ def on_pre_tool(
                                 "authority": str(getattr(d, "authority", "") or ""),
                                 "trace_id": resolved_trace_id,
                                 "route": route,
+                                "scope_key": dedupe_scope,
+                                "session_kind": session_lineage.get("session_kind"),
                                 "text_sig": text_sig,
                             },
                             max_lines=int(GLOBAL_DEDUPE_LOG_MAX),

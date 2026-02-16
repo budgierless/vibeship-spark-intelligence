@@ -113,3 +113,47 @@ def test_build_scorecard_reads_files_and_computes_core_reliability(tmp_path, mon
     assert score["current"]["good_advice_used"] == 1
     assert round(score["metrics"]["gaur"]["current"], 4) == 0.5
     assert round(score["core"]["core_reliability"], 4) == 0.75
+
+
+def test_build_health_alert_ok_when_thresholds_clear(monkeypatch):
+    monkeypatch.setattr(ck, "_sample_failure_snapshot", lambda limit=12: {"sampled_failures": [], "sample_count": 0})
+    score = {
+        "generated_at": 100.0,
+        "window_hours": 4.0,
+        "core": {"core_reliability": 1.0},
+        "metrics": {"gaur": {"current": 0.4}, "noise_burden": {"current": 0.2}},
+        "service_status": {"bridge_worker": {"heartbeat_age_s": 10.0}},
+        "current": {"event_counts": {}, "delivered": 3},
+    }
+
+    alert = ck.build_health_alert(score)
+    assert alert["status"] == "ok"
+    assert alert["breach_count"] == 0
+    assert "snapshot" not in alert
+
+
+def test_build_health_alert_includes_snapshot_on_breach(monkeypatch):
+    monkeypatch.setattr(
+        ck,
+        "_sample_failure_snapshot",
+        lambda limit=12: {"sampled_failures": [{"event": "engine_error"}], "sample_count": 1},
+    )
+    score = {
+        "generated_at": 100.0,
+        "window_hours": 4.0,
+        "core": {"core_reliability": 0.5},
+        "metrics": {"gaur": {"current": 0.1}, "noise_burden": {"current": 0.9}},
+        "service_status": {
+            "sparkd": {"running": True},
+            "bridge_worker": {"heartbeat_age_s": 999.0},
+            "scheduler": {"running": True},
+            "watchdog": {"running": True},
+        },
+        "current": {"event_counts": {"engine_error": 1}, "delivered": 0},
+    }
+
+    alert = ck.build_health_alert(score)
+    assert alert["status"] == "breach"
+    assert alert["breach_count"] >= 1
+    assert "snapshot" in alert
+    assert alert["snapshot"]["sample_count"] == 1

@@ -16,6 +16,13 @@ EFFECTIVENESS_FILE = SPARK_DIR / "advisor" / "effectiveness.json"
 SYNC_STATS_FILE = SPARK_DIR / "sync_stats.json"
 CHIP_MERGE_FILE = SPARK_DIR / "chip_merge_state.json"
 
+DEFAULT_ALERT_THRESHOLDS = {
+    "max_bridge_heartbeat_age_s": 120.0,
+    "min_core_reliability": 0.75,
+    "max_noise_burden": 0.65,
+    "min_gaur": 0.20,
+}
+
 
 def _safe_ratio(num: float, den: float) -> Optional[float]:
     if den <= 0:
@@ -181,6 +188,38 @@ def _service_status_snapshot() -> Dict[str, Any]:
         return {}
 
 
+def _sample_failure_snapshot(limit: int = 12) -> Dict[str, Any]:
+    rows = _read_jsonl(ADVISORY_LOG, limit=max(40, int(limit * 4)))
+    interesting = {
+        "engine_error",
+        "fallback_emit_failed",
+        "global_dedupe_suppressed",
+        "low_auth_global_suppressed",
+        "synth_empty",
+        "no_advice",
+    }
+    out: List[Dict[str, Any]] = []
+    for row in reversed(rows):
+        event = str(row.get("event") or "")
+        if event not in interesting:
+            continue
+        out.append(
+            {
+                "ts": float(row.get("ts") or 0.0),
+                "event": event,
+                "tool": str(row.get("tool") or ""),
+                "trace_id": str(row.get("trace_id") or ""),
+                "route": str(row.get("route") or ""),
+                "error_code": str(row.get("error_code") or ""),
+                "error_kind": str(row.get("error_kind") or ""),
+            }
+        )
+        if len(out) >= max(1, int(limit)):
+            break
+    out.reverse()
+    return {"sampled_failures": out, "sample_count": len(out)}
+
+
 def build_scorecard(window_hours: float = 4.0, now_ts: Optional[float] = None) -> Dict[str, Any]:
     now = float(now_ts if now_ts is not None else time.time())
     window_s = max(300.0, float(window_hours) * 3600.0)
@@ -262,3 +301,101 @@ def build_scorecard(window_hours: float = 4.0, now_ts: Optional[float] = None) -
             "last_stats": chip_last,
         },
     }
+
+
+def build_health_alert(
+    scorecard: Dict[str, Any],
+    *,
+    thresholds: Optional[Dict[str, float]] = None,
+    include_snapshot_on_breach: bool = True,
+) -> Dict[str, Any]:
+    """Build summary-first health alert with optional sampled debug snapshot.
+
+    Returns a compact summary suitable for webhook/cron notifications. When
+    thresholds are breached, includes a lightweight sampled failure snapshot for
+    debuggability (without dumping full logs).
+    """
+    cfg = dict(DEFAULT_ALERT_THRESHOLDS)
+    for k, v in (thresholds or {}).items():
+        try:
+            cfg[str(k)] = float(v)
+        except Exception:
+            continue
+
+    breaches: List[Dict[str, Any]] = []
+    status = scorecard.get("service_status") if isinstance(scorecard, dict) else {}
+    bridge = status.get("bridge_worker") if isinstance(status, dict) else {}
+    hb_age = bridge.get("heartbeat_age_s") if isinstance(bridge, dict) else None
+    if hb_age is not None and float(hb_age) > float(cfg["max_bridge_heartbeat_age_s"]):
+        breaches.append(
+            {
+                "kind": "bridge_heartbeat_stale",
+                "value": float(hb_age),
+                "threshold": float(cfg["max_bridge_heartbeat_age_s"]),
+                "direction": "max",
+            }
+        )
+
+    core_rel = (((scorecard.get("core") or {}).get("core_reliability")) if isinstance(scorecard, dict) else None)
+    if core_rel is not None and float(core_rel) < float(cfg["min_core_reliability"]):
+        breaches.append(
+            {
+                "kind": "core_reliability_low",
+                "value": float(core_rel),
+                "threshold": float(cfg["min_core_reliability"]),
+                "direction": "min",
+            }
+        )
+
+    gaur = (((scorecard.get("metrics") or {}).get("gaur") or {}).get("current")) if isinstance(scorecard, dict) else None
+    if gaur is not None and float(gaur) < float(cfg["min_gaur"]):
+        breaches.append(
+            {
+                "kind": "gaur_low",
+                "value": float(gaur),
+                "threshold": float(cfg["min_gaur"]),
+                "direction": "min",
+            }
+        )
+
+    noise = (((scorecard.get("metrics") or {}).get("noise_burden") or {}).get("current")) if isinstance(scorecard, dict) else None
+    if noise is not None and float(noise) > float(cfg["max_noise_burden"]):
+        breaches.append(
+            {
+                "kind": "noise_burden_high",
+                "value": float(noise),
+                "threshold": float(cfg["max_noise_burden"]),
+                "direction": "max",
+            }
+        )
+
+    summary = {
+        "generated_at": float(scorecard.get("generated_at") or time.time()),
+        "window_hours": float(scorecard.get("window_hours") or 0.0),
+        "status": "breach" if breaches else "ok",
+        "breach_count": len(breaches),
+        "breaches": breaches,
+        "thresholds": cfg,
+        "headline": (
+            "Health thresholds breached" if breaches else "Health within thresholds"
+        ),
+    }
+
+    if breaches and include_snapshot_on_breach:
+        summary["snapshot"] = {
+            "current": {
+                "event_counts": ((scorecard.get("current") or {}).get("event_counts") or {}),
+                "delivered": int(((scorecard.get("current") or {}).get("delivered") or 0)),
+                "gaur": gaur,
+                "noise_burden": noise,
+            },
+            "service": {
+                "sparkd": ((status or {}).get("sparkd") or {}),
+                "bridge_worker": ((status or {}).get("bridge_worker") or {}),
+                "scheduler": ((status or {}).get("scheduler") or {}),
+                "watchdog": ((status or {}).get("watchdog") or {}),
+            },
+            **_sample_failure_snapshot(limit=10),
+        }
+
+    return summary
