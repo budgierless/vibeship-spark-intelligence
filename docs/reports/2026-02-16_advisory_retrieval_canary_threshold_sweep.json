@@ -1,0 +1,65 @@
+[
+    {
+        "profile":  "strict",
+        "status":  "rolled_back",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135335.json"
+    },
+    {
+        "profile":  "medium",
+        "status":  "rolled_back",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135420.json"
+    },
+    {
+        "profile":  "edge",
+        "status":  "promoted",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135507.json"
+    },
+    {
+        "profile":  "recommended_candidate",
+        "status":  "promoted",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135549.json"
+    },
+    {
+        "profile":  "safe",
+        "status":  "promoted",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135645.json"
+    },
+    {
+        "profile":  "recommended_candidate_repeat1",
+        "status":  "promoted",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135731.json"
+    },
+    {
+        "profile":  "recommended_candidate_repeat2",
+        "status":  "promoted",
+        "mrr":  0.2489,
+        "gate":  0.3333,
+        "adv":  0.5,
+        "winner":  "baseline",
+        "report":  "2026-02-16_advisory_retrieval_canary_20260216_135820.json"
+    }
+]
