@@ -2854,10 +2854,10 @@ class SparkAdvisor:
                     advice_id,
                     outcome_str,
                     notes,
-                    # Prefer the retrieval trace (from recent advice log) when available,
-                    # so strict attribution remains trace-bound even if callers report
-                    # the outcome under a follow-on trace.
-                    trace_id=derived_trace or trace_id,
+                    # Prefer the explicit trace_id when provided (so trace-mismatched
+                    # outcomes remain weak-only). Fall back to the retrieval trace from
+                    # the recent advice log when callers don't provide a trace_id.
+                    trace_id=trace_id or derived_trace,
                     insight_key=ik,
                     source=src,
                 )

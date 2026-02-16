@@ -93,6 +93,9 @@ except Exception:
     GLOBAL_DEDUPE_COOLDOWN_S = 600.0
 GLOBAL_DEDUPE_LOG = Path.home() / ".spark" / "advisory_global_dedupe.jsonl"
 GLOBAL_DEDUPE_LOG_MAX = 5000
+
+# (pytest hygiene handled in *_recently_emitted helpers)
+
 try:
     INLINE_PREFETCH_MAX_JOBS = max(
         1, int(os.getenv("SPARK_ADVISORY_PREFETCH_INLINE_MAX_JOBS", "1") or 1)
@@ -162,6 +165,15 @@ def _low_auth_recently_emitted(
     now_ts: float,
     cooldown_s: float,
 ) -> Optional[Dict[str, Any]]:
+    # Keep tests hermetic: don't consult the user's real ~/.spark dedupe logs.
+    # (Allow tests that monkeypatch the log path to still exercise the logic.)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        try:
+            default_log = (Path.home() / ".spark" / "advisory_low_auth_dedupe.jsonl").resolve()
+            if LOW_AUTH_DEDUPE_LOG.resolve() == default_log:
+                return None
+        except Exception:
+            return None
     if not advice_id or cooldown_s <= 0:
         return None
     rows = _tail_jsonl(LOW_AUTH_DEDUPE_LOG, 250)
@@ -199,6 +211,15 @@ def _global_recently_emitted(
     now_ts: float,
     cooldown_s: float,
 ) -> Optional[Dict[str, Any]]:
+    # Keep tests hermetic: don't consult the user's real ~/.spark dedupe logs.
+    # (Allow tests that monkeypatch the log path to still exercise the logic.)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        try:
+            default_log = (Path.home() / ".spark" / "advisory_global_dedupe.jsonl").resolve()
+            if GLOBAL_DEDUPE_LOG.resolve() == default_log:
+                return None
+        except Exception:
+            return None
     aid = str(advice_id or "").strip()
     if not aid:
         return None
@@ -230,6 +251,15 @@ def _global_recently_emitted_text_sig(
     now_ts: float,
     cooldown_s: float,
 ) -> Optional[Dict[str, Any]]:
+    # Keep tests hermetic: don't consult the user's real ~/.spark dedupe logs.
+    # (Allow tests that monkeypatch the log path to still exercise the logic.)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        try:
+            default_log = (Path.home() / ".spark" / "advisory_global_dedupe.jsonl").resolve()
+            if GLOBAL_DEDUPE_LOG.resolve() == default_log:
+                return None
+        except Exception:
+            return None
     sig = str(text_sig or "").strip()
     if not sig:
         return None
