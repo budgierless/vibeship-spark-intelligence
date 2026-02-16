@@ -37,6 +37,11 @@ from lib.taste_api import add_from_dashboard
 from lib.diagnostics import setup_component_logging, log_exception
 from lib.ports import DASHBOARD_PORT, PULSE_PORT, META_RALPH_PORT, MIND_HEALTH_URL
 from lib.run_log import get_recent_runs, get_run_detail, get_run_kpis
+from lib.advisory_preferences import (
+    setup_questions as advisory_setup_questions,
+    get_current_preferences as advisory_get_current_preferences,
+    apply_preferences as advisory_apply_preferences,
+)
 
 # Service control
 from lib.service_control import service_status
@@ -132,6 +137,28 @@ def _to_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _get_advisory_setup_payload() -> Dict[str, Any]:
+    current = advisory_get_current_preferences()
+    setup = advisory_setup_questions(current=current)
+    return {
+        "ok": True,
+        "preferences": current,
+        "setup": setup,
+    }
+
+
+def _apply_advisory_preferences_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    body = payload if isinstance(payload, dict) else {}
+    memory_mode = body.get("memory_mode")
+    guidance_style = body.get("guidance_style")
+    source = str(body.get("source") or "dashboard")
+    return advisory_apply_preferences(
+        memory_mode=memory_mode,
+        guidance_style=guidance_style,
+        source=source,
+    )
 
 
 def _build_advisory_status_block(engine_status: Dict[str, Any], now_ts: Optional[float] = None) -> Dict[str, Any]:
@@ -4916,6 +4943,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(get_ops_data(), indent=2).encode())
+        elif path == '/api/advisory/setup':
+            payload = _get_advisory_setup_payload()
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(payload, indent=2).encode())
+        elif path == '/api/advisory/preferences':
+            payload = {
+                "ok": True,
+                "preferences": advisory_get_current_preferences(),
+            }
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(payload, indent=2).encode())
         elif path == '/api/trace':
             trace_id = ""
             if "trace_id" in query and query["trace_id"]:
@@ -4952,6 +4994,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+
         # Safety: only accept POSTs from localhost by default.
         remote = str(self.client_address[0]) if getattr(self, 'client_address', None) else ''
         allow_remote = str(os.environ.get('SPARK_DASHBOARD_ALLOW_REMOTE_POST') or '').strip().lower() in {'1','true','yes','on'}
@@ -4962,7 +5007,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'ok': False, 'error': 'remote POST forbidden'}).encode())
             return
 
-        if self.path == '/api/taste/add':
+        if path == '/api/taste/add':
             length = int(self.headers.get('Content-Length', '0') or 0)
             raw = self.rfile.read(length) if length else b'{}'
             try:
@@ -4978,7 +5023,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path in ('/api/eidos/escape', '/api/eidos/minimal/enter', '/api/eidos/minimal/exit', '/api/eidos/escalate'):
+        if path in ('/api/eidos/escape', '/api/eidos/minimal/enter', '/api/eidos/minimal/exit', '/api/eidos/escalate'):
             length = int(self.headers.get('Content-Length', '0') or 0)
             raw = self.rfile.read(length) if length else b'{}'
             try:
@@ -4986,11 +5031,34 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except Exception:
                 payload = {}
 
-            status, message = _handle_eidos_action(self.path, payload)
+            status, message = _handle_eidos_action(path, payload)
             body = json.dumps({"status": status, "message": message}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path in ('/api/advisory/setup', '/api/advisory/preferences'):
+            length = int(self.headers.get('Content-Length', '0') or 0)
+            raw = self.rfile.read(length) if length else b'{}'
+            try:
+                payload = json.loads(raw.decode('utf-8') or '{}')
+            except Exception:
+                payload = {}
+
+            try:
+                result = _apply_advisory_preferences_payload(payload)
+                body = json.dumps(result).encode('utf-8')
+                self.send_response(200)
+            except Exception as exc:
+                body = json.dumps({
+                    "ok": False,
+                    "error": f"advisory preferences update failed: {exc}",
+                }).encode('utf-8')
+                self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
             return

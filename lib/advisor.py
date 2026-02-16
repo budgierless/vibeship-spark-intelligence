@@ -88,6 +88,8 @@ REPLAY_MAX_RECORDS = int(os.environ.get("SPARK_ADVISORY_REPLAY_MAX_RECORDS", "35
 REPLAY_MAX_AGE_S = int(os.environ.get("SPARK_ADVISORY_REPLAY_MAX_AGE_S", str(21 * 86400)) or (21 * 86400))
 REPLAY_STRICT_WINDOW_S = int(os.environ.get("SPARK_ADVISORY_REPLAY_STRICT_WINDOW_S", "1200") or 1200)
 REPLAY_MIN_CONTEXT_MATCH = float(os.environ.get("SPARK_ADVISORY_REPLAY_MIN_CONTEXT", "0.12") or 0.12)
+REPLAY_MODE = "replay" if REPLAY_ADVISORY_ENABLED else "off"
+GUIDANCE_STYLE = "balanced"
 
 # Thresholds (Improvement #8: Advisor Integration tuneables)
 # Defaults — overridden by ~/.spark/tuneables.json → "advisor" section at module load.
@@ -291,6 +293,9 @@ def _load_advisor_config() -> None:
     global MIN_RELIABILITY_FOR_ADVICE, MIN_VALIDATIONS_FOR_STRONG_ADVICE
     global MAX_ADVICE_ITEMS, ADVICE_CACHE_TTL_SECONDS, MIN_RANK_SCORE
     global MIND_MAX_STALE_SECONDS, MIND_STALE_ALLOW_IF_EMPTY, MIND_MIN_SALIENCE
+    global REPLAY_ADVISORY_ENABLED, REPLAY_MIN_STRICT_SAMPLES, REPLAY_MIN_IMPROVEMENT_DELTA
+    global REPLAY_MAX_RECORDS, REPLAY_MAX_AGE_S, REPLAY_STRICT_WINDOW_S, REPLAY_MIN_CONTEXT_MATCH
+    global REPLAY_MODE, GUIDANCE_STYLE
     try:
         # Tests should be deterministic and not depend on user-local ~/.spark state.
         # However, some unit tests *do* validate this loader by monkeypatching Path.home().
@@ -342,11 +347,64 @@ def _load_advisor_config() -> None:
             )
         if "mind_min_salience" in cfg:
             MIND_MIN_SALIENCE = max(0.0, min(1.0, float(cfg["mind_min_salience"])))
+
+        if "replay_mode" in cfg:
+            mode = str(cfg.get("replay_mode") or "").strip().lower()
+            if mode in {"off", "standard", "replay"}:
+                REPLAY_MODE = mode
+                REPLAY_ADVISORY_ENABLED = mode != "off"
+        if "guidance_style" in cfg:
+            style = str(cfg.get("guidance_style") or "").strip().lower()
+            if style in {"concise", "balanced", "coach"}:
+                GUIDANCE_STYLE = style
+        if "replay_enabled" in cfg:
+            REPLAY_ADVISORY_ENABLED = _parse_bool(
+                cfg.get("replay_enabled"),
+                REPLAY_ADVISORY_ENABLED,
+            )
+            if not REPLAY_ADVISORY_ENABLED:
+                REPLAY_MODE = "off"
+            elif REPLAY_MODE == "off":
+                REPLAY_MODE = "replay"
+        if "replay_min_strict" in cfg:
+            REPLAY_MIN_STRICT_SAMPLES = max(1, int(cfg.get("replay_min_strict") or 1))
+        if "replay_min_delta" in cfg:
+            REPLAY_MIN_IMPROVEMENT_DELTA = max(
+                0.0, min(0.95, float(cfg.get("replay_min_delta") or 0.0))
+            )
+        if "replay_max_records" in cfg:
+            REPLAY_MAX_RECORDS = max(200, int(cfg.get("replay_max_records") or 200))
+        if "replay_max_age_s" in cfg:
+            REPLAY_MAX_AGE_S = max(3600, int(cfg.get("replay_max_age_s") or 3600))
+        if "replay_strict_window_s" in cfg:
+            REPLAY_STRICT_WINDOW_S = max(60, int(cfg.get("replay_strict_window_s") or 60))
+        if "replay_min_context" in cfg:
+            REPLAY_MIN_CONTEXT_MATCH = max(
+                0.0, min(1.0, float(cfg.get("replay_min_context") or 0.0))
+            )
     except Exception:
         pass  # Fail silently — keep hard-coded defaults
 
 
 _load_advisor_config()
+
+
+def reload_advisor_config() -> Dict[str, Any]:
+    """Reload advisor tuneables and return the effective replay/user preference subset."""
+    _load_advisor_config()
+    return {
+        "replay_mode": REPLAY_MODE,
+        "guidance_style": GUIDANCE_STYLE,
+        "replay_enabled": bool(REPLAY_ADVISORY_ENABLED),
+        "replay_min_strict": int(REPLAY_MIN_STRICT_SAMPLES),
+        "replay_min_delta": float(REPLAY_MIN_IMPROVEMENT_DELTA),
+        "replay_max_records": int(REPLAY_MAX_RECORDS),
+        "replay_max_age_s": int(REPLAY_MAX_AGE_S),
+        "replay_strict_window_s": int(REPLAY_STRICT_WINDOW_S),
+        "replay_min_context": float(REPLAY_MIN_CONTEXT_MATCH),
+        "max_items": int(MAX_ADVICE_ITEMS),
+        "min_rank_score": float(MIN_RANK_SCORE),
+    }
 
 
 def _maybe_warn_deprecated_advisor_retrieval_policy(

@@ -113,3 +113,39 @@ def test_opportunity_snapshot_includes_latest_and_adoption(monkeypatch):
     assert out["adoption_rate"] == 0.5
     assert out["acted_total"] == 2
     assert len(out["latest"]) == 2
+
+
+def test_advisory_setup_payload_contains_current_preferences(monkeypatch):
+    current = {"memory_mode": "standard", "guidance_style": "balanced", "effective": {"max_items": 8}}
+    monkeypatch.setattr(dashboard, "advisory_get_current_preferences", lambda: current)
+    monkeypatch.setattr(
+        dashboard,
+        "advisory_setup_questions",
+        lambda current: {"current": current, "questions": [{"id": "memory_mode"}, {"id": "guidance_style"}]},
+    )
+
+    out = dashboard._get_advisory_setup_payload()
+
+    assert out["ok"] is True
+    assert out["preferences"] == current
+    assert len(out["setup"]["questions"]) == 2
+
+
+def test_apply_advisory_preferences_payload_passes_values(monkeypatch):
+    calls = {}
+
+    def _fake_apply(memory_mode=None, guidance_style=None, source="dashboard"):
+        calls["memory_mode"] = memory_mode
+        calls["guidance_style"] = guidance_style
+        calls["source"] = source
+        return {"ok": True}
+
+    monkeypatch.setattr(dashboard, "advisory_apply_preferences", _fake_apply)
+    out = dashboard._apply_advisory_preferences_payload(
+        {"memory_mode": "replay", "guidance_style": "coach", "source": "api"}
+    )
+
+    assert out["ok"] is True
+    assert calls["memory_mode"] == "replay"
+    assert calls["guidance_style"] == "coach"
+    assert calls["source"] == "api"
