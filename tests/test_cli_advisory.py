@@ -201,3 +201,47 @@ def test_cmd_advisory_quality_calls_uplift(monkeypatch, capsys):
     assert calls["source"] == "spark_cli_quality"
     assert "Advisory Quality Uplift" in out
     assert "synth_tier: AI-Enhanced" in out
+
+
+def test_cmd_advisory_doctor_json(monkeypatch, capsys):
+    monkeypatch.setattr(
+        spark_cli,
+        "_advisory_doctor_snapshot",
+        lambda: {"ok": True, "advisory_on": True, "recommendations": ["No action needed"]},
+    )
+
+    spark_cli.cmd_advisory(_args(advisory_cmd="doctor", json=True))
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["ok"] is True
+    assert payload["advisory_on"] is True
+
+
+def test_cmd_advisory_repair_uses_preference_repair(monkeypatch, capsys):
+    calls = {}
+
+    def _fake_repair(source=""):
+        calls["source"] = source
+        return {
+            "before_drift": {"has_drift": True, "count": 2},
+            "after_drift": {"has_drift": False, "count": 0},
+            "applied": {
+                "memory_mode": "standard",
+                "guidance_style": "balanced",
+                "effective": {"replay_enabled": True},
+            },
+        }
+
+    monkeypatch.setattr(spark_cli, "repair_advisory_profile_drift", _fake_repair)
+    monkeypatch.setattr(
+        spark_cli,
+        "_get_advisory_runtime_state",
+        lambda: {"available": True, "engine_enabled": True, "emitter_enabled": True},
+    )
+
+    spark_cli.cmd_advisory(_args(advisory_cmd="repair", source="spark_cli_repair"))
+    out = capsys.readouterr().out
+
+    assert calls["source"] == "spark_cli_repair"
+    assert "before_drift: yes (2 overrides)" in out
+    assert "after_drift: no (0 overrides)" in out

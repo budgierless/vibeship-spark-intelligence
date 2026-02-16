@@ -418,3 +418,28 @@ def apply_quality_uplift(
         "runtime": runtime,
         "path": str(path),
     }
+
+
+def repair_profile_drift(
+    *,
+    path: Path = TUNEABLES_PATH,
+    source: str = "manual",
+) -> Dict[str, Any]:
+    before = get_current_preferences(path=path)
+    mode = before.get("memory_mode")
+    style = before.get("guidance_style")
+    applied = apply_preferences(
+        memory_mode=mode,
+        guidance_style=style,
+        path=path,
+        source=source,
+    )
+    after = get_current_preferences(path=path)
+    return {
+        "ok": True,
+        "memory_mode": mode,
+        "guidance_style": style,
+        "before_drift": before.get("drift", {}),
+        "after_drift": after.get("drift", {}),
+        "applied": applied,
+    }

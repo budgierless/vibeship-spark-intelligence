@@ -165,3 +165,27 @@ def test_apply_quality_uplift_persists_and_hot_applies(monkeypatch, tmp_path):
     assert data["synthesizer"]["mode"] == "auto"
     assert data["synthesizer"]["preferred_provider"] == "ollama"
     assert data["advisory_quality"]["profile"] == "enhanced"
+
+
+def test_repair_profile_drift_clears_overrides(monkeypatch, tmp_path):
+    tuneables = tmp_path / "tuneables.json"
+    tuneables.write_text(
+        json.dumps(
+            {
+                "advisor": {
+                    "replay_mode": "standard",
+                    "guidance_style": "balanced",
+                    "max_items": 3,
+                    "min_rank_score": 0.45,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(advisor_mod, "reload_advisor_config", lambda: {})
+
+    out = prefs.repair_profile_drift(path=tuneables, source="test")
+
+    assert out["ok"] is True
+    assert out["before_drift"]["has_drift"] is True
+    assert out["after_drift"]["has_drift"] is False

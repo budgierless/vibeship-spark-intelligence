@@ -94,6 +94,7 @@ from lib.advisory_preferences import (
     apply_preferences as apply_advisory_preferences,
     apply_quality_uplift as apply_advisory_quality_uplift,
     get_current_preferences as get_current_advisory_preferences,
+    repair_profile_drift as repair_advisory_profile_drift,
     setup_questions as get_advisory_setup_questions,
 )
 from lib.outcome_log import append_outcome, make_outcome_id, auto_link_outcomes, get_linkable_candidates
@@ -1933,9 +1934,70 @@ def _with_advisory_runtime(preferences: dict) -> dict:
     return out
 
 
+def _advisory_doctor_snapshot() -> dict:
+    prefs = _with_advisory_runtime(get_current_advisory_preferences())
+    effective = prefs.get("effective") if isinstance(prefs.get("effective"), dict) else {}
+    drift = prefs.get("drift") if isinstance(prefs.get("drift"), dict) else {}
+    runtime = prefs.get("runtime") if isinstance(prefs.get("runtime"), dict) else {}
+
+    replay_on = bool(effective.get("replay_enabled", prefs.get("memory_mode") != "off"))
+    runtime_up = bool(runtime.get("engine_enabled")) and bool(runtime.get("emitter_enabled"))
+    advisory_on = replay_on and runtime_up if runtime.get("available") else replay_on
+
+    recommendations = []
+    if not runtime_up:
+        recommendations.append("spark up")
+    if not replay_on:
+        recommendations.append("spark advisory on")
+    if drift.get("has_drift"):
+        recommendations.append("spark advisory repair")
+    if not bool(runtime.get("synth_ai_available")):
+        recommendations.append("spark advisory quality --profile enhanced --provider ollama")
+    if not recommendations:
+        recommendations.append("No action needed")
+
+    return {
+        "ok": True,
+        "advisory_on": advisory_on,
+        "runtime_up": runtime_up,
+        "replay_on": replay_on,
+        "memory_mode": prefs.get("memory_mode"),
+        "guidance_style": prefs.get("guidance_style"),
+        "drift": drift,
+        "runtime": runtime,
+        "recommendations": recommendations,
+        "preferences": prefs,
+    }
+
+
 def cmd_advisory(args):
     """Configure advisory preferences (memory replay + guidance style)."""
     advisory_cmd = str(getattr(args, "advisory_cmd", "") or "setup").strip().lower()
+
+    if advisory_cmd == "doctor":
+        snapshot = _advisory_doctor_snapshot()
+        if getattr(args, "json", False):
+            print(json.dumps(snapshot, indent=2))
+            return
+        print("[SPARK] Advisory Doctor")
+        print(f"  advisory_on: {'yes' if snapshot.get('advisory_on') else 'no'}")
+        print(f"  runtime_up: {'yes' if snapshot.get('runtime_up') else 'no'}")
+        print(f"  replay_on: {'yes' if snapshot.get('replay_on') else 'no'}")
+        print(f"  memory_mode: {snapshot.get('memory_mode')}")
+        print(f"  guidance_style: {snapshot.get('guidance_style')}")
+        drift = snapshot.get("drift") if isinstance(snapshot.get("drift"), dict) else {}
+        if drift.get("has_drift"):
+            print(f"  profile_drift: yes ({drift.get('count', 0)} overrides)")
+        else:
+            print("  profile_drift: no")
+        runtime = snapshot.get("runtime") if isinstance(snapshot.get("runtime"), dict) else {}
+        print(f"  synth_tier: {runtime.get('synth_tier', 'unknown')}")
+        print(f"  synth_ai_available: {'yes' if runtime.get('synth_ai_available') else 'no'}")
+        recs = snapshot.get("recommendations") or []
+        print("  recommended_next:")
+        for rec in recs:
+            print(f"    - {rec}")
+        return
 
     if advisory_cmd == "show":
         current = _with_advisory_runtime(get_current_advisory_preferences())
@@ -1946,6 +2008,16 @@ def cmd_advisory(args):
         return
 
     source = str(getattr(args, "source", "") or f"spark_cli_{advisory_cmd}")
+    if advisory_cmd == "repair":
+        result = repair_advisory_profile_drift(source=source)
+        before = result.get("before_drift") if isinstance(result.get("before_drift"), dict) else {}
+        after = result.get("after_drift") if isinstance(result.get("after_drift"), dict) else {}
+        print("[SPARK] Advisory Profile Repair")
+        print(f"  before_drift: {'yes' if before.get('has_drift') else 'no'} ({before.get('count', 0)} overrides)")
+        print(f"  after_drift: {'yes' if after.get('has_drift') else 'no'} ({after.get('count', 0)} overrides)")
+        _print_advisory_preferences(_with_advisory_runtime(result.get("applied", {})))
+        return
+
     if advisory_cmd == "quality":
         result = apply_advisory_quality_uplift(
             profile=getattr(args, "profile", "enhanced"),
@@ -2019,7 +2091,7 @@ def cmd_advisory(args):
         _print_advisory_preferences(_with_advisory_runtime(result))
         return
 
-    print("Use: spark advisory [setup|show|set|on|off|quality]")
+    print("Use: spark advisory [setup|show|set|on|off|repair|doctor|quality]")
 
 
 def cmd_memory(args):
@@ -2541,6 +2613,8 @@ Examples:
   spark capture --accept <id>
   spark advisory
   spark advisory on
+  spark advisory doctor
+  spark advisory repair
   spark advisory quality --profile enhanced
 """
     )
@@ -2668,6 +2742,9 @@ Examples:
     advisory_show = advisory_sub.add_parser("show", help="Show current advisory preferences")
     advisory_show.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    advisory_doctor = advisory_sub.add_parser("doctor", help="Diagnose advisory runtime and profile drift")
+    advisory_doctor.add_argument("--json", action="store_true", help="Emit JSON output")
+
     advisory_set = advisory_sub.add_parser("set", help="Set advisory preferences directly")
     advisory_set.add_argument("--memory-mode", choices=["off", "standard", "replay"], help="Memory replay mode")
     advisory_set.add_argument(
@@ -2698,6 +2775,9 @@ Examples:
         help="Optional style to persist while disabled",
     )
     advisory_off.add_argument("--source", default="spark_cli_off", help="Source label for metadata")
+
+    advisory_repair = advisory_sub.add_parser("repair", help="Re-apply profile defaults and clear drift")
+    advisory_repair.add_argument("--source", default="spark_cli_repair", help="Source label for metadata")
 
     advisory_quality = advisory_sub.add_parser("quality", help="Configure AI synthesis quality profile")
     advisory_quality.add_argument(

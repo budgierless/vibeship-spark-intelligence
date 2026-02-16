@@ -109,6 +109,23 @@ What it does:
 - Hot-applies settings at runtime (engine + synthesizer).
 - Reports whether AI providers are actually available, and warns if none are available for AI modes.
 
+### 7) Advisory doctor + repair commands
+
+Files: `spark/cli.py`, `lib/advisory_preferences.py`
+
+- New commands:
+  - `spark advisory doctor`
+  - `spark advisory repair`
+
+What they do:
+
+- `doctor`:
+  - Checks end-to-end advisory health (runtime up/down, replay on/off, synth tier).
+  - Detects profile drift and prints recommended next commands.
+- `repair`:
+  - Re-applies current `memory_mode` and `guidance_style` defaults.
+  - Clears drift for managed keys (`max_items`, `min_rank_score`, replay thresholds).
+
 ## Why this design
 
 - Two questions are enough for most users:
