@@ -47,6 +47,20 @@ This log tracks Spark x OpenClaw integration changes that should be easy to audi
 2. Add weekly strict-quality rollup report with lineage slices.
 3. Keep each integration change as a separate commit for rollback clarity.
 
+### Realtime verification follow-up (2026-02-16 15:00 UTC)
+
+- Ran realtime benchmark and observed advisory check instability:
+  - `docs/reports/openclaw/2026-02-16_190008_openclaw_realtime_e2e_benchmark.md`
+  - Status `warn` was caused by `advisory_engine_emitted_nonzero` requiring fresh `emitted>0`, while
+    the same run showed active advisory flow and high `global_dedupe_suppressed` counts.
+- Hardened benchmark check semantics to reduce false warnings:
+  - `scripts/openclaw_realtime_e2e_benchmark.py`
+  - Check now passes when either:
+    - new advisory emissions are present, or
+    - emissions are dedupe-suppressed and advisory delivery is still fresh in workspace/fallback surfaces.
+- Added regression tests for this logic:
+  - `tests/test_openclaw_realtime_e2e_benchmark.py`
+
 ### Audit artifact
 
 - Generated report:

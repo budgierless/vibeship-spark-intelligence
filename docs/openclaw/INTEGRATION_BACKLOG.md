@@ -26,6 +26,7 @@ Maintain an auditable backlog for Spark x OpenClaw integration changes, with:
 - [x] Add schema-transition dashboards for advisory feedback (`legacy` vs `schema_version=2`).
 - [ ] Add weekly "strict quality" rollup report with source/tool/session lineage slices.
 - [x] Add redacted OpenClaw integration audit tooling (`scripts/openclaw_integration_audit.py`).
+- [x] Stabilize realtime benchmark advisory signal check for dedupe-heavy windows (`scripts/openclaw_realtime_e2e_benchmark.py`).
 
 3. P2: Governance and lifecycle
 - [ ] Add formal advisory promotion/decay policy doc with exploration budget.
@@ -43,12 +44,14 @@ Maintain an auditable backlog for Spark x OpenClaw integration changes, with:
 - [x] Strict attribution metrics are computed from trace-bound outcome joins only.
 
 3. Runtime health
-- [ ] `spark-health-alert-watch` cron runs cleanly every hour.
-- [ ] Breach alert includes concise summary and sampled failure snapshot.
-- [ ] Auto-remediation only escalates after confirm delay.
+- [x] `spark-health-alert-watch` cron runs cleanly every hour.
+- [x] Breach alert includes concise summary and sampled failure snapshot.
+- [x] Auto-remediation only escalates after confirm delay.
+- [x] Realtime benchmark can distinguish true advisory outage vs dedupe-suppressed healthy flow.
 
 ## Tracking
 
 - Primary changelog: `docs/openclaw/INTEGRATION_CHANGELOG.md`
+- Verification log: `docs/openclaw/VERIFICATION_LOG.md`
 - Path/sensitivity map: `docs/OPENCLAW_PATHS_AND_DATA_BOUNDARIES.md`
 - Config snippets: `docs/openclaw/OPENCLAW_CONFIG_SNIPPETS.md`
