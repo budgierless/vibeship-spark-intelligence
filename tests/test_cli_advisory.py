@@ -28,6 +28,11 @@ def test_cmd_advisory_show_json(monkeypatch, capsys):
             "effective": {"replay_enabled": True},
         },
     )
+    monkeypatch.setattr(
+        spark_cli,
+        "_get_advisory_runtime_state",
+        lambda: {"available": True, "engine_enabled": True, "emitter_enabled": True},
+    )
 
     spark_cli.cmd_advisory(_args(advisory_cmd="show", json=True))
     payload = json.loads(capsys.readouterr().out)
@@ -35,6 +40,7 @@ def test_cmd_advisory_show_json(monkeypatch, capsys):
     assert payload["memory_mode"] == "standard"
     assert payload["guidance_style"] == "balanced"
     assert payload["effective"]["replay_enabled"] is True
+    assert payload["runtime"]["available"] is True
 
 
 def test_cmd_advisory_setup_applies_current_when_non_interactive(monkeypatch):
@@ -132,3 +138,24 @@ def test_cmd_advisory_off_forces_memory_mode_off(monkeypatch):
     assert calls["memory_mode"] == "off"
     assert calls["guidance_style"] == "coach"
     assert calls["source"] == "spark_cli_off"
+
+
+def test_print_advisory_preferences_uses_runtime_for_true_on_state(capsys):
+    spark_cli._print_advisory_preferences(
+        {
+            "memory_mode": "standard",
+            "guidance_style": "balanced",
+            "effective": {"replay_enabled": True},
+            "runtime": {
+                "available": True,
+                "engine_enabled": False,
+                "emitter_enabled": True,
+                "synth_tier": "Programmatic",
+            },
+        }
+    )
+    out = capsys.readouterr().out
+
+    assert "advisory_on: no" in out
+    assert "advisory_runtime: down" in out
+    assert "replay_advisory: on" in out

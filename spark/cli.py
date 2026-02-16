@@ -1876,18 +1876,55 @@ def _pick_advisory_option(question: dict, current_value: str) -> str:
 
 def _print_advisory_preferences(preferences: dict) -> None:
     effective = preferences.get("effective") if isinstance(preferences.get("effective"), dict) else {}
+    runtime = preferences.get("runtime") if isinstance(preferences.get("runtime"), dict) else {}
     memory_mode = str(preferences.get("memory_mode") or "standard")
     guidance_style = str(preferences.get("guidance_style") or "balanced")
-    advisory_on = bool(effective.get("replay_enabled", memory_mode != "off"))
+    replay_on = bool(effective.get("replay_enabled", memory_mode != "off"))
+    runtime_available = bool(runtime.get("available"))
+    runtime_on = bool(runtime.get("engine_enabled")) and bool(runtime.get("emitter_enabled"))
+    advisory_on = runtime_on and replay_on if runtime_available else replay_on
 
     print("[SPARK] Advisory Preferences")
     print(f"  advisory_on: {'yes' if advisory_on else 'no'}")
+    if runtime_available:
+        print(f"  advisory_runtime: {'up' if runtime_on else 'down'}")
+    print(f"  replay_advisory: {'on' if replay_on else 'off'}")
     print(f"  memory_mode: {memory_mode}")
     print(f"  guidance_style: {guidance_style}")
     if "max_items" in effective:
         print(f"  max_items: {effective.get('max_items')}")
     if "min_rank_score" in effective:
         print(f"  min_rank_score: {effective.get('min_rank_score')}")
+    if runtime_available and "synth_tier" in runtime:
+        print(f"  synth_tier: {runtime.get('synth_tier')}")
+
+
+def _get_advisory_runtime_state() -> dict:
+    """Best-effort runtime status for end-to-end advisory ON/OFF reporting."""
+    try:
+        from lib.advisory_engine import get_engine_status
+
+        status = get_engine_status()
+    except Exception:
+        return {"available": False}
+
+    if not isinstance(status, dict):
+        return {"available": False}
+    emitter = status.get("emitter") if isinstance(status.get("emitter"), dict) else {}
+    synth = status.get("synthesizer") if isinstance(status.get("synthesizer"), dict) else {}
+    return {
+        "available": True,
+        "engine_enabled": bool(status.get("enabled")),
+        "emitter_enabled": bool(emitter.get("enabled")),
+        "synth_tier": str(synth.get("tier_label") or ""),
+        "synth_ai_available": bool(synth.get("ai_available")),
+    }
+
+
+def _with_advisory_runtime(preferences: dict) -> dict:
+    out = dict(preferences or {})
+    out["runtime"] = _get_advisory_runtime_state()
+    return out
 
 
 def cmd_advisory(args):
@@ -1895,7 +1932,7 @@ def cmd_advisory(args):
     advisory_cmd = str(getattr(args, "advisory_cmd", "") or "setup").strip().lower()
 
     if advisory_cmd == "show":
-        current = get_current_advisory_preferences()
+        current = _with_advisory_runtime(get_current_advisory_preferences())
         if getattr(args, "json", False):
             print(json.dumps(current, indent=2))
             return
@@ -1918,7 +1955,7 @@ def cmd_advisory(args):
             guidance_style=guidance_style,
             source=source,
         )
-        _print_advisory_preferences(result)
+        _print_advisory_preferences(_with_advisory_runtime(result))
         return
 
     if advisory_cmd == "set":
@@ -1933,7 +1970,7 @@ def cmd_advisory(args):
             guidance_style=guidance_style,
             source=source,
         )
-        _print_advisory_preferences(result)
+        _print_advisory_preferences(_with_advisory_runtime(result))
         return
 
     if advisory_cmd == "on":
@@ -1944,7 +1981,7 @@ def cmd_advisory(args):
             guidance_style=guidance_style,
             source=source,
         )
-        _print_advisory_preferences(result)
+        _print_advisory_preferences(_with_advisory_runtime(result))
         return
 
     if advisory_cmd == "off":
@@ -1953,7 +1990,7 @@ def cmd_advisory(args):
             guidance_style=getattr(args, "guidance_style", None),
             source=source,
         )
-        _print_advisory_preferences(result)
+        _print_advisory_preferences(_with_advisory_runtime(result))
         return
 
     print("Use: spark advisory [setup|show|set|on|off]")
