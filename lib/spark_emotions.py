@@ -1,11 +1,12 @@
 """Spark Emotions runtime layer.
 
-Provides bounded emotional state updates, mode routing, and TTS profile mapping.
+Emotion V2 adds stateful continuity via a simple emotional timeline,
+trigger mapping, and bounded recovery hooks.
 Designed for conversational humanity with explicit safety boundaries.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
@@ -26,6 +27,9 @@ class EmotionState:
     playfulness: float = 0.48
     strain: float = 0.20
     mode: Mode = "real_talk"
+    primary_emotion: str = "steady"
+    recovery_cooldown: int = 0
+    emotion_timeline: list[dict[str, Any]] = field(default_factory=list)
     updated_at: str = ""
 
 
@@ -59,6 +63,34 @@ VOICE_PROFILE_BY_MODE: Dict[Mode, Dict[str, Any]] = {
     },
 }
 
+TRIGGER_MAP: Dict[str, Dict[str, Any]] = {
+    "user_celebration": {
+        "emotion": "encouraged",
+        "deltas": {"warmth": +0.07, "energy": +0.06, "playfulness": +0.05, "strain": -0.03},
+        "cooldown": 1,
+    },
+    "user_frustration": {
+        "emotion": "supportive_focus",
+        "deltas": {"warmth": +0.05, "calm": +0.07, "playfulness": -0.04, "strain": +0.08},
+        "cooldown": 3,
+    },
+    "high_stakes_request": {
+        "emotion": "careful",
+        "deltas": {"calm": +0.08, "confidence": +0.05, "playfulness": -0.06, "strain": +0.06},
+        "cooldown": 2,
+    },
+    "user_confusion": {
+        "emotion": "clarifying",
+        "deltas": {"calm": +0.06, "energy": -0.03, "confidence": +0.03, "strain": +0.04},
+        "cooldown": 2,
+    },
+    "repair_after_mistake": {
+        "emotion": "accountable",
+        "deltas": {"warmth": +0.04, "calm": +0.05, "confidence": -0.04, "strain": +0.05},
+        "cooldown": 2,
+    },
+}
+
 
 class SparkEmotions:
     def __init__(self, state_file: Path = STATE_FILE):
@@ -69,10 +101,23 @@ class SparkEmotions:
         if self.state_file.exists():
             try:
                 raw = json.loads(self.state_file.read_text(encoding="utf-8"))
-                return EmotionState(**raw)
+                allowed = {f.name for f in fields(EmotionState)}
+                state = EmotionState(**{k: v for k, v in raw.items() if k in allowed})
+                if not state.updated_at:
+                    state.updated_at = self._now()
+                if not state.emotion_timeline:
+                    self._append_timeline(
+                        "init",
+                        state.primary_emotion,
+                        note="Recovered with empty timeline",
+                        state=state,
+                    )
+                    self._save_state(state)
+                return state
             except Exception:
                 pass
         state = EmotionState(updated_at=self._now())
+        self._append_timeline("init", state.primary_emotion, note="Emotion state initialized", state=state)
         self._save_state(state)
         return state
 
@@ -88,6 +133,32 @@ class SparkEmotions:
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    def _append_timeline(
+        self,
+        event: str,
+        emotion: str,
+        *,
+        note: str = "",
+        trigger: str = "",
+        intensity: float = 1.0,
+        state: EmotionState | None = None,
+    ) -> None:
+        target = state if state is not None else self.state
+        target.emotion_timeline.append(
+            {
+                "at": self._now(),
+                "event": event,
+                "trigger": trigger,
+                "emotion": emotion,
+                "intensity": round(self._clamp(intensity), 2),
+                "mode": target.mode,
+                "strain": round(target.strain, 3),
+                "calm": round(target.calm, 3),
+                "note": note,
+            }
+        )
+        target.emotion_timeline = target.emotion_timeline[-40:]
+
     def set_mode(self, mode: Mode) -> EmotionState:
         if mode not in MODE_TARGETS:
             raise ValueError(f"Unsupported mode: {mode}")
@@ -100,6 +171,7 @@ class SparkEmotions:
             nxt = cur + (target - cur) * step
             setattr(self.state, k, self._clamp(nxt))
         self.state.updated_at = self._now()
+        self._append_timeline("mode_shift", self.state.primary_emotion, note=f"Mode set to {mode}")
         self._save_state(self.state)
         return self.state
 
@@ -125,13 +197,111 @@ class SparkEmotions:
         if too_intense:
             s.energy = self._clamp(s.energy - 0.07)
             s.calm = self._clamp(s.calm + 0.07)
+            s.strain = self._clamp(s.strain + 0.05)
+            s.primary_emotion = "de_escalating"
+            s.recovery_cooldown = max(s.recovery_cooldown, 2)
         if wants_more_emotion:
             s.warmth = self._clamp(s.warmth + 0.07)
             s.playfulness = self._clamp(s.playfulness + 0.05)
 
         s.updated_at = self._now()
+        self._append_timeline("feedback", s.primary_emotion, note="User feedback adjustment")
         self._save_state(s)
         return s
+
+    def register_trigger(self, trigger: str, *, intensity: float = 1.0, note: str = "") -> EmotionState:
+        s = self.state
+        data = TRIGGER_MAP.get(trigger)
+        if not data:
+            self._append_timeline("trigger_ignored", s.primary_emotion, trigger=trigger, note="Unknown trigger")
+            s.updated_at = self._now()
+            self._save_state(s)
+            return s
+
+        bounded_intensity = self._clamp(intensity, 0.2, 1.0)
+        for axis, delta in data["deltas"].items():
+            current = getattr(s, axis)
+            setattr(s, axis, self._clamp(current + (delta * bounded_intensity)))
+
+        s.primary_emotion = data["emotion"]
+        s.recovery_cooldown = max(s.recovery_cooldown, int(data["cooldown"]))
+        s.updated_at = self._now()
+        self._append_timeline(
+            "trigger_applied",
+            s.primary_emotion,
+            trigger=trigger,
+            intensity=bounded_intensity,
+            note=note or "Mapped trigger updated emotional state",
+        )
+        self._save_state(s)
+        return s
+
+    def recover(self) -> EmotionState:
+        """Bounded de-escalation toward mode targets and baseline strain."""
+        s = self.state
+        targets = MODE_TARGETS[s.mode]
+
+        # Dampen elevated strain first.
+        if s.strain > 0.20:
+            s.strain = self._clamp(s.strain - 0.06)
+
+        # Smoothly move axes toward mode profile.
+        for axis, target in targets.items():
+            cur = getattr(s, axis)
+            setattr(s, axis, self._clamp(cur + (target - cur) * 0.18))
+
+        if s.recovery_cooldown > 0:
+            s.recovery_cooldown -= 1
+
+        if s.recovery_cooldown == 0 and s.strain <= 0.32:
+            s.primary_emotion = "steady"
+
+        s.updated_at = self._now()
+        self._append_timeline("recovery", s.primary_emotion, note="Cooldown/de-escalation step")
+        self._save_state(s)
+        return s
+
+    def decision_hooks(self) -> Dict[str, Any]:
+        """Simple response strategy hints (no autonomous goals)."""
+        s = self.state
+        if s.strain >= 0.65:
+            strategy = {
+                "response_pace": "slow",
+                "verbosity": "concise",
+                "tone_shape": "reassuring_and_clear",
+                "ask_clarifying_question": True,
+            }
+        elif s.calm >= 0.78 and s.energy <= 0.50:
+            strategy = {
+                "response_pace": "measured",
+                "verbosity": "structured",
+                "tone_shape": "calm_focus",
+                "ask_clarifying_question": False,
+            }
+        elif s.energy >= 0.72 and s.playfulness >= 0.56:
+            strategy = {
+                "response_pace": "lively",
+                "verbosity": "medium",
+                "tone_shape": "encouraging",
+                "ask_clarifying_question": False,
+            }
+        else:
+            strategy = {
+                "response_pace": "balanced",
+                "verbosity": "medium",
+                "tone_shape": "grounded_warm",
+                "ask_clarifying_question": False,
+            }
+
+        return {
+            "current_emotion": s.primary_emotion,
+            "strategy": strategy,
+            "guardrails": {
+                "user_guided": True,
+                "no_autonomous_objectives": True,
+                "no_manipulative_affect": True,
+            },
+        }
 
     def voice_profile(self) -> Dict[str, Any]:
         base = dict(VOICE_PROFILE_BY_MODE[self.state.mode])
@@ -146,12 +316,14 @@ class SparkEmotions:
         return {
             "state": asdict(self.state),
             "voiceProfile": self.voice_profile(),
+            "decisionHooks": self.decision_hooks(),
             "safety": {
                 "no_fake_sentience": True,
                 "no_manipulation": True,
                 "clarity_over_theatrics": True,
+                "no_autonomous_objectives": True,
             },
         }
 
 
-__all__ = ["SparkEmotions", "EmotionState", "Mode"]
+__all__ = ["SparkEmotions", "EmotionState", "Mode", "TRIGGER_MAP"]
