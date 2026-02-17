@@ -25,3 +25,23 @@ Spark Emotions V2 upgrades the runtime from tone-only adjustments to a bounded e
 - `recover()`
 - `decision_hooks()`
 - Existing APIs retained: `set_mode()`, `apply_feedback()`, `voice_profile()`, `status()`.
+
+## Live wiring (V2 -> runtime behavior)
+Emotions V2 hooks are now consumed in the live advisory response path:
+
+- `lib/advisory_synthesizer.py::_emotion_decision_hooks()` loads `SparkEmotions().decision_hooks()` with fail-closed guardrails.
+- `synthesize_programmatic(...)` applies hook strategy to real output shaping:
+  - `verbosity=concise|structured|medium` changes how much context is emitted.
+  - `ask_clarifying_question=true` appends a short user-guided clarifier.
+- `_build_synthesis_prompt(...)` injects pace/verbosity/tone strategy for AI synthesis mode.
+
+Safety is preserved: if guardrails are missing (`user_guided` + `no_autonomous_objectives`), synthesis falls back to neutral defaults.
+
+### Quick verification
+Run:
+
+```bash
+pytest -q tests/test_advisory_synthesizer_emotions.py
+```
+
+Expected: tests pass and confirm Emotions V2 hooks affect both programmatic output shaping and AI prompt shaping.

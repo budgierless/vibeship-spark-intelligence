@@ -122,6 +122,51 @@ def _strip_thinking_tags(text: Optional[str]) -> str:
     return _THINK_TAG_RE.sub("", text).strip()
 
 
+def _get_emotion_decision_hooks() -> Dict[str, Any]:
+    """Best-effort fetch of live SparkEmotions decision hooks.
+
+    This must never break advisory runtime flow. If emotions are unavailable,
+    malformed, or throw, we return {} and continue unchanged.
+    """
+    try:
+        from .spark_emotions import SparkEmotions
+
+        hooks = SparkEmotions().decision_hooks()
+        if not isinstance(hooks, dict):
+            return {}
+        strategy = hooks.get("strategy")
+        if not isinstance(strategy, dict):
+            return {}
+        return {
+            "current_emotion": str(hooks.get("current_emotion") or "").strip(),
+            "response_pace": str(strategy.get("response_pace") or "").strip(),
+            "verbosity": str(strategy.get("verbosity") or "").strip(),
+            "tone_shape": str(strategy.get("tone_shape") or "").strip(),
+            "ask_clarifying_question": bool(strategy.get("ask_clarifying_question")),
+        }
+    except Exception:
+        return {}
+
+
+def _emotion_shaping_prompt_block(hooks: Dict[str, Any]) -> str:
+    """Render concise style constraints for synthesis prompts."""
+    if not hooks:
+        return ""
+    pace = hooks.get("response_pace") or "balanced"
+    verbosity = hooks.get("verbosity") or "medium"
+    tone_shape = hooks.get("tone_shape") or "grounded_warm"
+    current_emotion = hooks.get("current_emotion") or "steady"
+    ask_q = "yes" if hooks.get("ask_clarifying_question") else "no"
+    return (
+        "\nLive response-shaping hints (Spark Emotions):\n"
+        f"- Current emotion: {current_emotion}\n"
+        f"- Pace: {pace}\n"
+        f"- Verbosity: {verbosity}\n"
+        f"- Tone shape: {tone_shape}\n"
+        f"- Ask a clarifying question if uncertainty remains: {ask_q}\n"
+    )
+
+
 PREFERRED_PROVIDER = _sanitize_provider(PREFERRED_PROVIDER_ENV)
 
 
@@ -215,6 +260,54 @@ def _refresh_synth_config(force: bool = False) -> None:
 _refresh_synth_config(force=True)
 
 
+DEFAULT_DECISION_STRATEGY = {
+    "response_pace": "balanced",
+    "verbosity": "medium",
+    "tone_shape": "grounded_warm",
+    "ask_clarifying_question": False,
+}
+
+
+def _emotion_decision_hooks() -> Dict[str, Any]:
+    """Resolve Emotions V2 decision hooks safely for runtime response shaping."""
+    fallback = {
+        "current_emotion": "steady",
+        "strategy": dict(DEFAULT_DECISION_STRATEGY),
+        "guardrails": {
+            "user_guided": True,
+            "no_autonomous_objectives": True,
+            "no_manipulative_affect": True,
+        },
+    }
+    try:
+        from .spark_emotions import SparkEmotions
+
+        hooks = SparkEmotions().decision_hooks()
+    except Exception:
+        return fallback
+
+    if not isinstance(hooks, dict):
+        return fallback
+    strategy = hooks.get("strategy") if isinstance(hooks.get("strategy"), dict) else {}
+    guardrails = hooks.get("guardrails") if isinstance(hooks.get("guardrails"), dict) else {}
+
+    # Fail closed: only use strategy when user-guided + no autonomous objectives are explicit.
+    if not (guardrails.get("user_guided") and guardrails.get("no_autonomous_objectives")):
+        return fallback
+
+    merged = dict(DEFAULT_DECISION_STRATEGY)
+    merged.update({k: v for k, v in strategy.items() if k in merged})
+    return {
+        "current_emotion": str(hooks.get("current_emotion") or "steady"),
+        "strategy": merged,
+        "guardrails": {
+            "user_guided": True,
+            "no_autonomous_objectives": True,
+            "no_manipulative_affect": bool(guardrails.get("no_manipulative_affect", True)),
+        },
+    }
+
+
 # ============= Tier 1: Programmatic Synthesis =============
 
 def synthesize_programmatic(
@@ -232,12 +325,16 @@ def synthesize_programmatic(
     if not advice_items:
         return ""
 
-    sections = []
+    hooks = _emotion_decision_hooks()
+    strategy = hooks.get("strategy") if isinstance(hooks.get("strategy"), dict) else {}
+    verbosity = str(strategy.get("verbosity") or "medium").strip().lower()
+    ask_clarifying_question = bool(strategy.get("ask_clarifying_question"))
+
+    sections: List[str] = []
 
     # Group by authority/type
     warnings = []
     notes = []
-    whispers = []
 
     for item in advice_items:
         authority = getattr(item, "_authority", "note")  # Set by gate
@@ -255,27 +352,40 @@ def synthesize_programmatic(
 
         if authority == "warning":
             warnings.append(entry)
-        elif authority == "whisper":
-            whispers.append(entry)
-        else:
+        elif authority != "whisper":
             notes.append(entry)
+
+    max_warnings = 1 if verbosity == "concise" else 2
+    max_notes = 1 if verbosity == "concise" else (4 if verbosity == "structured" else 3)
 
     # Build the block
     if warnings:
-        sections.append("**Cautions:**")
-        for w in warnings[:2]:
-            conf = f" ({w['confidence']:.0%})" if w['confidence'] >= 0.7 else ""
-            sections.append(f"- {w['text']}{conf}")
+        if verbosity == "concise":
+            w = warnings[0]
+            conf = f" ({w['confidence']:.0%})" if w["confidence"] >= 0.7 else ""
+            sections.append(f"Caution: {w['text']}{conf}")
+        else:
+            sections.append("**Cautions:**")
+            for w in warnings[:max_warnings]:
+                conf = f" ({w['confidence']:.0%})" if w["confidence"] >= 0.7 else ""
+                sections.append(f"- {w['text']}{conf}")
 
     if notes:
-        if warnings:
+        if warnings and verbosity != "concise":
             sections.append("")
-        sections.append("**Relevant context:**")
-        for n in notes[:3]:
+        if verbosity != "concise":
+            sections.append("**Relevant context:**")
+        for n in notes[:max_notes]:
             # Strip leading tags like [Caution], [Past Failure] for cleaner display
             text = n["text"]
             text = text.lstrip("[").split("]", 1)[-1].strip() if text.startswith("[") else text
-            sections.append(f"- {text}")
+            if verbosity == "concise":
+                sections.append(text)
+            else:
+                sections.append(f"- {text}")
+
+    if ask_clarifying_question:
+        sections.append("If this doesn’t match your intent, what outcome matters most for this step?")
 
     if not sections:
         return ""
@@ -332,6 +442,22 @@ def _build_synthesis_prompt(
         source = getattr(item, "source", "unknown")
         items_text += f"  {i}. [{source}, {conf:.0%}] {text}\n"
 
+    hooks = _emotion_decision_hooks()
+    strategy = hooks.get("strategy") if isinstance(hooks.get("strategy"), dict) else {}
+    guardrails = hooks.get("guardrails") if isinstance(hooks.get("guardrails"), dict) else {}
+    emotion_block = (
+        "\nResponse shaping strategy (Emotions V2):\n"
+        f"- current_emotion: {hooks.get('current_emotion', 'steady')}\n"
+        f"- response_pace: {strategy.get('response_pace', 'balanced')}\n"
+        f"- verbosity: {strategy.get('verbosity', 'medium')}\n"
+        f"- tone_shape: {strategy.get('tone_shape', 'grounded_warm')}\n"
+        f"- ask_clarifying_question: {bool(strategy.get('ask_clarifying_question', False))}\n"
+        "- safety: user_guided="
+        f"{bool(guardrails.get('user_guided', True))}, "
+        "no_autonomous_objectives="
+        f"{bool(guardrails.get('no_autonomous_objectives', True))}\n"
+    )
+
     soul_block = ""
     if SOUL_UPGRADE_PROMPT_ENABLED:
         try:
@@ -350,7 +476,7 @@ def _build_synthesis_prompt(
 Current context:
 - Task phase: {phase}
 - Tool about to use: {tool_name}
-- Developer intent: {user_intent or 'not specified'}{soul_block}
+- Developer intent: {user_intent or 'not specified'}{emotion_block}{soul_block}
 
 Raw insights:
 {items_text}
@@ -358,7 +484,10 @@ Rules:
 - Be direct and specific, no filler
 - If insights conflict, note the tension briefly
 - Prioritize warnings and failure patterns
+- Follow the Emotions V2 response shaping strategy for pace/verbosity/tone
+- Never introduce autonomous goals; stay user-guided
 - Max 3 sentences. If only 1 insight, 1 sentence is fine
+- If ask_clarifying_question=true, end with one short clarifying question
 - Do NOT say "based on past learnings" or "according to insights" - just give the guidance
 - Format: plain text, no markdown headers"""
 
