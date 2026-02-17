@@ -384,7 +384,7 @@ def synthesize_programmatic(
             conf = f" ({w['confidence']:.0%})" if w["confidence"] >= 0.7 else ""
             sections.append(f"Caution: {w['text']}{conf}")
         else:
-            sections.append("**Cautions:**")
+            sections.append("Cautions:")
             for w in warnings[:max_warnings]:
                 conf = f" ({w['confidence']:.0%})" if w["confidence"] >= 0.7 else ""
                 sections.append(f"- {w['text']}{conf}")
@@ -393,7 +393,7 @@ def synthesize_programmatic(
         if warnings and verbosity != "concise":
             sections.append("")
         if verbosity != "concise":
-            sections.append("**Relevant context:**")
+            sections.append("Relevant context:")
         for n in notes[:max_notes]:
             # Strip leading tags like [Caution], [Past Failure] for cleaner display
             text = n["text"]

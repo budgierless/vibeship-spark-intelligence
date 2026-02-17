@@ -153,3 +153,36 @@ def test_programmatic_synthesis_applies_pace_to_detail_budget(monkeypatch):
     slow_bullets = sum(1 for line in slow.splitlines() if line.startswith("- "))
 
     assert lively_bullets > slow_bullets
+
+
+def test_programmatic_synthesis_is_plain_text_no_markdown_noise(monkeypatch):
+    monkeypatch.setattr(
+        synth,
+        "_emotion_decision_hooks",
+        lambda: {
+            "current_emotion": "steady",
+            "strategy": {
+                "response_pace": "balanced",
+                "verbosity": "medium",
+                "tone_shape": "grounded_warm",
+                "ask_clarifying_question": False,
+            },
+            "guardrails": {
+                "user_guided": True,
+                "no_autonomous_objectives": True,
+                "no_manipulative_affect": True,
+            },
+        },
+    )
+
+    text = synth.synthesize_programmatic(
+        [
+            _advice("[Caution] verify rollback before deploy", authority="warning"),
+            _advice("run quick smoke test on critical path"),
+        ]
+    )
+
+    assert "**" not in text
+    assert "<think>" not in text.lower()
+    assert "Cautions:" in text
+    assert "Relevant context:" in text
