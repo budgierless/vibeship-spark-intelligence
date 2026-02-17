@@ -74,3 +74,82 @@ def test_build_prompt_includes_emotions_v2_strategy(monkeypatch):
     assert "verbosity: structured" in prompt
     assert "tone_shape: calm_focus" in prompt
     assert "Never introduce autonomous goals; stay user-guided" in prompt
+
+
+def test_programmatic_synthesis_applies_tone_shape_opener(monkeypatch):
+    monkeypatch.setattr(
+        synth,
+        "_emotion_decision_hooks",
+        lambda: {
+            "current_emotion": "steady",
+            "strategy": {
+                "response_pace": "measured",
+                "verbosity": "medium",
+                "tone_shape": "calm_focus",
+                "ask_clarifying_question": False,
+            },
+            "guardrails": {
+                "user_guided": True,
+                "no_autonomous_objectives": True,
+                "no_manipulative_affect": True,
+            },
+        },
+    )
+
+    text = synth.synthesize_programmatic([_advice("run focused tests after edit")])
+
+    assert text.startswith("Calm focus:")
+
+
+def test_programmatic_synthesis_applies_pace_to_detail_budget(monkeypatch):
+    advice = [
+        _advice("run focused test suite"),
+        _advice("verify migration plan"),
+        _advice("check rollback readiness"),
+        _advice("capture release notes"),
+    ]
+
+    monkeypatch.setattr(
+        synth,
+        "_emotion_decision_hooks",
+        lambda: {
+            "current_emotion": "steady",
+            "strategy": {
+                "response_pace": "lively",
+                "verbosity": "medium",
+                "tone_shape": "grounded_warm",
+                "ask_clarifying_question": False,
+            },
+            "guardrails": {
+                "user_guided": True,
+                "no_autonomous_objectives": True,
+                "no_manipulative_affect": True,
+            },
+        },
+    )
+    lively = synth.synthesize_programmatic(advice)
+
+    monkeypatch.setattr(
+        synth,
+        "_emotion_decision_hooks",
+        lambda: {
+            "current_emotion": "steady",
+            "strategy": {
+                "response_pace": "slow",
+                "verbosity": "medium",
+                "tone_shape": "grounded_warm",
+                "ask_clarifying_question": False,
+            },
+            "guardrails": {
+                "user_guided": True,
+                "no_autonomous_objectives": True,
+                "no_manipulative_affect": True,
+            },
+        },
+    )
+    slow = synth.synthesize_programmatic(advice)
+
+    lively_bullets = sum(1 for line in lively.splitlines() if line.startswith("- "))
+    slow_bullets = sum(1 for line in slow.splitlines() if line.startswith("- "))
+
+    assert lively_bullets > slow_bullets

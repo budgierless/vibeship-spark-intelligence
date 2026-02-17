@@ -328,6 +328,8 @@ def synthesize_programmatic(
     hooks = _emotion_decision_hooks()
     strategy = hooks.get("strategy") if isinstance(hooks.get("strategy"), dict) else {}
     verbosity = str(strategy.get("verbosity") or "medium").strip().lower()
+    response_pace = str(strategy.get("response_pace") or "balanced").strip().lower()
+    tone_shape = str(strategy.get("tone_shape") or "grounded_warm").strip().lower()
     ask_clarifying_question = bool(strategy.get("ask_clarifying_question"))
 
     sections: List[str] = []
@@ -357,6 +359,23 @@ def synthesize_programmatic(
 
     max_warnings = 1 if verbosity == "concise" else 2
     max_notes = 1 if verbosity == "concise" else (4 if verbosity == "structured" else 3)
+
+    if response_pace == "slow":
+        max_warnings = max(1, max_warnings - 1)
+        max_notes = max(1, max_notes - 1)
+    elif response_pace == "lively":
+        max_notes = min(5, max_notes + 1)
+
+    tone_openers = {
+        "reassuring_and_clear": "Steady path:",
+        "calm_focus": "Calm focus:",
+        "encouraging": "You're on the right track:",
+        "grounded_warm": "Grounded take:",
+    }
+    if verbosity != "concise":
+        opener = tone_openers.get(tone_shape)
+        if opener:
+            sections.append(opener)
 
     # Build the block
     if warnings:
