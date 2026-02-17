@@ -3441,34 +3441,96 @@ class SparkAdvisor:
         return False
 
     def _score_actionability(self, text: str) -> float:
-        """Score how actionable advice is (0.0 to 1.0).
+        """Score actionability on 4 dimensions (0.0 to 1.0).
 
-        Actionable advice tells you WHAT TO DO, not just observations.
+        Dimensions:
+            has_directive   - Contains imperative verb (use, avoid, check, ensure, prefer)
+            has_condition   - Contains when/if/before/after trigger
+            has_specificity - References concrete tools, files, patterns, or tech
+            not_observation - NOT a passive observation, quote, log, or code snippet
+
+        Items scoring below ACTIONABILITY_GATE (0.3) are functionally dropped
+        by the rank_score multiplier (0.5 + score), giving them 0.5x-0.8x weight.
         """
         text_lower = text.lower()
-        score = 0.5  # Base score
+        text_stripped = text.strip()
 
-        # Strong action verbs = highly actionable (+0.3)
-        action_verbs = ['use ', 'avoid ', 'check ', 'verify ', 'ensure ', 'always ',
-                        'never ', 'remember ', "don't ", 'prefer ', 'try ', 'run ']
-        if any(v in text_lower for v in action_verbs):
-            score += 0.3
+        # ----- Dimension 1: Observation detection (hard disqualifiers) -----
+        not_observation = 1.0
 
-        # When-then patterns = conditional guidance (+0.2)
-        conditional_patterns = ['when ', 'if ', 'before ', 'after ', 'instead of']
+        # Retweet / X research
+        if text_stripped.startswith("RT @") or re.search(r"\(eng:\d+\)", text):
+            not_observation = 0.0
+        # DEPTH training log
+        elif text_stripped.startswith("[DEPTH:") and "reasoning:" in text_lower:
+            not_observation = 0.1
+        elif re.search(r"Strong (?:Socratic|CONNECTIONS|PARADOX|CONSCIOUSNESS|VOID|IDENTITY|DECOMPOSE|OPTIMIZE|SIMPLIFY)", text):
+            not_observation = 0.1
+        # Verbatim user quotes
+        elif re.match(r"^(User prefers |Now, can we|Can you now|lets make sure|by the way|instead of this|I think we|I'd say)", text):
+            not_observation = 0.15
+        # Code snippet (>50% non-alpha chars in first 100 chars)
+        elif len(text_stripped) > 20:
+            sample = text_stripped[:100]
+            alpha_ratio = sum(1 for c in sample if c.isalpha()) / max(1, len(sample))
+            if alpha_ratio < 0.4:
+                not_observation = 0.1
+        # X social tags
+        if re.match(r"^\[(vibe_coding|bittensor|openclaw_moltbook|ai agents|X Strategy)\]", text):
+            not_observation = 0.1
+        # Ship it / launch artifact
+        if text_stripped.startswith("Ship it:"):
+            not_observation = 0.2
+        # Chip observation (not directive)
+        if re.match(r"^\[Chip:\w+\].*(?:snapshot|mood|cultural_mood|engagement_snapshot)", text):
+            not_observation = 0.2
+
+        # ----- Dimension 2: Has directive verb -----
+        has_directive = 0.0
+        directive_verbs = [
+            'use ', 'avoid ', 'check ', 'verify ', 'ensure ', 'always ',
+            'never ', 'remember ', "don't ", 'prefer ', 'try ', 'run ',
+            'validate ', 'test ', 'confirm ', 'apply ', 'set ', 'configure ',
+            'wrap ', 'handle ', 'catch ', 'return ', 'raise ', 'log ',
+        ]
+        if any(text_lower.startswith(v) or f" {v}" in text_lower for v in directive_verbs):
+            has_directive = 0.8
+        # EIDOS/Caution tags = pre-validated directives
+        if text_stripped.startswith('[EIDOS') or text_stripped.startswith('[Caution]'):
+            has_directive = max(has_directive, 0.9)
+        # "Applied advisory:" prefix = actionable
+        if text_stripped.startswith("Applied advisory:"):
+            has_directive = max(has_directive, 0.6)
+
+        # ----- Dimension 3: Has condition/trigger -----
+        has_condition = 0.0
+        conditional_patterns = ['when ', 'if ', 'before ', 'after ', 'instead of ', 'unless ']
         if any(p in text_lower for p in conditional_patterns):
-            score += 0.2
+            has_condition = 0.7
 
-        # Vague/observational = less actionable (-0.2)
-        vague_patterns = ['user prefers', 'user likes', 'seems to', 'might be', 'probably']
-        if any(p in text_lower for p in vague_patterns):
-            score -= 0.2
+        # ----- Dimension 4: Has specificity -----
+        has_specificity = 0.0
+        specificity_markers = [
+            r'\b\w+\.py\b',           # Python file reference
+            r'\b\w+\.json\b',         # JSON file reference
+            r'\b\w+\.yaml\b',         # YAML file reference
+            r'\b(?:Edit|Write|Bash|Read|Grep|Glob)\b',  # Tool names
+            r'\b(?:pytest|git|pip|npm|docker)\b',  # CLI tools
+            r'\b(?:auth|token|jwt|session|cookie)\b',  # Domain terms
+            r'\b(?:port|endpoint|API|URL|HTTP)\b',  # Infra terms
+        ]
+        specificity_hits = sum(1 for pat in specificity_markers if re.search(pat, text, re.IGNORECASE))
+        has_specificity = min(1.0, specificity_hits * 0.35)
 
-        # EIDOS/Caution tags = already validated (+0.1)
-        if text.startswith('[EIDOS') or text.startswith('[Caution]'):
-            score += 0.1
+        # ----- Final score: weighted average -----
+        score = (
+            not_observation * 0.40 +
+            has_directive * 0.30 +
+            has_condition * 0.15 +
+            has_specificity * 0.15
+        )
 
-        return max(0.1, min(1.0, score))
+        return max(0.05, min(1.0, score))
 
     def _is_low_signal_struggle_text(self, text: str) -> bool:
         sample = str(text or "").strip().lower()
