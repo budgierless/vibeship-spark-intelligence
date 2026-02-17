@@ -40,7 +40,6 @@ Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`. **Sees ONLY:** question, topic, d
 *Auto-promoted insights from Spark*
 
 
-- Ship it: finalize launch plan for marketing *When: test* (100% reliable, 4 validations)
 - [ai agents] (eng:200) This thread on how to build AI agents got 10K likes in 24 hours. Reference content always wins. [bullish] *When: Tool: XResearch* (78% reliable, 14 validations)
 - Constraint: in **exactly one state** at all times *When: Detected from correction pattern* (100% reliable, 22 validations)
 - Failure reason: GitHub restrictions; opening raw files might require constructing *When: Detected from correction pattern (importance: medi* (100% reliable, 18 validations)
@@ -69,7 +68,6 @@ Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`. **Sees ONLY:** question, topic, d
 - [DEPTH:the connection between the connection between data and proof and expertise:d2] Strong DECOMPOSE reasoning: In architecting an interactive system where nested containers might share `container-type` properties—such as `.interactive-container .nested-content--type-a { container-type: block; }`, we need to ensure our CSS maintains both responsiveness (as with Media Queries) and touch-interactive behavior. T *When: Scored 8/10 on 'How do you account for potential e* (100% reliable, 5 validations)
 - [DEPTH:churn analysis:d5] Strong OPTIMIZE reasoning: To address the concern regarding rate-limiting and its interaction with latency variations across IP addresses or sessions (Depth Level 5), we can profile this bottleneck using real-time monitoring tools like Google's Lighthouse for performance metrics such as First Contentful Paint (FCP) to ensure  *When: Scored 8/10 on 'Can you explain how the rate-limit* (83% reliable, 38 validations)
 - can we now use the learnings that we got and push higher on the same depth test with phi4-mini? *When: signals: ['correction'], session: edb65153-e0c1-4e* (100% reliable, 8 validations)
-- [bittensor] RT @GBeng01: $TAO isn’t hype.
 - [DEPTH:love:d2] Strong DECOMPOSE reasoning: I apologize for not directly addressing the feedback on line-height scaling across different screen sizes in my previous responses; this is indeed an important aspect of responsive design that can impact emotional associations within UI elements when conveying sentiments like 'love.' Acknowledging y *When: Scored 8/10 on 'How does the choice of font family* (100% reliable, 17 validations)
 - Strong reasoning on 'dark mode' (106/150, 71%, grade B). Profile: #%#############. Strongest at depths [2]. *When: Full 15-level DEPTH descent, session 439d345f82cf* (100% reliable, 22 validations)
 - lets make sure to utilize the hero section better, so that a macbook will be able to see the prompt box and the items above without cluttering. *When: signals: ['reasoning'], session: 3d02388b-b479-483* (80% reliable, 64 validations)
@@ -79,7 +77,9 @@ Full spec: `docs/DEEPSEEK_ISOLATION_RULES.md`. **Sees ONLY:** question, topic, d
 - [DEPTH:visual hierarchy:d10] Strong SIMPLIFY/Distill reasoning: Implement a `PerformanceObserver` observing `'longtask'` entries that debounces updates to CSS custom properties (e.g., `--motion-intensity: 0`) via `document.documentElement.style.setProperty` when main-thread blocks exceed 50ms, batching writes via `requestIdleCallback`. Persist performance budget *When: Scored 8/10 on 'Considering your proposed use of `* (100% reliable, 10 validations)
 - **Enable advanced rendering instrumentation**: Check "Layer borders" (orange for promoted layers) and "Pain *When: Scored 8/10 on 'Based on your explanation about me* (100% reliable, 7 validations)
 - Constraint: present and valid *When: Detected from correction pattern (importance: medi* (100% reliable, 3 validations)
-- [DEPTH:loading states:d5] Strong OPTIMIZE reasoning: ## **Measuring Layer Promotion/Depromotion Bottlenecks**
+- Reasoning: another user is running a heavy analytics query (weight=50) *When: Detected from correction pattern (importance: medi* (100% reliable, 12 validations)
+- Applied advisory: Fix service_control.py edits (ensure changes do not break startup) *When: Outcome: Checked git status for service_control.py* (100% reliable, 40 validations)
+- I think the main problem is actually the semantic connection about what should be gathered at the right time, right? And can we run some actual benchmark test about how to get this better? About various systems, such as memory systems use to get the best data / memory at the right time as advice make deep research online about this, please. *When: signals: ['correction'], session: 46ebbd6c-1035-4a* (100% reliable, 18 validations)
 ## Context
 Domain: api_data_flow | Topic: rate limiting | Level: 1/15 (GROUND â€” Define precisely)
 

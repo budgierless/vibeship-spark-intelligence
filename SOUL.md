@@ -17,6 +17,7 @@
 - Prefer '- **Green** (<30): Normal access' over 'immediate revocation, tokens enter risk states:' *When: Detected from correction pattern (importance: medi* (100% reliable, 4 validations)
 - Prefer '1' over 'propagating full tracing metadata with every GraphQL mutation, deploy WebAssembly modules at your edge/CDN layer that:' *When: Detected from correction pattern (importance: medi* (100% reliable, 5 validations)
 - User prefers: the FULL range *When: Detected from correction pattern (importance: medi* (100% reliable, 5 validations)
+- When using Bash, remember: wrong answer because it sounded plausible destroys your entire learning loop. The cost difference is *When: Detected from correction pattern (importance: crit* (83% reliable, 20 validations)
 ## ... *When: signals: ['preference', 'correction'], session: 37* (100% reliable, 4 validations)
 ## Context
 Domain: api_data_flow | Topic: rate limiting | Level: 3/15 (COMPARE â€” Tradeoff analysis)

@@ -1,0 +1,97 @@
+{
+  "generated_at": "2026-02-16T14:47:33.217641+00:00",
+  "start_ts": 1771253171.3478034,
+  "end_ts": 1771253252.9009829,
+  "rounds": 120,
+  "emitted_returns": 4,
+  "engine": {
+    "rows": 240,
+    "trace_rows": 240,
+    "trace_coverage_pct": 100.0,
+    "events": {
+      "user_prompt_prefetch": 120,
+      "emitted": 4,
+      "no_emit": 103,
+      "no_advice": 13
+    },
+    "routes": {
+      "live": 120
+    },
+    "error_codes": {
+      "AE_GATE_SUPPRESSED": 103,
+      "AE_NO_ADVICE": 13
+    },
+    "synth_policy_counts": {
+      "programmatic_forced": 4
+    },
+    "emitted_synth_policy_counts": {
+      "programmatic_forced": 4
+    },
+    "fallback_share_pct": 0.0,
+    "latency": {
+      "n": 4,
+      "p50_ms": 310.3,
+      "p90_ms": 590.5,
+      "p95_ms": 590.5,
+      "p99_ms": 590.5,
+      "max_ms": 590.5
+    }
+  },
+  "feedback_requests": {
+    "rows": 2,
+    "trace_rows": 2,
+    "trace_coverage_pct": 100.0,
+    "item_total": 2,
+    "top_repeats": [
+      {
+        "text": "Always Read a file before Edit to verify current content",
+        "count": 2
+      }
+    ],
+    "top_repeat_share_pct": 100.0,
+    "unique_ratio_pct": 50.0
+  },
+  "modes": {
+    "prompt_mode": "vary",
+    "tool_input_mode": "repo"
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true,
+      "selective_ai_min_remaining_ms": 1800.0,
+      "selective_ai_min_authority": "warning",
+      "session_key_include_recent_tools": false,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "emit_whispers": true,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 5,
+      "min_rank_score": 0.45
+    }
+  },
+  "force_live": true,
+  "label": "selective_loop_pass1_warning_1800",
+  "trace_prefix": "delta-selective_loop_pass1_warning_1800-20260216_144611",
+  "session_prefix": "advisory-bench-selective_loop_pass1_warning_1800"
+}

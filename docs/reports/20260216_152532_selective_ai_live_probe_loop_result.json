@@ -1,0 +1,129 @@
+{
+  "generated_at_utc": "2026-02-16 15:25:32",
+  "rounds": 60,
+  "dedupe_history_preserved": false,
+  "tuneables_backup": "C:\\Users\\USER\\.spark\\backups\\tuneables.json.live_probe_loop_20260216_152403.bak",
+  "passes": [
+    {
+      "candidate": {
+        "name": "probe_pass1_note_1400_gate050_t12",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 1400,
+        "note_threshold": 0.5,
+        "whisper_threshold": 0.35,
+        "ai_timeout_s": 1.2,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_152403_probe_pass1_note_1400_gate050_t12_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass1_note_1400_gate050_t12",
+      "trace_prefix": "liveprobe-probe_pass1_note_1400_gate050_t12-20260216_152403",
+      "score": -176.5,
+      "metrics": {
+        "emitted": 1,
+        "no_emit": 40,
+        "synth_empty": 0,
+        "global_dedupe_suppressed": 12,
+        "no_advice": 7,
+        "p50_ms": 534.3,
+        "p95_ms": 534.3,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 1,
+        "gate_suppressed": 40,
+        "viable_live_profile": true,
+        "score": -176.5
+      }
+    },
+    {
+      "candidate": {
+        "name": "probe_pass2_note_1400_gate035_t09",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 1400,
+        "note_threshold": 0.35,
+        "whisper_threshold": 0.25,
+        "ai_timeout_s": 0.9,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_152432_probe_pass2_note_1400_gate035_t09_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass2_note_1400_gate035_t09",
+      "trace_prefix": "liveprobe-probe_pass2_note_1400_gate035_t09-20260216_152432",
+      "score": -123.0,
+      "metrics": {
+        "emitted": 1,
+        "no_emit": 2,
+        "synth_empty": 31,
+        "global_dedupe_suppressed": 19,
+        "no_advice": 7,
+        "p50_ms": 204.9,
+        "p95_ms": 204.9,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 1,
+        "gate_suppressed": 2,
+        "viable_live_profile": true,
+        "score": -123.0
+      }
+    },
+    {
+      "candidate": {
+        "name": "probe_pass3_warning_1800_gate050_t07",
+        "selective_ai_min_authority": "warning",
+        "selective_ai_min_remaining_ms": 1800,
+        "note_threshold": 0.5,
+        "whisper_threshold": 0.35,
+        "ai_timeout_s": 0.7,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_152502_probe_pass3_warning_1800_gate050_t07_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass3_warning_1800_gate050_t07",
+      "trace_prefix": "liveprobe-probe_pass3_warning_1800_gate050_t07-20260216_152502",
+      "score": -176.5,
+      "metrics": {
+        "emitted": 1,
+        "no_emit": 40,
+        "synth_empty": 0,
+        "global_dedupe_suppressed": 12,
+        "no_advice": 7,
+        "p50_ms": 615.5,
+        "p95_ms": 615.5,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 1,
+        "gate_suppressed": 40,
+        "viable_live_profile": true,
+        "score": -176.5
+      }
+    }
+  ],
+  "winner": {
+    "candidate": {
+      "name": "probe_pass2_note_1400_gate035_t09",
+      "selective_ai_min_authority": "note",
+      "selective_ai_min_remaining_ms": 1400,
+      "note_threshold": 0.35,
+      "whisper_threshold": 0.25,
+      "ai_timeout_s": 0.9,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true
+    },
+    "artifact": "docs\\reports\\20260216_152432_probe_pass2_note_1400_gate035_t09_live_probe_loop.json",
+    "session_prefix": "advisory-liveprobe-probe_pass2_note_1400_gate035_t09",
+    "trace_prefix": "liveprobe-probe_pass2_note_1400_gate035_t09-20260216_152432",
+    "score": -123.0,
+    "metrics": {
+      "emitted": 1,
+      "no_emit": 2,
+      "synth_empty": 31,
+      "global_dedupe_suppressed": 19,
+      "no_advice": 7,
+      "p50_ms": 204.9,
+      "p95_ms": 204.9,
+      "selective_hits": 0,
+      "programmatic_forced_hits": 1,
+      "gate_suppressed": 2,
+      "viable_live_profile": true,
+      "score": -123.0
+    }
+  },
+  "winner_reason": "best_viable_profile"
+}

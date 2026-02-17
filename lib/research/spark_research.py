@@ -39,7 +39,7 @@ def get_research_queries(domain: str, purpose: str = "all") -> List[str]:
     for p in purposes:
         templates = QUERY_TEMPLATES.get(p, [])
         for template in templates[:2]:
-            queries.append(template.format(domain=domain))
+            queries.append(template.format(domain=domain, year=datetime.now().year))
 
     return queries
 
@@ -69,7 +69,7 @@ def process_research_results(
     research = web_researcher.research_domain_sync(domain, results, purpose)
 
     # Update mastery
-    mastery = researcher.research_online(domain, results)
+    mastery = researcher.research_online(domain, results, purpose=purpose)
 
     return {
         "domain": domain,
@@ -91,6 +91,7 @@ def research_and_set_intent(
     domain: str,
     project_path: str,
     search_results: List[Dict] = None,
+    purpose: str = "best_practices",
     user_focus: List[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -113,7 +114,7 @@ def research_and_set_intent(
 
     # Research mastery
     if search_results:
-        mastery = researcher.research_online(domain, search_results)
+        mastery = researcher.research_online(domain, search_results, purpose=purpose)
         research_source = "web"
     else:
         mastery = researcher.research_domain(domain)
@@ -273,7 +274,7 @@ def on_research_complete(domain: str, project_path: str, results: List[Dict]) ->
     Processes results and sets learning intent.
     """
     # Process all results
-    processed = process_research_results(domain, results)
+    processed = process_research_results(domain, results, purpose="best_practices")
 
     # Set intent
     intent = set_learning_intent(domain, project_path)

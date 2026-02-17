@@ -1,0 +1,95 @@
+{
+  "generated_at_utc": "2026-02-16 14:45:54",
+  "rounds": 120,
+  "tuneables_backup": "C:\\Users\\USER\\.spark\\backups\\tuneables.json.selective_loop_20260216_144145.bak",
+  "passes": [
+    {
+      "candidate": {
+        "name": "pass1_warning_1800",
+        "selective_ai_min_authority": "warning",
+        "selective_ai_min_remaining_ms": 1800,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_144145_pass1_warning_1800_selective_loop.json",
+      "score": -69.0,
+      "metrics": {
+        "emitted": 14,
+        "no_emit": 106,
+        "no_advice": 0,
+        "p50_ms": 261.3,
+        "p95_ms": 366.1,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 14,
+        "gate_suppressed": 106,
+        "score": -69.0
+      }
+    },
+    {
+      "candidate": {
+        "name": "pass2_note_1800",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 1800,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_144309_pass2_note_1800_selective_loop.json",
+      "score": -178.5,
+      "metrics": {
+        "emitted": 7,
+        "no_emit": 101,
+        "no_advice": 12,
+        "p50_ms": 225.5,
+        "p95_ms": 691.4,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 7,
+        "gate_suppressed": 101,
+        "score": -178.5
+      }
+    },
+    {
+      "candidate": {
+        "name": "pass3_note_2400",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 2400,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_144427_pass3_note_2400_selective_loop.json",
+      "score": -227.5,
+      "metrics": {
+        "emitted": 4,
+        "no_emit": 103,
+        "no_advice": 13,
+        "p50_ms": 331.4,
+        "p95_ms": 626.7,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 4,
+        "gate_suppressed": 103,
+        "score": -227.5
+      }
+    }
+  ],
+  "winner": {
+    "candidate": {
+      "name": "pass1_warning_1800",
+      "selective_ai_min_authority": "warning",
+      "selective_ai_min_remaining_ms": 1800,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true
+    },
+    "artifact": "docs\\reports\\20260216_144145_pass1_warning_1800_selective_loop.json",
+    "score": -69.0,
+    "metrics": {
+      "emitted": 14,
+      "no_emit": 106,
+      "no_advice": 0,
+      "p50_ms": 261.3,
+      "p95_ms": 366.1,
+      "selective_hits": 0,
+      "programmatic_forced_hits": 14,
+      "gate_suppressed": 106,
+      "score": -69.0
+    }
+  }
+}

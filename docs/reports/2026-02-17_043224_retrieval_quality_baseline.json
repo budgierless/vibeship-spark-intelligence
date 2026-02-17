@@ -1,0 +1,334 @@
+{
+  "timestamp": "2026-02-17T04:32:24.491923",
+  "total_scenarios": 25,
+  "overall_precision_at_5": 0.42,
+  "noise_rate": 0.0,
+  "avg_latency_ms": 126.6,
+  "p95_latency_ms": 212.5,
+  "by_category": {
+    "code_editing": {
+      "count": 8,
+      "avg_precision": 0.438,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "debugging": {
+      "count": 5,
+      "avg_precision": 1.0,
+      "min_precision": 1.0,
+      "total_noise_items": 0
+    },
+    "research": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "x_social": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "general": {
+      "count": 4,
+      "avg_precision": 0.5,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "edit_python_auth",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 212.5,
+      "noise_samples": [],
+      "advice_texts": [
+        "Validate authentication inputs server-side and avoid trusting client checks.",
+        "Never log secrets or tokens; redact sensitive data in logs."
+      ]
+    },
+    {
+      "name": "edit_python_import",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 114.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "edit_config_tuneables",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 118.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "write_new_test",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 89.4,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_error_handler",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 112.3,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_dataclass_field",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 105.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "edit_html_dashboard",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 135.1,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_yaml_chip",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 133.2,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "debug_pytest_failure",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 51.5,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_import_error",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 161.6,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_memory_issue",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 198.4,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_git_conflict",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 43.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_service_startup",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 158.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "research_api_docs",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 101.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_cross_encoder",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 62.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_rag_patterns",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 110.7,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "research_memory_systems",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 63.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "social_compose_tweet",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 158.7,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "social_reply_thread",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 169.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "AI social networks need verified agent identity - cryptographic proof that agent is actually AI, not"
+      ]
+    },
+    {
+      "name": "social_research_trends",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 168.5,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "social_analyze_engagement",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 180.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "general_read_config",
+      "precision_at_5": 1.0,
+      "total_advice": 2,
+      "relevant_in_top5": 2,
+      "noise_count": 0,
+      "latency_ms": 227.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4",
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25"
+      ]
+    },
+    {
+      "name": "general_glob_tests",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 71.0,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "general_grep_function",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 125.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "OpenClaw value is tooling ecosystem, not raw speed. Shines for agents that autonomously interact wit"
+      ]
+    },
+    {
+      "name": "general_read_report",
+      "precision_at_5": 1.0,
+      "total_advice": 2,
+      "relevant_in_top5": 2,
+      "noise_count": 0,
+      "latency_ms": 94.4,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4",
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25"
+      ]
+    }
+  ]
+}

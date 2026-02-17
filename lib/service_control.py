@@ -745,7 +745,9 @@ def stop_services() -> dict[str, str]:
                 pass
         if name == "scheduler":
             try:
-                (Path.home() / ".spark" / "scheduler_heartbeat.json").unlink(missing_ok=True)
+                spark_root = Path.home() / ".spark"
+                (spark_root / "scheduler_heartbeat.json").unlink(missing_ok=True)
+                (spark_root / "scheduler" / "heartbeat.json").unlink(missing_ok=True)
             except Exception:
                 pass
     return results

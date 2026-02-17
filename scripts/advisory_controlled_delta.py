@@ -96,6 +96,11 @@ def _summarize_repeats(advice_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     events = Counter()
     routes = Counter()
+    error_codes = Counter()
+    synth_policy_counts = Counter()
+    emitted_synth_policy_counts = Counter()
+    selective_ai_eligibility = Counter()
+    emitted_authority_counts = Counter()
     trace_rows = 0
     fallback_events = 0
     delivered = 0
@@ -107,6 +112,19 @@ def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             events[ev] += 1
         if rt:
             routes[rt] += 1
+        error_code = str(row.get("error_code") or "").strip()
+        if error_code:
+            error_codes[error_code] += 1
+        synth_policy = str(row.get("synth_policy") or "").strip() or "__missing__"
+        if ev in {"emitted", "synth_empty"}:
+            synth_policy_counts[synth_policy] += 1
+            selective_ai_eligibility["eligible" if bool(row.get("selective_ai_eligible")) else "not_eligible"] += 1
+            for auth in list(row.get("emitted_authorities") or [])[:4]:
+                name = str(auth or "").strip().lower()
+                if name:
+                    emitted_authority_counts[name] += 1
+        if ev == "emitted":
+            emitted_synth_policy_counts[synth_policy] += 1
         if row.get("trace_id"):
             trace_rows += 1
         if ev == "fallback_emit" or str(row.get("delivery_mode") or "") == "fallback":
@@ -131,6 +149,11 @@ def _summarize_engine(engine_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "trace_coverage_pct": round((trace_rows / max(1, len(engine_rows))) * 100.0, 2),
         "events": dict(events),
         "routes": dict(routes),
+        "error_codes": dict(error_codes),
+        "synth_policy_counts": dict(synth_policy_counts),
+        "emitted_synth_policy_counts": dict(emitted_synth_policy_counts),
+        "selective_ai_eligibility": dict(selective_ai_eligibility),
+        "emitted_authority_counts": dict(emitted_authority_counts),
         "fallback_share_pct": round((fallback_events / max(1, delivered)) * 100.0, 2),
         "latency": {
             "n": len(elapsed_ms),
@@ -275,6 +298,8 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=40, help="Number of synthetic pre/post tool rounds")
     ap.add_argument("--label", default="run", help="Label used in output metadata")
     ap.add_argument("--out", default="", help="Optional output JSON path")
+    ap.add_argument("--session-prefix", default="", help="Optional session prefix override")
+    ap.add_argument("--trace-prefix", default="", help="Optional trace prefix override")
     ap.add_argument("--force-live", action="store_true", help="Bypass packet lookup to exercise live advisory path")
     ap.add_argument(
         "--prompt-mode",
@@ -296,9 +321,9 @@ def main() -> int:
     args = ap.parse_args()
 
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    trace_prefix = f"delta-{args.label}-{ts}"
-    # Bench sessions bypass global/low-auth dedupe guards so controlled runs can measure emissions.
-    session_prefix = f"advisory-bench-{args.label}"
+    trace_prefix = str(args.trace_prefix or "").strip() or f"delta-{args.label}-{ts}"
+    # Default bench sessions bypass global/low-auth dedupe guards so controlled runs can measure emissions.
+    session_prefix = str(args.session_prefix or "").strip() or f"advisory-bench-{args.label}"
     summary = run_workload(
         rounds=max(1, int(args.rounds)),
         session_prefix=session_prefix,

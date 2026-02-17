@@ -1,0 +1,81 @@
+{
+  "generated_at": "2026-02-16T13:53:35.144508+00:00",
+  "status": "rolled_back",
+  "rolled_back": true,
+  "tuneables_path": "C:\\Users\\USER\\.spark\\tuneables.json",
+  "backup_path": "C:\\Users\\USER\\.spark\\tuneables.canary_backup_20260216_135335.json",
+  "patch_applied": {
+    "retrieval": {
+      "level": "2",
+      "domain_profile_enabled": true,
+      "overrides": {
+        "intent_coverage_weight": 0.06,
+        "support_boost_weight": 0.08,
+        "reliability_weight": 0.04,
+        "semantic_intent_min": 0.02
+      },
+      "domain_profiles": {
+        "memory": {
+          "semantic_limit": 12,
+          "max_queries": 4,
+          "agentic_query_limit": 4,
+          "lexical_weight": 0.4,
+          "intent_coverage_weight": 0.1,
+          "support_boost_weight": 0.1,
+          "reliability_weight": 0.05,
+          "semantic_intent_min": 0.03,
+          "min_results_no_escalation": 5,
+          "min_top_score_no_escalation": 0.74
+        },
+        "coding": {
+          "semantic_limit": 11,
+          "lexical_weight": 0.34,
+          "intent_coverage_weight": 0.06,
+          "support_boost_weight": 0.08,
+          "reliability_weight": 0.04,
+          "semantic_intent_min": 0.02
+        },
+        "x_social": {
+          "semantic_limit": 11,
+          "max_queries": 4,
+          "agentic_query_limit": 4,
+          "lexical_weight": 0.32,
+          "intent_coverage_weight": 0.08,
+          "support_boost_weight": 0.08,
+          "reliability_weight": 0.04,
+          "semantic_intent_min": 0.02
+        }
+      }
+    },
+    "semantic": {
+      "min_similarity": 0.5,
+      "min_fusion_score": 0.45,
+      "rescue_min_similarity": 0.3,
+      "rescue_min_fusion_score": 0.2
+    },
+    "advisor": {
+      "max_items": 5,
+      "max_advice_items": 5,
+      "min_rank_score": 0.45
+    }
+  },
+  "memory_cases": "benchmarks\\data\\memory_retrieval_eval_multidomain_real_user_2026_02_16.json",
+  "memory_gates": "benchmarks\\data\\memory_retrieval_domain_gates_multidomain_v1.json",
+  "advisory_cases": "benchmarks\\data\\advisory_quality_eval_seed.json",
+  "memory_report_path": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\benchmarks\\out\\memory_retrieval_domain_matrix_canary_20260216_135335_report.json",
+  "advisory_report_path": "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\benchmarks\\out\\advisory_quality_canary_20260216_135335_report.json",
+  "evaluation": {
+    "checks": {
+      "memory_mrr_min": false,
+      "memory_gate_pass_rate_min": false,
+      "advisory_score_min": false
+    },
+    "all_pass": false,
+    "metrics": {
+      "memory_weighted_mrr": 0.2489,
+      "memory_domain_gate_pass_rate": 0.3333,
+      "advisory_winner_score": 0.5,
+      "advisory_winner_profile": "baseline"
+    }
+  }
+}

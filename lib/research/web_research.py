@@ -9,12 +9,10 @@ anti-patterns, and expert insights.
 import json
 import logging
 import re
-import asyncio
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from datetime import datetime
-from urllib.parse import quote_plus
 
 log = logging.getLogger("spark.research.web")
 
@@ -73,7 +71,7 @@ class DomainResearch:
 # Query templates for different research purposes
 QUERY_TEMPLATES = {
     "best_practices": [
-        "{domain} best practices 2025",
+        "{domain} best practices {year}",
         "{domain} expert tips professional",
         "how to master {domain} guide",
         "{domain} what separates good from great",
@@ -123,6 +121,34 @@ INSIGHT_PATTERNS = [
 ]
 
 
+def _safe_cache_key(domain: str) -> str:
+    """Create a filesystem-safe cache key from a domain name."""
+    raw = str(domain or "").strip().lower()
+    if not raw:
+        return "domain"
+    key = re.sub(r"[^a-z0-9._-]+", "_", raw)
+    key = key.strip("._-")
+    return key or "domain"
+
+
+def _unique_preserve_order(items: List[str], *, limit: int) -> List[str]:
+    """Return first-seen unique strings in deterministic order."""
+    seen = set()
+    out: List[str] = []
+    for item in items:
+        text = re.sub(r"\s+", " ", str(item or "").strip())
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= max(0, int(limit)):
+            break
+    return out
+
+
 class WebResearcher:
     """Conduct web research for domain mastery."""
 
@@ -153,7 +179,7 @@ class WebResearcher:
         """Save research to cache."""
         try:
             RESEARCH_CACHE.mkdir(parents=True, exist_ok=True)
-            path = RESEARCH_CACHE / f"{research.domain}.json"
+            path = RESEARCH_CACHE / f"{_safe_cache_key(research.domain)}.json"
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(research.to_dict(), f, indent=2)
         except Exception as e:
@@ -168,11 +194,12 @@ class WebResearcher:
         if purposes is None:
             purposes = ["best_practices", "anti_patterns", "expert_insights"]
 
+        current_year = datetime.now().year
         queries = []
         for purpose in purposes:
             templates = QUERY_TEMPLATES.get(purpose, [])
             for template in templates[:2]:  # Limit to 2 per purpose
-                query = template.format(domain=domain)
+                query = template.format(domain=domain, year=current_year)
                 queries.append(ResearchQuery(
                     query=query,
                     purpose=purpose,
@@ -294,7 +321,7 @@ class WebResearcher:
 
         # Deduplicate insights
         for key in all_insights:
-            all_insights[key] = list(set(all_insights[key]))[:10]  # Top 10 unique
+            all_insights[key] = _unique_preserve_order(all_insights[key], limit=10)
 
         research = DomainResearch(
             domain=domain,
@@ -341,7 +368,7 @@ class WebResearcher:
 
         # Deduplicate
         for key in all_insights:
-            all_insights[key] = list(set(all_insights[key]))[:10]
+            all_insights[key] = _unique_preserve_order(all_insights[key], limit=10)
 
         research = self.get_cached_research(domain) or DomainResearch(domain=domain)
 
@@ -353,10 +380,10 @@ class WebResearcher:
         research.common_mistakes.extend(all_insights["common_mistakes"])
 
         # Deduplicate all
-        research.best_practices = list(set(research.best_practices))[:15]
-        research.anti_patterns = list(set(research.anti_patterns))[:15]
-        research.expert_insights = list(set(research.expert_insights))[:15]
-        research.common_mistakes = list(set(research.common_mistakes))[:15]
+        research.best_practices = _unique_preserve_order(research.best_practices, limit=15)
+        research.anti_patterns = _unique_preserve_order(research.anti_patterns, limit=15)
+        research.expert_insights = _unique_preserve_order(research.expert_insights, limit=15)
+        research.common_mistakes = _unique_preserve_order(research.common_mistakes, limit=15)
 
         research.researched_at = datetime.now().isoformat()
         research.total_sources = len(set(r.url for r in research.results))

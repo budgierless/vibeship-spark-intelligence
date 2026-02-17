@@ -42,6 +42,8 @@ logger = logging.getLogger("spark.scheduler")
 SPARK_DIR = Path.home() / ".spark"
 SCHEDULER_DIR = SPARK_DIR / "scheduler"
 HEARTBEAT_FILE = SCHEDULER_DIR / "heartbeat.json"
+# Back-compat path used by some status checks and older scripts.
+LEGACY_HEARTBEAT_FILE = SPARK_DIR / "scheduler_heartbeat.json"
 STATE_FILE = SCHEDULER_DIR / "state.json"
 DRAFT_REPLIES_FILE = SPARK_DIR / "multiplier" / "draft_replies.json"
 MULTIPLIER_DB_PATH = SPARK_DIR / "multiplier" / "scored_mentions.db"
@@ -406,29 +408,40 @@ def _save_state(state: Dict[str, Any]) -> None:
 
 
 def write_scheduler_heartbeat(task_stats: Dict[str, Any]) -> None:
-    """Write heartbeat file for watchdog monitoring."""
+    """Write heartbeat file(s) for watchdog monitoring."""
+    payload = json.dumps({"ts": time.time(), "stats": task_stats}, indent=2)
     try:
         SCHEDULER_DIR.mkdir(parents=True, exist_ok=True)
-        HEARTBEAT_FILE.write_text(
-            json.dumps({"ts": time.time(), "stats": task_stats}, indent=2),
-            encoding="utf-8",
-        )
+        HEARTBEAT_FILE.write_text(payload, encoding="utf-8")
+    except Exception:
+        pass
+
+    # Keep legacy root-level heartbeat for existing tooling.
+    try:
+        LEGACY_HEARTBEAT_FILE.write_text(payload, encoding="utf-8")
     except Exception:
         pass
 
 
-def scheduler_heartbeat_age_s() -> Optional[float]:
-    """Return heartbeat age in seconds, or None if missing."""
+def _read_heartbeat_ts(path: Path) -> Optional[float]:
     try:
-        if not HEARTBEAT_FILE.exists():
+        if not path.exists():
             return None
-        data = json.loads(HEARTBEAT_FILE.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
         ts = float(data.get("ts", 0))
-        if ts <= 0:
-            return None
-        return max(0.0, time.time() - ts)
+        return ts if ts > 0 else None
     except Exception:
         return None
+
+
+def scheduler_heartbeat_age_s() -> Optional[float]:
+    """Return heartbeat age in seconds, or None if missing."""
+    now = time.time()
+    candidates = [_read_heartbeat_ts(HEARTBEAT_FILE), _read_heartbeat_ts(LEGACY_HEARTBEAT_FILE)]
+    latest = max((ts for ts in candidates if ts), default=None)
+    if latest is None:
+        return None
+    return max(0.0, now - latest)
 
 
 def _post_json_to_webhook(url: str, payload: Dict[str, Any]) -> bool:

@@ -7,6 +7,7 @@ This sets the intent for what Spark should be looking for.
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -15,6 +16,16 @@ from datetime import datetime
 log = logging.getLogger("spark.research")
 
 MASTERY_CACHE = Path.home() / ".spark" / "research" / "mastery"
+
+
+def _safe_cache_key(domain: str) -> str:
+    """Create a filesystem-safe cache key from a domain name."""
+    raw = str(domain or "").strip().lower()
+    if not raw:
+        return "domain"
+    key = re.sub(r"[^a-z0-9._-]+", "_", raw)
+    key = key.strip("._-")
+    return key or "domain"
 
 
 @dataclass
@@ -362,7 +373,7 @@ class MasteryResearcher:
         """Save mastery definition to cache."""
         try:
             MASTERY_CACHE.mkdir(parents=True, exist_ok=True)
-            path = MASTERY_CACHE / f"{mastery.domain}.json"
+            path = MASTERY_CACHE / f"{_safe_cache_key(mastery.domain)}.json"
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(mastery.to_dict(), f, indent=2)
         except Exception as e:
@@ -470,7 +481,12 @@ class MasteryResearcher:
         anti_patterns.extend(mastery.common_mistakes)
         return anti_patterns
 
-    def research_online(self, domain: str, search_results: List[Dict] = None) -> DomainMastery:
+    def research_online(
+        self,
+        domain: str,
+        search_results: List[Dict] = None,
+        purpose: str = "best_practices",
+    ) -> DomainMastery:
         """
         Research a domain using web search results.
 
@@ -491,7 +507,11 @@ class MasteryResearcher:
 
         # Process search results if provided
         if search_results:
-            research = researcher.research_domain_sync(domain, search_results)
+            research = researcher.research_domain_sync(
+                domain,
+                search_results,
+                purpose=purpose,
+            )
             merge_data = researcher.merge_into_mastery(research)
 
             # Add researched markers

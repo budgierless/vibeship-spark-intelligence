@@ -7,6 +7,7 @@ This focuses learning on what matters for mastery.
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -17,6 +18,24 @@ from .mastery import get_researcher, DomainMastery
 log = logging.getLogger("spark.research")
 
 INTENTS_FILE = Path.home() / ".spark" / "research" / "intents.json"
+
+
+def _unique_preserve_order(items: List[str], *, limit: int) -> List[str]:
+    """Return first-seen unique strings in deterministic order."""
+    seen = set()
+    out: List[str] = []
+    for item in items:
+        text = re.sub(r"\s+", " ", str(item or "").strip())
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= max(0, int(limit)):
+            break
+    return out
 
 
 @dataclass
@@ -166,7 +185,7 @@ class IntentSetter:
                 if len(word) > 4 and word.isalpha():
                     triggers.append(word)
 
-        return list(set(triggers))[:10]
+        return _unique_preserve_order(triggers, limit=10)
 
     def get_intent(self, project_path: str) -> Optional[DomainIntent]:
         """Get active intent for a project."""
@@ -209,7 +228,7 @@ class IntentSetter:
             "domain": intent.domain,
             "positive_matches": positive_matches,
             "negative_matches": negative_matches,
-            "intent_matches": list(set(intent_matches)),
+            "intent_matches": _unique_preserve_order(intent_matches, limit=50),
             "alignment_score": self._calculate_alignment(positive_matches, negative_matches),
         }
 

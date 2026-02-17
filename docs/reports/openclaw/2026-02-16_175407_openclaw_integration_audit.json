@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-02-16T13:54:07.642590+00:00",
+  "paths": {
+    "openclaw_config": "C:\\Users\\USER\\.openclaw\\openclaw.json",
+    "cron_jobs": "C:\\Users\\USER\\.openclaw\\cron\\jobs.json",
+    "openclaw_package": "C:\\Users\\USER\\.npm-global\\node_modules\\openclaw\\package.json"
+  },
+  "openclaw": {
+    "version": "2026.2.15",
+    "subagents": {
+      "maxConcurrent": null,
+      "maxSpawnDepth": null,
+      "maxChildrenPerAgent": null,
+      "depth2_enabled": false
+    },
+    "cron": {
+      "webhook_configured": false,
+      "webhook_token_configured": false
+    },
+    "hooks": {
+      "llm_input_output_configured": true
+    }
+  },
+  "spark_health_job": {
+    "present": true,
+    "command_has_alert_json": true,
+    "command_has_confirm": true,
+    "command_has_auto_remediate": true,
+    "command_has_fail_on_breach": true
+  },
+  "sensitive_fields": {
+    "count": 0,
+    "secret_like_count": 0,
+    "fields": []
+  }
+}

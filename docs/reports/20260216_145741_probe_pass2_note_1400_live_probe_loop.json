@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-02-16T14:58:18.535661+00:00",
+  "start_ts": 1771253861.9352267,
+  "end_ts": 1771253898.2344978,
+  "rounds": 80,
+  "emitted_returns": 0,
+  "engine": {
+    "rows": 160,
+    "trace_rows": 160,
+    "trace_coverage_pct": 100.0,
+    "events": {
+      "user_prompt_prefetch": 80,
+      "global_dedupe_suppressed": 22,
+      "no_emit": 50,
+      "no_advice": 8
+    },
+    "routes": {
+      "live": 80
+    },
+    "error_codes": {
+      "AE_GLOBAL_DEDUPE_SUPPRESSED": 22,
+      "AE_GATE_SUPPRESSED": 50,
+      "AE_NO_ADVICE": 8
+    },
+    "synth_policy_counts": {},
+    "emitted_synth_policy_counts": {},
+    "fallback_share_pct": 0.0,
+    "latency": {
+      "n": 0,
+      "p50_ms": 0.0,
+      "p90_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "max_ms": 0.0
+    }
+  },
+  "feedback_requests": {
+    "rows": 0,
+    "trace_rows": 0,
+    "trace_coverage_pct": 0.0,
+    "item_total": 0,
+    "top_repeats": [],
+    "top_repeat_share_pct": 0.0,
+    "unique_ratio_pct": 0.0
+  },
+  "modes": {
+    "prompt_mode": "vary",
+    "tool_input_mode": "repo"
+  },
+  "config": {
+    "advisory_engine": {
+      "enabled": true,
+      "max_ms": 3500.0,
+      "include_mind": true,
+      "prefetch_queue_enabled": true,
+      "prefetch_inline_enabled": true,
+      "packet_fallback_emit_enabled": false,
+      "fallback_rate_guard_enabled": true,
+      "fallback_rate_max_ratio": 0.55,
+      "fallback_rate_window": 80,
+      "prefetch_inline_max_jobs": 1,
+      "actionability_enforce": true,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true,
+      "selective_ai_min_remaining_ms": 1400.0,
+      "selective_ai_min_authority": "note",
+      "session_key_include_recent_tools": false,
+      "delivery_stale_s": 900.0,
+      "advisory_text_repeat_cooldown_s": 9000.0
+    },
+    "advisory_gate": {
+      "max_emit_per_call": 1,
+      "tool_cooldown_s": 150,
+      "advice_repeat_cooldown_s": 5400,
+      "emit_whispers": true,
+      "warning_threshold": 0.8,
+      "note_threshold": 0.5,
+      "whisper_threshold": 0.35
+    },
+    "advisor": {
+      "max_items": 5,
+      "min_rank_score": 0.45
+    }
+  },
+  "force_live": true,
+  "label": "live_probe_probe_pass2_note_1400",
+  "trace_prefix": "liveprobe-probe_pass2_note_1400-20260216_145741",
+  "session_prefix": "advisory-liveprobe-probe_pass2_note_1400"
+}

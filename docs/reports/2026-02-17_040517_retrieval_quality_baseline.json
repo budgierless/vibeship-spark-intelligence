@@ -1,0 +1,354 @@
+{
+  "timestamp": "2026-02-17T04:05:17.493027",
+  "total_scenarios": 25,
+  "overall_precision_at_5": 0.167,
+  "noise_rate": 0.0,
+  "avg_latency_ms": 171.2,
+  "p95_latency_ms": 327.0,
+  "by_category": {
+    "code_editing": {
+      "count": 8,
+      "avg_precision": 0.146,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "debugging": {
+      "count": 5,
+      "avg_precision": 0.4,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "research": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "x_social": {
+      "count": 4,
+      "avg_precision": 0.25,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "general": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "edit_python_auth",
+      "precision_at_5": 0.667,
+      "total_advice": 3,
+      "relevant_in_top5": 2,
+      "noise_count": 0,
+      "latency_ms": 233.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "Validate authentication inputs server-side and avoid trusting client checks.",
+        "Never log secrets or tokens; redact sensitive data in logs.",
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "edit_python_import",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 129.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)",
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "edit_config_tuneables",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 124.4,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)",
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "write_new_test",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 92.4,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_error_handler",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 117.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "edit_dataclass_field",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 113.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "Always Read a file before Edit to verify current content",
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "edit_html_dashboard",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 141.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "edit_yaml_chip",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 175.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "debug_pytest_failure",
+      "precision_at_5": 1.0,
+      "total_advice": 2,
+      "relevant_in_top5": 2,
+      "noise_count": 0,
+      "latency_ms": 51.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "debug_import_error",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 246.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "debug_memory_issue",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 274.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "debug_git_conflict",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 45.4,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "debug_service_startup",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 231.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "research_api_docs",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 115.7,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_cross_encoder",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 74.6,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_rag_patterns",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 130.0,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "research_memory_systems",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 79.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "social_compose_tweet",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 245.6,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "social_reply_thread",
+      "precision_at_5": 0.0,
+      "total_advice": 3,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 327.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in ",
+        "AI social networks need verified agent identity - cryptographic proof that agent is actually AI, not"
+      ]
+    },
+    {
+      "name": "social_research_trends",
+      "precision_at_5": 0.5,
+      "total_advice": 2,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 333.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "social_analyze_engagement",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 307.5,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor",
+        "[Caution] Using python -X utf8 flag on Windows prevents UnicodeEncodeError with non-ASCII output in "
+      ]
+    },
+    {
+      "name": "general_read_config",
+      "precision_at_5": 0.0,
+      "total_advice": 3,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 307.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25",
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4",
+        "Always Read a file before Edit to verify current content"
+      ]
+    },
+    {
+      "name": "general_glob_tests",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 96.0,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "general_grep_function",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 167.6,
+      "noise_samples": [],
+      "advice_texts": [
+        "OpenClaw value is tooling ecosystem, not raw speed. Shines for agents that autonomously interact wit"
+      ]
+    },
+    {
+      "name": "general_read_report",
+      "precision_at_5": 0.0,
+      "total_advice": 2,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 120.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25",
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4"
+      ]
+    }
+  ]
+}

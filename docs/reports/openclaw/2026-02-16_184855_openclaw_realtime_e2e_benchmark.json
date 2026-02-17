@@ -1,0 +1,405 @@
+{
+  "generated_at": "2026-02-16T14:48:55.757474+00:00",
+  "window_minutes": 90,
+  "status": "pass",
+  "checks": [
+    {
+      "name": "core_services_running",
+      "status": "pass",
+      "detail": {
+        "sparkd": true,
+        "bridge_worker": true,
+        "scheduler": true,
+        "watchdog": true
+      }
+    },
+    {
+      "name": "hook_spool_llm_input_output",
+      "status": "pass",
+      "detail": {
+        "llm_input_window": 61,
+        "llm_output_window": 60
+      }
+    },
+    {
+      "name": "hook_ingested_to_queue",
+      "status": "pass",
+      "detail": {
+        "hook_rows_window": 115
+      }
+    },
+    {
+      "name": "advisory_engine_activity",
+      "status": "pass",
+      "detail": {
+        "rows_window": 500,
+        "events": {
+          "user_prompt_prefetch": 250,
+          "no_emit": 217,
+          "no_advice": 28,
+          "emitted": 5
+        }
+      }
+    },
+    {
+      "name": "advisory_engine_emitted_nonzero",
+      "status": "pass",
+      "detail": {
+        "emitted": 5
+      }
+    },
+    {
+      "name": "workspace_context_delivery",
+      "status": "pass",
+      "detail": {
+        "existing_workspaces": 3,
+        "any_context": true
+      }
+    },
+    {
+      "name": "advisory_delivery_surface",
+      "status": "pass",
+      "detail": {
+        "any_workspace_advisory": true,
+        "fallback_advisory_exists": true
+      }
+    },
+    {
+      "name": "schema_v2_feedback_requests",
+      "status": "pass",
+      "detail": {
+        "requests_schema_v2_window": 17,
+        "trace_coverage_pct": 100.0
+      }
+    },
+    {
+      "name": "strict_outcome_signal",
+      "status": "pass",
+      "detail": {
+        "strict_with_outcome_window": 2,
+        "strict_effectiveness_window": 0.0
+      }
+    },
+    {
+      "name": "production_gates_ready",
+      "status": "pass",
+      "detail": {
+        "ready": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "name": "openclaw_canary_turns",
+      "status": "pass",
+      "detail": {
+        "agent": "spark-speed",
+        "turns_ok": [
+          true,
+          true
+        ]
+      }
+    }
+  ],
+  "canary": {
+    "agent": "spark-speed",
+    "turns": [
+      {
+        "prompt": "Spark realtime benchmark canary A. Run one Bash tool call to execute `echo SPARK_REALTIME_CANARY_A`, then provide one actionable recommendation.",
+        "exit_code": 0,
+        "duration_ms": 21714,
+        "has_json_payload": true,
+        "payload_count": 1,
+        "response_preview": "SPARK_REALTIME_CANARY_A \u2014 add an automatic retry with jitter (max 2 retries) only when stdout is empty so transient shell/output glitches don\u2019t create false negatives.",
+        "logs_tail": "\n            \"summaryChars\": 105,\n            \"schemaChars\": 179,\n            \"propertiesCount\": 4\n          },\n          {\n            \"name\": \"session_status\",\n            \"summaryChars\": 207,\n            \"schemaChars\": 89,\n            \"propertiesCount\": 2\n          },\n          {\n            \"name\": \"image\",\n            \"summaryChars\": 246,\n            \"schemaChars\": 248,\n            \"propertiesCount\": 5\n          }\n        ]\n      }\n    }\n  }\n}\n\n[tools] tools.profile (coding) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled."
+      },
+      {
+        "prompt": "Spark realtime benchmark canary B. Read AGENTS.md from the workspace, then reply with one action and one measurable success criterion.",
+        "exit_code": 0,
+        "duration_ms": 19276,
+        "has_json_payload": true,
+        "payload_count": 1,
+        "response_preview": "Action: Write today\u2019s hardening changes (what failed, what you changed, and why) into `memory/2026-02-16.md` immediately.\nSuccess criterion: add at least 3 new bullets, including one explicit verification step you can run tomorrow at 01:00.",
+        "logs_tail": "\n            \"summaryChars\": 105,\n            \"schemaChars\": 179,\n            \"propertiesCount\": 4\n          },\n          {\n            \"name\": \"session_status\",\n            \"summaryChars\": 207,\n            \"schemaChars\": 89,\n            \"propertiesCount\": 2\n          },\n          {\n            \"name\": \"image\",\n            \"summaryChars\": 246,\n            \"schemaChars\": 248,\n            \"propertiesCount\": 5\n          }\n        ]\n      }\n    }\n  }\n}\n\n[tools] tools.profile (coding) allowlist contains unknown entries (group:memory). These entries won't match any tool unless the plugin is enabled."
+      }
+    ],
+    "ok": true
+  },
+  "service_status": {
+    "sparkd": {
+      "running": true,
+      "healthy": true,
+      "pid": 102860
+    },
+    "dashboard": {
+      "running": true,
+      "healthy": true,
+      "pid": 86100
+    },
+    "pulse": {
+      "running": true,
+      "healthy": false,
+      "pid": 102468
+    },
+    "meta_ralph": {
+      "running": true,
+      "healthy": true,
+      "pid": 102820
+    },
+    "bridge_worker": {
+      "running": true,
+      "heartbeat_age_s": 2.9293041229248047,
+      "pid": 92864,
+      "process_running": true,
+      "heartbeat_fresh": true
+    },
+    "scheduler": {
+      "running": true,
+      "heartbeat_age_s": 5.029894828796387,
+      "pid": 102628,
+      "process_running": true,
+      "heartbeat_fresh": true
+    },
+    "watchdog": {
+      "running": true,
+      "pid": 90488
+    },
+    "log_dir": "C:\\Users\\USER\\.spark\\logs"
+  },
+  "hook_metrics": {
+    "path": "C:\\Users\\USER\\.spark\\openclaw_hook_events.jsonl",
+    "exists": true,
+    "rows_tail": 121,
+    "window_rows": 121,
+    "llm_input_window": 61,
+    "llm_output_window": 60,
+    "latest_age_s": 6.12
+  },
+  "queue_hook_metrics": {
+    "path": "C:\\Users\\USER\\.spark\\queue\\events.jsonl",
+    "exists": true,
+    "hook_rows_tail": 115,
+    "hook_rows_window": 115,
+    "latest_age_s": 167.34
+  },
+  "advisory_engine_metrics": {
+    "path": "C:\\Users\\USER\\.spark\\advisory_engine.jsonl",
+    "exists": true,
+    "rows_window": 500,
+    "event_counts": {
+      "user_prompt_prefetch": 250,
+      "no_emit": 217,
+      "no_advice": 28,
+      "emitted": 5
+    },
+    "route_counts": {
+      "unknown": 250,
+      "live": 250
+    }
+  },
+  "feedback_metrics": {
+    "requests_file": "C:\\Users\\USER\\.spark\\advice_feedback_requests.jsonl",
+    "feedback_file": "C:\\Users\\USER\\.spark\\advice_feedback.jsonl",
+    "requests_window": 17,
+    "requests_schema_v2_window": 17,
+    "requests_trace_coverage_pct": 100.0,
+    "requests_run_id_coverage_pct": 100.0,
+    "requests_group_key_coverage_pct": 100.0,
+    "feedback_window": 0,
+    "feedback_schema_v2_window": 0,
+    "feedback_trace_coverage_pct": null
+  },
+  "outcome_metrics": {
+    "path": "C:\\Users\\USER\\.spark\\meta_ralph\\outcome_tracking.json",
+    "exists": true,
+    "records_window": 5,
+    "strict_window": 2,
+    "strict_with_outcome_window": 2,
+    "strict_effectiveness_window": 0.0,
+    "source_mix": {
+      "cognitive": 2
+    },
+    "outcome_mix": {
+      "bad": 2
+    }
+  },
+  "workspace_metrics": {
+    "workspaces": [
+      {
+        "workspace": "C:\\Users\\USER\\.openclaw\\workspace",
+        "exists": true,
+        "context_exists": true,
+        "advisory_exists": true,
+        "notifications_exists": true,
+        "context_age_s": 2.68,
+        "advisory_age_s": 363.91
+      },
+      {
+        "workspace": "C:\\Users\\USER\\.openclaw\\workspace-main",
+        "exists": true,
+        "context_exists": true,
+        "advisory_exists": true,
+        "notifications_exists": true,
+        "context_age_s": 2.68,
+        "advisory_age_s": 363.91
+      },
+      {
+        "workspace": "C:\\Users\\USER\\.openclaw\\workspace-spark-speed",
+        "exists": true,
+        "context_exists": true,
+        "advisory_exists": true,
+        "notifications_exists": true,
+        "context_age_s": 2.68,
+        "advisory_age_s": 363.91
+      }
+    ],
+    "existing_workspaces": 3,
+    "any_context": true,
+    "any_advisory": true,
+    "fallback_advisory_exists": true,
+    "fallback_advisory_age_s": 363.91
+  },
+  "production_gates": {
+    "metrics": {
+      "total_stored": 239,
+      "total_retrieved": 500,
+      "actionable_retrieved": 500,
+      "ignored_non_actionable": 0,
+      "retrieval_rate": 2.092050209205021,
+      "acted_on": 500,
+      "acted_on_rate": 1.0,
+      "effectiveness_rate": 0.842,
+      "strict_acted_on": 379,
+      "strict_with_outcome": 379,
+      "strict_acted_on_rate": 0.758,
+      "strict_trace_coverage": 0.758,
+      "strict_effectiveness_rate": 0.7941952506596306,
+      "strict_require_trace": true,
+      "strict_window_s": 1200,
+      "quality_rate": 0.08695652173913043,
+      "quality_rate_samples": 46,
+      "quality_rate_filtered_pipeline_tests": 0,
+      "quality_rate_filtered_duplicates": 469,
+      "distillations": 160,
+      "queue_depth": 0,
+      "advice_total": 66845,
+      "advice_followed": 43205,
+      "advice_helpful": 42968,
+      "chip_insights": 1409,
+      "chip_to_cognitive_ratio": 5.895397489539749
+    },
+    "result": {
+      "passed": 13,
+      "total": 13,
+      "ready": true,
+      "checks": [
+        {
+          "name": "effectiveness_counter_integrity",
+          "ok": true,
+          "value": {
+            "advice_total": 66845,
+            "advice_followed": 43205,
+            "advice_helpful": 42968
+          },
+          "target": "helpful <= followed <= total",
+          "recommendation": "Repair effectiveness counters and dedupe outcome counting."
+        },
+        {
+          "name": "retrieval_rate",
+          "ok": true,
+          "value": 2.0921,
+          "target": ">= 0.10",
+          "recommendation": "Improve advisor retrieval coverage and trigger rules."
+        },
+        {
+          "name": "acted_on_rate",
+          "ok": true,
+          "value": 1.0,
+          "target": ">= 0.30",
+          "recommendation": "Increase advice actionability and UX surfacing before tool execution."
+        },
+        {
+          "name": "strict_attribution_policy",
+          "ok": true,
+          "value": {
+            "require_trace": true,
+            "window_s": 1200
+          },
+          "target": "trace_required=True, 0<window<=1800s",
+          "recommendation": "Enable strict trace binding and keep attribution window bounded."
+        },
+        {
+          "name": "strict_outcome_sample_floor",
+          "ok": true,
+          "value": 379,
+          "target": ">= 5",
+          "recommendation": "Collect more explicit good/bad outcomes with trace_id to calibrate strict attribution."
+        },
+        {
+          "name": "strict_acted_on_rate",
+          "ok": true,
+          "value": 0.758,
+          "target": ">= 0.20",
+          "recommendation": "Raise trace-binding quality and reduce latency/window misses before scoring readiness."
+        },
+        {
+          "name": "strict_trace_coverage",
+          "ok": true,
+          "value": 0.758,
+          "target": ">= 0.50",
+          "recommendation": "Ensure acted-on outcomes stay bound to the originating retrieval trace."
+        },
+        {
+          "name": "strict_effectiveness_rate",
+          "ok": true,
+          "value": {
+            "rate": 0.7942,
+            "samples": 379
+          },
+          "target": ">= 0.50 with >= 5 samples",
+          "recommendation": "Improve strict-attributed outcomes before promoting to production defaults."
+        },
+        {
+          "name": "effectiveness_rate",
+          "ok": true,
+          "value": 0.842,
+          "target": ">= 0.50",
+          "recommendation": "Demote low-impact learnings and tune ranking weights toward proven outcomes."
+        },
+        {
+          "name": "distillation_floor",
+          "ok": true,
+          "value": 160,
+          "target": ">= 5",
+          "recommendation": "Increase distillation yield and episode completion quality."
+        },
+        {
+          "name": "meta_ralph_quality_band",
+          "ok": true,
+          "value": {
+            "quality_rate": 0.087,
+            "samples": 46,
+            "filtered_pipeline_tests": 0,
+            "filtered_duplicates": 469,
+            "enforced": false
+          },
+          "target": "0.30..0.60 (enforced after >= 50 samples)",
+          "recommendation": "Collect more real (non-test) roasts to calibrate quality. If enforced and out-of-band, tune primitive filtering and quality thresholds."
+        },
+        {
+          "name": "chip_noise_ratio",
+          "ok": true,
+          "value": 5.895,
+          "target": "<= 100.0",
+          "recommendation": "Raise chip quality gates or reduce noisy triggers in high-volume chips."
+        },
+        {
+          "name": "queue_backpressure",
+          "ok": true,
+          "value": 0,
+          "target": "<= 2000",
+          "recommendation": "Increase bridge cadence or processing batch size to reduce backlog."
+        }
+      ]
+    }
+  }
+}

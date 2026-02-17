@@ -1,0 +1,103 @@
+{
+  "generated_at_utc": "2026-02-16 14:58:58",
+  "rounds": 80,
+  "tuneables_backup": "C:\\Users\\USER\\.spark\\backups\\tuneables.json.live_probe_loop_20260216_145702.bak",
+  "passes": [
+    {
+      "candidate": {
+        "name": "probe_pass1_warning_1800",
+        "selective_ai_min_authority": "warning",
+        "selective_ai_min_remaining_ms": 1800,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_145702_probe_pass1_warning_1800_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass1_warning_1800",
+      "trace_prefix": "liveprobe-probe_pass1_warning_1800-20260216_145702",
+      "score": -172.5,
+      "metrics": {
+        "emitted": 1,
+        "no_emit": 56,
+        "no_advice": 8,
+        "p50_ms": 690.0,
+        "p95_ms": 690.0,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 1,
+        "gate_suppressed": 56,
+        "score": -172.5
+      }
+    },
+    {
+      "candidate": {
+        "name": "probe_pass2_note_1400",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 1400,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_145741_probe_pass2_note_1400_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass2_note_1400",
+      "trace_prefix": "liveprobe-probe_pass2_note_1400-20260216_145741",
+      "score": -166.0,
+      "metrics": {
+        "emitted": 0,
+        "no_emit": 50,
+        "no_advice": 8,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 0,
+        "gate_suppressed": 50,
+        "score": -166.0
+      }
+    },
+    {
+      "candidate": {
+        "name": "probe_pass3_note_900",
+        "selective_ai_min_authority": "note",
+        "selective_ai_min_remaining_ms": 900,
+        "force_programmatic_synth": true,
+        "selective_ai_synth_enabled": true
+      },
+      "artifact": "docs\\reports\\20260216_145818_probe_pass3_note_900_live_probe_loop.json",
+      "session_prefix": "advisory-liveprobe-probe_pass3_note_900",
+      "trace_prefix": "liveprobe-probe_pass3_note_900-20260216_145818",
+      "score": -166.0,
+      "metrics": {
+        "emitted": 0,
+        "no_emit": 50,
+        "no_advice": 8,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "selective_hits": 0,
+        "programmatic_forced_hits": 0,
+        "gate_suppressed": 50,
+        "score": -166.0
+      }
+    }
+  ],
+  "winner": {
+    "candidate": {
+      "name": "probe_pass2_note_1400",
+      "selective_ai_min_authority": "note",
+      "selective_ai_min_remaining_ms": 1400,
+      "force_programmatic_synth": true,
+      "selective_ai_synth_enabled": true
+    },
+    "artifact": "docs\\reports\\20260216_145741_probe_pass2_note_1400_live_probe_loop.json",
+    "session_prefix": "advisory-liveprobe-probe_pass2_note_1400",
+    "trace_prefix": "liveprobe-probe_pass2_note_1400-20260216_145741",
+    "score": -166.0,
+    "metrics": {
+      "emitted": 0,
+      "no_emit": 50,
+      "no_advice": 8,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "selective_hits": 0,
+      "programmatic_forced_hits": 0,
+      "gate_suppressed": 50,
+      "score": -166.0
+    }
+  }
+}

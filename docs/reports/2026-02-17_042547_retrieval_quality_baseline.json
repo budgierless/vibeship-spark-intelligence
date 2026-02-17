@@ -1,0 +1,319 @@
+{
+  "timestamp": "2026-02-17T04:25:47.874301",
+  "total_scenarios": 25,
+  "overall_precision_at_5": 0.32,
+  "noise_rate": 0.0,
+  "avg_latency_ms": 888.2,
+  "p95_latency_ms": 707.8,
+  "by_category": {
+    "code_editing": {
+      "count": 8,
+      "avg_precision": 0.5,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "debugging": {
+      "count": 5,
+      "avg_precision": 0.4,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "research": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "x_social": {
+      "count": 4,
+      "avg_precision": 0.0,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    },
+    "general": {
+      "count": 4,
+      "avg_precision": 0.5,
+      "min_precision": 0.0,
+      "total_noise_items": 0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "edit_python_auth",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 14928.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "Validate authentication inputs server-side and avoid trusting client checks."
+      ]
+    },
+    {
+      "name": "edit_python_import",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 707.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "edit_config_tuneables",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 256.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "write_new_test",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 300.0,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_error_handler",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 293.9,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_dataclass_field",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 232.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "Applied advisory: Fix service_control.py edits (ensure changes do not break startup)"
+      ]
+    },
+    {
+      "name": "edit_html_dashboard",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 376.8,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "edit_yaml_chip",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 313.5,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "debug_pytest_failure",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 178.6,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_import_error",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 333.3,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "debug_memory_issue",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 444.6,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "debug_git_conflict",
+      "precision_at_5": 1.0,
+      "total_advice": 1,
+      "relevant_in_top5": 1,
+      "noise_count": 0,
+      "latency_ms": 120.1,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] When deploying to production, always run smoke tests on /health and /ready endpoints befor"
+      ]
+    },
+    {
+      "name": "debug_service_startup",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 286.1,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "research_api_docs",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 339.9,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_cross_encoder",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 190.7,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "research_rag_patterns",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 325.6,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "research_memory_systems",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 181.0,
+      "noise_samples": [],
+      "advice_texts": [
+        "User aversion: when we are using rounded corners for components"
+      ]
+    },
+    {
+      "name": "social_compose_tweet",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 316.7,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "social_reply_thread",
+      "precision_at_5": 0.0,
+      "total_advice": 1,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 340.3,
+      "noise_samples": [],
+      "advice_texts": [
+        "AI social networks need verified agent identity - cryptographic proof that agent is actually AI, not"
+      ]
+    },
+    {
+      "name": "social_research_trends",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 368.3,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "social_analyze_engagement",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 344.5,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "general_read_config",
+      "precision_at_5": 1.0,
+      "total_advice": 3,
+      "relevant_in_top5": 3,
+      "noise_count": 0,
+      "latency_ms": 320.8,
+      "noise_samples": [],
+      "advice_texts": [
+        "Always Read a file before Edit to verify current content",
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25",
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4"
+      ]
+    },
+    {
+      "name": "general_glob_tests",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 192.5,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "general_grep_function",
+      "precision_at_5": 0.0,
+      "total_advice": 0,
+      "relevant_in_top5": 0,
+      "noise_count": 0,
+      "latency_ms": 268.7,
+      "noise_samples": [],
+      "advice_texts": []
+    },
+    {
+      "name": "general_read_report",
+      "precision_at_5": 1.0,
+      "total_advice": 2,
+      "relevant_in_top5": 2,
+      "noise_count": 0,
+      "latency_ms": 244.2,
+      "noise_samples": [],
+      "advice_texts": [
+        "[Caution] Reading files before editing consistently prevents data loss and reduces failed edits by 4",
+        "[Caution] Read fails repeatedly with: File content (48324 tokens) exceeds maximum allowed tokens (25"
+      ]
+    }
+  ]
+}
