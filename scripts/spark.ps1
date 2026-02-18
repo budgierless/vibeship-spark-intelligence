@@ -226,7 +226,27 @@ function Show-Status {
         Write-Host "  sparkd URL: http://127.0.0.1:$sparkdPort/" -ForegroundColor DarkGray
         Write-Host "  Pulse URL: http://127.0.0.1:$pulsePort/" -ForegroundColor DarkGray
     } else {
-        Write-Host "  Not running. Use 'spark start'" -ForegroundColor Yellow
+        # Fallback: if PID file is missing/stale, probe service endpoints before declaring "not running".
+        $sparkdUp = $false
+        $pulseUp = $false
+        try {
+            $null = Invoke-RestMethod http://127.0.0.1:$sparkdPort/health -TimeoutSec 2
+            $sparkdUp = $true
+        } catch {}
+
+        $pulseCode = curl.exe -s -o NUL -w "%{http_code}" --max-time 2 http://127.0.0.1:$pulsePort/ 2>$null
+        if ($pulseCode -eq "200") {
+            $pulseUp = $true
+        }
+
+        if ($sparkdUp -or $pulseUp) {
+            Write-Host "  PID registry missing, but endpoints are reachable:" -ForegroundColor Yellow
+            Write-Host ("  [OK] sparkd endpoint: {0}" -f ($(if ($sparkdUp) { "up" } else { "down" }))) -ForegroundColor $(if ($sparkdUp) { "Green" } else { "Red" })
+            Write-Host ("  [OK] pulse endpoint:  {0}" -f ($(if ($pulseUp) { "up" } else { "down" }))) -ForegroundColor $(if ($pulseUp) { "Green" } else { "Red" })
+            Write-Host "  Suggestion: run 'spark restart' to rebuild PID registry." -ForegroundColor DarkGray
+        } else {
+            Write-Host "  Not running. Use 'spark start'" -ForegroundColor Yellow
+        }
     }
 
     $hbFile = "$env:USERPROFILE\.spark\bridge_worker_heartbeat.json"
