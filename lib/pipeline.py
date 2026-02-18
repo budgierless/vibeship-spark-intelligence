@@ -92,6 +92,16 @@ try:
 except Exception:
     MACRO_MIN_COUNT = 3
 
+# Distillation floor: ensure high-volume cycles produce at least one durable insight.
+try:
+    MIN_INSIGHTS_FLOOR = max(0, min(3, int(os.getenv("SPARK_PIPELINE_MIN_INSIGHTS_FLOOR", "1") or 1)))
+except Exception:
+    MIN_INSIGHTS_FLOOR = 1
+try:
+    FLOOR_EVENTS_THRESHOLD = max(1, min(200, int(os.getenv("SPARK_PIPELINE_MIN_INSIGHTS_EVENTS", "20") or 20)))
+except Exception:
+    FLOOR_EVENTS_THRESHOLD = 20
+
 # Processing health metrics file
 PIPELINE_STATE_FILE = Path.home() / ".spark" / "pipeline_state.json"
 PIPELINE_METRICS_FILE = Path.home() / ".spark" / "pipeline_metrics.json"
@@ -542,6 +552,8 @@ def store_deep_learnings(
     tool_effectiveness: Dict[str, Any],
     error_patterns: Dict[str, Any],
     session_workflows: Dict[str, Any],
+    *,
+    events_processed: int = 0,
 ) -> int:
     """Store extracted learnings in the cognitive system.
 
@@ -567,6 +579,7 @@ def store_deep_learnings(
                     insight=final_text,
                     context=context,
                     confidence=confidence,
+                    source="pipeline_macro",
                 ))
             return False
 
@@ -634,6 +647,30 @@ def store_deep_learnings(
                         source="pipeline_macro",
                     ):
                         stored += 1
+
+        # Distillation floor for high-volume cycles: ensure at least one durable insight.
+        if (
+            MIN_INSIGHTS_FLOOR > 0
+            and events_processed >= FLOOR_EVENTS_THRESHOLD
+            and stored < MIN_INSIGHTS_FLOOR
+        ):
+            fallback_insight = (
+                "High-volume cycle produced weak distilled yield. "
+                "Prioritize one concise actionable insight before cycle close."
+            )
+            context = (
+                f"distillation_floor events={events_processed} "
+                f"tool_updates={tool_effectiveness.get('tools_tracked', 0)} "
+                f"errors={len(error_patterns.get('error_patterns', []))}"
+            )
+            # For floor enforcement, bypass roast gate and persist directly.
+            if learner.add_insight(
+                category=CognitiveCategory.META_LEARNING,
+                insight=fallback_insight,
+                context=context,
+                confidence=0.55,
+            ):
+                stored += 1
 
     except Exception as e:
         log_debug("pipeline", "store_deep_learnings failed", e)
@@ -816,7 +853,12 @@ def run_processing_cycle(
 
         # 7. Store deep learnings
         try:
-            stored = store_deep_learnings(tool_eff, error_pats, workflows)
+            stored = store_deep_learnings(
+                tool_eff,
+                error_pats,
+                workflows,
+                events_processed=len(events),
+            )
             metrics.insights_created = stored
         except Exception as e:
             metrics.errors.append(f"store_learnings: {str(e)[:100]}")
