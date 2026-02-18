@@ -351,6 +351,47 @@ def _ask_distillation_model(prompt: str, *, timeout_s: int = 45) -> Optional[str
     )
 
 
+def _infer_emotional_signal(evidence: str, action: str, usage_context: str) -> Dict[str, Any]:
+    text = f"{evidence} {action} {usage_context}".lower()
+
+    lexicon = {
+        "frustration": ["frustrat", "stuck", "blocked", "drift", "not working", "failed", "issue", "error"],
+        "stress": ["pressure", "overload", "overwhelmed", "urgent", "deadline", "chaos"],
+        "relief": ["resolved", "stable", "fixed", "recovered", "unblocked"],
+        "joy": ["great", "happy", "loved", "amazing", "beautiful", "perfect"],
+        "breakthrough": ["breakthrough", "insight", "unlock", "clarity", "worked", "improved"],
+    }
+
+    scores: Dict[str, float] = {}
+    for label, terms in lexicon.items():
+        hit = sum(1 for t in terms if t in text)
+        scores[label] = min(1.0, hit * 0.25)
+
+    top = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    primary, intensity = top[0] if top else ("neutral", 0.0)
+    if intensity <= 0.0:
+        primary = "neutral"
+
+    # bounded multiplier (emotion boosts but does not dominate)
+    multiplier = 1.0 + min(0.35, intensity * 0.35)
+    return {
+        "type": primary,
+        "intensity": round(float(intensity), 3),
+        "multiplier": round(float(multiplier), 3),
+    }
+
+
+def _compute_priority_score(confidence: float, decision: str, emotional_signal: Dict[str, Any], usage_context: str) -> float:
+    base = confidence
+    if decision == "drop":
+        return round(max(0.0, base * 0.35), 3)
+
+    usage_bonus = 0.08 if usage_context.strip() else 0.0
+    mult = float(emotional_signal.get("multiplier") or 1.0)
+    # cap final score in [0,1]
+    return round(max(0.0, min(1.0, (base + usage_bonus) * mult)), 3)
+
+
 def _normalize_distillation_payload(raw: str) -> Optional[Dict[str, Any]]:
     txt = _strip_json_fence(raw)
     try:
@@ -377,13 +418,22 @@ def _normalize_distillation_payload(raw: str) -> Optional[Dict[str, Any]]:
             confidence = 0.0
         confidence = max(0.0, min(1.0, confidence))
 
+        evidence = str(it.get("evidence") or "").strip()[:500]
+        action = str(it.get("action") or "").strip()[:500]
+        usage_context = str(it.get("usage_context") or "").strip()[:240]
+
+        emotional_signal = _infer_emotional_signal(evidence, action, usage_context)
+        priority_score = _compute_priority_score(confidence, decision, emotional_signal, usage_context)
+
         item = {
             "insight_type": str(it.get("insight_type") or "pattern").strip()[:40],
             "confidence": round(confidence, 3),
-            "evidence": str(it.get("evidence") or "").strip()[:500],
-            "action": str(it.get("action") or "").strip()[:500],
-            "usage_context": str(it.get("usage_context") or "").strip()[:240],
+            "evidence": evidence,
+            "action": action,
+            "usage_context": usage_context,
             "decision": decision,
+            "emotional_signal": emotional_signal,
+            "priority_score": priority_score,
         }
         if item["action"] and item["evidence"]:
             out.append(item)
@@ -393,6 +443,8 @@ def _normalize_distillation_payload(raw: str) -> Optional[Dict[str, Any]]:
 
     kept = [x for x in out if x["decision"] == "keep"]
     final = kept if kept else out[:3]
+    # rank by usable priority so advisory gets best candidates first
+    final = sorted(final, key=lambda x: float(x.get("priority_score") or 0.0), reverse=True)
     return {
         "schema": "spark.eidos.v1",
         "insights": final[:3],
