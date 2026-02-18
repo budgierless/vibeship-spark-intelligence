@@ -592,18 +592,6 @@ def classify_event_priority(event: "SparkEvent") -> int:
     return EventPriority.LOW
 
 
-def read_events_prioritized(limit: int = 200, offset: int = 0) -> List["SparkEvent"]:
-    """Read events from the queue, sorted by priority (HIGH first).
-
-    Reads up to ``limit`` events starting at ``offset``, then returns them
-    ordered so that high-priority events come first.  This lets callers
-    process the most valuable events even if they can only handle a subset.
-    """
-    raw = read_events(limit=limit, offset=offset)
-    raw.sort(key=lambda e: classify_event_priority(e), reverse=True)
-    return raw
-
-
 def get_queue_stats() -> Dict:
     """Get queue statistics."""
     count = count_events()
@@ -626,56 +614,6 @@ def get_queue_stats() -> Dict:
         "max_bytes": MAX_QUEUE_BYTES,
         "needs_rotation": (MAX_EVENTS > 0 and count > MAX_EVENTS) or (MAX_QUEUE_BYTES > 0 and size_bytes > MAX_QUEUE_BYTES)
     }
-
-
-def get_events_by_type(event_type: EventType, limit: int = 100) -> List[SparkEvent]:
-    """Get events of a specific type."""
-    events = []
-    
-    if not EVENTS_FILE.exists():
-        return events
-    
-    try:
-        for line in (_iter_active_lines_iter(EVENTS_FILE) or []):
-            try:
-                data = json.loads(line.strip())
-                if data.get("event_type") == event_type.value:
-                    events.append(SparkEvent.from_dict(data))
-                    if len(events) >= limit:
-                        break
-            except Exception:
-                continue
-    except Exception as e:
-        log_debug("queue", "get_events_by_type failed", e)
-        pass
-    
-    return events
-
-
-def get_error_events(limit: int = 50) -> List[SparkEvent]:
-    """Get recent error events."""
-    return get_events_by_type(EventType.POST_TOOL_FAILURE, limit)
-
-
-def get_session_events(session_id: str) -> List[SparkEvent]:
-    """Get all events for a specific session."""
-    events = []
-    
-    if not EVENTS_FILE.exists():
-        return events
-    
-    try:
-        for line in (_iter_active_lines_iter(EVENTS_FILE) or []):
-            try:
-                data = json.loads(line.strip())
-                if data.get("session_id") == session_id:
-                    events.append(SparkEvent.from_dict(data))
-            except Exception:
-                continue
-    except Exception:
-        pass
-    
-    return events
 
 
 def _tail_lines(path: Path, count: int, start_offset_bytes: int = 0) -> List[str]:
