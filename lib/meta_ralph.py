@@ -298,6 +298,11 @@ class MetaRalph:
         r"principle",                     # Design principle
         r"balance",                       # Balance decision
         r"sweet spot",                    # Optimal value found
+        r"data shows",                    # Evidence-based
+        r"consistently",                  # Validated pattern
+        r"outperforms?",                  # Comparative evidence
+        r"\d{3,}\s*(avg|likes|views)",    # Numeric engagement evidence
+        r"strategy",                      # Strategic insight
     ]
 
     # File paths
@@ -829,14 +834,26 @@ class MetaRalph:
         # ACTIONABILITY: Can I act on this?
         if any(word in learning_lower for word in ["always", "never", "use", "avoid", "prefer", "should", "must", "set", "allows", "cap"]):
             score.actionability = 2
-        elif any(word in learning_lower for word in ["consider", "try", "might", "could", "optimal", "sweet spot", "balance"]):
+        elif any(word in learning_lower for word in [
+            "consider", "try", "might", "could", "optimal", "sweet spot", "balance",
+            # Data-backed action words
+            "drives", "increases", "decreases", "reduces", "outperforms",
+            # Strategy/approach patterns
+            "strategy", "approach", "pattern", "technique", "prioritize",
+        ]):
             score.actionability = 1
+        # Numeric evidence implies actionability (e.g., "2729 avg likes")
+        if score.actionability == 0 and re.search(r"\d{2,}", learning_lower):
+            if any(w in learning_lower for w in ["avg", "likes", "engagement", "%", "score", "rate", "count"]):
+                score.actionability = 1
 
         # NOVELTY: Is this new information?
         quality_matches = sum(1 for pattern in self.QUALITY_SIGNALS if re.search(pattern, learning_lower))
-        if quality_matches >= 2 or priority_boost > 0:
+        # Data-backed claims with numbers are inherently novel
+        has_numeric_evidence = bool(re.search(r"\d{3,}", learning_lower))
+        if quality_matches >= 2 or priority_boost > 0 or (has_numeric_evidence and quality_matches >= 1):
             score.novelty = 2
-        elif quality_matches >= 1 or decision_boost > 0:
+        elif quality_matches >= 1 or decision_boost > 0 or has_numeric_evidence:
             score.novelty = 1
 
         # REASONING: Does it have a "why"?
@@ -846,10 +863,15 @@ class MetaRalph:
             "so that", "in order to", "helps", "prevents",
             "for better", "for easier", "for safer", "for faster",
             "to avoid", "to ensure", "to prevent", "to improve",
-            "which means", "which allows", "which prevents"
+            "which means", "which allows", "which prevents",
+            # Data-backed reasoning
+            "data shows", "evidence", "correlates", "consistently",
         ]):
             score.reasoning = 1
         elif decision_boost > 0:
+            score.reasoning = 1
+        # Numeric data with comparative language implies reasoning
+        elif has_numeric_evidence and any(w in learning_lower for w in ["vs", "over", "compared", "avg", "outperforms"]):
             score.reasoning = 1
 
         # SPECIFICITY: Is it specific or generic?
@@ -878,11 +900,17 @@ class MetaRalph:
             # Game feel outcomes
             "feels fair", "feels good", "feels right", "punishing", "boring", "satisfying",
             # Architecture outcomes
-            "persisting", "processing", "captured", "stored"
+            "persisting", "processing", "captured", "stored",
+            # Engagement/metric outcomes
+            "likes", "engagement", "views", "clicks", "conversion", "retention",
+            "drives", "outperforms", "increases",
         ]):
             score.outcome_linked = 1
         elif context.get("has_outcome"):
             score.outcome_linked = max(score.outcome_linked, 1)
+        # Numeric evidence with engagement metrics = strong outcome link
+        elif has_numeric_evidence and any(w in learning_lower for w in ["avg", "rate", "%", "score"]):
+            score.outcome_linked = 1
 
         # Apply boosts
         if priority_boost > 0:
