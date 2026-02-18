@@ -906,6 +906,9 @@ class Advice:
     context_match: float  # How well it matches current context
     reason: str = ""  # Task #13: WHY this advice matters (evidence/context)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    # Emotional priority metadata from pipeline distillation (0.0-1.0).
+    # Bridges emotional salience into final ranking without dominating it.
+    emotional_priority: float = 0.0
 
 
 @dataclass
@@ -3108,6 +3111,55 @@ class SparkAdvisor:
 
         return advice
 
+    def _load_recent_eidos_priority_map(self) -> Dict[str, float]:
+        """Load priority_score from recent EIDOS distillations, keyed by action text.
+
+        Returns a dict mapping lowercased action text → priority_score.
+        Lightweight: reads only the last 2 KB of the JSONL file.
+        """
+        cache_attr = "_eidos_priority_cache"
+        cache_ts_attr = "_eidos_priority_cache_ts"
+        now = time.time()
+        # Cache for 60 s to avoid re-reading on every call
+        if (
+            hasattr(self, cache_attr)
+            and hasattr(self, cache_ts_attr)
+            and (now - getattr(self, cache_ts_attr, 0.0)) < 60.0
+        ):
+            return getattr(self, cache_attr) or {}
+
+        result: Dict[str, float] = {}
+        try:
+            eidos_file = Path.home() / ".spark" / "eidos_distillations.jsonl"
+            if not eidos_file.exists():
+                return result
+            raw = eidos_file.read_bytes()
+            # Only parse the tail (last ~4 KB) for speed
+            tail = raw[-4096:] if len(raw) > 4096 else raw
+            for line in tail.decode("utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                for it in (entry.get("insights") or []):
+                    if not isinstance(it, dict):
+                        continue
+                    ps = it.get("priority_score")
+                    action = str(it.get("action") or "").strip().lower()
+                    if action and ps is not None:
+                        try:
+                            result[action] = float(ps)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        setattr(self, cache_attr, result)
+        setattr(self, cache_ts_attr, now)
+        return result
+
     def _get_eidos_advice(self, tool_name: str, context: str) -> List[Advice]:
         """Get advice from EIDOS distillations (extracted rules from patterns)."""
         advice = []
@@ -3124,6 +3176,9 @@ class SparkAdvisor:
             # Get distillations for this intent (includes policies, heuristics, anti-patterns)
             distillations = retriever.retrieve_for_intent(intent)
 
+            # Load recent emotional priority metadata for bridging
+            priority_map = self._load_recent_eidos_priority_map()
+
             for d in distillations[:5]:
                 # Determine advice type label based on distillation type
                 type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
@@ -3135,6 +3190,18 @@ class SparkAdvisor:
 
                 # Compute real context match instead of hardcoding 0.85
                 eidos_match = self._calculate_context_match(d.statement, context)
+
+                # Bridge emotional priority: try exact match on action text,
+                # else try substring match on statement
+                ep = 0.0
+                stmt_lower = (d.statement or "").strip().lower()
+                if stmt_lower in priority_map:
+                    ep = priority_map[stmt_lower]
+                else:
+                    for action_key, ps in priority_map.items():
+                        if action_key and action_key in stmt_lower:
+                            ep = max(ep, ps)
+                            break
 
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(
@@ -3148,6 +3215,7 @@ class SparkAdvisor:
                     source="eidos",
                     context_match=eidos_match,
                     reason=reason,
+                    emotional_priority=ep,
                 ))
                 # Record usage (will mark helped=True on positive outcome)
                 retriever.record_usage(d.distillation_id, helped=False)
@@ -3878,6 +3946,12 @@ class SparkAdvisor:
         if source_stats.get("total", 0) > 0:
             helpful_rate = source_stats.get("helpful", 0) / source_stats["total"]
             base_score *= (0.8 + helpful_rate * 0.4)  # 0.8x to 1.2x
+
+        # Emotional priority boost: bridge pipeline emotional salience into ranking.
+        # Capped at +20% to keep emotion as a tiebreaker, not a dominator.
+        ep = float(getattr(a, "emotional_priority", 0.0) or 0.0)
+        if ep > 0.0:
+            base_score *= (1.0 + min(0.20, ep * 0.20))
 
         return base_score
 
