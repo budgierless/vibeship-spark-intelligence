@@ -19,15 +19,49 @@ from .diagnostics import log_debug
 
 _reranker_instance: Optional["CrossEncoderReranker"] = None
 _reranker_load_attempted: bool = False
+_reranker_loading: bool = False
+
+
+def preload_reranker() -> None:
+    """Start loading the cross-encoder model in a background thread.
+
+    Call this early (e.g., at advisor init) so the model is warm
+    by the time the first rerank request comes in. If the model
+    isn't ready yet, get_reranker() returns None and reranking is
+    silently skipped (no 10s cold-start block).
+    """
+    global _reranker_loading, _reranker_load_attempted
+    if _reranker_instance is not None or _reranker_load_attempted or _reranker_loading:
+        return
+    _reranker_loading = True
+
+    import threading
+
+    def _load():
+        global _reranker_instance, _reranker_load_attempted, _reranker_loading
+        try:
+            _reranker_instance = CrossEncoderReranker()
+            log_debug("cross_encoder", "Background preload complete")
+        except Exception as e:
+            log_debug("cross_encoder", f"Background preload failed: {e}")
+        finally:
+            _reranker_load_attempted = True
+            _reranker_loading = False
+
+    t = threading.Thread(target=_load, daemon=True)
+    t.start()
 
 
 def get_reranker() -> Optional["CrossEncoderReranker"]:
-    """Get or create the singleton reranker. Returns None if unavailable."""
+    """Get the singleton reranker. Returns None if unavailable or still loading."""
     global _reranker_instance, _reranker_load_attempted
     if _reranker_instance is not None:
         return _reranker_instance
     if _reranker_load_attempted:
-        return None
+        return None  # Tried and failed
+    if _reranker_loading:
+        return None  # Still loading in background — skip this time
+    # No background preload was started; attempt synchronous load
     _reranker_load_attempted = True
     try:
         _reranker_instance = CrossEncoderReranker()

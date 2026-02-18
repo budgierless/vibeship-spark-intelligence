@@ -948,6 +948,14 @@ class SparkAdvisor:
         # key -> (blob_hash, token_set, blob_lower)
         self._prefilter_cache: Dict[str, Tuple[str, set, str]] = {}
 
+        # Preload cross-encoder model in background thread so first advise()
+        # call doesn't block for 10+ seconds waiting for model load.
+        try:
+            from .cross_encoder_reranker import preload_reranker
+            preload_reranker()
+        except Exception:
+            pass  # Cross-encoder is optional
+
     def _load_effectiveness(self) -> Dict[str, Any]:
         """Load effectiveness tracking data."""
         if EFFECTIVENESS_FILE.exists():
