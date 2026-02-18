@@ -54,6 +54,15 @@ MEMORY_EMOTION_DEFAULTS: Dict[str, Any] = {
 _MEMORY_EMOTION_CFG_CACHE: Dict[str, Any] = dict(MEMORY_EMOTION_DEFAULTS)
 _MEMORY_EMOTION_CFG_MTIME: Optional[float] = None
 
+MEMORY_LEARNING_DEFAULTS: Dict[str, Any] = {
+    "enabled": True,
+    "retrieval_learning_weight": 0.18,
+    "retrieval_min_learning_signal": 0.20,
+    "calm_mode_bonus": 0.08,
+}
+_MEMORY_LEARNING_CFG_CACHE: Dict[str, Any] = dict(MEMORY_LEARNING_DEFAULTS)
+_MEMORY_LEARNING_CFG_MTIME: Optional[float] = None
+
 
 def _safe_bool(value: Any, default: bool) -> bool:
     if isinstance(value, bool):
@@ -124,6 +133,58 @@ def _load_memory_emotion_config(*, force: bool = False) -> Dict[str, Any]:
     return dict(cfg)
 
 
+def _load_memory_learning_config(*, force: bool = False) -> Dict[str, Any]:
+    global _MEMORY_LEARNING_CFG_MTIME
+    global _MEMORY_LEARNING_CFG_CACHE
+
+    current_mtime: Optional[float] = None
+    try:
+        if TUNEABLES_FILE.exists():
+            current_mtime = float(TUNEABLES_FILE.stat().st_mtime)
+    except Exception:
+        current_mtime = None
+
+    if not force and _MEMORY_LEARNING_CFG_MTIME == current_mtime:
+        return dict(_MEMORY_LEARNING_CFG_CACHE)
+
+    cfg = dict(MEMORY_LEARNING_DEFAULTS)
+    try:
+        if TUNEABLES_FILE.exists():
+            payload = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
+            section = payload.get("memory_learning") if isinstance(payload, dict) else None
+            if isinstance(section, dict):
+                cfg["enabled"] = _safe_bool(section.get("enabled"), cfg["enabled"])
+                cfg["retrieval_learning_weight"] = _safe_float(
+                    section.get("retrieval_learning_weight"),
+                    cfg["retrieval_learning_weight"],
+                )
+                cfg["retrieval_min_learning_signal"] = _safe_float(
+                    section.get("retrieval_min_learning_signal"),
+                    cfg["retrieval_min_learning_signal"],
+                )
+                cfg["calm_mode_bonus"] = _safe_float(
+                    section.get("calm_mode_bonus"),
+                    cfg["calm_mode_bonus"],
+                )
+    except Exception:
+        pass
+
+    env_enabled = os.getenv("SPARK_MEMORY_LEARNING_ENABLED")
+    if env_enabled is not None:
+        cfg["enabled"] = _safe_bool(env_enabled, cfg["enabled"])
+    env_weight = os.getenv("SPARK_MEMORY_LEARNING_WEIGHT")
+    if env_weight is not None:
+        cfg["retrieval_learning_weight"] = _safe_float(env_weight, cfg["retrieval_learning_weight"])
+
+    cfg["retrieval_learning_weight"] = max(0.0, float(cfg["retrieval_learning_weight"]))
+    cfg["retrieval_min_learning_signal"] = _clamp01(cfg["retrieval_min_learning_signal"])
+    cfg["calm_mode_bonus"] = _clamp01(cfg["calm_mode_bonus"])
+
+    _MEMORY_LEARNING_CFG_CACHE = dict(cfg)
+    _MEMORY_LEARNING_CFG_MTIME = current_mtime
+    return dict(cfg)
+
+
 def _current_retrieval_emotion_state() -> Optional[Dict[str, Any]]:
     try:
         from lib.spark_emotions import SparkEmotions
@@ -143,6 +204,66 @@ def _current_retrieval_emotion_state() -> Optional[Dict[str, Any]]:
         }
     except Exception:
         return None
+
+
+def _with_memory_emotion_meta(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    merged = dict(meta or {})
+    cfg = _load_memory_emotion_config()
+    if not bool(cfg.get("enabled", True)):
+        return merged
+    if isinstance(merged.get("emotion"), dict) and merged.get("emotion"):
+        return merged
+
+    state = _current_retrieval_emotion_state()
+    if not state:
+        return merged
+
+    state_copy = dict(state)
+    state_copy["captured_at"] = time.time()
+    merged["emotion"] = state_copy
+    return merged
+
+
+def _with_memory_learning_meta(
+    meta: Optional[Dict[str, Any]],
+    *,
+    category: str,
+    content: str,
+) -> Dict[str, Any]:
+    merged = dict(meta or {})
+    cfg = _load_memory_learning_config()
+    if not bool(cfg.get("enabled", True)):
+        return merged
+
+    if isinstance(merged.get("learning"), dict) and merged.get("learning"):
+        return merged
+
+    cat = (category or "").strip().lower()
+    base_priority = {
+        "reasoning": 0.78,
+        "meta_learning": 0.75,
+        "self_awareness": 0.68,
+        "workflow": 0.62,
+        "advisory": 0.60,
+    }.get(cat, 0.52)
+
+    text = (content or "").lower()
+    keyword_bonus = 0.0
+    if any(k in text for k in ("learn", "lesson", "pattern", "insight", "approach", "fix", "decision")):
+        keyword_bonus += 0.08
+    if any(k in text for k in ("always", "never", "rule", "gate", "must")):
+        keyword_bonus += 0.06
+
+    outcome_quality = _clamp01(_safe_float(merged.get("outcome_quality"), 0.60))
+    priority = _clamp01(base_priority + keyword_bonus)
+
+    merged["learning"] = {
+        "priority": round(priority, 4),
+        "outcome_quality": round(outcome_quality, 4),
+        "calm_important": bool(priority >= 0.62),
+        "captured_at": time.time(),
+    }
+    return merged
 
 
 def _emotion_state_similarity(
@@ -584,6 +705,9 @@ def upsert_entry(
     if _is_telemetry_memory(content):
         return
 
+    meta = _with_memory_emotion_meta(meta)
+    meta = _with_memory_learning_meta(meta, category=category, content=content)
+
     # Delta compaction: if this is near-duplicate of a recent memory, store only the delta.
     if DELTAS_ENABLED and content and len(content) >= 240:
         conn = _connect()
@@ -888,23 +1012,52 @@ def retrieve(
                     it["score"] = (0.6 * it["score"]) + (0.4 * cos)
 
         emotion_cfg = _load_memory_emotion_config()
-        if emotion_cfg.get("enabled"):
-            active_state = _current_retrieval_emotion_state()
-            if active_state:
-                state_weight = float(emotion_cfg.get("retrieval_state_match_weight") or 0.0)
-                min_state_sim = float(emotion_cfg.get("retrieval_min_state_similarity") or 0.0)
-                if state_weight > 0.0:
-                    for it in items:
-                        meta = it.get("meta") if isinstance(it, dict) else None
-                        mem_state = meta.get("emotion") if isinstance(meta, dict) else None
-                        state_match = _emotion_state_similarity(active_state, mem_state)
-                        if state_match < min_state_sim:
-                            state_match = 0.0
-                        state_boost = state_weight * state_match
-                        if state_boost > 0.0:
-                            it["score"] += state_boost
-                        it["emotion_state_match"] = round(state_match, 4)
-                        it["emotion_score_boost"] = round(state_boost, 4)
+        active_state = _current_retrieval_emotion_state() if emotion_cfg.get("enabled") else None
+        if emotion_cfg.get("enabled") and active_state:
+            state_weight = float(emotion_cfg.get("retrieval_state_match_weight") or 0.0)
+            min_state_sim = float(emotion_cfg.get("retrieval_min_state_similarity") or 0.0)
+            if state_weight > 0.0:
+                for it in items:
+                    meta = it.get("meta") if isinstance(it, dict) else None
+                    mem_state = meta.get("emotion") if isinstance(meta, dict) else None
+                    state_match = _emotion_state_similarity(active_state, mem_state)
+                    if state_match < min_state_sim:
+                        state_match = 0.0
+                    state_boost = state_weight * state_match
+                    if state_boost > 0.0:
+                        it["score"] += state_boost
+                    it["emotion_state_match"] = round(state_match, 4)
+                    it["emotion_score_boost"] = round(state_boost, 4)
+
+        # Learning lane: calm but important learnings should still rank strongly.
+        learning_cfg = _load_memory_learning_config()
+        if learning_cfg.get("enabled"):
+            learning_weight = float(learning_cfg.get("retrieval_learning_weight") or 0.0)
+            min_signal = float(learning_cfg.get("retrieval_min_learning_signal") or 0.0)
+            calm_bonus = float(learning_cfg.get("calm_mode_bonus") or 0.0)
+            is_calm_mode = bool(
+                active_state and str(active_state.get("primary_emotion") or "steady") in {"steady", "calm", "reflective"}
+            )
+            if learning_weight > 0.0:
+                for it in items:
+                    meta = it.get("meta") if isinstance(it, dict) else None
+                    learn = meta.get("learning") if isinstance(meta, dict) else None
+                    if not isinstance(learn, dict):
+                        continue
+                    priority = _clamp01(_safe_float(learn.get("priority"), 0.0))
+                    outcome_quality = _clamp01(
+                        _safe_float(learn.get("outcome_quality"), _safe_float(meta.get("outcome_quality"), 0.5) if isinstance(meta, dict) else 0.5)
+                    )
+                    learning_signal = _clamp01((0.65 * priority) + (0.35 * outcome_quality))
+                    if learning_signal < min_signal:
+                        learning_signal = 0.0
+                    learning_boost = learning_weight * learning_signal
+                    if is_calm_mode and bool(learn.get("calm_important")):
+                        learning_boost += calm_bonus * learning_signal
+                    if learning_boost > 0.0:
+                        it["score"] += learning_boost
+                    it["learning_signal"] = round(learning_signal, 4)
+                    it["learning_score_boost"] = round(learning_boost, 4)
 
         items.sort(key=lambda i: i.get("score", 0.0), reverse=True)
 
