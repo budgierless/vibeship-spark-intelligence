@@ -114,6 +114,38 @@ def _current_emotion_snapshot() -> Optional[Dict[str, Any]]:
         return None
 
 
+def _infer_outcome_quality(text: str, category: str, source: str) -> float:
+    """Lightweight outcome quality inference for memory feedback loop.
+
+    Rationale:
+    - Positive/solution outcomes should strengthen retrieval for similar future states.
+    - Failure/frustration signals should still be stored, but with lower success quality.
+    """
+    t = (text or "").lower()
+    positive = (
+        "fixed", "solved", "working", "done", "great", "perfect", "stable", "passed", "success"
+    )
+    negative = (
+        "failed", "broken", "frustrat", "angry", "stuck", "issue", "error", "not working", "drift"
+    )
+
+    score = 0.60
+    if any(k in t for k in positive):
+        score += 0.18
+    if any(k in t for k in negative):
+        score -= 0.22
+
+    c = (category or "").lower()
+    if c in {"reasoning", "meta_learning", "decision", "workflow"}:
+        score += 0.05
+
+    s = (source or "").lower()
+    if "feedback" in s:
+        score += 0.05
+
+    return max(0.0, min(1.0, float(score)))
+
+
 def _hash_id(*parts: str) -> str:
     raw = "|".join([p or "" for p in parts]).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()[:12]
@@ -251,6 +283,13 @@ def store_memory(text: str, category: str, session_id: Optional[str] = None, sou
         snapshot = _current_emotion_snapshot()
         if snapshot:
             meta["emotion"] = snapshot
+
+    outcome_quality = _infer_outcome_quality(text, category, source)
+    meta["outcome_quality"] = round(outcome_quality, 4)
+    meta["feedback_hook"] = {
+        "kind": "memory_banks_outcome_inference",
+        "captured_at": round(time.time(), 3),
+    }
 
     entry = BankEntry(
         entry_id=entry_id,
