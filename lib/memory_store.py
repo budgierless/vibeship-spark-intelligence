@@ -689,6 +689,37 @@ def _split_patches(text: str) -> List[str]:
     return merged
 
 
+def _apply_reconsolidation_meta(
+    previous_meta: Optional[Dict[str, Any]],
+    new_meta: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    prev = dict(previous_meta or {})
+    nxt = dict(new_meta or {})
+
+    prev_outcome = _safe_float(prev.get("outcome_quality"), 0.50)
+    next_outcome = _safe_float(nxt.get("outcome_quality"), prev_outcome)
+
+    recon_prev = prev.get("reconsolidation") if isinstance(prev.get("reconsolidation"), dict) else {}
+    updates = int(recon_prev.get("updates") or 0) + 1
+
+    prev_ema = _safe_float(recon_prev.get("outcome_quality_ema"), prev_outcome)
+    outcome_ema = _clamp01((0.70 * prev_ema) + (0.30 * next_outcome))
+
+    history = recon_prev.get("outcome_history") if isinstance(recon_prev.get("outcome_history"), list) else []
+    history = [h for h in history if isinstance(h, (int, float))]
+    history.append(round(next_outcome, 4))
+    history = history[-6:]
+
+    nxt["reconsolidation"] = {
+        "updates": updates,
+        "last_outcome_delta": round(next_outcome - prev_outcome, 4),
+        "outcome_quality_ema": round(outcome_ema, 4),
+        "outcome_history": history,
+        "last_updated_at": time.time(),
+    }
+    return nxt
+
+
 def _upsert_entry_raw(
     conn: sqlite3.Connection,
     *,
@@ -701,6 +732,17 @@ def _upsert_entry_raw(
     source: str,
     meta: Optional[Dict[str, Any]] = None,
 ) -> None:
+    existing_row = conn.execute(
+        "SELECT meta FROM memories WHERE memory_id = ?",
+        (memory_id,),
+    ).fetchone()
+    if existing_row is not None:
+        try:
+            prev_meta = _parse_meta(existing_row["meta"])
+            meta = _apply_reconsolidation_meta(prev_meta, meta)
+        except Exception:
+            pass
+
     conn.execute(
         """
         INSERT OR REPLACE INTO memories
