@@ -878,6 +878,19 @@ class CognitiveLearner:
         if not text:
             return True
 
+        # Check indented code BEFORE stripping (strip removes the evidence)
+        raw = text.rstrip()
+        if raw and raw[0] in (' ', '\t'):
+            leading = len(raw) - len(raw.lstrip())
+            if leading >= 4:
+                stripped_line = raw.lstrip()
+                # Indented assignment: "    current.confidence = max(...)"
+                if re.match(r"[\w.]+\s*=\s*.+", stripped_line):
+                    return True
+                # Indented statement: "    self._log(...)", "    return x"
+                if re.match(r"(self\.\w+|if |for |def |class |return |import |from |try:|except|raise |print\(|elif )", stripped_line):
+                    return True
+
         t = text.strip()
         tl = t.lower()
 
@@ -1201,6 +1214,40 @@ class CognitiveLearner:
         # e.g., "## Session History", "## Current State: 2026-02-03"
         if re.match(r"^##\s+", t):
             return True
+
+        # 42. "I struggle with tool_N_error" — generic hook error telemetry
+        # e.g., "I struggle with tool_5_error tasks", "I struggle with tool_49_error tasks"
+        if re.search(r"i struggle with tool_\d+_error", tl):
+            return True
+
+        # 43. Python import statements stored as insights (column-0 imports)
+        # e.g., "from lib.diagnostics import log_debug as _bridge_log_debug"
+        if re.match(r"^(from\s+[\w.]+\s+import\s|import\s+[\w.,\s]+$)", t):
+            return True
+
+        # 44. Short/vague "Constraint:" or "Principle:" with conversational fragments
+        # e.g., "Constraint: check and about each", "Constraint: utilise all those APIs"
+        for lp in ("constraint:", "principle:", "reasoning:"):
+            if tl.startswith(lp):
+                rest = tl[len(lp):].strip()
+                # Conversational markers: direct address, vague references
+                if re.search(r"(please|let me know|as well|about each|right now|at the moment|over here|about this|let's|utilise|utilize all)", rest):
+                    return True
+                # Fragments that just reference something without actionable content
+                if re.search(r"^(check |look |see |about |what |how |when |where |that we|the way)", rest):
+                    return True
+                break
+
+        # 45. Chip intelligence with generic "pattern:" or "observation:" fields
+        # e.g., "[Spark Core Intelligence] pattern: awaiting one"
+        if re.match(r"^\[[\w\s-]+\]\s*(pattern|observation|event|signal|trigger):", t, re.IGNORECASE):
+            return True
+
+        # 46. "User prefers: X" extremely short (< 25 chars after prefix)
+        if tl.startswith("user prefers:") or tl.startswith("user aversion:"):
+            rest = t.split(":", 1)[1].strip() if ":" in t else ""
+            if len(rest) < 25:
+                return True
 
         return False
 
