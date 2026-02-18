@@ -1,5 +1,8 @@
 # OpenClaw Operations — Running Spark the Seer
 
+Status: `canonical`
+Scope: runtime startup, data flow, service health, troubleshooting
+
 ## Session Startup Checklist
 
 Every time you start a new OpenClaw session, do this:

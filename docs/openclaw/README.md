@@ -2,6 +2,12 @@
 
 This folder is the organized source for Spark x OpenClaw integration tracking.
 
+## Canonical Surfaces
+
+- Runtime operations/startup/troubleshooting: `docs/OPENCLAW_OPERATIONS.md`
+- Integration tracking and change workflow: this folder (`docs/openclaw/`)
+- Path and sensitivity boundaries: `docs/OPENCLAW_PATHS_AND_DATA_BOUNDARIES.md`
+
 ## Files
 
 - `docs/openclaw/INTEGRATION_BACKLOG.md`: prioritized implementation backlog

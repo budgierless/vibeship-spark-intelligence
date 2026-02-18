@@ -88,7 +88,7 @@ Report: `benchmarks/out/memory_retrieval_ab_live_now_report.md`
 
 ## Advisory Self Review (Last 24h)
 
-Report: `docs/reports/2026-02-15_200030_advisory_self_review.md`
+Report: `docs/archive/docs/reports_self_review/2026-02-15_200030_advisory_self_review.md`
 - advisory trace coverage: 98.68%
 - engine trace coverage: 50.0% (engine path evidence linkage incomplete)
 - strict effectiveness rate: 0.7935

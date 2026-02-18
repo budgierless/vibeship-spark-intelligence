@@ -1,4 +1,4 @@
-﻿# Documentation Index
+# Documentation Index
 
 This index is the canonical map of active Spark documentation.
 Primary navigation hub: `docs/GLOSSARY.md`.
@@ -12,17 +12,21 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `Intelligence_Flow.md`: runtime flow, data stores, tuneables
 - `Intelligence_Flow_Map.md`: high-level system map
 - `VIBESHIP_OPTIMIZER.md`: optimization logbook (vibeship-optimizer workflow + Spark KPI capture)
+- `docs/CHANGE_AND_UPGRADE_WORKFLOW.md`: mandatory end-to-end change route (control hierarchy, promotion gates, rollback discipline, optimizer-first evidence flow)
+- `docs/DOCUMENTATION_SYSTEM.md`: documentation governance system (authority order, retention, archive policy, cross-repo sync rules)
 
 ## Integrations
 
-- `docs/MINIMAX_INTEGRATION.md`: **MiniMax M2.5** — setup, subagent patterns, all integration points, extended thinking handling, troubleshooting
-- `docs/OPENCLAW_OPERATIONS.md`: **Start here** — session startup, how Spark works in OpenClaw, services, troubleshooting
-- `docs/OPENCLAW_INTEGRATION.md`: Technical integration details (capture, context sync, notifications)
+- `docs/MINIMAX_INTEGRATION.md`: **MiniMax M2.5** â€” setup, subagent patterns, all integration points, extended thinking handling, troubleshooting
+- `docs/OPENCLAW_OPERATIONS.md`: **Canonical OpenClaw runtime doc** â€” startup, data flow, services, troubleshooting
+- `docs/openclaw/README.md`: OpenClaw integration tracking hub (backlog/changelog/verification workflow)
+- `docs/OPENCLAW_INTEGRATION.md`: legacy compatibility pointer to canonical OpenClaw docs
 - `docs/LLM_INTEGRATION.md`: Claude CLI LLM integration (advisory synthesis, EIDOS distillation, PowerShell bridge)
 
 ## Operator Runbooks
 
 - `TUNEABLES.md`: tuneable parameters and thresholds
+- `docs/CHANGE_AND_UPGRADE_WORKFLOW.md`: canonical workflow for tuneables/code/env changes with required before/after optimizer evidence
 - `docs/launch/LAUNCH_SCOPE_AND_GATES.md`: ship-now vs later, release gates, go/no-go, owners, rollback
 - `docs/launch/LAUNCH_ASSETS.md`: landing copy, demo script, and screenshot/GIF checklist
 - `docs/launch/ANNOUNCEMENT_PACK.md`: X thread + announcement drafts + tracking plan
@@ -54,6 +58,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 - `scripts/apply_chip_profile_r3.py`: applies promoted R3 chip merge tuneables to `~/.spark/tuneables.json`
 - `scripts/run_chip_observer_policy.py`: observer keep/disable policy generator from 2-3 diagnostics windows (with optional apply to runtime policy file)
 - `scripts/run_chip_learning_diagnostics.py`: chip learning/distillation diagnostics (telemetry rate, learnable statement yield, merge-eligible coverage)
+- `scripts/archive_self_reviews.py`: archive repetitive advisory self-review logs into `docs/archive/docs/reports_self_review/` while keeping latest quick-access files
 - `docs/OPENCLAW_RESEARCH_AND_UPDATES.md`: experiment log for OpenClaw tuning changes, outcomes, and keep/rollback decisions
 - `docs/reports/2026-02-12_openclaw_memory_advisory_concrete_plan_and_live_baseline.md`: concrete memory/advisory fix plan + live baseline + execution updates
 - `docs/reports/2026-02-12_spark_intelligence_2day_comprehensive_honest_assessment.md`: two-day system scorecard and integrated closure plan
@@ -68,7 +73,9 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 ## Core Systems
 
-- `docs/RETRIEVAL_IMPROVEMENT_PLAN.md`: **ACTIVE** — SOTA-grounded plan to raise advisory precision from 60% to >85% (metadata filtering, actionability gate, cross-encoder reranking, memory tiering)
+- `docs/SELF_IMPROVEMENT_SYSTEMS.md`: **10 recursive self-improvement modules** â€” auto-tuner, implicit feedback, memory tiering, weakness training, regression guard, demotion sweep, hypothesis pipeline, actionability classifier, cross-domain evolution, E2E benchmark
+- `docs/RETRIEVAL_IMPROVEMENT_PLAN.md`: **ACTIVE** â€” SOTA-grounded plan to raise advisory precision from 60% to >85% (metadata filtering, actionability gate, cross-encoder reranking, memory tiering)
+- `docs/SPARK_EMOTIONS_V2.md`: canonical emotions runtime behavior and advisory integration hooks
 - `EIDOS_GUIDE.md`: EIDOS architecture and enforcement loop
 - `EIDOS_QUICKSTART.md`: EIDOS operational quickstart
 - `META_RALPH.md`: quality gate and feedback loop
@@ -79,6 +86,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 ## Current Program Docs
 
 - `docs/PROGRAM_STATUS.md`: consolidated implementation status and priorities
+- `docs/reports/LATEST.md`: condensed pointer list for current high-signal validation evidence
 - `docs/architecture/CONSCIOUSNESS_INTELLIGENCE_ALIGNMENT_TASK_SYSTEM.md`: cross-repo Spark Consciousness x Spark Intelligence alignment backlog with ordered execution phases
 - `docs/memory-retrieval-status.md`: memory retrieval stabilization + A/B execution spec
 - `docs/reports/2026-02-12_memory_retrieval_tuned_two_system_scorecard.md`: tuned best-vs-best comparison (`embeddings_only` vs `hybrid_agentic`)
@@ -123,6 +131,7 @@ Primary navigation hub: `docs/GLOSSARY.md`.
 
 - `docs/archive/`: superseded plans, roadmaps, and one-off deep dives
 - `docs/reports/`: point-in-time audits and analysis reports
+- `docs/archive/docs/reports_self_review/`: archived repetitive self-review logs
 
 Archive convention:
 - Keep active docs focused on current runtime behavior.

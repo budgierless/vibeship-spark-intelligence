@@ -32,7 +32,7 @@ Executed the next optimization queue without adding features:
   - file: `benchmarks/out/memory_retrieval_ab_canary_retrieval_v2_soak1_report.json`
   - winner remains: `hybrid_agentic`
 - Self-review:
-  - file: `docs/reports/2026-02-13_124252_advisory_self_review.md`
+  - file: `docs/archive/docs/reports_self_review/2026-02-13_124252_advisory_self_review.md`
   - repeated-advice concentration remains high (`~61.21%` top repeated cluster share)
   - engine trace coverage still low (`50.2%`)
 

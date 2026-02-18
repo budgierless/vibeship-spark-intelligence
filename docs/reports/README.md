@@ -2,17 +2,36 @@
 
 Point-in-time analysis reports live here.
 
-These are snapshots, not always-live source-of-truth docs.
-For current behavior and configuration, use:
-- `Intelligence_Flow.md`
+Reports are evidence snapshots, not policy truth.
+For current operational truth, start with:
+- `docs/DOCS_INDEX.md`
+- `docs/CHANGE_AND_UPGRADE_WORKFLOW.md`
 - `TUNEABLES.md`
-- `docs/PROGRAM_STATUS.md`
+- `VIBESHIP_OPTIMIZER.md`
 
-## Prompt-System Reporting Spine
+## Start Here
 
-- `docs/reports/PROMPT_SYSTEM_MASTER_LOG.md`: canonical cross-run prompt-system log (coverage, decisions, next actions).
-- `docs/reports/2026-02-15_233443_prompt_run_10_2_6.md`: detailed run log for prompts #10/#2/#6 and autonomous follow-up.
-- `docs/reports/2026-02-16_prompt_system_execution_plan.md`: autonomous execution plan and tracking table for this cycle.
-- `docs/reports/2026-02-16_prompt_sweep_1_3_4_5_7.md`: prompt sweep outputs for #1/#3/#4/#5/#7.
-- `docs/reports/20260216_145005_selective_ai_tune_loop_report.md`: 3-pass selective-AI tune-loop comparison and winner summary.
-- `docs/reports/2026-02-16_live_probe_followup.md`: continuation loop on non-benchmark probes, loop-hardening reruns, selective-eligibility telemetry, and final safe-improved runtime decision.
+- `docs/reports/LATEST.md`: curated list of current high-signal reports.
+- `docs/reports/PROMPT_SYSTEM_MASTER_LOG.md`: canonical cross-run prompt-system spine (coverage, decisions, next actions).
+
+## Retention Layout
+
+- `docs/reports/`: current/high-signal reports and curated summaries.
+- `docs/archive/docs/reports_self_review/`: archived repetitive self-review logs (tracked history).
+- `docs/reports/openclaw/`: OpenClaw-specific benchmark/audit run artifacts.
+
+## Naming Convention
+
+- Use dated report names: `YYYY-MM-DD_<topic>.md` (or timestamped variants where needed).
+- Keep generated JSON companions near their report when they are direct evidence.
+
+## Hygiene Rules
+
+- Do not treat report conclusions as permanent policy without promotion into canonical docs.
+- Move repetitive run logs into `docs/archive/docs/reports_self_review/` to keep top-level scanning efficient.
+- Keep `LATEST.md` short and decision-focused.
+
+### Archive helper
+
+Use:
+`python scripts/archive_self_reviews.py --apply --keep-latest 3`

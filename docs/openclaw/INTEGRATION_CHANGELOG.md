@@ -2,6 +2,18 @@
 
 This log tracks Spark x OpenClaw integration changes that should be easy to audit later.
 
+## 2026-02-18
+
+### Documentation consolidation (canonicalization)
+
+- Consolidated OpenClaw documentation surfaces:
+  - canonical runtime operations doc remains `docs/OPENCLAW_OPERATIONS.md`
+  - canonical tracking hub set to `docs/openclaw/README.md`
+- Converted `docs/OPENCLAW_INTEGRATION.md` into a compatibility pointer to canonical docs.
+- Archived full legacy integration body:
+  - `docs/archive/docs/OPENCLAW_INTEGRATION_LEGACY.md`
+- Updated documentation index references to reduce duplicated/competing entry points.
+
 ## 2026-02-16
 
 ### Added

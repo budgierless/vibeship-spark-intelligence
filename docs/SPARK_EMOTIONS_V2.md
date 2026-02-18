@@ -1,5 +1,8 @@
 # Spark Emotions V2 (Stateful Continuity)
 
+Status: `canonical`
+Scope: bounded emotions runtime behavior and advisory shaping hooks
+
 Spark Emotions V2 upgrades the runtime from tone-only adjustments to a bounded emotional continuity model.
 
 ## What V2 adds

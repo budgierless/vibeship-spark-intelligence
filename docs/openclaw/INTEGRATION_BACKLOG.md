@@ -1,6 +1,6 @@
 # OpenClaw Integration Backlog
 
-Last updated: 2026-02-16
+Last updated: 2026-02-18
 Owner: Spark Intelligence
 Status: Active
 
@@ -32,6 +32,7 @@ Maintain an auditable backlog for Spark x OpenClaw integration changes, with:
 - [ ] Add formal advisory promotion/decay policy doc with exploration budget.
 - [ ] Add stale advisory re-test cadence and suppression expiry policy.
 - [ ] Add monthly config audit with signed changelog entry.
+- [x] Consolidate OpenClaw docs into canonical runtime path + tracking hub with legacy compatibility pointers.
 
 ## Validation gates
 
