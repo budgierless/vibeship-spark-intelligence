@@ -146,6 +146,90 @@ def _infer_outcome_quality(text: str, category: str, source: str) -> float:
     return max(0.0, min(1.0, float(score)))
 
 
+def _infer_memory_type(text: str, category: str, outcome_quality: float) -> str:
+    t = (text or "").lower()
+    if any(k in t for k in ("frustrat", "angry", "stressed", "overwhelmed", "upset")):
+        return "frustration"
+    if any(k in t for k in ("failed", "error", "broken", "not working", "drift")):
+        return "failure"
+    if any(k in t for k in ("breakthrough", "unlock", "clicked", "clarity", "aha")):
+        return "breakthrough"
+    if any(k in t for k in ("improve", "better", "optimiz", "tune", "upgrade")):
+        return "improvement"
+    if outcome_quality >= 0.72 or any(k in t for k in ("worked", "great", "perfect", "stable", "passed")):
+        return "success"
+
+    c = (category or "").lower()
+    if c in {"meta_learning", "reasoning", "workflow"}:
+        return "improvement"
+    return "general"
+
+
+def _build_actionability_profile(memory_type: str, text: str, category: str) -> Dict[str, Any]:
+    snippet = " ".join((text or "").split())[:240]
+    base: Dict[str, Any] = {
+        "version": "v1",
+        "memory_type": memory_type,
+        "category": category,
+        "source_summary": snippet,
+    }
+
+    if memory_type == "failure":
+        base.update(
+            {
+                "trigger_signal": "error/failure observed",
+                "root_cause_hint": snippet,
+                "next_fix_step": "narrow scope and test one corrective step",
+                "reuse_when": "same failure signature appears again",
+            }
+        )
+    elif memory_type == "success":
+        base.update(
+            {
+                "situation": "positive result achieved",
+                "approach": snippet,
+                "why_it_worked_hint": "method aligned with constraints and reduced noise",
+                "reuse_when": "similar context and constraints recur",
+            }
+        )
+    elif memory_type == "improvement":
+        base.update(
+            {
+                "current_gap": snippet,
+                "candidate_upgrade": "apply one focused improvement and verify",
+                "expected_impact": "higher consistency and clarity",
+                "reuse_when": "same quality gap appears",
+            }
+        )
+    elif memory_type == "frustration":
+        base.update(
+            {
+                "pain_signal": snippet,
+                "blocker_type": "emotional + workflow friction",
+                "stabilizer": "shorten loop, simplify next action, verify quickly",
+                "reuse_when": "frustration state and similar blocker return",
+            }
+        )
+    elif memory_type == "breakthrough":
+        base.update(
+            {
+                "unlock_signal": snippet,
+                "transferable_principle": "preserve what reduced ambiguity and increased momentum",
+                "reuse_when": "matching objective with similar uncertainty",
+            }
+        )
+    else:
+        base.update(
+            {
+                "note": "general memory",
+                "reuse_when": "related context appears",
+            }
+        )
+
+    base["actionable"] = True
+    return base
+
+
 def _hash_id(*parts: str) -> str:
     raw = "|".join([p or "" for p in parts]).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()[:12]
@@ -285,7 +369,11 @@ def store_memory(text: str, category: str, session_id: Optional[str] = None, sou
             meta["emotion"] = snapshot
 
     outcome_quality = _infer_outcome_quality(text, category, source)
+    memory_type = _infer_memory_type(text, category, outcome_quality)
+
     meta["outcome_quality"] = round(outcome_quality, 4)
+    meta["memory_type"] = memory_type
+    meta["actionability_profile"] = _build_actionability_profile(memory_type, text, category)
     meta["feedback_hook"] = {
         "kind": "memory_banks_outcome_inference",
         "captured_at": round(time.time(), 3),
