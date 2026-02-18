@@ -569,6 +569,21 @@ def run_bridge_cycle(
                         ok, reason = _is_valid_eidos_distillation(eidos_update)
                         if ok:
                             stats["eidos_distillation"] = eidos_update
+                            structured = _parse_structured_eidos(eidos_update)
+                            if isinstance(structured, dict):
+                                kept = [
+                                    it for it in (structured.get("insights") or [])
+                                    if isinstance(it, dict) and str(it.get("decision", "keep")).lower() == "keep"
+                                ]
+                                if kept:
+                                    top = kept[0]
+                                    try:
+                                        stats["eidos_priority_top"] = float(top.get("priority_score") or 0.0)
+                                    except Exception:
+                                        stats["eidos_priority_top"] = 0.0
+                                    emo = top.get("emotional_signal") if isinstance(top.get("emotional_signal"), dict) else {}
+                                    stats["eidos_emotion_top"] = str(emo.get("type") or "neutral")
+
                             _append_eidos_update(eidos_update)
                             log_debug("bridge_worker", "EIDOS distillation complete", None)
                         else:

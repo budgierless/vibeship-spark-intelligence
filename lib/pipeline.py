@@ -102,9 +102,9 @@ try:
 except Exception:
     FLOOR_EVENTS_THRESHOLD = 20
 try:
-    FLOOR_SOFT_MIN_EVENTS = max(1, min(50, int(os.getenv("SPARK_PIPELINE_SOFT_MIN_INSIGHTS_EVENTS", "3") or 3)))
+    FLOOR_SOFT_MIN_EVENTS = max(1, min(50, int(os.getenv("SPARK_PIPELINE_SOFT_MIN_INSIGHTS_EVENTS", "2") or 2)))
 except Exception:
-    FLOOR_SOFT_MIN_EVENTS = 3
+    FLOOR_SOFT_MIN_EVENTS = 2
 
 # Processing health metrics file
 PIPELINE_STATE_FILE = Path.home() / ".spark" / "pipeline_state.json"
@@ -638,7 +638,15 @@ def store_deep_learnings(
             """Run insight through MetaRalph quality gate, then store if it passes."""
             debug["attempted"] = int(debug.get("attempted", 0)) + 1
             roast_result = ralph.roast(insight_text, source=source)
-            if roast_result.verdict == RoastVerdict.QUALITY:
+            verdict_value = str(getattr(roast_result.verdict, "value", roast_result.verdict) or "gate_rejected").lower()
+
+            # Keep strict default, but allow low-volume pipeline cycles to pass non-primitive verdicts.
+            allow_low_volume_pass = (
+                events_processed <= FLOOR_SOFT_MIN_EVENTS
+                and verdict_value not in {"primitive", "noise", "garbage"}
+            )
+
+            if roast_result.verdict == RoastVerdict.QUALITY or allow_low_volume_pass:
                 # Use refined version if MetaRalph improved it
                 final_text = roast_result.refined_version or insight_text
                 ok = bool(learner.add_insight(
@@ -656,8 +664,7 @@ def store_deep_learnings(
                 return ok
 
             skipped = debug.setdefault("skipped", {})
-            reason = str(getattr(roast_result.verdict, "value", roast_result.verdict) or "gate_rejected")
-            skipped[reason] = int(skipped.get(reason, 0)) + 1
+            skipped[verdict_value] = int(skipped.get(verdict_value, 0)) + 1
             return False
 
         # Tool effectiveness insights
