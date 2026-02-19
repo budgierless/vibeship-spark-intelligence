@@ -122,7 +122,7 @@ def format_from_gate_result(
 
 # ============= Stdout Emission =============
 
-def emit(text: str) -> bool:
+def emit(text: str, *, metadata: Optional[Dict[str, Any]] = None) -> bool:
     """
     Write advisory text to stdout so Claude Code reads it.
 
@@ -150,7 +150,7 @@ def emit(text: str) -> bool:
         return False
 
     # Log emission for diagnostics
-    _log_emission(output)
+    _log_emission(output, metadata=metadata)
 
     return True
 
@@ -159,6 +159,11 @@ def emit_advisory(
     gate_result,
     synthesized_text: str,
     advice_items: Optional[list] = None,
+    *,
+    trace_id: Optional[str] = None,
+    tool_name: str = "",
+    route: str = "",
+    task_plane: str = "",
 ) -> bool:
     """
     High-level emission: format and emit advisory from gate + synthesis.
@@ -179,7 +184,17 @@ def emit_advisory(
 
     if synthesized_text and synthesized_text.strip():
         formatted = format_advisory(synthesized_text, highest, gate_result.phase)
-        return emit(formatted)
+        return emit(
+            formatted,
+            metadata={
+                "trace_id": str(trace_id or "").strip() or None,
+                "tool_name": (tool_name or "").strip() or None,
+                "route": (route or "").strip() or None,
+                "task_plane": (task_plane or "").strip() or None,
+                "authority": highest,
+                "phase": getattr(gate_result, "phase", "") or None,
+            },
+        )
 
     # Fallback: emit individual items from advice list
     if advice_items:
@@ -203,7 +218,17 @@ def emit_advisory(
             # Enforce total budget
             if len(combined) > MAX_EMIT_CHARS:
                 combined = combined[:MAX_EMIT_CHARS - 3] + "..."
-            return emit(combined)
+            return emit(
+                combined,
+                metadata={
+                    "trace_id": str(trace_id or "").strip() or None,
+                    "tool_name": (tool_name or "").strip() or None,
+                    "route": (route or "").strip() or None,
+                    "task_plane": (task_plane or "").strip() or None,
+                    "authority": highest,
+                    "phase": getattr(gate_result, "phase", "") or None,
+                },
+            )
 
     return False
 
@@ -221,7 +246,7 @@ def _highest_authority(decisions: list) -> str:
 
 # ============= Diagnostics =============
 
-def _log_emission(text: str) -> None:
+def _log_emission(text: str, *, metadata: Optional[Dict[str, Any]] = None) -> None:
     """Log what was emitted for diagnostics and feedback tracking."""
     try:
         EMIT_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +255,8 @@ def _log_emission(text: str) -> None:
             "text": text[:300],
             "chars": len(text),
         }
+        if metadata:
+            entry.update({k: v for k, v in metadata.items() if v is not None and v != ""})
         with open(EMIT_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 

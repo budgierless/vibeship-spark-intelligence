@@ -1487,7 +1487,15 @@ def on_pre_tool(
             try:
                 from .advisory_emitter import emit_advisory
                 fallback_emitted = bool(
-                    emit_advisory(gate_result, fallback_text, advice_items, authority="note")
+                    emit_advisory(
+                        gate_result,
+                        fallback_text,
+                        advice_items,
+                        trace_id=resolved_trace_id,
+                        tool_name=tool_name,
+                        route=route,
+                        task_plane=task_plane,
+                    )
                 )
                 if fallback_emitted:
                     state.last_advisory_text_fingerprint = repeat_meta["fingerprint"]
@@ -1772,7 +1780,15 @@ def on_pre_tool(
             return None
 
         t_emit = time.time() * 1000.0
-        emitted = emit_advisory(gate_result, synth_text, advice_items)
+        emitted = emit_advisory(
+            gate_result,
+            synth_text,
+            advice_items,
+            trace_id=resolved_trace_id,
+            tool_name=tool_name,
+            route=route,
+            task_plane=task_plane,
+        )
         _mark("emit", t_emit)
         effective_text = str(synth_text or "").strip()
         if emitted and not effective_text:
