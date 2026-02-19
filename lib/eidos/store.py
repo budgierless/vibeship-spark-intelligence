@@ -677,6 +677,24 @@ class EidosStore:
             )
             conn.commit()
 
+    def find_distillation_by_prefix(self, id_prefix: str) -> Optional[str]:
+        """Find a distillation ID by its prefix (used for outcome routing).
+
+        The advisor stores truncated IDs (8 chars) in insight_keys.
+        This resolves the full ID for usage tracking.
+        """
+        if not id_prefix or len(id_prefix) < 6:
+            return None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                row = conn.execute(
+                    "SELECT distillation_id FROM distillations WHERE distillation_id LIKE ?",
+                    (id_prefix + "%",)
+                ).fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
     def record_distillation_usage(self, distillation_id: str, helped: bool):
         """Record that a distillation was used and whether it helped.
 

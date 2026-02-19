@@ -1261,10 +1261,29 @@ class MetaRalph:
         entry["last_outcome_at"] = datetime.now().isoformat()
 
     def _apply_outcome_to_cognitive(self, record: OutcomeRecord) -> None:
-        """Apply outcome feedback to cognitive insights when possible."""
+        """Apply outcome feedback to cognitive insights or EIDOS distillations."""
         outcome = self._normalize_outcome(record.outcome)
         if outcome not in ("good", "bad"):
             return
+
+        # Route EIDOS outcomes to the EIDOS store (not cognitive).
+        ik = (record.insight_key or "").strip()
+        if ik.startswith("eidos:"):
+            try:
+                from lib.eidos.store import EidosStore
+                store = EidosStore()
+                parts = ik.split(":")
+                if len(parts) >= 3:
+                    id_prefix = parts[2]
+                    full_id = store.find_distillation_by_prefix(id_prefix)
+                    if full_id:
+                        store.record_distillation_usage(
+                            full_id, helped=(outcome == "good")
+                        )
+            except Exception:
+                pass
+            return
+
         try:
             from lib.cognitive_learner import get_cognitive_learner
             cog = get_cognitive_learner()

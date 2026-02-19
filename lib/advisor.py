@@ -3217,8 +3217,8 @@ class SparkAdvisor:
                     reason=reason,
                     emotional_priority=ep,
                 ))
-                # Record usage (will mark helped=True on positive outcome)
-                retriever.record_usage(d.distillation_id, helped=False)
+                # Usage tracking now handled by meta_ralph outcome feedback loop
+                # (see _apply_outcome_to_cognitive in meta_ralph.py)
 
         except Exception:
             pass  # Don't break advice flow if EIDOS retrieval fails
