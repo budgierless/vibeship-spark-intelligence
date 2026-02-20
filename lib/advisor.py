@@ -606,7 +606,34 @@ def _parse_iso_ts(value: Any) -> Optional[float]:
 
 
 def _chips_disabled() -> bool:
-    return str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
+    return not _chips_enabled()
+
+
+def _chips_enabled() -> bool:
+    if str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
+    chips_switch = str(os.environ.get("SPARK_CHIPS_ENABLED", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    premium_switch = str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    return chips_switch and premium_switch
+
+
+def _premium_tools_enabled() -> bool:
+    return str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
         "1",
         "true",
         "yes",
@@ -1339,7 +1366,7 @@ class SparkAdvisor:
         if not combined:
             return "general"
 
-        if self._is_x_social_query(combined):
+        if _premium_tools_enabled() and self._is_x_social_query(combined):
             return "x_social"
 
         for domain, markers in RETRIEVAL_DOMAIN_MARKERS.items():
@@ -1804,6 +1831,8 @@ class SparkAdvisor:
         domain_filtered: Dict[str, Any] = {}
         for key, insight in insights.items():
             action_domain = getattr(insight, "action_domain", "") or "general"
+            if not _premium_tools_enabled() and action_domain == "x_social":
+                continue
             if action_domain in allowed_domains:
                 domain_filtered[key] = insight
         # Fallback: if domain filtering is too aggressive (<20 items), include all
@@ -2383,7 +2412,9 @@ class SparkAdvisor:
         advice: List[Advice] = []
         filtered_low_match = 0
         filtered_domain_mismatch = 0
-        social_query = active_domain == "x_social" or self._is_x_social_query(context)
+        social_query = _premium_tools_enabled() and (
+            active_domain == "x_social" or self._is_x_social_query(context)
+        )
         for r in ranked_rows[:semantic_limit]:
             if hasattr(self.cognitive, "is_noise_insight") and self.cognitive.is_noise_insight(r.insight_text):
                 continue
@@ -2520,6 +2551,8 @@ class SparkAdvisor:
         body = str(text or "").strip().lower()
         if not body:
             return False
+        if not _premium_tools_enabled():
+            return False
         return any(marker in body for marker in X_SOCIAL_MARKERS)
 
     def _is_x_social_insight(self, text: str) -> bool:
@@ -2556,6 +2589,13 @@ class SparkAdvisor:
 
     def _filter_cross_domain_advice(self, advice_list: List[Advice], context: str) -> List[Advice]:
         """Drop cross-domain social advice when the current query is not social."""
+        if not _premium_tools_enabled():
+            return [
+                item
+                for item in advice_list
+                if not self._is_x_social_insight(getattr(item, "text", ""))
+            ]
+
         if self._is_x_social_query(context):
             return list(advice_list)
         out: List[Advice] = []
@@ -2919,7 +2959,7 @@ class SparkAdvisor:
     def _get_chip_advice(self, context: str) -> List[Advice]:
         """Get advice from recent high-quality chip insights."""
         advice: List[Advice] = []
-        if _chips_disabled():
+        if not _chips_enabled():
             return advice
         if not CHIP_INSIGHTS_DIR.exists():
             return advice
@@ -3001,10 +3041,22 @@ class SparkAdvisor:
                     reason=reason,
                 )
             )
-            if len(advice) >= CHIP_ADVICE_LIMIT:
-                break
+            if len(advice) >= CHIP_ADVICE_LIMIT * 3:
+                break  # Collect up to 3x limit for cross-encoder reranking
 
-        return advice
+        # Cross-encoder rerank chip candidates when reranker is available.
+        # Replaces keyword-only ranking with semantic relevance for final selection.
+        if len(advice) > CHIP_ADVICE_LIMIT:
+            try:
+                from .cross_encoder_reranker import get_reranker
+                ce = get_reranker()
+                if ce:
+                    ce_ranked = ce.rerank(context, [a.text for a in advice], top_k=CHIP_ADVICE_LIMIT)
+                    advice = [advice[idx] for idx, _sc in ce_ranked]
+            except Exception:
+                pass
+
+        return advice[:CHIP_ADVICE_LIMIT]
 
     def _is_telemetry_chip_row(self, chip_id: str, text: str) -> bool:
         chip = str(chip_id or "").strip().lower()
@@ -3020,6 +3072,8 @@ class SparkAdvisor:
     def _chip_domain_bonus(self, chip_id: str, context: str) -> float:
         chip = str(chip_id or "").strip().lower()
         text = str(context or "").strip().lower()
+        if not _chips_enabled():
+            return 0.0
         if not chip or not text:
             return 0.0
 
@@ -3189,10 +3243,12 @@ class SparkAdvisor:
                 # Determine advice type label based on distillation type
                 type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
 
-                # Add reason from distillation confidence and usage
+                # Add reason from distillation confidence and proven effectiveness
                 reason = f"Confidence: {d.confidence:.0%}"
-                if hasattr(d, 'usage_count') and d.usage_count:
-                    reason += f", used {d.usage_count}x"
+                if d.times_used > 0:
+                    reason += f", effective {d.effectiveness:.0%} ({d.times_helped}/{d.times_used})"
+                if d.validation_count > 0:
+                    reason += f", {d.validation_count} validations"
 
                 # Compute real context match instead of hardcoding 0.85
                 eidos_match = self._calculate_context_match(d.statement, context)
@@ -3209,6 +3265,10 @@ class SparkAdvisor:
                             ep = max(ep, ps)
                             break
 
+                # Blend confidence with proven effectiveness:
+                # Unknown (eff=0.5) → *0.85, Proven (eff=1.0) → *1.0, Failing (eff=0.0) → *0.7
+                blended_conf = min(1.0, d.confidence * (0.7 + d.effectiveness * 0.3))
+
                 advice.append(Advice(
                     advice_id=self._generate_advice_id(
                         f"[EIDOS {type_label}] {d.statement}",
@@ -3217,7 +3277,7 @@ class SparkAdvisor:
                     ),
                     insight_key=f"eidos:{d.type.value}:{d.distillation_id[:8]}",
                     text=f"[EIDOS {type_label}] {d.statement}",
-                    confidence=d.confidence,
+                    confidence=blended_conf,
                     source="eidos",
                     context_match=eidos_match,
                     reason=reason,
@@ -3237,6 +3297,8 @@ class SparkAdvisor:
         Activates for X user profile tools or engagement contexts.
         Surfaces active opportunities and relationship context.
         """
+        if not _premium_tools_enabled():
+            return []
         advice: List[Advice] = []
 
         niche_signals = [
@@ -3305,6 +3367,8 @@ class SparkAdvisor:
         Activates when posting tweets or checking engagement.
         Surfaces prediction accuracy and recent surprises.
         """
+        if not _premium_tools_enabled():
+            return []
         advice: List[Advice] = []
 
         engagement_signals = [
@@ -3374,6 +3438,8 @@ class SparkAdvisor:
         Only activates for X/Twitter reply tools or when context mentions
         replies, conversations, or engagement.
         """
+        if not _premium_tools_enabled():
+            return []
         advice: List[Advice] = []
 
         # Only trigger for relevant contexts
@@ -3947,6 +4013,32 @@ class SparkAdvisor:
             insight_effectiveness = ralph.get_insight_effectiveness(a.insight_key)
             base_score *= (0.5 + insight_effectiveness)
 
+        # EIDOS store-backed effectiveness boost.
+        # The SQLite store tracks times_helped/times_used across all sessions,
+        # providing richer signal than Meta-Ralph's in-memory outcomes.
+        if a.source == "eidos" and a.insight_key and a.insight_key.startswith("eidos:"):
+            try:
+                from .eidos.store import get_store as _get_eidos_store
+                from .eidos.models import DistillationType as _DType
+                _estore = _get_eidos_store()
+                _parts = a.insight_key.split(":")
+                if len(_parts) >= 3:
+                    _fid = _estore.find_distillation_by_prefix(_parts[2])
+                    if _fid:
+                        _dist = _estore.get_distillation(_fid)
+                        if _dist:
+                            _eff = _dist.effectiveness  # 0.0-1.0
+                            # POLICY distillations get floor boost (always >=1.15x)
+                            _floor = 1.15 if _dist.type == _DType.POLICY else 1.0
+                            # Effectiveness range: 0.7x (bad) to 1.3x (proven)
+                            _mult = max(_floor, 0.7 + _eff * 0.6)
+                            # High-validation bonus (5+ validations = 1.1x)
+                            if _dist.validation_count >= 5:
+                                _mult *= 1.1
+                            base_score *= _mult
+            except Exception:
+                pass
+
         # Boost based on source-level past effectiveness (fallback)
         source_stats = self.effectiveness.get("by_source", {}).get(a.source, {})
         if source_stats.get("total", 0) > 0:
@@ -4006,6 +4098,8 @@ class SparkAdvisor:
             "advice_texts": [a.text[:100] for a in advice_list],
             "insight_keys": [a.insight_key for a in advice_list],
             "sources": [a.source for a in advice_list],
+            "confidences": [round(a.confidence, 3) for a in advice_list],
+            "context_matches": [round(a.context_match, 3) for a in advice_list],
         }
 
         _append_jsonl_capped(ADVICE_LOG, entry, max_lines=4000)
