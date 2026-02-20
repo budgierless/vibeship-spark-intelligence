@@ -357,7 +357,9 @@ def commit_learning(
             pass
 
         return True
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger("spark.memory_capture").warning("commit_learning failed: %s", e)
         return False
 
 

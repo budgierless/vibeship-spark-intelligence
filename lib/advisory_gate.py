@@ -75,8 +75,8 @@ PHASE_RELEVANCE = {
         "context": 1.3,        # Architecture insights valuable here
         "wisdom": 1.0,
         "reasoning": 1.2,
-        "user_understanding": 0.8,
-        "self_awareness": 0.6,
+        "user_understanding": 1.0,  # was 0.8 — crushed scores below whisper threshold
+        "self_awareness": 0.9,     # was 0.6 — same issue, kept slightly below 1.0
     },
     "planning": {
         "reasoning": 1.4,      # Past decisions very relevant

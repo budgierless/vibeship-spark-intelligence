@@ -57,6 +57,37 @@ _BRIDGE_GC_EVERY = max(1, min(100, _BRIDGE_GC_EVERY))
 _BRIDGE_GC_COUNTER = 0
 
 
+def _premium_tools_enabled() -> bool:
+    return str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _chips_disabled() -> bool:
+    return str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _chips_enabled() -> bool:
+    if _chips_disabled():
+        return False
+    if not _premium_tools_enabled():
+        return False
+    return str(os.environ.get("SPARK_CHIPS_ENABLED", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
     try:
         value = float(os.environ.get(name, str(default)))
@@ -159,6 +190,8 @@ def run_bridge_cycle(
         "prediction": {},
         "content_learned": 0,
         "chips": {},
+        "engagement_pulse": {},
+        "chip_merge": {},
         "errors": [],
     }
 
@@ -204,6 +237,16 @@ def run_bridge_cycle(
         else:
             stats["errors"].append("memory")
             log_debug("bridge_worker", f"memory capture failed ({error})", None)
+
+        # --- Flush cognitive learner so memory-captured insights hit disk ---
+        # Without this, batch mode defers all writes until the very end,
+        # and any failure in later steps loses captured memories.
+        if cognitive:
+            try:
+                cognitive.end_batch()
+                cognitive.begin_batch()
+            except Exception as e:
+                log_debug("bridge_worker", f"mid-cycle cognitive flush failed ({e})", None)
 
         # --- Run the processing pipeline ---
         pipeline_metrics = None
@@ -397,32 +440,58 @@ def run_bridge_cycle(
             stats["opportunity_scanner"] = {"enabled": True, "error": str(error or "")}
             log_debug("bridge_worker", f"opportunity scanner failed ({error})", None)
 
-        # TODO: Filter chips by project context (game-dev shouldn't fire during spark-checker work)
-        # See: spark_reports/day1_fixes_plan.md for details
-        
-        # --- Chip processing (uses pre-built chip_events list, capped for speed) ---
-        # Cap at 30 events to keep cycle time under 30s (was 60s+ with 67 events x 13 chips)
-        capped_chip_events = chip_events[-30:] if len(chip_events) > 30 else chip_events
-        ok, chip_stats, error = _run_step("chips", process_chip_events, capped_chip_events, project_path, timeout_s=30)
-        if ok:
-            stats["chips"] = chip_stats or {}
-        else:
-            stats["errors"].append("chips")
-            log_debug("bridge_worker", f"chip processing failed ({error})", None)
+        chips_enabled = _chips_enabled()
+        if chips_enabled:
+            # TODO: Filter chips by project context (game-dev shouldn't fire during spark-checker work)
+            # See: spark_reports/day1_fixes_plan.md for details
 
-        # --- Engagement Pulse: check for pending snapshots ---
-        def _poll_engagement_pulse():
-            from lib.engagement_tracker import get_engagement_tracker
-            tracker = get_engagement_tracker()
-            pending = tracker.get_pending_snapshots()
-            tracker.cleanup_old(max_age_days=7)
-            return {"pending_snapshots": len(pending), "tracked": len(tracker.tracked)}
+            # --- Chip processing (uses pre-built chip_events list, capped for speed) ---
+            # Cap at 30 events to keep cycle time under 30s (was 60s+ with 67 events x 13 chips)
+            capped_chip_events = chip_events[-30:] if len(chip_events) > 30 else chip_events
+            ok, chip_stats, error = _run_step("chips", process_chip_events, capped_chip_events, project_path, timeout_s=30)
+            if ok:
+                stats["chips"] = chip_stats or {}
+            else:
+                stats["errors"].append("chips")
+                log_debug("bridge_worker", f"chip processing failed ({error})", None)
 
-        ok, pulse_stats, error = _run_step("engagement_pulse", _poll_engagement_pulse)
-        if ok:
-            stats["engagement_pulse"] = pulse_stats or {}
+            # --- Engagement Pulse: check for pending snapshots ---
+            def _poll_engagement_pulse():
+                from lib.engagement_tracker import get_engagement_tracker
+                tracker = get_engagement_tracker()
+                pending = tracker.get_pending_snapshots()
+                tracker.cleanup_old(max_age_days=7)
+                return {"pending_snapshots": len(pending), "tracked": len(tracker.tracked)}
+
+            ok, pulse_stats, error = _run_step("engagement_pulse", _poll_engagement_pulse)
+            if ok:
+                stats["engagement_pulse"] = pulse_stats or {}
+            else:
+                stats["errors"].append("engagement_pulse")
+
+            # --- Chip merger ---
+            ok, merge_stats, error = _run_step(
+                "chip_merge",
+                merge_chip_insights,
+                min_confidence=CHIP_MERGE_MIN_CONFIDENCE,
+                min_quality_score=CHIP_MERGE_MIN_QUALITY,
+                limit=20,
+            )
+            if ok:
+                stats["chip_merge"] = {
+                    "processed": merge_stats.get("processed", 0),
+                    "merged": merge_stats.get("merged", 0),
+                    "skipped_low_quality": merge_stats.get("skipped_low_quality", 0),
+                    "skipped_low_quality_cooldown": merge_stats.get("skipped_low_quality_cooldown", 0),
+                    "by_chip": merge_stats.get("by_chip", {}),
+                }
+            else:
+                stats["errors"].append("chip_merge")
+                log_debug("bridge_worker", f"chip merge failed ({error})", None)
         else:
-            stats["errors"].append("engagement_pulse")
+            stats["chips"] = {"enabled": False, "reason": "premium chips/features disabled"}
+            stats["engagement_pulse"] = {"enabled": False, "reason": "premium chips/features disabled"}
+            stats["chip_merge"] = {"enabled": False, "reason": "premium chips/features disabled"}
 
         # --- Runtime hygiene ---
         ok, hygiene_stats, error = _run_step("runtime_hygiene", cleanup_runtime_artifacts)
@@ -431,26 +500,6 @@ def run_bridge_cycle(
         else:
             stats["errors"].append("runtime_hygiene")
             log_debug("bridge_worker", f"runtime hygiene failed ({error})", None)
-
-        # --- Chip merger ---
-        ok, merge_stats, error = _run_step(
-            "chip_merge",
-            merge_chip_insights,
-            min_confidence=CHIP_MERGE_MIN_CONFIDENCE,
-            min_quality_score=CHIP_MERGE_MIN_QUALITY,
-            limit=20,
-        )
-        if ok:
-            stats["chip_merge"] = {
-                "processed": merge_stats.get("processed", 0),
-                "merged": merge_stats.get("merged", 0),
-                "skipped_low_quality": merge_stats.get("skipped_low_quality", 0),
-                "skipped_low_quality_cooldown": merge_stats.get("skipped_low_quality_cooldown", 0),
-                "by_chip": merge_stats.get("by_chip", {}),
-            }
-        else:
-            stats["errors"].append("chip_merge")
-            log_debug("bridge_worker", f"chip merge failed ({error})", None)
 
         # --- Context sync ---
         ok, sync_result, error = _run_step("sync", sync_context)
@@ -913,6 +962,18 @@ def _append_eidos_update(update: str) -> None:
             log_debug("bridge_worker", f"Skipped EIDOS distillation ({reason})", None)
             return
 
+        # Run advisory quality transformer for deeper filtering
+        adv_quality_dict = {}
+        try:
+            from lib.distillation_transformer import transform_for_advisory
+            adv_q = transform_for_advisory(update, source="eidos")
+            adv_quality_dict = adv_q.to_dict()
+            if adv_q.suppressed:
+                log_debug("bridge_worker", f"EIDOS distillation suppressed by transformer ({adv_q.suppression_reason})", None)
+                return
+        except Exception:
+            pass  # Don't block EIDOS storage if transformer fails
+
         eidos_file = Path.home() / ".spark" / "eidos_distillations.jsonl"
         from datetime import datetime
 
@@ -946,11 +1007,13 @@ def _append_eidos_update(update: str) -> None:
                 "schema": structured.get("schema") or "spark.eidos.v1",
                 "insights": kept[:3],
                 "distillation_summary": " | ".join(summary_parts)[:1200],
+                "advisory_quality": adv_quality_dict,
             }
         else:
             entry = {
                 "timestamp": datetime.now().isoformat(),
                 "distillation": update,
+                "advisory_quality": adv_quality_dict,
             }
 
         with open(eidos_file, "a", encoding="utf-8") as f:

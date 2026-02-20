@@ -22,7 +22,7 @@ from lib.chips.registry import get_registry
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
 MERGE_STATE_FILE = Path.home() / ".spark" / "chip_merge_state.json"
 TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
-LOW_QUALITY_COOLDOWN_S = 4 * 3600
+LOW_QUALITY_COOLDOWN_S = 30 * 60  # 30 min (was 4h — too aggressive, starved merges)
 MAX_REJECTED_TRACKING = 2000
 DUPLICATE_CHURN_RATIO = 0.8
 DUPLICATE_CHURN_MIN_PROCESSED = 10
