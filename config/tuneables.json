@@ -96,7 +96,7 @@
   "advisory_gate": {
     "max_emit_per_call": 1,
     "tool_cooldown_s": 30,
-    "advice_repeat_cooldown_s": 600,
+    "advice_repeat_cooldown_s": "300",
     "warning_threshold": 0.68,
     "note_threshold": 0.38,
     "whisper_threshold": 0.27,
