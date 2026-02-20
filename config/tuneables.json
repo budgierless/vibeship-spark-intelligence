@@ -85,7 +85,7 @@
     "prefetch_queue_enabled": true,
     "prefetch_inline_enabled": true,
     "prefetch_inline_max_jobs": 1,
-    "delivery_stale_s": "600",
+    "delivery_stale_s": 600,
     "advisory_text_repeat_cooldown_s": 1800,
     "actionability_enforce": true,
     "force_programmatic_synth": false,
