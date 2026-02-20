@@ -210,7 +210,7 @@
     "min_tuneable_samples": 50,
     "min_needs_work_samples": 5,
     "min_source_samples": 15,
-    "attribution_window_s": 1200,
+    "attribution_window_s": 1800,
     "strict_attribution_require_trace": true
   },
   "eidos": {
