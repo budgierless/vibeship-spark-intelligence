@@ -271,7 +271,7 @@
     "run_interval_s": 86400,
     "max_change_per_run": 0.15,
     "source_boosts": {
-      "cognitive": 1.52,
+      "cognitive": 1.65,
       "semantic": 0.35,
       "self_awareness": 0.353,
       "trigger": 0.401,
