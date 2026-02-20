@@ -423,7 +423,7 @@
   },
   "memory_learning": {
     "enabled": true,
-    "retrieval_learning_weight": 0.18,
+    "retrieval_learning_weight": 0.25,
     "retrieval_min_learning_signal": 0.2,
     "calm_mode_bonus": 0.08
   },
