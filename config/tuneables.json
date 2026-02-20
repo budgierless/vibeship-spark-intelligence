@@ -275,7 +275,7 @@
       "semantic": 0.35,
       "self_awareness": 0.353,
       "trigger": 0.401,
-      "mind": 0.2,
+      "mind": 0.0,
       "eidos": 0.85,
       "convo": 0.8,
       "prefetch": 0.4,
