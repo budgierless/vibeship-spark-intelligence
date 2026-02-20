@@ -203,7 +203,7 @@
     }
   },
   "meta_ralph": {
-    "quality_threshold": 4,
+    "quality_threshold": "4.5",
     "needs_work_threshold": 2,
     "needs_work_close_delta": 0.5,
     "min_outcome_samples": 5,
