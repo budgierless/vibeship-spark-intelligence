@@ -389,7 +389,7 @@
         "data_basis": "33,315 advisor outcomes across 15 sources"
       }
     ],
-    "max_changes_per_cycle": 2
+    "max_changes_per_cycle": 4
   },
   "updated_at": "2026-02-20T10:25:16+00:00",
   "chip_merge": {
