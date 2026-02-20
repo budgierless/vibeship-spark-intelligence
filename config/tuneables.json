@@ -14,7 +14,7 @@
   "semantic": {
     "enabled": true,
     "min_similarity": 0.5,
-    "min_fusion_score": 0.45,
+    "min_fusion_score": "0.50",
     "weight_recency": 0.1,
     "weight_outcome": 0.35,
     "mmr_lambda": 0.5,
