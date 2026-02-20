@@ -1251,6 +1251,36 @@ class CognitiveLearner:
         if re.search(r"i struggle with tool_\d+_error", tl):
             return True
 
+        # 47. Cycle summary telemetry — operational data, not cognitive insights
+        # e.g., "Cycle summary: Bash used 3 times (100% success)."
+        # e.g., "Processed 42 events with 5 tools tracked and 0 error patterns"
+        if tl.startswith("cycle summary:"):
+            return True
+        if re.match(r"^processed \d+ events with \d+ tools? tracked", tl):
+            return True
+
+        # 48. Tool usage counts — Tier 1 operational telemetry
+        # e.g., "Bash used 8 times (100% success)", "Read had 75% success across 4 uses"
+        if re.search(r"\b\w+ used \d+ times?\b", tl):
+            return True
+        if re.search(r"\bhad \d+%? success across \d+ uses\b", tl):
+            return True
+
+        # 49. Large edit warnings — operational telemetry about file edits
+        # e.g., "Large edit on pipeline.py (652→1036 chars). Consider smaller..."
+        if re.match(r"^large edit on \w+\.\w+\s*\(", tl):
+            return True
+
+        # 50. Generic tool struggle — auto-generated from any tool error
+        # e.g., "I struggle with Bash_error tasks", "I struggle with Glob_error tasks"
+        if re.match(r"^i struggle with \w+_error tasks?$", tl):
+            return True
+
+        # 51. Goal genesis telemetry — cycle counts, not actionable insights
+        # e.g., "3 goals completed. Top gap: cognitive:self_awareness (severity 1.00)"
+        if re.match(r"^\d+ goals? completed\. top gap:", tl):
+            return True
+
         # 43. Python import statements stored as insights (column-0 imports)
         # e.g., "from lib.diagnostics import log_debug as _bridge_log_debug"
         if re.match(r"^(from\s+[\w.]+\s+import\s|import\s+[\w.,\s]+$)", t):

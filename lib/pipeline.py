@@ -815,8 +815,13 @@ def store_deep_learnings(
                 f"tool_updates={tool_effectiveness.get('tools_tracked', 0)} "
                 f"errors={len(error_patterns.get('error_patterns', []))}"
             )
-            # For floor enforcement, bypass roast gate and persist directly.
-            if learner.add_insight(
+            # For floor enforcement, bypass roast gate but still check noise filter.
+            # Cycle summaries like "Bash used 3 times (100% success)" are operational
+            # telemetry that should not be stored as cognitive insights.
+            if learner.is_noise_insight(fallback_insight):
+                skipped = debug.setdefault("skipped", {})
+                skipped["floor_noise_filtered"] = int(skipped.get("floor_noise_filtered", 0)) + 1
+            elif learner.add_insight(
                 category=CognitiveCategory.META_LEARNING,
                 insight=fallback_insight,
                 context=context,
