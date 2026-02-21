@@ -1367,6 +1367,18 @@ class CognitiveLearner:
     # RETRIEVAL AND QUERY
     # =========================================================================
 
+    # Stopwords to skip in word-matching (common words that cause false matches)
+    _RETRIEVAL_STOPWORDS = frozenset({
+        "the", "and", "for", "with", "from", "this", "that", "used", "have",
+        "been", "were", "was", "are", "not", "but", "its", "into", "also",
+        "more", "than", "can", "all", "had", "has", "will", "each", "which",
+        "their", "them", "then", "when", "what", "how", "about", "would",
+        "make", "like", "just", "over", "such", "take", "only", "come",
+        "could", "after", "use", "two", "way", "our", "out", "get", "may",
+        "cycle", "summary", "summary:", "times", "across", "uses", "success",
+        "100%", "had", "session", "session(s)", "consecutive", "failures",
+    })
+
     def get_insights_for_context(
         self,
         context: str,
@@ -1379,20 +1391,46 @@ class CognitiveLearner:
         - Prefer direct string matches (query in insight.context/insight text)
         - Then reliability/validations
         - If with_keys=True, returns (insight_key, insight) tuples
+
+        Noise prevention:
+        - Filters out noise insights BEFORE limit truncation
+        - Requires 2+ word matches (not single-word) to reduce false positives
+        - Skips stopwords and short words in word-matching
         """
         relevant: List[tuple[float, str, CognitiveInsight]] = []
         context_lower = (context or "").lower()
+        if not context_lower:
+            return []
 
         for key, insight in self.insights.items():
-            ic = (insight.context or "").lower()
-            ii = (insight.insight or "").lower()
+            # Pre-filter: skip cycle summaries and noise
+            ii_text = insight.insight or ""
+            if ii_text.startswith("Cycle summary:"):
+                continue
+            if self._is_noise_insight(ii_text):
+                continue
 
-            hit = (
+            ic = (insight.context or "").lower()
+            ii = ii_text.lower()
+
+            # Direct context field matching (high precision)
+            direct_hit = (
                 (ic and ic in context_lower) or
-                (context_lower and context_lower in ic) or
-                any(word in context_lower for word in ii.split()[:8])
+                (context_lower and context_lower in ic)
             )
-            if not hit:
+
+            # Word-matching: require 2+ meaningful word matches
+            word_hit = False
+            if not direct_hit:
+                words = ii.split()[:12]
+                meaningful_words = [
+                    w for w in words
+                    if len(w) >= 4 and w.rstrip(".,;:!?()") not in self._RETRIEVAL_STOPWORDS
+                ]
+                matching_count = sum(1 for w in meaningful_words if w in context_lower)
+                word_hit = matching_count >= 2
+
+            if not direct_hit and not word_hit:
                 continue
 
             match_score = 0.0
@@ -1400,6 +1438,8 @@ class CognitiveLearner:
                 match_score += 1.0
             if context_lower and context_lower in ii:
                 match_score += 0.7
+            if word_hit and not direct_hit:
+                match_score += 0.3  # Word matches score lower than direct
 
             relevant.append((match_score, key, insight))
 
@@ -1423,6 +1463,10 @@ class CognitiveLearner:
         """
         # FINAL GATE: Block noise patterns that somehow bypassed earlier filters
         if self._is_noise_insight(insight):
+            return None
+
+        # Block cycle summaries - operational telemetry, not learning
+        if insight.startswith("Cycle summary:"):
             return None
 
         # Compute advisory quality dimensions for storage

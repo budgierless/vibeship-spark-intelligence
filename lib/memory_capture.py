@@ -157,6 +157,58 @@ def importance_score(text: str) -> Tuple[float, Dict[str, float]]:
         breakdown["length"] = max(breakdown.get("length", 0.0), 0.05)
         score = min(1.0, score + 0.05)
 
+    # --- Semantic signals (catch useful content without trigger phrases) ---
+
+    # Causal language: explains WHY something works
+    causal_score = 0.0
+    if re.search(r"\b(because|due to|causes|leads to|results in|since|the reason)\b", t):
+        causal_score = 0.35
+    elif re.search(r"\b(so that|in order to|prevents|ensures|helps|improves|reduces)\b", t):
+        causal_score = 0.25
+    if causal_score:
+        breakdown["causal"] = causal_score
+        score = max(score, causal_score)
+
+    # Quantitative evidence: numbers suggest data-backed insights
+    quant_score = 0.0
+    if re.search(r"\d+\.?\d*\s*(%|percent|ms|seconds|MB|GB|x faster|x slower)", t):
+        quant_score = 0.40
+    elif re.search(r"\b\d{2,}\b", t) and re.search(r"\b(avg|average|median|reduced|increased|improved|from|to)\b", t):
+        quant_score = 0.35
+    if quant_score:
+        breakdown["quantitative"] = quant_score
+        score = max(score, quant_score)
+
+    # Comparative language: preference/evaluation with specifics
+    compare_score = 0.0
+    if re.search(r"\b(better than|worse than|instead of|prefer .+ over|outperforms|compared to|rather than)\b", t):
+        compare_score = 0.40
+    elif re.search(r"\b(faster|slower|simpler|safer|cleaner|more reliable|less error)\b", t):
+        compare_score = 0.25
+    if compare_score:
+        breakdown["comparative"] = compare_score
+        score = max(score, compare_score)
+
+    # Technical specificity: named frameworks, patterns, or techniques
+    tech_score = 0.0
+    tech_hits = len(re.findall(
+        r"\b(React|Vue|Svelte|Next\.?js|Express|FastAPI|Django|bcrypt|JWT|OAuth|"
+        r"SQL|NoSQL|Redis|Docker|Kubernetes|CI/CD|webpack|vite|TypeScript|"
+        r"useEffect|useState|middleware|endpoint|schema|migration|"
+        r"async|await|promise|callback|hook|component|reducer|"
+        r"lazy.?load|memoiz|debounce|throttle|cache|index|partition|"
+        r"rate.?limit|CORS|CSRF|XSS|injection|sanitiz)\b", t, re.IGNORECASE
+    ))
+    if tech_hits >= 3:
+        tech_score = 0.40
+    elif tech_hits >= 2:
+        tech_score = 0.30
+    elif tech_hits >= 1:
+        tech_score = 0.20
+    if tech_score:
+        breakdown["technical"] = tech_score
+        score = max(score, tech_score)
+
     return float(min(1.0, score)), breakdown
 
 

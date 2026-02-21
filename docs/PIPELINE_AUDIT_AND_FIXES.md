@@ -1,217 +1,200 @@
-# Spark Intelligence Pipeline: 20-Issue Audit & Fix Report
+# Pipeline Audit: Real Data, Real Gaps, Real Fixes
 
 **Date**: 2026-02-21
-**Method**: Data-driven audit of all 10 pipeline stages using actual runtime data from `~/.spark/`
+**Method**: 3000-memory E2E benchmark through REAL production pipeline
+**Input**: 1000 useful memories (11 domains) + 2000 garbage memories (8 types)
 
 ---
 
-## Stage 1-2: Event Ingest + Queue + Bridge Cycle
+## The Funnel (Real Numbers)
 
-### Q1: Is the queue healthy and keeping up?
-**Answer**: Yes. `head_bytes` (3,378,372) matches `events.jsonl` size exactly. Zero backlog. No overflow file. 4,455 events total. Heartbeat is live.
+```
+Stage                    Useful    Garbage    % Useful Passed    % Garbage Blocked
+-----                    ------    -------    ---------------    -----------------
+Input                    1000      2000       100%               -
+importance_score(>=0.65) 382       74         38.2%              96.3%
+Meta-Ralph (QUALITY)     479       87         47.9%              95.7%
+Cognitive (not noise)    479       78         47.9%              96.1%
+Advisory retrieval       4         0          0.4%               100%
+Gate emission            1         0          0.1%               100%
+```
 
-### Q2: Is the bridge worker doing useful work?
-**Answer**: Barely. Last cycle: 39 patterns processed, 1 learned, 0 chip insights, 0 merged (12 skipped), 0 memories auto-saved. Alive but near-zero yield per cycle.
-
-**Root cause (Issue 9)**: EIDOS distillation only fires every 10th cycle (`bridge_cycle.py:600`).
-**Fix**: Reduce to every 5th cycle.
-
----
-
-## Stage 3: Context Sync + Promotion
-
-### Q3: Is context being synced to useful targets?
-**Answer**: Partially. `openclaw=written`, `exports=written`. But `claude_code`, `cursor`, `windsurf` are all **disabled** (default `mode="core"`).
-
-**Root cause (Issue 12)**: `context_sync.py:87` defaults to `mode="core"` which only enables `openclaw` + `exports`.
-**Fix**: Add `sync.mode="all"` to `tuneables.json`.
-
-### Q4: Is promotion quality adequate?
-**Answer**: No. ~50+ auto-promoted items in CLAUDE.md include raw user transcripts, code snippets, and verbose DEPTH outputs. Promotion thresholds (0.7 reliability, 3 validations) are too low.
-
-**Root cause (Issue 7)**: `promoter.py:37-40` — threshold 0.7, 3 validations, fast-track at 0.90 confidence.
-**Root cause (Issue 18)**: `_should_demote()` exists but demotion is never called from bridge cycle.
-**Fix**: Raise threshold to 0.80, validations to 5, fast-track to 0.95, age to 6h. Add demotion pass.
+**Bottom line**: Of 1000 useful memories, only 1 reaches the user as advice (0.1%).
 
 ---
 
-## Stage 4: Cognitive Learning
+## 5 Root Causes (Benchmark-Backed)
 
-### Q5: What's the cognitive learner storing?
-**Answer**: 116 insights. 78 meta_learning (67%), 19 reasoning (16%), 9 user_understanding (8%), 5 self_awareness (4%), 3 context (3%), 2 wisdom (2%). Average reliability: 0.89.
+### Root Cause 1: Cognitive Store is 62% Operational Noise
 
-### Q6: Are cognitive insights useful?
-**Answer**: Mixed. The system mostly learns about itself (67% meta_learning), not about user work domains. Only 2 wisdom items out of 116.
+**Data**: 143 insights in production cognitive store. 89 (62.2%) are "Cycle summary:" entries.
 
-**Root cause (Issue 13)**: No automatic wisdom generation code. META_LEARNING auto-created by system self-observation. WISDOM requires manual promotion that never happens.
-**Fix**: Add `promote_to_wisdom()` method that upgrades highly-validated insights (10+ validations, 85%+ reliability).
+**Examples of noise that dominate retrieval**:
+- `meta_learning:cycle_summary:_edit_used_7_times` -> "Cycle summary: Edit used 7 times (100% success)"
+- `meta_learning:cycle_summary:_bash_had_77%_success` -> "Cycle summary: Bash had 77% success across 13 uses"
+- `meta_learning:cycle_summary:_read_had_75%_success` -> "Cycle summary: Read had 75% success across 8 uses"
 
----
+**Why it matters**: These entries contain generic tool names ("Edit", "Bash", "Read"). The matching logic in `get_insights_for_context()` checks if any of the first 8 words of the insight text appear in the query. Since virtually every advisory query mentions a tool name, these 89 noise entries match EVERY query.
 
-## Stage 5: Pattern Detection + Distillation + EIDOS
+**Real test**: Searched for "adding rate limiting to login endpoint". Got 53 matches. The relevant test insight "Always hash passwords with bcrypt" was at position 23. Positions 1-15 were dominated by cycle summaries.
 
-### Q7: Is EIDOS producing useful distillations?
-**Answer**: Barely. 1,009 episodes, 20,713 steps, 221 distillations (22% yield). **0 policies ever created.**
-
-**Root cause (Issue 8)**: `distillation_engine.py:292-332` only generates 4 types (HEURISTIC, ANTI_PATTERN, SHARP_EDGE, PLAYBOOK). No code path creates POLICY despite it being defined in models.py.
-**Root cause (Issue 15)**: Quality gate rejects statements < 30 chars and 24 tautology phrases.
-**Fix**: Add `_generate_policy()` method. Lower min length to 20.
-
-### Q8: Are detected patterns leading anywhere?
-**Answer**: 562 patterns, but mixed success/failure patterns (40-60% success) are discarded entirely.
-
-**Root cause (Issue 16)**: `distiller.py:244-249` requires >60% success OR >60% failure. Mixed = rejected.
-**Fix**: Add SHARP_EDGE generation for mixed patterns (30-70% success, 4+ samples).
+**Fix**: Clean cycle summaries from production store + prevent future accumulation.
 
 ---
 
-## Stage 6: Outcomes + Predictions + Validation
+### Root Cause 2: Retrieval Word-Matching is Too Broad
 
-### Q9: Are predictions validated against outcomes?
-**Answer**: Almost never. 19,686 predictions vs 2,282 outcomes = **11.6% outcome rate**. 88.4% never evaluated.
+**Data**: `get_insights_for_context()` at `lib/cognitive_learner.py:1386-1404`
 
-**Root cause (Issue 1)**: `prediction_loop.py:461` — `auto_link_outcomes()` has 300s interval timer, so most cycles skip linking entirely.
-**Root cause (Issue 14)**: Predictions never expire (`expires_at` set but never checked). File is 10MB.
-**Root cause (Issue 20)**: Budget 180 predictions/cycle with no in-cycle dedup.
-**Fix**: Lower interval to 60s, add cleanup, reduce budget to 50, add dedup.
+**Matching logic**:
+```python
+hit = (
+    (ic and ic in context_lower) or                          # context field match
+    (context_lower and context_lower in ic) or               # reverse context match
+    any(word in context_lower for word in ii.split()[:8])    # ANY of first 8 words
+)
+```
 
-### Q10: Is the validation loop updating reliability?
-**Answer**: No. `validation.processed: 0` every cycle. Both validation paths produce zero.
+**Problem**: The third condition matches if ANY single word from the insight's first 8 words appears in the query. For "Cycle summary: Edit used 7 times (100% success)", the first 8 words are: `["cycle", "summary:", "edit", "used", "7", "times", "(100%", "success)"]`.
 
-**Root cause (Issue 2)**: `validation_loop.py:40-48` — POS_TRIGGERS requires "prefer"/"like"/"love" etc. Most user prompts don't contain these. NEG_TRIGGERS only 9 words.
-**Root cause (Issue 1)**: No outcome links exist → outcome validation path has nothing to validate.
-**Fix**: Expand POS_TRIGGERS (+13 words) and NEG_TRIGGERS (+9 words).
+The word "edit" matches any Edit tool query. The word "used" matches almost any English sentence.
 
----
-
-## Stage 7: Advisory Engine
-
-### Q11: Is the advisory engine giving useful advice?
-**Answer**: Mostly suppressing. Last 2 events: `no_emit` (tool cooldown). Code defaults: MAX_EMIT=1, COOLDOWN=90s, REPEAT=1800s.
-
-**Root cause (Issue 5)**: `advisory_gate.py:60-66` — harsh code defaults (tuneables override to 2/15/300 but code fallback is bad).
-**Fix**: Change code defaults to 2/30/300.
-
-### Q12: What's Meta-Ralph's quality gate performance?
-**Answer**: 26,510 roasted, 1,896 passed = **7.15% pass rate**. 0 refinements made.
-
-**Root cause (Issue 4)**: Quality threshold 4.5/10 with harsh multi-dimensional scoring. Target should be 15-20%.
-**Fix**: Lower threshold to 3.8 in `tuneables.json`.
+**Fix**: Require minimum 2-word overlap, skip words < 4 chars, exclude common stopwords.
 
 ---
 
-## Stage 8: Chips Pipeline
+### Root Cause 3: Noise Filter Runs AFTER Limit Truncation
 
-### Q13: Are chips producing domain intelligence?
-**Answer**: Barely. 6 chips active, last cycle: 30 events processed, 0 insights captured, 0 merged.
+**Data**: `lib/advisor.py:2696-2742`
 
-### Q14: Is the chip merger doing anything?
-**Answer**: No. Last cycle: 20 processed, 0 merged, 12 skipped (low quality cooldown).
+The advisor calls:
+1. `cognitive.get_insights_for_context(context, limit=10)` -> returns top 10 by match_score
+2. Then loops through results and calls `is_noise_insight()` to filter
 
-**Root cause (Issue 10)**: `chip_merger.py:25` — `LOW_QUALITY_COOLDOWN_S = 30 * 60` (30 min). Once rejected, blocked for 30 min.
-**Fix**: Lower to 10 min (600s).
+**Problem**: limit=10 is applied BEFORE noise filtering. If 8 of the top 10 are noise, after filtering only 2 useful results remain. But 20+ useful results at positions 11-30 were never fetched.
 
----
-
-## Stage 9: Memory + Mind
-
-### Q15: What's in the memory store?
-**Answer**: 253 memories, 52 pending, 0 auto-saved, 0 explicit-saved (last cycle). AUTO_SAVE_THRESHOLD=0.82 blocks everything.
-
-**Root cause (Issue 11)**: `memory_capture.py:228` — threshold 0.82 is top 18% of confidence range.
-**Fix**: Lower to 0.65.
-
-### Q16: Is Mind contributing to advisory?
-**Answer**: No. Mind effectiveness: **0.0%** (23 samples, boost 0.2). Architecturally connected but functionally dead.
-
-**Root cause (Issue 6)**: `advisory_engine.py:22` — `INCLUDE_MIND_IN_MEMORY` defaults to "0" (disabled). Also in `disabled_from_advisory` in tuneables. Circular: disabled → 0% effective → stays disabled.
-**Fix**: Enable Mind, start with conservative boost (0.2), lower salience gate from 0.55 to 0.30.
+**Fix**: Increase fetch limit to 30, filter after.
 
 ---
 
-## Stage 10: Self-Evolution + Operations
+### Root Cause 4: importance_score() is Keyword-Only
 
-### Q17: Is the auto-tuner evolving the system?
-**Answer**: Yes. 10 auto-tune cycles logged. Executive loop ran 5 config evolutions on 2/20. This is the one stage that demonstrably works end-to-end.
+**Data**: `lib/memory_capture.py:126-160`
 
-### Q18: What's the operational health?
-**Answer**: 25 Python processes, ~2.2GB RAM. Total ~/.spark/: 77MB (manageable). No errors in last bridge cycle.
+Scores memories using three keyword lists:
+- HARD_TRIGGERS: "remember this" (1.0), "always" (0.65), "never" (0.65)
+- SOFT_TRIGGERS: "i prefer" (0.55), "must" (0.4), "should" (0.25)
+- DECISION_MARKERS: "let's do it" (0.25), "ship it" (0.25)
 
-**Root cause (Issue 17)**: Process count investigation needed. No code change — operational audit.
+AUTO_SAVE_THRESHOLD = 0.65
 
----
+**Problem**: Useful insights without trigger phrases score 0.0. Example: "Memory leaks in React often come from useEffect cleanup functions not being implemented" scores 0.0.
 
-## Cross-cutting
+**Result**: 618/1000 (61.8%) useful memories blocked.
 
-### Q19: End-to-end conversion rate?
-**Answer**: 4,455 events → 562 patterns → 221 distillations → 116 cognitive insights → ~50 promoted → 5-10 useful. **0.1-0.2% yield**.
-
-### Q20: Single biggest systemic problem?
-**Answer**: **The outcome gap.** 19,686 predictions, 2,282 outcomes (11.6%). Without closed feedback loops, reliability scores stagnate, validation stays idle, distillations can't be refined. Everything downstream of "did this work?" is starved.
+**Fix**: Add semantic signals (technical terms, causal language, quantitative evidence).
 
 ---
 
-## Fix Summary
+### Root Cause 5: Meta-Ralph Garbage Leakage (4.3%)
+
+**Breakdown**:
+| Type | Leaked | Total | Rate |
+|------|--------|-------|------|
+| tool_sequence | 23 | 400 | 5.8% |
+| duplicate | 17 | 200 | 8.5% |
+| platitude | 14 | 300 | 4.7% |
+| system_noise | 12 | 200 | 6.0% |
+| timing_metrics | 9 | 300 | 3.0% |
+| transcript | 8 | 200 | 4.0% |
+| code_snippet | 4 | 200 | 2.0% |
+| reaction_noise | 0 | 200 | 0.0% |
+
+**Fix**: Add explicit negative scoring for tool sequences, platitudes, and system noise in `_score_learning()`.
+
+---
+
+## Advisory Retrieval Details (26 Real Queries)
+
+Only 3/26 queries matched benchmark data:
+- "debugging flaky test CI" -> timezone insight (1 match)
+- "fixing memory leak React" -> useEffect cleanup (2 matches)
+- "optimizing page load lazy loading" -> lazy loading stats (1 match)
+
+23 other queries: 0 matches. Keyword matching can't bridge semantic gaps.
+
+---
+
+## Score Distribution (Meta-Ralph)
+
+```
+Score  Count   Category
+  1    1507    Noise/primitive
+  2     929    Below threshold
+  3      62    Below threshold
+  4     117    Near threshold
+  5      67    Above threshold
+  6      14    Quality
+  7      96    Quality
+  8     206    Quality
+  9       2    High quality
+```
+
+Bimodal: peak at 1-2 (noise) and secondary peak at 8 (well-structured useful content).
+
+---
+
+## Previous 20-Issue Audit Fixes (All Implemented 2026-02-21)
 
 | # | Issue | File(s) | Fix | Status |
 |---|-------|---------|-----|--------|
-| 1 | auto_link interval 300s | prediction_loop.py | 300→60s, limit 80→200 | |
-| 2 | Validation triggers narrow | validation_loop.py | +13 POS, +9 NEG words | |
-| 3 | Implicit tracker missing | implicit_outcome_tracker.py | CREATE new file + wire | |
-| 4 | Meta-Ralph 7.15% pass | tuneables.json | threshold 4.5→3.8 | |
-| 5 | Advisory gate harsh defaults | advisory_gate.py | emit 1→2, cool 90→30 | |
-| 6 | Mind 0% effective | tuneables.json, advisor.py | Enable, boost 0→0.2 | |
-| 7 | Promoter thresholds low | promoter.py, tuneables.json | 0.7→0.80, 3→5 vals | |
-| 8 | 0 EIDOS policies | distillation_engine.py | Add _generate_policy() | |
-| 9 | Distillation every 10 cycles | bridge_cycle.py | %10→%5 | |
-| 10 | Chip cooldown 30min | chip_merger.py | 1800→600s | |
-| 11 | Auto-save threshold 0.82 | memory_capture.py | 0.82→0.65 | |
-| 12 | Sync targets disabled | tuneables.json | mode core→all | |
-| 13 | 67% meta_learning, 2% wisdom | cognitive_learner.py | Add promote_to_wisdom() | |
-| 14 | Predictions never expire | prediction_loop.py | Add cleanup function | |
-| 15 | Distillation gate strict | distillation_engine.py | min len 30→20 | |
-| 16 | Mixed patterns rejected | distiller.py | Add SHARP_EDGE for mixed | |
-| 17 | 25 processes / 2.2GB RAM | — | Audit-only, document | |
-| 18 | No demotion of stale promos | bridge_cycle.py | Add demotion pass | |
-| 19 | implicit_feedback.jsonl empty | — | Fixed by Issue 3 | |
-| 20 | Prediction budget 180, no dedup | prediction_loop.py | 180→50, add dedup | |
+| 1 | auto_link interval 300s | prediction_loop.py | 300->60s, limit 80->200 | DONE |
+| 2 | Validation triggers narrow | validation_loop.py | +13 POS, +9 NEG words | DONE |
+| 3 | Implicit tracker missing | implicit_outcome_tracker.py | CREATE new file + wire | DONE |
+| 4 | Meta-Ralph 7.15% pass | tuneables.json | threshold 4.5->3.8 | DONE |
+| 5 | Advisory gate harsh defaults | advisory_gate.py | emit 1->2, cool 90->30 | DONE |
+| 6 | Mind 0% effective | tuneables.json, advisor.py | Enable, boost 0->0.2 | DONE |
+| 7 | Promoter thresholds low | promoter.py, tuneables.json | 0.7->0.80, 3->5 vals | DONE |
+| 8 | 0 EIDOS policies | distillation_engine.py | Add _generate_policy() | DONE |
+| 9 | Distillation every 10 cycles | bridge_cycle.py | %10->%5 | DONE |
+| 10 | Chip cooldown 30min | chip_merger.py | 1800->600s | DONE |
+| 11 | Auto-save threshold 0.82 | memory_capture.py | 0.82->0.65 | DONE |
+| 12 | Sync targets disabled | tuneables.json | mode core->all | DONE |
+| 13 | 67% meta_learning, 2% wisdom | cognitive_learner.py | Add promote_to_wisdom() | DONE |
+| 14 | Predictions never expire | prediction_loop.py | Add cleanup function | DONE |
+| 15 | Distillation gate strict | distillation_engine.py | min len 30->20 | DONE |
+| 16 | Mixed patterns rejected | distiller.py | Add SHARP_EDGE for mixed | DONE |
+| 17 | 25 processes / 2.2GB RAM | -- | Audit-only, document | DONE |
+| 18 | No demotion of stale promos | bridge_cycle.py | Add demotion pass | DONE |
+| 19 | implicit_feedback.jsonl empty | -- | Fixed by Issue 3 | DONE |
+| 20 | Prediction budget 180, no dedup | prediction_loop.py | 180->50, add dedup | DONE |
 
 ---
 
-## Implementation Status
+## NEW Benchmark-Driven Fixes (Issues 21-25)
 
-All 20 issues implemented and verified on 2026-02-21.
+| # | Issue | Root Cause | File(s) | Fix | Status |
+|---|-------|-----------|---------|-----|--------|
+| 21 | 62% cognitive store is noise | Cycle summaries saved as insights | cognitive_learner.py | Clean store + guard add_insight() | DONE |
+| 22 | Word-matching too broad | Single common word matches all queries | cognitive_learner.py | Min 2-word match, skip stopwords | DONE |
+| 23 | Noise filter after truncation | limit=10 before is_noise_insight() | advisor.py | limit 10->30 | DONE |
+| 24 | importance_score keyword-only | No semantic signals | memory_capture.py | Add technical/causal/quant scoring | DONE |
+| 25 | Meta-Ralph garbage leakage 4.3% | No negative scoring for noise patterns | meta_ralph.py | Penalize tool sequences, platitudes | DONE |
 
-### Files Modified
+---
 
-| File | Group | Changes |
-|------|-------|---------|
-| `lib/prediction_loop.py` | A, G | Auto-link 300->60s, limit 80->200, budget 180->50, +cleanup +dedup |
-| `lib/validation_loop.py` | A | POS_TRIGGERS +13 words, NEG_TRIGGERS +9 words |
-| `lib/implicit_outcome_tracker.py` | A | **CREATED** - advice->outcome tracker |
-| `hooks/observe.py` | A | Wire implicit tracker into Pre/Post/Failure handlers |
-| `lib/advisory_gate.py` | B | emit 1->2, cooldown 90->30, repeat 1800->300 |
-| `lib/advisor.py` | B | Mind source boost 1.0->1.15 |
-| `config/tuneables.json` | B,C,E | Mind enabled, threshold 4.5->3.8, promo 0.5->0.80, sync=all, auto_save=0.65 |
-| `lib/promoter.py` | C | threshold 0.7->0.80, validations 3->5, floor 0.90->0.95, age 2->6h |
-| `lib/eidos/distillation_engine.py` | D | +_generate_policy(), min length 30->20 |
-| `lib/pattern_detection/distiller.py` | D | +_create_sharp_edge_from_mixed() |
-| `lib/bridge_cycle.py` | D, F | Distillation %10->%5, +wisdom promotion call |
-| `lib/memory_capture.py` | E | AUTO_SAVE_THRESHOLD 0.82->0.65 |
-| `lib/chip_merger.py` | F | LOW_QUALITY_COOLDOWN 1800->600s |
-| `lib/cognitive_learner.py` | F | +promote_to_wisdom() method |
+## Before/After: Cognitive Retrieval (Critical Path)
 
-## Before/After Metrics
+**Benchmark**: 557 test memories injected, 49 real advisory queries run through production `on_pre_tool()`.
 
-| Metric | Before | After (expected) | Delta |
-|--------|--------|-------------------|-------|
-| Outcome tracking rate | 11.6% | 30-50% | +18-38pp |
-| Validation processed/cycle | 0 | >0 | fixed |
-| Meta-Ralph pass rate | 7.15% | 15-20% | +8-13pp |
-| Advisory emit rate | ~0% | >0% | unblocked |
-| EIDOS distillation yield | 22% | 30-35% | +8-13pp |
-| Chip merges/cycle | 0 | 2-5 | unblocked |
-| Memory auto-saves/cycle | 0 | 5-15 | unblocked |
-| Wisdom % of insights | 2% | 70%+ | +68pp (96 promoted on first run) |
-| Predictions file size | 10MB | stabilize 2-5K | capped |
-| EIDOS policies created | 0 | >0 | enabled |
+| Metric | BEFORE (pre-fix 21-25) | AFTER (post-fix 21-25) | Delta |
+|--------|----------------------|----------------------|-------|
+| Cognitive source items | 0 | 43 | **0 -> 43 (UNBLOCKED)** |
+| Queries with any advice | 49/49 | 45/49 | -4 (expected, noise removed) |
+| Bench items in advice | 0/64 | 43/94 | **0% -> 46%** |
+| EIDOS items | 49 | 36 | -13 (less dominant now) |
+| Trigger items | 15 | 15 | unchanged |
+| Cognitive store noise | 89/143 (62%) | 0/55 (0%) | **-62pp** |
+| Avg latency | 69ms | 78ms | +9ms (negligible) |
+
+**Key result**: The cognitive retrieval path went from DEAD (0 items) to the DOMINANT advisory source (43 items). Before, ALL advice came from EIDOS distillations and trigger rules because cognitive was drowned by cycle summary noise. Now cognitive is the primary source.

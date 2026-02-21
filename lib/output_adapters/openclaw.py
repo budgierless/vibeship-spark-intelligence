@@ -129,16 +129,16 @@ def write(context: str, config: Optional[dict] = None, advisory_payload: Optiona
         )
         # Keep advisory visible in profile workspaces even when only the fallback
         # advisory file was updated in this cycle.
-            if FALLBACK_ADVISORY_FILE.exists():
-                advisory_path = workspace / "SPARK_ADVISORY.md"
-                src_mtime = FALLBACK_ADVISORY_FILE.stat().st_mtime
-                dst_mtime = advisory_path.stat().st_mtime if advisory_path.exists() else 0.0
-                if src_mtime > dst_mtime:
-                    advisory_path.parent.mkdir(parents=True, exist_ok=True)
-                    advisory_path.write_text(
-                        FALLBACK_ADVISORY_FILE.read_text(encoding="utf-8", errors="replace"),
-                        encoding="utf-8",
-                    )
+        if FALLBACK_ADVISORY_FILE.exists():
+            advisory_path = workspace / "SPARK_ADVISORY.md"
+            src_mtime = FALLBACK_ADVISORY_FILE.stat().st_mtime
+            dst_mtime = advisory_path.stat().st_mtime if advisory_path.exists() else 0.0
+            if src_mtime > dst_mtime:
+                advisory_path.parent.mkdir(parents=True, exist_ok=True)
+                advisory_path.write_text(
+                    FALLBACK_ADVISORY_FILE.read_text(encoding="utf-8", errors="replace"),
+                    encoding="utf-8",
+                )
         if advisory_payload is not None:
             write_json(workspace / "SPARK_ADVISORY_PAYLOAD.json", advisory_payload)
         ok = ok or bool(result)

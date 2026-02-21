@@ -999,6 +999,38 @@ class MetaRalph:
         ]):
             score.ethics = 2  # Explicitly positive-sum
 
+        # GARBAGE PENALTIES: Reduce scores for known garbage patterns.
+        # These patterns inflate individual dimensions but aren't real learning.
+
+        # Tool sequences: "Bash -> Edit -> verify" have action verbs but no insight
+        if re.search(r"(->|-->|then run|then use|then check|execute)\s+\w+", learning_lower):
+            arrow_count = learning_lower.count("->") + learning_lower.count("-->")
+            if arrow_count >= 2:
+                score.actionability = 0
+                score.novelty = 0
+
+        # Platitudes: "Good code should be well-tested" - sounds wise but teaches nothing
+        platitude_patterns = [
+            r"^(good|best|proper|clean|quality)\s+(code|software|practice)",
+            r"\b(best practice|industry standard|common sense|goes without saying)\b",
+            r"^(it.s important|you should|one should|we should)\s+(to|always|never)\b",
+        ]
+        if any(re.search(p, learning_lower) for p in platitude_patterns):
+            if not has_numeric_evidence and not re.search(r"\b(because|due to|causes)\b", learning_lower):
+                score.reasoning = 0
+                score.novelty = 0
+
+        # System noise: operational status, health checks, metrics dumps
+        if re.search(r"\b(status|health|heartbeat|uptime|process(es)?)\s*[:=]", learning_lower):
+            score.actionability = 0
+            score.specificity = 0
+
+        # Cycle summaries / tool telemetry
+        if learning_lower.startswith("cycle summary:") or re.search(r"\b\d+\s*times?\s*\(\d+%\s*success\)", learning_lower):
+            score.actionability = 0
+            score.novelty = 0
+            score.reasoning = 0
+
         return score
 
     def _generate_roast_questions(self, learning: str, score: QualityScore) -> Tuple[List[str], List[str]]:

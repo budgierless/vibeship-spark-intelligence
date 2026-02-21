@@ -2698,7 +2698,7 @@ class SparkAdvisor:
         advice = []
 
         # Query insights relevant to this context
-        insights = self.cognitive.get_insights_for_context(context, limit=10, with_keys=True)
+        insights = self.cognitive.get_insights_for_context(context, limit=30, with_keys=True)
 
         # Also get tool-specific insights
         tool_insights = self.cognitive.get_insights_for_context(tool_name, limit=5, with_keys=True)

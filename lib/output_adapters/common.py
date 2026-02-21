@@ -68,7 +68,7 @@ def write_text(path: Path, content: str) -> bool:
             pass
         return False
     _ensure_parent(path)
-        path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8")
     return True
 
 
