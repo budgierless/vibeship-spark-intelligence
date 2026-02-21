@@ -23,18 +23,21 @@ cd /path/to/Spark
 ### Option 2: Manual Install
 
 ```bash
-# Install dependencies
-pip install -e .
-
-# Install Spark (from repo)
-pip install -e .[services]
+# Install dependencies in a virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate  # use .venv\\Scripts\\activate on Windows
+python -m pip install -e .[services]
 
 # Optional: Enable embeddings (fastembed)
-pip install -e .[embeddings]
+python -m pip install -e .[embeddings]
 
 # Test it works
-python3 -m spark.cli health
+python -m spark.cli health
 ```
+
+If pip reports `externally-managed-environment`, you are likely running on a
+system-managed Python install (Ubuntu/Debian policy). Re-run after creating and
+activating a local virtualenv as above.
 
 ## Basic Usage
 

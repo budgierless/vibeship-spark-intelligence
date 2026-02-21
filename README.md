@@ -40,16 +40,25 @@ The goal is to keep context, patterns, and practical lessons in a form that your
 ## Install
 
 ```bash
-pip install vibeship-spark-intelligence[services]
-spark up
-```
-
-Or clone for development:
-
-```bash
 git clone https://github.com/vibeforge1111/vibeship-spark-intelligence
 cd vibeship-spark-intelligence
-pip install -e .[services]
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -e .[services]
+```
+
+If your system uses PEP 668 / external package management, this avoids the
+`externally-managed-environment` error:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .[services]
+```
+
+Or run directly with editable install:
+
+```bash
+python -m pip install vibeship-spark-intelligence[services]
 spark up
 ```
 

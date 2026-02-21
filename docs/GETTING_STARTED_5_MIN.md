@@ -20,8 +20,13 @@ See `README.md` for the exact commands.
 
 ```bash
 cd /path/to/vibeship-spark-intelligence
-pip install -e .[services]
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install -e .[services]
 ```
+
+If you see `externally-managed-environment`, use the virtualenv block above and
+re-run installation inside it.
 
 ## 2) Start Services
 
