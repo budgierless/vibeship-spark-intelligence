@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -12,9 +13,10 @@ from pathlib import Path
 
 def run_cmd(cmd: str, label: str) -> None:
     print(f"\n== {label} ==")
+    argv = shlex.split(cmd)
     proc = subprocess.run(
-        cmd,
-        shell=True,
+        argv,
+        shell=False,
         capture_output=True,
         text=True,
         encoding="utf-8",

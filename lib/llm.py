@@ -119,21 +119,18 @@ def _call_claude_windows(
         response_file.unlink()
 
     # Build the start command
-    ps_args = f'-PromptFile "{prompt_file}" -ResponseFile "{response_file}"'
+    cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+    cmd.extend(["-File", str(bridge_script)])
+    cmd.extend(["-PromptFile", str(prompt_file), "-ResponseFile", str(response_file)])
     if system_prompt:
         sys_file = spark_dir / "llm_system.txt"
         sys_file.write_text(system_prompt, encoding="utf-8")
-        ps_args += f' -SystemFile "{sys_file}"'
-
-    cmd = (
-        f'start /wait /min powershell -NoProfile -ExecutionPolicy Bypass '
-        f'-File "{bridge_script}" {ps_args}'
-    )
+        cmd.extend(["-SystemFile", str(sys_file)])
 
     try:
         result = subprocess.run(
             cmd,
-            shell=True,
+            shell=False,
             timeout=timeout_s,
             capture_output=True,
             text=True,

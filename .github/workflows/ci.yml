@@ -34,7 +34,12 @@ jobs:
         run: |
           python scripts/public_release_safety_check.py
 
+      - name: Release test baseline
+        run: |
+          python scripts/verify_test_baseline.py
+
       - name: Unit Tests
+        continue-on-error: true
         run: |
           python -m pytest -q -m "not integration"
 

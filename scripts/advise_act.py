@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -48,7 +49,10 @@ def main() -> int:
             if tool.lower() == "bash":
                 if not args.command:
                     raise RuntimeError("Missing --command for Bash")
-                subprocess.run(args.command, shell=True, check=True)
+                command = shlex.split(args.command)
+                if not command:
+                    raise RuntimeError("Empty command after parsing")
+                subprocess.run(command, shell=False, check=True)
             elif tool.lower() == "edit":
                 if not args.file_path or args.append is None:
                     raise RuntimeError("Edit requires --file and --append")

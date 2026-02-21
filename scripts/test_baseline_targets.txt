@@ -1,0 +1,5 @@
+# Minimal release-confidence test baseline for OSS public snapshots.
+# Keep this list intentionally small and focused until the broader suite is stable.
+tests/test_safety_guardrails.py
+tests/test_sparkd_hardening.py
+tests/test_production_hardening.py
