@@ -517,6 +517,16 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
     categories = _safe_list(packet.get("category_summary"), max_items=20)
     source_line = ", ".join(sources) if sources else "unset"
     category_line = ", ".join(categories) if categories else "unset"
+    flags = _readiness_flags(packet, now_ts=_now())
+    freshness_remaining = float(packet.get("fresh_until_ts", 0.0) or 0.0) - _now()
+    if freshness_remaining < 0.0:
+        freshness_remaining = 0.0
+    last_read_ts = float(packet.get("last_read_ts", 0.0) or 0.0)
+    last_read_at = (
+        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_read_ts))
+        if last_read_ts > 0.0
+        else "never"
+    )
 
     lines = [
         f"# Packet {packet_id}",
@@ -533,6 +543,14 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
         f"- Fresh until: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(fresh_until_ts)) if fresh_until_ts else 'unknown'}",
         f"- Sources: {source_line}",
         f"- Categories: {category_line}",
+        f"- Invalidated: {bool(packet.get('invalidated', False))}",
+        f"- Invalidation reason: `{str(packet.get('invalidate_reason', '') or 'none')}`",
+        f"- Readiness: {float(flags.get('readiness_score', 0.0) or 0.0):.3f}",
+        f"- Fresh now: {'yes' if bool(flags.get('is_fresh')) else 'no'}",
+        f"- Ready for use: {bool(flags.get('ready_for_use'))}",
+        f"- Freshness remaining (s): {int(freshness_remaining)}",
+        f"- Last read at: {last_read_at}",
+        f"- Last read route: `{str(packet.get('last_read_route', '') or 'none')}`",
         f"- Effectiveness: {float(packet.get('effectiveness_score', 0.5) or 0.5):.3f}",
         f"- Usage: {int(packet.get('usage_count', 0) or 0)}",
         f"- Deliveries: {int(packet.get('deliver_count', 0) or 0)}",
@@ -609,6 +627,9 @@ def _readiness_flags(packet: Dict[str, Any], now_ts: Optional[float] = None) -> 
 def _obsidian_catalog_entry(packet: Dict[str, Any], now_ts: Optional[float] = None) -> Dict[str, Any]:
     now_value = float(now_ts if now_ts is not None else _now())
     flags = _readiness_flags(packet, now_ts=now_value)
+    fresh_remaining = float(packet.get("fresh_until_ts", 0.0) or 0.0) - now_value
+    if fresh_remaining < 0.0:
+        fresh_remaining = 0.0
     return {
         "packet_id": str(packet.get("packet_id") or ""),
         "project_key": str(packet.get("project_key") or ""),
@@ -620,6 +641,9 @@ def _obsidian_catalog_entry(packet: Dict[str, Any], now_ts: Optional[float] = No
         "fresh_until_ts": float(packet.get("fresh_until_ts", 0.0) or 0.0),
         "ready_for_use": bool(flags.get("ready_for_use")),
         "is_fresh": bool(flags.get("is_fresh")),
+        "invalidated": bool(packet.get("invalidated", False)),
+        "invalidate_reason": str(packet.get("invalidate_reason", "") or ""),
+        "freshness_remaining_s": float(fresh_remaining),
         "readiness_score": float(flags.get("readiness_score", 0.0)),
         "effectiveness_score": float(packet.get("effectiveness_score", 0.5) or 0.5),
         "read_count": int(packet.get("read_count", 0) or 0),
@@ -638,6 +662,7 @@ def _build_obsidian_catalog(
     now_ts: Optional[float] = None,
     only_ready: bool = False,
     include_stale: bool = False,
+    include_invalid: bool = False,
     limit: int = 0,
 ) -> List[Dict[str, Any]]:
     index = _load_index()
@@ -653,7 +678,7 @@ def _build_obsidian_catalog(
         if not row_packet:
             continue
         flags = _readiness_flags(row_packet, now_value)
-        if bool(flags.get("invalidated", False)):
+        if not include_invalid and bool(row_packet.get("invalidated")):
             continue
         if not include_stale and not bool(flags.get("is_fresh", False)):
             continue
@@ -685,18 +710,39 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
         for source in _safe_list(row.get("source_summary"), max_items=20):
             if source:
                 source_counter[str(source)] += 1
+    ready = [r for r in catalog if bool(r.get("ready_for_use"))]
+    invalid = [r for r in catalog if bool(r.get("invalidated"))]
+    stale = [r for r in catalog if not bool(r.get("is_fresh")) and not bool(r.get("invalidated"))]
 
     lines.append("# SPARK Advisory Packet Catalog")
     lines.append("")
     lines.append(f"- entries: {len(catalog)}")
+    lines.append(f"- ready: {len(ready)}")
+    lines.append(f"- stale: {len(stale)}")
+    if invalid:
+        lines.append(f"- invalidated: {len(invalid)}")
     lines.append(f"- updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now()))}")
     if source_counter:
         lines.append("- top sources: " + ", ".join(f"{k}({v})" for k, v in source_counter.most_common(8)))
     if category_counter:
         lines.append("- top categories: " + ", ".join(f"{k}({v})" for k, v in category_counter.most_common(8)))
     lines.append("")
+    if invalid:
+        lines.append("## Invalid Packets")
+        for idx, row in enumerate(invalid[:80], start=1):
+            packet_id = str(row.get("packet_id") or "")
+            updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
+            updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
+            lines.append(
+                f"{idx}. [[{packet_id}]] "
+                f"| {str(row.get('tool_name') or '*')} "
+                f"| {str(row.get('intent_family') or 'emergent_other')} "
+                f"| reason: {str(row.get('invalidate_reason') or 'none')} "
+                f"| updated={updated_text}"
+            )
+        lines.append("")
+
     lines.append("## Ready Packets")
-    ready = [r for r in catalog if bool(r.get("ready_for_use"))]
     for idx, row in enumerate(ready[:100], start=1):
         packet_id = str(row.get("packet_id") or "")
         updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
@@ -708,6 +754,7 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
             f"| readiness={float(row.get('readiness_score') or 0.0):.2f} "
             f"| eff={float(row.get('effectiveness_score') or 0.0):.2f} "
             f"| reads={int(row.get('read_count', 0) or 0)} "
+            f"| usages={int(row.get('usage_count', 0) or 0)} "
             f"| deliveries={int(row.get('deliver_count', row.get('emit_count', 0)) or 0)} "
             f"| updated={updated_text}"
         )
@@ -743,6 +790,7 @@ def _sync_obsidian_catalog() -> Optional[str]:
         now_ts=_now(),
         only_ready=False,
         include_stale=True,
+        include_invalid=True,
         limit=max(1, OBSIDIAN_EXPORT_MAX_PACKETS),
     )
     if not catalog:
@@ -1527,6 +1575,8 @@ def get_advisory_catalog(
                 "tool_name": str(row.get("tool_name") or ""),
                 "intent_family": str(row.get("intent_family") or ""),
                 "task_plane": str(row.get("task_plane") or ""),
+                "invalidated": bool(row.get("invalidated", False)),
+                "invalidate_reason": str(row.get("invalidate_reason", "") or ""),
                 "updated_ts": float(row.get("updated_ts", 0.0) or 0.0),
                 "fresh_until_ts": float(row.get("fresh_until_ts", 0.0) or 0.0),
                 "ready_for_use": bool(flags.get("ready_for_use", False)),
@@ -1568,7 +1618,13 @@ def invalidate_packet(packet_id: str, reason: str = "manual") -> bool:
     if packet_id in (index.get("packet_meta") or {}):
         index["packet_meta"][packet_id]["invalidated"] = True
         index["packet_meta"][packet_id]["updated_ts"] = packet["updated_ts"]
+        index["packet_meta"][packet_id]["invalidate_reason"] = reason[:200]
     _save_index(index)
+    try:
+        if _obsidian_enabled():
+            _export_packet_to_obsidian(packet, force=True)
+    except Exception:
+        pass
     return True
 
 
