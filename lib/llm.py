@@ -261,6 +261,7 @@ def synthesize_advisory(
             project_name = project_ctx.split("Project: ")[1].split(" (")[0]
 
     project_context = f"PROJECT CONTEXT:\n{project_ctx}" if project_ctx else ""
+    additional_context = f"ADDITIONAL CONTEXT: {context}" if context else ""
     prompt = f"""You are Spark Intelligence, observing a live coding session on {project_name}.
 
 SYSTEM INVENTORY (what actually exists — do NOT reference anything outside this list):
@@ -276,7 +277,7 @@ LEARNED INSIGHTS (from past sessions):
 {insight_text}
 
 {project_context}
-{f"ADDITIONAL CONTEXT: {context}" if context else ""}
+{additional_context}
 
 CRITICAL RULES:
 - ONLY recommend things supported by the data above. If the patterns show file edits, talk about those files. If they show errors, address those errors.
