@@ -107,6 +107,7 @@ $env:SPARK_MIND_PORT = $MindPort
 
 $pgPort = Get-EmbeddedPgPort
 if ($pgPort -and (Test-Port -Port $pgPort)) {
+    # Local/dev fallback only; production should set MIND_DATABASE_URL explicitly.
     $env:MIND_DATABASE_URL = "postgresql://mind:mind@127.0.0.1:$pgPort/mind"
 } else {
     if (Test-Path Env:MIND_DATABASE_URL) { Remove-Item Env:MIND_DATABASE_URL }

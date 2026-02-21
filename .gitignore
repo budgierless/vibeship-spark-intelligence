@@ -138,8 +138,10 @@ _test_*.txt
 .mcp.json
 
 # Runtime-modified files (Spark hook writes to these)
-# CLAUDE.md is committed clean; local changes from hook are ignored
-# PROJECT.md same
+# CLAUDE.md is removed from public sources; keep it out of version control.
 
 # Any file with local Windows paths in name
 C?UsersUSER*
+*test_output.txt
+*test_out.txt
+*test_err.txt
