@@ -1,15 +1,11 @@
 <p align="center">
-  <img src="logo.png" alt="Spark Intelligence" width="120">
-  <h1 align="center">Spark Intelligence</h1>
-  <p align="center">
-    <em>local self-evolving AI companion for coding intelligence.</em>
-  </p>
-  <p align="center">
-    <a href="https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
-    <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/runs-100%25_local-green?style=flat-square" alt="Local">
-    <img src="https://img.shields.io/badge/platform-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
-  </p>
+  <a href="https://spark.vibeship.co"><img src="header.png" alt="Spark Intelligence" width="100%"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/runs-100%25_local-green?style=flat-square" alt="Local">
+  <img src="https://img.shields.io/badge/platform-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
 </p>
 
 ---
