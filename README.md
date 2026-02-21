@@ -90,6 +90,7 @@ Your Agent (Claude Code / Cursor / OpenClaw)
 - **Full setup**: `docs/QUICKSTART.md`
 - **Docs index**: `docs/DOCS_INDEX.md`
 - **Website**: [spark.vibeship.com](https://spark.vibeship.com)
+- **Contributing**: `CONTRIBUTING.md` (local setup, PR flow, and safety expectations)
 
 ## Responsible Use
 
