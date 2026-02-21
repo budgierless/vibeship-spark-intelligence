@@ -12,10 +12,10 @@ PYTHON_BIN="python3"
 error_if_managed() {
   local code=$1
   local out=$2
-  if [ "$code" -ne 0 ] && [ -f "$out" ] && grep -qi "externally-managed-environment" "$out"; then
-    return 10
+  if [ "$code" -ne 0 ] && [ -f "$out" ] && grep -qi "externally-managed-environment" "$out" >/dev/null 2>&1; then
+    return 0
   fi
-  return "$code"
+  return 1
 }
 
 pip_install_editable() {
@@ -29,14 +29,14 @@ pip_install_editable() {
     return 0
   fi
 
-  if ! error_if_managed "$code" "$err_file"; then
-    cat "$err_file"
+  if error_if_managed "$code" "$err_file"; then
     rm -f "$err_file"
-    return "$code"
+    return 10
   fi
 
+  cat "$err_file"
   rm -f "$err_file"
-  return 10
+  return "$code"
 }
 
 ensure_venv() {
@@ -90,8 +90,10 @@ PY
 echo ""
 echo "Installing dependencies..."
 if [ -f "$SPARK_DIR/pyproject.toml" ]; then
-  if ! pip_install_editable "$SPARK_DIR"; then
-    code=$?
+  code=0
+  pip_install_editable "$SPARK_DIR"
+  code=$?
+  if [ "$code" -ne 0 ]; then
     if [ "$code" -ne 10 ]; then
       exit "$code"
     fi
