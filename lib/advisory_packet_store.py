@@ -127,7 +127,7 @@ def _obsidian_enabled() -> bool:
 
 
 def _decision_ledger_enabled() -> bool:
-    return os.getenv("SPARK_ADVISORY_DECISION_LEDGER", "1") != "0"
+    return True
 
 
 def _read_advisory_decision_ledger(limit: int = 120) -> List[Dict[str, Any]]:

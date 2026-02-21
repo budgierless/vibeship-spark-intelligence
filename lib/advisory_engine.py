@@ -20,12 +20,8 @@ ENGINE_ENABLED = os.getenv("SPARK_ADVISORY_ENGINE", "1") != "0"
 ENGINE_LOG = Path.home() / ".spark" / "advisory_engine.jsonl"
 ENGINE_LOG_MAX = 500
 ADVISORY_DECISION_LEDGER_FILE = Path.home() / ".spark" / "advisory_decision_ledger.jsonl"
-ADVISORY_DECISION_LEDGER_ENABLED = os.getenv("SPARK_ADVISORY_DECISION_LEDGER", "1") != "0"
-try:
-    ADVISORY_DECISION_LEDGER_MAX = max(
-        120, min(8000, int(os.getenv("SPARK_ADVISORY_DECISION_LEDGER_MAX_LINES", "1500")))
-except Exception:
-    ADVISORY_DECISION_LEDGER_MAX = 1500
+ADVISORY_DECISION_LEDGER_ENABLED = True
+ADVISORY_DECISION_LEDGER_MAX = 1500
 MAX_ENGINE_MS = float(os.getenv("SPARK_ADVISORY_MAX_MS", "4000"))
 INCLUDE_MIND_IN_MEMORY = os.getenv("SPARK_ADVISORY_INCLUDE_MIND", "0") == "1"
 ENABLE_PREFETCH_QUEUE = os.getenv("SPARK_ADVISORY_PREFETCH_QUEUE", "1") != "0"
@@ -522,31 +518,6 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             applied.append("advisory_text_repeat_cooldown_s")
         except Exception:
             warnings.append("invalid_advisory_text_repeat_cooldown_s")
-    if "decision_ledger_enabled" in cfg:
-        raw = cfg.get("decision_ledger_enabled")
-        if isinstance(raw, bool):
-            ADVISORY_DECISION_LEDGER_ENABLED = raw
-            applied.append("decision_ledger_enabled")
-        elif isinstance(raw, str):
-            raw_lower = raw.strip().lower()
-            if raw_lower in {"1", "true", "yes", "on"}:
-                ADVISORY_DECISION_LEDGER_ENABLED = True
-                applied.append("decision_ledger_enabled")
-            elif raw_lower in {"0", "false", "no", "off"}:
-                ADVISORY_DECISION_LEDGER_ENABLED = False
-                applied.append("decision_ledger_enabled")
-            else:
-                warnings.append("invalid_decision_ledger_enabled")
-    if "decision_ledger_max_lines" in cfg:
-        try:
-            ADVISORY_DECISION_LEDGER_MAX = max(
-                120,
-                min(8000, int(cfg.get("decision_ledger_max_lines") or 120)),
-            )
-            applied.append("decision_ledger_max_lines")
-        except Exception:
-            warnings.append("invalid_decision_ledger_max_lines")
-
     return {"applied": applied, "warnings": warnings}
 
 
@@ -570,8 +541,6 @@ def get_engine_config() -> Dict[str, Any]:
         "session_key_include_recent_tools": bool(SESSION_KEY_INCLUDE_RECENT_TOOLS),
         "delivery_stale_s": float(DELIVERY_STALE_SECONDS),
         "advisory_text_repeat_cooldown_s": float(ADVISORY_TEXT_REPEAT_COOLDOWN_S),
-        "decision_ledger_enabled": bool(ADVISORY_DECISION_LEDGER_ENABLED),
-        "decision_ledger_max_lines": int(ADVISORY_DECISION_LEDGER_MAX),
     }
 
 
