@@ -137,7 +137,7 @@ def _read_advisory_decision_ledger(limit: int = 120) -> List[Dict[str, Any]]:
         limit_count = int(limit)
     except Exception:
         limit_count = 120
-    if limit_count < 0:
+    if limit_count <= 0:
         limit_count = 0
 
     try:
@@ -760,6 +760,23 @@ def _build_obsidian_catalog(
 
 
 def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> None:
+    try:
+        watchtower = _read_advisory_decision_ledger(limit=max(0, int(OBSIDIAN_EXPORT_MAX_PACKETS // 3)))
+    except Exception:
+        watchtower: List[Dict[str, Any]] = []
+    try:
+        watchtower_reasons: Counter[str] = Counter()
+        watchtower_stage: Counter[str] = Counter()
+        for row in watchtower:
+            stage = str(row.get("stage", "") or "unspecified").strip() or "unspecified"
+            watchtower_stage[stage] += 1
+            for reason in _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=6):
+                if reason:
+                    watchtower_reasons[str(reason)] += 1
+    except Exception:
+        watchtower_reasons = Counter()
+        watchtower_stage = Counter()
+
     def _render_tags(values: List[str]) -> str:
         if not values:
             return ""
@@ -774,16 +791,6 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
         for source in _safe_list(row.get("source_summary"), max_items=20):
             if source:
                 source_counter[str(source)] += 1
-
-    watchtower = _read_advisory_decision_ledger(limit=max(0, int(OBSIDIAN_EXPORT_MAX_PACKETS // 3)))
-    watchtower_reasons: Counter[str] = Counter()
-    watchtower_stage: Counter[str] = Counter()
-    for row in watchtower:
-        stage = str(row.get("stage", "") or "unspecified").strip() or "unspecified"
-        watchtower_stage[stage] += 1
-        for reason in _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=6):
-            if reason:
-                watchtower_reasons[str(reason)] += 1
 
     ready = [r for r in catalog if bool(r.get("ready_for_use"))]
     invalid = [r for r in catalog if bool(r.get("invalidated"))]
@@ -894,26 +901,28 @@ def _sync_obsidian_catalog() -> Optional[str]:
         return None
     if not OBSIDIAN_AUTO_EXPORT:
         return None
+    try:
+        packets_dir = _obsidian_packets_dir()
+        if not packets_dir.exists():
+            return None
 
-    packets_dir = _obsidian_packets_dir()
-    if not packets_dir.exists():
+        catalog = _build_obsidian_catalog(
+            now_ts=_now(),
+            only_ready=False,
+            include_stale=True,
+            include_invalid=True,
+            limit=max(1, OBSIDIAN_EXPORT_MAX_PACKETS),
+        )
+        if not catalog and not ADVISORY_DECISION_LEDGER_FILE.exists():
+            return None
+
+        lines: List[str] = []
+        _render_obsidian_index(lines, catalog)
+        target = _obsidian_packets_dir() / "index.md"
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return str(target)
+    except Exception:
         return None
-
-    catalog = _build_obsidian_catalog(
-        now_ts=_now(),
-        only_ready=False,
-        include_stale=True,
-        include_invalid=True,
-        limit=max(1, OBSIDIAN_EXPORT_MAX_PACKETS),
-    )
-    if not catalog and not ADVISORY_DECISION_LEDGER_FILE.exists():
-        return None
-
-    lines: List[str] = []
-    _render_obsidian_index(lines, catalog)
-    target = _obsidian_packets_dir() / "index.md"
-    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return str(target)
 
 
 def _export_packet_to_obsidian(packet: Dict[str, Any], *, force: bool = False) -> Optional[str]:

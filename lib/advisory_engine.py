@@ -1037,58 +1037,60 @@ def _record_advisory_decision_ledger(
 ) -> None:
     if not ADVISORY_DECISION_LEDGER_ENABLED:
         return
+    try:
+        snapshot = _snapshot_gate_decisions(gate_result)
+        suppressed = []
+        emitted = []
+        for row in snapshot:
+            if row.get("emit"):
+                emitted.append(row)
+            else:
+                suppressed.append(row)
 
-    snapshot = _snapshot_gate_decisions(gate_result)
-    suppressed = []
-    emitted = []
-    for row in snapshot:
-        if row.get("emit"):
-            emitted.append(row)
-        else:
-            suppressed.append(row)
+        suppressed_summary: List[Dict[str, Any]] = []
+        reason_counts = dict(suppressed_reasons or {})
+        if not reason_counts and suppressed:
+            for row in suppressed:
+                reason = str(row.get("reason", "") or "unspecified").strip()
+                reason_counts[reason] = int(reason_counts.get(reason, 0) + 1)
+        for reason, count in sorted(reason_counts.items(), key=lambda kv: kv[1], reverse=True):
+            suppressed_summary.append({"reason": str(reason), "count": int(count)})
+        selected_ids = [str(row.get("advice_id", "") or "").strip() for row in emitted]
+        suppressed_ids = [str(row.get("advice_id", "") or "").strip() for row in suppressed]
+        route_clean = str(route or "").strip()
 
-    suppressed_summary: List[Dict[str, Any]] = []
-    reason_counts = dict(suppressed_reasons or {})
-    if not reason_counts and suppressed:
-        for row in suppressed:
-            reason = str(row.get("reason", "") or "unspecified").strip()
-            reason_counts[reason] = int(reason_counts.get(reason, 0) + 1)
-    for reason, count in sorted(reason_counts.items(), key=lambda kv: kv[1], reverse=True):
-        suppressed_summary.append({"reason": str(reason), "count": int(count)})
-    selected_ids = [str(row.get("advice_id", "") or "").strip() for row in emitted]
-    suppressed_ids = [str(row.get("advice_id", "") or "").strip() for row in suppressed]
-    route_clean = str(route or "").strip()
+        entry: Dict[str, Any] = {
+            "ts": time.time(),
+            "stage": str(stage or "").strip(),
+            "outcome": str(outcome or "").strip(),
+            "session_id": str(session_id or ""),
+            "trace_id": str(trace_id or ""),
+            "tool": str(tool_name or ""),
+            "intent_family": str(intent_family or ""),
+            "task_plane": str(task_plane or ""),
+            "route": route_clean,
+            "packet_id": str(packet_id or ""),
+            "route_hint": str(route_clean or ""),
+            "selected_count": int(len(selected_ids)),
+            "suppressed_count": int(len(suppressed_ids)),
+            "selected_ids": selected_ids[:12],
+            "suppressed_ids": suppressed_ids[:12],
+            "suppressed_reasons": suppressed_summary[:12],
+            "decision_count": len(snapshot),
+        }
+        if extras:
+            entry.update({k: v for k, v in extras.items() if v is not None})
 
-    entry: Dict[str, Any] = {
-        "ts": time.time(),
-        "stage": str(stage or "").strip(),
-        "outcome": str(outcome or "").strip(),
-        "session_id": str(session_id or ""),
-        "trace_id": str(trace_id or ""),
-        "tool": str(tool_name or ""),
-        "intent_family": str(intent_family or ""),
-        "task_plane": str(task_plane or ""),
-        "route": route_clean,
-        "packet_id": str(packet_id or ""),
-        "route_hint": str(route_clean or ""),
-        "selected_count": int(len(selected_ids)),
-        "suppressed_count": int(len(suppressed_ids)),
-        "selected_ids": selected_ids[:12],
-        "suppressed_ids": suppressed_ids[:12],
-        "suppressed_reasons": suppressed_summary[:12],
-        "decision_count": len(snapshot),
-    }
-    if extras:
-        entry.update({k: v for k, v in extras.items() if v is not None})
-
-    if isinstance(advice_items, list):
-        entry["retrieved_count"] = len(advice_items)
-        entry["source_counts"] = _advice_source_counts(advice_items)
-    _append_jsonl_capped(
-        ADVISORY_DECISION_LEDGER_FILE,
-        entry,
-        max_lines=ADVISORY_DECISION_LEDGER_MAX,
-    )
+        if isinstance(advice_items, list):
+            entry["retrieved_count"] = len(advice_items)
+            entry["source_counts"] = _advice_source_counts(advice_items)
+        _append_jsonl_capped(
+            ADVISORY_DECISION_LEDGER_FILE,
+            entry,
+            max_lines=ADVISORY_DECISION_LEDGER_MAX,
+        )
+    except Exception:
+        pass
 
 
 def _gate_suppression_metadata(gate_result: Any) -> Dict[str, Any]:
