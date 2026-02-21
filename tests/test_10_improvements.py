@@ -308,6 +308,8 @@ def test_10_chips_activation():
         loader = get_chip_loader()
         all_chips = loader.get_all_chips()
         print(f"  Total chips loaded: {len(all_chips)}")
+        if len(all_chips) == 0:
+            pytest.skip("chips catalog unavailable in this environment")
 
         # Test context activation
         test_contexts = [
@@ -326,6 +328,8 @@ def test_10_chips_activation():
         print_result("Threshold lowered (<=0.5)", threshold <= 0.5)
         assert threshold <= 0.5, f"auto-activate threshold too high: {threshold}"
         assert all_passed, "chip activation contexts failed"
+    except pytest.skip.Exception:
+        raise
     except Exception as e:
         pytest.fail(f"test_10_chips_activation failed: {e}")
 

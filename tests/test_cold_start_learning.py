@@ -12,12 +12,14 @@ Learning Markers Tested:
 """
 
 import json
+import time
 from pathlib import Path
 import pytest
 
 # Baseline before test
 BASELINE_FILE = Path.home() / '.spark' / 'iteration_baseline.json'
 COGNITIVE_FILE = Path.home() / '.spark' / 'cognitive_insights.json'
+BRIDGE_HEARTBEAT_FILE = Path.home() / '.spark' / 'bridge_worker_heartbeat.json'
 pytestmark = pytest.mark.integration
 
 
@@ -44,8 +46,26 @@ def get_insights_containing(text: str) -> list:
     return matches
 
 
+def _bridge_worker_recent(max_age_seconds: int = 180) -> bool:
+    if not BRIDGE_HEARTBEAT_FILE.exists():
+        return False
+    try:
+        data = json.loads(BRIDGE_HEARTBEAT_FILE.read_text(encoding="utf-8"))
+        ts = float(data.get("ts") or 0.0)
+        if ts <= 0.0:
+            return False
+        return (time.time() - ts) <= max_age_seconds
+    except Exception:
+        return False
+
+
 def test_explicit_signals():
     """Test that explicit learning signals are captured."""
+    if not _bridge_worker_recent():
+        pytest.skip("bridge worker heartbeat missing/stale; integration prerequisite not met")
+    if not COGNITIVE_FILE.exists():
+        pytest.skip("cognitive_insights store missing; integration prerequisite not met")
+
     print("=" * 60)
     print("PROJECT 2: COLD START LEARNING TEST")
     print("=" * 60)

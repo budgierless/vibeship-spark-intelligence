@@ -18,6 +18,7 @@ server zero-dependency. We can upgrade to embeddings later.
 
 import json
 import os
+import re
 import secrets
 import sqlite3
 import uuid
@@ -44,6 +45,7 @@ _FTS_AVAILABLE = None
 _FTS_SCHEMA = None  # legacy | extended
 _FTS_TRIGGERS = None
 _RRF_K = 60
+_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _read_token_file(path: Path) -> str | None:
@@ -144,6 +146,15 @@ def _score(content: str, tokens):
     return sum(c.count(t) for t in tokens)
 
 
+def _safe_sql_identifier(name: str) -> str | None:
+    ident = str(name or "").strip()
+    if not ident:
+        return None
+    if _SQL_IDENTIFIER_RE.fullmatch(ident) is None:
+        return None
+    return ident
+
+
 def _ensure_fts(conn: sqlite3.Connection) -> bool:
     global _FTS_AVAILABLE, _FTS_SCHEMA, _FTS_TRIGGERS
     if _FTS_AVAILABLE is False:
@@ -167,8 +178,11 @@ def _ensure_fts(conn: sqlite3.Connection) -> bool:
         ).fetchall()
         if triggers:
             for name, in triggers:
+                safe_name = _safe_sql_identifier(name)
+                if not safe_name:
+                    continue
                 try:
-                    conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+                    conn.execute(f'DROP TRIGGER IF EXISTS "{safe_name}"')
                 except Exception:
                     pass
             _FTS_TRIGGERS = False
