@@ -44,17 +44,22 @@ The goal is to keep context, patterns, and practical lessons in a form that your
 ## Install
 
 ```bash
+pip install vibeship-spark-intelligence[services]
+spark up
+```
+
+Or clone for development:
+
+```bash
 git clone https://github.com/vibeforge1111/vibeship-spark-intelligence
 cd vibeship-spark-intelligence
 pip install -e .[services]
+spark up
 ```
 
 ## Quick Start
 
 ```bash
-# Start services
-spark up
-
 # Check health
 spark health
 
