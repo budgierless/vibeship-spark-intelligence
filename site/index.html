@@ -70,18 +70,19 @@ a { color: var(--green); text-decoration: none; }
   pointer-events: none;
 }
 
-/* mouse glow */
-#reveal-glow {
-  position: fixed;
-  width: 500px;
-  height: 500px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0,196,154,0.04) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 1;
-  transform: translate(-50%, -50%);
+/* spotlight layer — brighter Spark revealed by mouse */
+#spark-spotlight {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
   opacity: 0;
-  transition: opacity 0.4s;
+  filter: saturate(0.9) brightness(0.7);
+  transition: opacity 0.8s ease;
+  mask-image: radial-gradient(circle 0px at 50% 50%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle 0px at 50% 50%, black 0%, transparent 100%);
 }
 
 /* ---- NAV ---- */
@@ -252,9 +253,9 @@ h1 { animation-delay: 0.08s; }
 
 <div id="spark-bg">
   <img id="spark-img" src="spark.png" alt="">
+  <img id="spark-spotlight" src="spark.png" alt="">
 </div>
 <canvas id="spark-canvas"></canvas>
-<div id="reveal-glow"></div>
 
 <nav>
   <a href="/" class="nav-brand">
@@ -287,7 +288,7 @@ h1 { animation-delay: 0.08s; }
 
 <script>
 const sparkImg = document.getElementById('spark-img');
-const revealGlow = document.getElementById('reveal-glow');
+const spotlight = document.getElementById('spark-spotlight');
 const cloneBox = document.getElementById('clone-box');
 const hint = cloneBox.querySelector('.clone-hint');
 const canvas = document.getElementById('spark-canvas');
@@ -298,6 +299,7 @@ let targetOpacity = 0;
 let moveCount = 0;
 let copied = false;
 let sparks = [];
+let spotlightRadius = 180;
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -307,7 +309,7 @@ resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
 // --- Spark particle ---
-class Spark {
+class SparkParticle {
   constructor(x, y) {
     this.x = x;
     this.y = y;
@@ -349,15 +351,21 @@ function emitSparks(count) {
   for (let i = 0; i < count; i++) {
     const x = cx + (Math.random() - 0.5) * canvas.width * 0.6;
     const y = cy + (Math.random() - 0.5) * canvas.height * 0.5;
-    sparks.push(new Spark(x, y));
+    sparks.push(new SparkParticle(x, y));
   }
 }
 
-// Mouse move — Spark fades in
+// Mouse move — spotlight follows cursor, base image fades in
 document.addEventListener('mousemove', (e) => {
-  revealGlow.style.left = e.clientX + 'px';
-  revealGlow.style.top = e.clientY + 'px';
-  revealGlow.style.opacity = '1';
+  const mx = e.clientX;
+  const my = e.clientY;
+
+  // move the spotlight mask to follow mouse
+  const r = spotlightRadius;
+  const mask = `radial-gradient(circle ${r}px at ${mx}px ${my}px, black 0%, transparent 100%)`;
+  spotlight.style.maskImage = mask;
+  spotlight.style.webkitMaskImage = mask;
+  spotlight.style.opacity = '1';
 
   moveCount++;
   if (!copied) {
@@ -366,7 +374,7 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('mouseleave', () => {
-  revealGlow.style.opacity = '0';
+  spotlight.style.opacity = '0';
   if (!copied) {
     targetOpacity = Math.max(0.08, targetOpacity - 0.03);
   }
@@ -385,6 +393,9 @@ cloneBox.addEventListener('click', () => {
   copied = true;
   targetOpacity = 0.45;
   sparkImg.style.filter = 'saturate(0.75) brightness(0.5)';
+
+  // widen the spotlight after copy
+  spotlightRadius = 320;
 
   // burst of sparks
   emitSparks(60);
