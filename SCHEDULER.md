@@ -1,4 +1,4 @@
-# Spark Scheduler - Quick Guide
+﻿# Spark Scheduler - Quick Guide
 
 ## What It Does
 
@@ -50,7 +50,7 @@ Look for:
 - `build_candidates.startup_ideas` -> one-shot startup prompts
 
 Canonical implementation for trend-scout logic now lives in:
-`C:\Users\USER\Desktop\spark-x-builder`.
+`<SPARK_X_BUILDER_PATH>`.
 
 ## OpenClaw / Clawdbot handoff
 
@@ -59,7 +59,7 @@ Set these env vars if those systems should receive each run:
 ```
 OPENCLAW_WEBHOOK_URL=https://your-openclaw-endpoint/webhook
 CLAWDBOT_WEBHOOK_URL=https://your-clawdbot-endpoint/webhook
-SPARK_X_BUILDER_PATH=C:\Users\USER\Desktop\spark-x-builder
+SPARK_X_BUILDER_PATH=<SPARK_X_BUILDER_PATH>
 ```
 
 When set, the scheduler posts the exact payload in `~/.spark/claw_integration/latest_trend_handoff.json` to both endpoints after each successful run.
@@ -173,3 +173,4 @@ TWITTER_ACCESS_TOKEN_SECRET
 **Watchdog keeps restarting it:** Check `~/.spark/logs/scheduler.log` for errors.
 
 **Want to stop it:** `python -m spark.cli down` stops everything, or kill the scheduler PID from `~/.spark/pids/scheduler.pid`.
+

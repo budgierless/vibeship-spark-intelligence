@@ -1,4 +1,4 @@
-# EIDOS Quickstart Guide
+﻿# EIDOS Quickstart Guide
 
 > **EIDOS** = Explicit Intelligence with Durable Outcomes & Semantics
 >
@@ -30,7 +30,7 @@ If you're using Claude Code with Spark hooks configured, EIDOS is **automaticall
 
 Check status:
 ```bash
-cd C:\Users\USER\Desktop\vibeship-spark-intelligence
+cd <REPO_ROOT>
 python -c "from lib.eidos import get_store; print(get_store().get_stats())"
 ```
 
@@ -68,55 +68,55 @@ for k, v in stats.items():
 Every tool call goes through:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 THE EIDOS VERTICAL LOOP                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   PreToolUse (hooks/observe.py)                             │
-│   ├── Make prediction (confidence 0-1)                      │
-│   ├── Create Step with hypothesis                           │
-│   ├── Check watchers (8 active)                             │
-│   ├── Check control plane                                   │
-│   └── BLOCK if any watcher fires                            │
-│                                                             │
-│   Tool Executes...                                          │
-│                                                             │
-│   PostToolUse / PostToolUseFailure                          │
-│   ├── Record result                                         │
-│   ├── Evaluate prediction vs outcome                        │
-│   ├── Calculate surprise level                              │
-│   ├── Extract lesson                                        │
-│   ├── Score for memory persistence                          │
-│   └── Update phase if needed                                │
-│                                                             │
-│   SessionEnd                                                │
-│   └── Complete episode → Run distillation                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                 THE EIDOS VERTICAL LOOP                     â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚                                                             â”‚
+â”‚   PreToolUse (hooks/observe.py)                             â”‚
+â”‚   â”œâ”€â”€ Make prediction (confidence 0-1)                      â”‚
+â”‚   â”œâ”€â”€ Create Step with hypothesis                           â”‚
+â”‚   â”œâ”€â”€ Check watchers (8 active)                             â”‚
+â”‚   â”œâ”€â”€ Check control plane                                   â”‚
+â”‚   â””â”€â”€ BLOCK if any watcher fires                            â”‚
+â”‚                                                             â”‚
+â”‚   Tool Executes...                                          â”‚
+â”‚                                                             â”‚
+â”‚   PostToolUse / PostToolUseFailure                          â”‚
+â”‚   â”œâ”€â”€ Record result                                         â”‚
+â”‚   â”œâ”€â”€ Evaluate prediction vs outcome                        â”‚
+â”‚   â”œâ”€â”€ Calculate surprise level                              â”‚
+â”‚   â”œâ”€â”€ Extract lesson                                        â”‚
+â”‚   â”œâ”€â”€ Score for memory persistence                          â”‚
+â”‚   â””â”€â”€ Update phase if needed                                â”‚
+â”‚                                                             â”‚
+â”‚   SessionEnd                                                â”‚
+â”‚   â””â”€â”€ Complete episode â†’ Run distillation                   â”‚
+â”‚                                                             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Data Flow
 
 ```
 Claude Code
-    │
-    ▼
-hooks/observe.py ──────► lib/eidos/integration.py
-    │                           │
-    │                           ▼
-    │                    ElevatedControlPlane
-    │                           │
-    │              ┌────────────┼────────────┐
-    │              ▼            ▼            ▼
-    │         Watchers    StateMachine   EscapeProtocol
-    │              │            │            │
-    │              └────────────┼────────────┘
-    │                           │
-    │                           ▼
-    │                    ~/.spark/eidos.db
-    │                    (SQLite database)
-    │
-    ▼
+    â”‚
+    â–¼
+hooks/observe.py â”€â”€â”€â”€â”€â”€â–º lib/eidos/integration.py
+    â”‚                           â”‚
+    â”‚                           â–¼
+    â”‚                    ElevatedControlPlane
+    â”‚                           â”‚
+    â”‚              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    â”‚              â–¼            â–¼            â–¼
+    â”‚         Watchers    StateMachine   EscapeProtocol
+    â”‚              â”‚            â”‚            â”‚
+    â”‚              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+    â”‚                           â”‚
+    â”‚                           â–¼
+    â”‚                    ~/.spark/eidos.db
+    â”‚                    (SQLite database)
+    â”‚
+    â–¼
 Continue or BLOCK
 ```
 
@@ -128,7 +128,7 @@ Continue or BLOCK
 | `~/.spark/truth_ledger.json` | Claims, facts, rules with evidence |
 | `~/.spark/policy_patches.json` | Behavior change rules |
 | `~/.spark/acceptance_plans.json` | Definition of Done for episodes |
-| `~/.spark/eidos_active_episodes.json` | Session → Episode mapping |
+| `~/.spark/eidos_active_episodes.json` | Session â†’ Episode mapping |
 
 ---
 
@@ -240,7 +240,7 @@ Save this as `eidos_dashboard.py`:
 """EIDOS Dashboard - Quick health check"""
 
 import sys
-sys.path.insert(0, 'C:/Users/USER/Desktop/vibeship-spark-intelligence')
+sys.path.insert(0, '<USER_HOME>/Desktop/vibeship-spark-intelligence')
 
 from lib.eidos import (
     get_store, get_elevated_control_plane,
@@ -261,35 +261,35 @@ def main():
     print("                    EIDOS DASHBOARD")
     print("=" * 60)
 
-    print("\n📊 DATABASE STATS")
+    print("\nðŸ“Š DATABASE STATS")
     print(f"   Episodes:      {stats['episodes']}")
     print(f"   Steps:         {stats['steps']}")
     print(f"   Distillations: {stats['distillations']}")
     print(f"   Policies:      {stats['policies']}")
     print(f"   Success Rate:  {stats['success_rate']:.1%}")
 
-    print("\n🔍 WATCHERS")
+    print("\nðŸ” WATCHERS")
     alert_count = len(ecp.watcher_engine.alert_history)
     print(f"   Total Alerts:  {alert_count}")
     if ecp.watcher_engine.alert_history:
         recent = ecp.watcher_engine.alert_history[-3:]
         for a in recent:
-            print(f"   └─ {a.watcher.value}: {a.message[:40]}")
+            print(f"   â””â”€ {a.watcher.value}: {a.message[:40]}")
 
-    print("\n📖 TRUTH LEDGER")
+    print("\nðŸ“– TRUTH LEDGER")
     tl_stats = ledger.get_stats()
     print(f"   Claims:        {tl_stats['claims']}")
     print(f"   Facts:         {tl_stats['facts']}")
     print(f"   Rules:         {tl_stats['rules']}")
     print(f"   High Conf:     {tl_stats['high_confidence']}")
 
-    print("\n⚙️  POLICY PATCHES")
+    print("\nâš™ï¸  POLICY PATCHES")
     patch_stats = patches.get_stats()
     print(f"   Active:        {patch_stats['enabled']}")
     print(f"   Triggered:     {patch_stats['total_triggers']}")
     print(f"   Effectiveness: {patch_stats['effectiveness']:.1%}")
 
-    print("\n🛡️  MINIMAL MODE")
+    print("\nðŸ›¡ï¸  MINIMAL MODE")
     mm_stats = minimal.get_stats()
     print(f"   Currently:     {'ACTIVE' if mm_stats['currently_active'] else 'Inactive'}")
     print(f"   Times Used:    {mm_stats['times_entered']}")
@@ -311,14 +311,14 @@ python eidos_dashboard.py
 
 | # | Watcher | Trigger | Action | What It Means |
 |---|---------|---------|--------|---------------|
-| 1 | **Repeat Failure** | Same error 2x | → DIAGNOSE | Stop retrying, investigate |
-| 2 | **No New Evidence** | 5 steps without evidence | → DIAGNOSE | Spinning wheels, need data |
+| 1 | **Repeat Failure** | Same error 2x | â†’ DIAGNOSE | Stop retrying, investigate |
+| 2 | **No New Evidence** | 5 steps without evidence | â†’ DIAGNOSE | Spinning wheels, need data |
 | 3 | **Diff Thrash** | Same file 3x | Freeze file | File is not the problem |
-| 4 | **Confidence Stagnation** | Delta < 0.05 × 3 | → PLAN | Need new approach |
+| 4 | **Confidence Stagnation** | Delta < 0.05 Ã— 3 | â†’ PLAN | Need new approach |
 | 5 | **Memory Bypass** | No citation | BLOCK | Must use past learning |
-| 6 | **Budget Half No Progress** | >50%, no progress | → SIMPLIFY | Scope too big |
-| 7 | **Scope Creep** | Plan grows, progress doesn't | → SIMPLIFY | Reduce scope 50% |
-| 8 | **Validation Gap** | >2 steps without validation | → VALIDATE | Need to verify state |
+| 6 | **Budget Half No Progress** | >50%, no progress | â†’ SIMPLIFY | Scope too big |
+| 7 | **Scope Creep** | Plan grows, progress doesn't | â†’ SIMPLIFY | Reduce scope 50% |
+| 8 | **Validation Gap** | >2 steps without validation | â†’ VALIDATE | Need to verify state |
 
 ### When Watchers Fire
 
@@ -335,15 +335,15 @@ This means EIDOS has detected a rabbit hole and is forcing you to change approac
 ## Understanding the Phases
 
 ```
-EXPLORE ──► PLAN ──► EXECUTE ──► VALIDATE ──► CONSOLIDATE
-    ▲                              │
-    │                              ▼
-    └────────── DIAGNOSE ◄─────────┘
-                   │
-                   ▼
+EXPLORE â”€â”€â–º PLAN â”€â”€â–º EXECUTE â”€â”€â–º VALIDATE â”€â”€â–º CONSOLIDATE
+    â–²                              â”‚
+    â”‚                              â–¼
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ DIAGNOSE â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                   â”‚
+                   â–¼
                 SIMPLIFY
-                   │
-                   ▼
+                   â”‚
+                   â–¼
             ESCALATE / HALT
 ```
 
@@ -492,7 +492,7 @@ dir %USERPROFILE%\.spark\eidos.db
 # View raw stats
 python -c "
 import sqlite3
-conn = sqlite3.connect('C:/Users/USER/.spark/eidos.db')
+conn = sqlite3.connect('<USER_HOME>/.spark/eidos.db')
 print('Episodes:', conn.execute('SELECT COUNT(*) FROM episodes').fetchone()[0])
 print('Steps:', conn.execute('SELECT COUNT(*) FROM steps').fetchone()[0])
 conn.close()
@@ -521,41 +521,41 @@ type %USERPROFILE%\.spark\debug.log
 ## Quick Reference Card
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                    EIDOS QUICK REFERENCE                       │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  THE MANTRA:                                                   │
-│  "If progress is unclear, stop acting and change the question" │
-│                                                                │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  5 INVARIANT RULES:                                            │
-│  1. No action without falsifiable hypothesis                   │
-│  2. Two failures = stop modifying reality                      │
-│  3. Progress must be observable                                │
-│  4. Budgets are capped (25 steps, 12 min)                      │
-│  5. Memory must be consulted                                   │
-│                                                                │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  WHEN STUCK:                                                   │
-│  1. FREEZE (no edits)                                          │
-│  2. SUMMARIZE (what we know)                                   │
-│  3. ISOLATE (smallest failing unit)                            │
-│  4. FLIP (change the question)                                 │
-│  5. HYPOTHESIZE (max 3)                                        │
-│  6. TEST (1 discriminating test)                               │
-│  7. LEARN (create artifact)                                    │
-│                                                                │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  KEY FILES:                                                    │
-│  ~/.spark/eidos.db          - Main database                    │
-│  ~/.spark/truth_ledger.json - Claims/facts/rules               │
-│  ~/.spark/policy_patches.json - Behavior rules                 │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    EIDOS QUICK REFERENCE                       â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚                                                                â”‚
+â”‚  THE MANTRA:                                                   â”‚
+â”‚  "If progress is unclear, stop acting and change the question" â”‚
+â”‚                                                                â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚                                                                â”‚
+â”‚  5 INVARIANT RULES:                                            â”‚
+â”‚  1. No action without falsifiable hypothesis                   â”‚
+â”‚  2. Two failures = stop modifying reality                      â”‚
+â”‚  3. Progress must be observable                                â”‚
+â”‚  4. Budgets are capped (25 steps, 12 min)                      â”‚
+â”‚  5. Memory must be consulted                                   â”‚
+â”‚                                                                â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚                                                                â”‚
+â”‚  WHEN STUCK:                                                   â”‚
+â”‚  1. FREEZE (no edits)                                          â”‚
+â”‚  2. SUMMARIZE (what we know)                                   â”‚
+â”‚  3. ISOLATE (smallest failing unit)                            â”‚
+â”‚  4. FLIP (change the question)                                 â”‚
+â”‚  5. HYPOTHESIZE (max 3)                                        â”‚
+â”‚  6. TEST (1 discriminating test)                               â”‚
+â”‚  7. LEARN (create artifact)                                    â”‚
+â”‚                                                                â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚                                                                â”‚
+â”‚  KEY FILES:                                                    â”‚
+â”‚  ~/.spark/eidos.db          - Main database                    â”‚
+â”‚  ~/.spark/truth_ledger.json - Claims/facts/rules               â”‚
+â”‚  ~/.spark/policy_patches.json - Behavior rules                 â”‚
+â”‚                                                                â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
@@ -568,3 +568,5 @@ type %USERPROFILE%\.spark\debug.log
 4. **Review distillations** to see what's being learned
 
 EIDOS is designed to be invisible when things are going well, and highly visible when things go wrong. Trust the watchers.
+
+

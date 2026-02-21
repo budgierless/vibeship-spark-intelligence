@@ -321,12 +321,24 @@ The watchtower is the packet-first observability layer: every emitted advisory p
   - suppression/reason trend view
   - decision-ledger tail
   - project/tool/intent distributions
+  - cross-packet trace health pane (required/optional systems, missing systems, hot systems)
+  - trace-system heatmap for packet coverage by trace source
 - `.\Spark-Intelligence-Observatory\packets\index.md` remains the packet catalog.
 - Per-packet files appear as:
-  - `pkt_<id>.md`
+  - `<packet_id>.md` (current export naming; no `pkt_` prefix)
 
 For best-practice usage (daily/weekly workflows, triage pattern, and noise control),
 see: `docs/ADVISORY_OBSIDIAN_PLAYBOOK.md`.
+
+### Quick health check command
+
+Run:
+
+```bash
+python scripts/check_obsidian_watchtower.py
+```
+
+to validate watchtower directory, config, and dashboard file sync in one pass.
 
 --- 
 
@@ -336,6 +348,9 @@ see: `docs/ADVISORY_OBSIDIAN_PLAYBOOK.md`.
 |------|---------|-----|
 | `~/.spark/advisory_engine.jsonl` | Engine events (retrieve, gate, emit, errors) | 500 lines |
 | `~/.spark/advisory_emit.jsonl` | What was emitted to stdout | 500 lines |
+| `~/.spark/outcomes.jsonl` | Outcome tracker rows (linked to trace IDs/insights) | 5000 lines |
+| `~/.spark/outcome_links.jsonl` | Outcome-to-insight linkage rows | 5000 lines |
+| `~/.spark/advisor/implicit_feedback.jsonl` | Implicit outcome tracker rows for advisory post-tool signals | 5000 lines |
 | `~/.spark/advisor/retrieval_router.jsonl` | Which sources hit per query | 800 lines |
 | `~/.spark/advisor/advice_log.jsonl` | All advice retrieval | 500 lines |
 | `~/.spark/advisor/recent_advice.jsonl` | Last 20min deliveries | 200 lines |

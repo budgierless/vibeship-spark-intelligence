@@ -36,7 +36,7 @@ import re
 def _generalize_failed_decision(raw: str) -> str:
     """Extract a generalizable tool/action pattern from a literal decision string.
 
-    Instead of encoding 'Execute: cd C:\\Users\\USER && find ...' verbatim,
+    Instead of encoding 'Execute: cd <USER_HOME> && find ...' verbatim,
     produce something like 'Bash find commands' that matches future similar actions
     without matching every unrelated Bash command.
     """
@@ -667,7 +667,7 @@ class EscapeProtocol:
             dist_type = DistillationType.SHARP_EDGE
         elif failed_decisions:
             # Extract the generalizable pattern, not the literal command
-            # e.g. "Execute: cd C:\Users\USER && find ..." -> "Bash find commands"
+            # e.g. "Execute: cd <USER_HOME> && find ..." -> "Bash find commands"
             raw = failed_decisions[0]
             tool_hint = _generalize_failed_decision(raw)
             statement = f"When repeated {tool_hint} attempts fail without progress, step back and try a different approach"

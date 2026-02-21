@@ -288,7 +288,7 @@ class PatternDistiller:
             domains=["user_interaction", intent_desc],
             triggers=[intent_key, intent_desc],
             source_steps=[s.step_id for s in successes[:10]],
-            confidence=confidence,
+            confidence=min(0.4, confidence),  # Start low, earn trust
         )
 
         self._stats["candidates_generated"] += 1
@@ -332,7 +332,7 @@ class PatternDistiller:
             domains=["user_interaction", intent_desc],
             anti_triggers=[intent_key],
             source_steps=[s.step_id for s in failures[:10]],
-            confidence=confidence,
+            confidence=min(0.35, confidence),  # Start low, earn trust
         )
 
         self._stats["candidates_generated"] += 1
@@ -371,7 +371,7 @@ class PatternDistiller:
             domains=["inconsistency", intent_desc],
             triggers=[intent_key, "mixed_results"],
             source_steps=[s.step_id for s in steps[:10]],
-            confidence=0.5,
+            confidence=0.35,  # Start low, earn trust
         )
 
         self._stats["candidates_generated"] += 1

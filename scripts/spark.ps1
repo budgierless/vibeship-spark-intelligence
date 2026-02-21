@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Spark Intelligence - one command to rule them all.
 .DESCRIPTION
@@ -15,8 +15,8 @@ param(
     [string]$Action = "status"
 )
 
-$REPO = "C:\Users\USER\Desktop\vibeship-spark-intelligence"
-$PULSE_DIR = "C:\Users\USER\Desktop\vibeship-spark-pulse"
+$REPO = "<REPO_ROOT>"
+$PULSE_DIR = "<SPARK_PULSE_DIR>"
 $PID_FILE = "$REPO\scripts\.spark_pids.json"
 $DEFAULT_SPARKD_PORT = 8787
 if ($env:SPARKD_PORT -match "^\d+$") {
@@ -303,4 +303,5 @@ switch ($Action) {
     "restart" { Stop-Spark; Start-Sleep 2; Start-Spark }
     "health"  { Show-Health }
 }
+
 

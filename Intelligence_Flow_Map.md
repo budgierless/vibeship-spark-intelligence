@@ -154,6 +154,7 @@ flowchart LR
   bridge_cycle --> content_learner --> cognitive
 
   bridge_cycle --> chips_loader --> chips_router --> chips_runtime --> chips_scoring --> chips_evolution
+  chips_evolution --> chips_store
   chips_runtime --> chips_store
   chips_store --> chip_merger --> cognitive
   chips_store --> advisor

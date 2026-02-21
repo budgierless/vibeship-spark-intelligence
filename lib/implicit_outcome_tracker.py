@@ -34,6 +34,7 @@ class ImplicitOutcomeTracker:
         advice_texts: List[str],
         advice_sources: Optional[List[str]] = None,
         tool_input: Optional[Dict] = None,
+        trace_id: Optional[str] = None,
     ) -> None:
         """Record that advice was emitted before a tool call."""
         if not advice_texts:
@@ -43,6 +44,7 @@ class ImplicitOutcomeTracker:
             "advice_sources": (advice_sources or [])[:5],
             "file_path": (tool_input or {}).get("file_path", ""),
             "timestamp": time.time(),
+            "trace_id": str(trace_id or "").strip(),
         }
 
     def record_outcome(
@@ -51,6 +53,7 @@ class ImplicitOutcomeTracker:
         success: bool,
         tool_input: Optional[Dict] = None,
         error_text: str = "",
+        trace_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Record tool outcome and match against pending advice."""
         self._clean_stale()
@@ -66,6 +69,8 @@ class ImplicitOutcomeTracker:
             "success": success,
             "advice_count": len(entry.get("advice_texts", [])),
             "advice_sources": entry.get("advice_sources", []),
+            "file_path": entry.get("file_path", ""),
+            "trace_id": str(trace_id or entry.get("trace_id") or "").strip(),
             "latency_s": round(time.time() - entry["timestamp"], 2),
             "timestamp": time.time(),
         }

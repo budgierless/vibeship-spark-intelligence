@@ -2170,8 +2170,14 @@ class SparkAdvisor:
             "complexity_min": complexity_min,
         }
 
-    def _log_retrieval_route(self, entry: Dict[str, Any]) -> None:
+    def _log_retrieval_route(
+        self,
+        entry: Dict[str, Any],
+        *,
+        trace_id: Optional[str] = None,
+    ) -> None:
         payload = dict(entry or {})
+        payload.setdefault("trace_id", str(trace_id or "").strip() or None)
         payload["ts"] = time.time()
         _append_jsonl_capped(RETRIEVAL_ROUTE_LOG, payload, RETRIEVAL_ROUTE_LOG_MAX)
 
@@ -2488,7 +2494,14 @@ class SparkAdvisor:
         advice_list.extend(self._get_bank_advice(context))
 
         # 2. Query cognitive insights (semantic + keyword fallback)
-        advice_list.extend(self._get_cognitive_advice(tool_name, context, semantic_context))
+        advice_list.extend(
+            self._get_cognitive_advice(
+                tool_name,
+                context,
+                semantic_context=semantic_context,
+                trace_id=trace_id,
+            )
+        )
 
         # 2.5. Query chip insights (domain-specific intelligence).
         advice_list.extend(self._get_chip_advice(context))
@@ -2563,11 +2576,13 @@ class SparkAdvisor:
                     semantic_context,
                     advice_list,
                     policy,
+                    trace_id=trace_id,
                 )
                 # Optional telemetry (lightweight + no extra IO path).
                 self._log_retrieval_route(
                     {
                         "tool": tool_name,
+                        "trace_id": str(trace_id or "").strip(),
                         "route": "minimax_fast_rerank",
                         "routed": rerank_meta.get("used", False),
                         "reason": str(rerank_meta.get("reason", "")),
@@ -2583,6 +2598,7 @@ class SparkAdvisor:
                 self._log_retrieval_route(
                     {
                         "tool": tool_name,
+                        "trace_id": str(trace_id or "").strip(),
                         "route": "minimax_fast_rerank",
                         "routed": False,
                         "reason": str(rerank_gate_meta.get("reason", "")),
@@ -2640,9 +2656,19 @@ class SparkAdvisor:
 
         return advice_list
 
-    def _get_cognitive_advice(self, tool_name: str, context: str, semantic_context: Optional[str] = None) -> List[Advice]:
+    def _get_cognitive_advice(
+        self,
+        tool_name: str,
+        context: str,
+        semantic_context: Optional[str] = None,
+        trace_id: Optional[str] = None,
+    ) -> List[Advice]:
         """Get advice from cognitive insights (semantic-first with keyword fallback)."""
-        semantic = self._get_semantic_cognitive_advice(tool_name=tool_name, context=semantic_context or context)
+        semantic = self._get_semantic_cognitive_advice(
+            tool_name=tool_name,
+            context=semantic_context or context,
+            trace_id=trace_id,
+        )
         keyword = self._get_cognitive_advice_keyword(tool_name, context)
 
         if not semantic:
@@ -2657,7 +2683,12 @@ class SparkAdvisor:
             merged.append(a)
         return merged
 
-    def _get_semantic_cognitive_advice(self, tool_name: str, context: str) -> List[Advice]:
+    def _get_semantic_cognitive_advice(
+        self,
+        tool_name: str,
+        context: str,
+        trace_id: Optional[str] = None,
+    ) -> List[Advice]:
         """Retrieve cognitive advice with policy-driven semantic/agentic routing."""
         try:
             from .semantic_retriever import get_semantic_retriever
@@ -2838,6 +2869,7 @@ class SparkAdvisor:
             self._log_retrieval_route(
                 {
                     "tool": tool_name,
+                    "trace_id": str(trace_id or "").strip(),
                     "profile_level": policy.get("level"),
                     "profile_name": policy.get("profile"),
                     "active_domain": active_domain,
@@ -2999,6 +3031,7 @@ class SparkAdvisor:
         self._log_retrieval_route(
             {
                 "tool": tool_name,
+                "trace_id": str(trace_id or "").strip(),
                 "profile_level": policy.get("level"),
                 "profile_name": policy.get("profile"),
                 "active_domain": active_domain,
@@ -4761,18 +4794,36 @@ Output only JSON with `order` as a list of 0-based indices (descending by releva
             order.append(idx)
         return order
 
-    def _minimax_fast_rerank(self, query: str, advice_list: List[Advice], policy: Dict[str, Any]) -> Tuple[List[Advice], Dict[str, Any]]:
+    def _minimax_fast_rerank(
+        self,
+        query: str,
+        advice_list: List[Advice],
+        policy: Dict[str, Any],
+        trace_id: Optional[str] = None,
+    ) -> Tuple[List[Advice], Dict[str, Any]]:
         if not isinstance(advice_list, list) or len(advice_list) < 2:
-            return advice_list, {"used": False, "reason": "insufficient_items"}
+            return advice_list, {
+                "used": False,
+                "reason": "insufficient_items",
+                "trace_id": str(trace_id or "").strip(),
+            }
         if not policy:
             policy = {}
 
         if not bool(policy.get("minimax_fast_rerank", False)):
-            return advice_list, {"used": False, "reason": "disabled"}
+            return advice_list, {
+                "used": False,
+                "reason": "disabled",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         min_items = max(6, int(policy.get("minimax_fast_rerank_min_items", 12) or 12))
         if len(advice_list) < min_items:
-            return advice_list, {"used": False, "reason": "below_min_items"}
+            return advice_list, {
+                "used": False,
+                "reason": "below_min_items",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         top_k = max(min_items, int(policy.get("minimax_fast_rerank_top_k", 16) or 16))
         top_k = min(top_k, len(advice_list))
@@ -4780,7 +4831,11 @@ Output only JSON with `order` as a list of 0-based indices (descending by releva
         cooldown = max(0.0, float(policy.get("minimax_fast_rerank_cooldown_s", 30.0) or 0.0))
         now = time.time()
         if cooldown > 0 and (now - self._last_minimax_rerank_ts) < cooldown:
-            return advice_list, {"used": False, "reason": "cooldown"}
+            return advice_list, {
+                "used": False,
+                "reason": "cooldown",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         start = time.perf_counter()
         model = str(policy.get("minimax_fast_rerank_model", "MiniMax-M2.5") or "MiniMax-M2.5").strip()
@@ -4788,24 +4843,44 @@ Output only JSON with `order` as a list of 0-based indices (descending by releva
 
         prompt = self._build_minimax_rerank_prompt(query, advice_list, top_k)
         if not prompt:
-            return advice_list, {"used": False, "reason": "empty_prompt"}
+            return advice_list, {
+                "used": False,
+                "reason": "empty_prompt",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         try:
             from .advisory_synthesizer import _query_minimax
         except Exception:
-            return advice_list, {"used": False, "reason": "synth_import_error"}
+            return advice_list, {
+                "used": False,
+                "reason": "synth_import_error",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         try:
             response = _query_minimax(prompt, model=model, timeout_s=timeout_s)
         except Exception:
-            return advice_list, {"used": False, "reason": "query_failed"}
+            return advice_list, {
+                "used": False,
+                "reason": "query_failed",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         if not response:
-            return advice_list, {"used": False, "reason": "empty_response"}
+            return advice_list, {
+                "used": False,
+                "reason": "empty_response",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         order = self._parse_minimax_rerank_response(response, len(advice_list))
         if not order:
-            return advice_list, {"used": False, "reason": "bad_order"}
+            return advice_list, {
+                "used": False,
+                "reason": "bad_order",
+                "trace_id": str(trace_id or "").strip(),
+            }
 
         seen = set()
         top_order: List[Advice] = []
@@ -4828,6 +4903,7 @@ Output only JSON with `order` as a list of 0-based indices (descending by releva
                 "top_k": top_k,
                 "order_len": len(order),
                 "elapsed_ms": int((time.perf_counter() - start) * 1000),
+                "trace_id": str(trace_id or "").strip(),
             },
         )
 
@@ -5149,6 +5225,25 @@ Output only JSON with `order` as a list of 0-based indices (descending by releva
                 )
         except Exception:
             pass  # Don't break outcome flow if tracking fails
+
+        # Route EIDOS-sourced outcomes back to EIDOS store
+        # This closes the distillation feedback loop — confidence evolves
+        try:
+            if ik and isinstance(ik, str) and ik.startswith("eidos:"):
+                # insight_key format: "eidos:{type}:{id_prefix}"
+                parts = ik.split(":", 2)
+                if len(parts) >= 3:
+                    id_prefix = parts[2]
+                    from .eidos.store import get_store
+                    eidos_store = get_store()
+                    full_id = eidos_store.find_distillation_by_prefix(id_prefix)
+                    if full_id:
+                        eidos_store.record_distillation_usage(
+                            full_id,
+                            helped=(was_helpful is True),
+                        )
+        except Exception:
+            pass  # Don't break outcome flow
 
         # Log outcome
         with open(ADVICE_LOG, "a", encoding="utf-8") as f:

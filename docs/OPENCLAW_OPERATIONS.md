@@ -1,4 +1,4 @@
-# OpenClaw Operations — Running Spark the Seer
+﻿# OpenClaw Operations â€” Running Spark the Seer
 
 Status: `canonical`
 Scope: runtime startup, data flow, service health, troubleshooting
@@ -13,7 +13,7 @@ Operating policy reference:
 ### 1. Start Spark Services
 
 ```powershell
-$repo = "C:\Users\USER\Desktop\vibeship-spark-intelligence"
+$repo = "<REPO_ROOT>"
 $env:SPARK_EMBEDDINGS = "0"
 
 # Core services
@@ -22,7 +22,7 @@ $bridge = Start-Process python -ArgumentList "$repo\bridge_worker.py" -WorkingDi
 $tailer = Start-Process python -ArgumentList "$repo\adapters\openclaw_tailer.py","--include-subagents" -WorkingDirectory $repo -WindowStyle Hidden -PassThru
 
 # Dashboard
-$pulse = Start-Process python -ArgumentList "-m","uvicorn","app:app","--host","127.0.0.1","--port","8765" -WorkingDirectory "C:\Users\USER\Desktop\vibeship-spark-pulse" -WindowStyle Hidden -PassThru
+$pulse = Start-Process python -ArgumentList "-m","uvicorn","app:app","--host","127.0.0.1","--port","8765" -WorkingDirectory "<SPARK_PULSE_DIR>" -WindowStyle Hidden -PassThru
 
 Write-Host "sparkd=$($sparkd.Id) bridge=$($bridge.Id) tailer=$($tailer.Id) pulse=$($pulse.Id)"
 ```
@@ -73,59 +73,59 @@ If it says "Invalid API key", run `claude` and type `/login`.
 
 ```
 You type a message
-        │
-        ▼
+        â”‚
+        â–¼
 OpenClaw processes it (tools, responses, etc.)
-        │
-        ▼
+        â”‚
+        â–¼
 Session JSONL written to ~/.openclaw/agents/main/sessions/
-        │
-        ▼
+        â”‚
+        â–¼
 openclaw_tailer reads new events, sends to sparkd (:8787)
-        │
-        ▼
+        â”‚
+        â–¼
 sparkd queues events in ~/.spark/queue/events.jsonl
-        │
-        ▼
+        â”‚
+        â–¼
 bridge_worker processes queue every ~30 seconds:
-  ├─ Pattern detection (coding patterns, errors, workflows)
-  ├─ Chip system (domain-specific insights across 7+ domains)
-  ├─ Cognitive learner (builds validated knowledge base)
-  ├─ Feedback ingestion (reads agent self-reports)
-  ├─ Prediction/validation loop
-  ├─ Context sync (writes to all IDE targets)
-  ├─ Auto-tuner (optimizes its own parameters)
-  └─ LLM Advisory (calls Claude when enough patterns found)
-        │
-        ▼
+  â”œâ”€ Pattern detection (coding patterns, errors, workflows)
+  â”œâ”€ Chip system (domain-specific insights across 7+ domains)
+  â”œâ”€ Cognitive learner (builds validated knowledge base)
+  â”œâ”€ Feedback ingestion (reads agent self-reports)
+  â”œâ”€ Prediction/validation loop
+  â”œâ”€ Context sync (writes to all IDE targets)
+  â”œâ”€ Auto-tuner (optimizes its own parameters)
+  â””â”€ LLM Advisory (calls Claude when enough patterns found)
+        â”‚
+        â–¼
 Outputs written to OpenClaw workspace:
-  ├─ SPARK_CONTEXT.md    (curated insights)
-  ├─ SPARK_ADVISORY.md   (Claude-generated recommendations)
-  └─ SPARK_NOTIFICATIONS.md (recent events)
-        │
-        ▼
+  â”œâ”€ SPARK_CONTEXT.md    (curated insights)
+  â”œâ”€ SPARK_ADVISORY.md   (Claude-generated recommendations)
+  â””â”€ SPARK_NOTIFICATIONS.md (recent events)
+        â”‚
+        â–¼
 Cron job (every 30 min) tells agent to read + act on advisories
-        │
-        ▼
+        â”‚
+        â–¼
 Agent evaluates, acts, reports feedback to spark_reports/
-        │
-        ▼
-bridge_worker ingests feedback → updates confidence → loop repeats
+        â”‚
+        â–¼
+bridge_worker ingests feedback â†’ updates confidence â†’ loop repeats
 ```
 
 ### The Self-Evolution Loop
 
 ```
-         ┌──────────────────────────────────────────────┐
-         │                                              │
-         ▼                                              │
-    Conversation ──→ Capture ──→ Patterns ──→ Claude   │
-                                Advisory               │
-                                    │                   │
-                                    ▼                   │
-                             Agent evaluates            │
-                              ├─ Act → Report outcome ──┘
-                              └─ Skip → Report reason ──┘
+         â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+         â”‚                                              â”‚
+         â–¼                                              â”‚
+    Conversation â”€â”€â†’ Capture â”€â”€â†’ Patterns â”€â”€â†’ Claude   â”‚
+                                Advisory               â”‚
+                                    â”‚                   â”‚
+                                    â–¼                   â”‚
+                             Agent evaluates            â”‚
+                              â”œâ”€ Act â†’ Report outcome â”€â”€â”˜
+                              â””â”€ Skip â†’ Report reason â”€â”€â”˜
 ```
 
 The `advice_action_rate` metric tracks what % of advice gets acted on. Target: >50%.
@@ -137,8 +137,8 @@ The `advice_action_rate` metric tracks what % of advice gets acted on. Target: >
 | Service | Port | Process | Critical Notes |
 |---------|------|---------|----------------|
 | sparkd | 8787 | `python sparkd.py` | HTTP event ingestion endpoint |
-| bridge_worker | — | `python bridge_worker.py` | **MUST set `SPARK_EMBEDDINGS=0`** or 8GB+ RAM leak |
-| openclaw_tailer | — | `python adapters/openclaw_tailer.py --include-subagents` | Tails session JSONL files |
+| bridge_worker | â€” | `python bridge_worker.py` | **MUST set `SPARK_EMBEDDINGS=0`** or 8GB+ RAM leak |
+| openclaw_tailer | â€” | `python adapters/openclaw_tailer.py --include-subagents` | Tails session JSONL files |
 | Spark Pulse | 8765 | `python -m uvicorn app:app` | **MUST use `-m uvicorn`** not `python app.py` |
 
 ### RAM Budget
@@ -229,7 +229,7 @@ Verification loop after any config change:
 - Check Claude auth: `claude -p "say OK"` (needs PTY)
 - Check rate limit: `Get-Content ~/.spark/llm_calls.json`
 - Check bridge heartbeat: `llm_advisory` should be `True`
-- Need ≥5 patterns or ≥2 merged insights to trigger
+- Need â‰¥5 patterns or â‰¥2 merged insights to trigger
 
 ### No events in queue
 - Verify tailer is running and watching the right session
@@ -244,7 +244,7 @@ Verification loop after any config change:
 2. For each recommendation: act, defer, or skip
 3. Report feedback via `lib/agent_feedback.py`:
    ```python
-   import sys; sys.path.insert(0, r"C:\Users\USER\Desktop\vibeship-spark-intelligence")
+   import sys; sys.path.insert(0, r"<REPO_ROOT>")
    from lib.agent_feedback import advisory_acted, advisory_skipped, learned_something
    ```
 4. Read `SPARK_CONTEXT.md` and `SPARK_NOTIFICATIONS.md`
@@ -268,3 +268,4 @@ learned_something("what you learned", "context", confidence=0.9)
 - Repo: `vibeforge1111/vibeship-spark-intelligence` (PRIVATE)
 - Push after every logical chunk
 - Today's commits: 14 (Phase 1-2, UTF-8 fixes, live advice, memory leak fix, LLM integration, feedback loop, docs)
+

@@ -1,4 +1,4 @@
-# Consciousness x Intelligence Alignment Task System
+﻿# Consciousness x Intelligence Alignment Task System
 
 Date: 2026-02-17  
 Status: Active backlog (cross-repo)
@@ -7,8 +7,8 @@ Status: Active backlog (cross-repo)
 
 This task system aligns:
 
-- `C:\Users\USER\Desktop\vibeship-spark-intelligence`
-- `C:\Users\USER\.openclaw\workspace-spark-speed`
+- `<REPO_ROOT>`
+- `<OPENCLAW_HOME>\workspace-spark-speed`
 
 Focus is architecture-doc coherence plus runtime contract wiring for Spark Consciousness and Spark Intelligence.
 
@@ -43,7 +43,7 @@ Evidence:
 
 - Most runtime modules write/read `~/.spark/*`.
 - `lib/spark_emotions.py` defaults to repo-local `.spark/emotion_state.json`.
-- Research brief explicitly notes missing deployed `C:\Users\USER\.spark\emotion_state.json` in `docs/spark-consciousness/emotion-memory-unity-research.md`.
+- Research brief explicitly notes missing deployed `<SPARK_HOME>\emotion_state.json` in `docs/spark-consciousness/emotion-memory-unity-research.md`.
 
 Impact:
 
@@ -53,8 +53,8 @@ Impact:
 
 Evidence:
 
-- `C:\Users\USER\.openclaw\workspace-spark-speed\docs\04-integration-contracts.md` has malformed markdown and stale schema shape.
-- `C:\Users\USER\.openclaw\workspace-spark-speed\SPARK_ADVISORY.md` is a transient session advisory snapshot, not a stable architecture contract.
+- `<OPENCLAW_HOME>\workspace-spark-speed\docs\04-integration-contracts.md` has malformed markdown and stale schema shape.
+- `<OPENCLAW_HOME>\workspace-spark-speed\SPARK_ADVISORY.md` is a transient session advisory snapshot, not a stable architecture contract.
 - `docs/SPARK_CHIPS_ARCHITECTURE.md` references `docs/CHIP_VIBECODING.md` which does not exist in active docs.
 - Predictive advisory blueprint/backlog docs reference module/test files not yet present, without a clear implemented-vs-planned status table.
 
@@ -146,3 +146,4 @@ For each task:
 2. Run targeted validation.
 3. Record result and evidence.
 4. Move to next task only if current task passes.
+

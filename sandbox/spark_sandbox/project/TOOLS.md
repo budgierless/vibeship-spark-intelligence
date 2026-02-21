@@ -1,4 +1,0 @@
-# TOOLS.md
-
-## Spark Learnings
-

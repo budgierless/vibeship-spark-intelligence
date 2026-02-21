@@ -1,4 +1,4 @@
-{
+﻿{
   "values": {
     "min_occurrences": 1,
     "min_occurrences_critical": 1,
@@ -42,7 +42,7 @@
   },
   "triggers": {
     "enabled": true,
-    "rules_file": "C:\\Users\\USER\\.spark\\trigger_rules.yaml"
+    "rules_file": "<USER_HOME>\\.spark\\trigger_rules.yaml"
   },
   "promotion": {
     "adapter_budgets": {
@@ -86,7 +86,7 @@
     "prefetch_inline_enabled": true,
     "prefetch_inline_max_jobs": 1,
     "delivery_stale_s": 600,
-    "advisory_text_repeat_cooldown_s": 900,
+    "advisory_text_repeat_cooldown_s": 300,
     "actionability_enforce": true,
     "force_programmatic_synth": false,
     "selective_ai_synth_enabled": true,
@@ -107,7 +107,21 @@
     "max_index_packets": 2000,
     "relaxed_effectiveness_weight": 2.0,
     "relaxed_low_effectiveness_threshold": 0.3,
-    "relaxed_low_effectiveness_penalty": 0.5
+    "relaxed_low_effectiveness_penalty": 0.5,
+    "relaxed_max_candidates": 6,
+    "packet_lookup_candidates": 6,
+    "packet_lookup_llm_enabled": false,
+    "packet_lookup_llm_provider": "minimax",
+    "packet_lookup_llm_timeout_s": 1.2,
+    "packet_lookup_llm_top_k": 3,
+    "packet_lookup_llm_min_candidates": 2,
+    "packet_lookup_llm_context_chars": 220,
+    "packet_lookup_llm_provider_url": "https://api.minimax.io/v1",
+    "packet_lookup_llm_model": "MiniMax-M2.5",
+    "obsidian_enabled": false,
+    "obsidian_auto_export": false,
+    "obsidian_export_max_packets": 300,
+    "obsidian_export_dir": ""
   },
   "advisory_prefetch": {
     "worker_enabled": false,
@@ -217,9 +231,9 @@
     "mode": "all"
   },
   "source_roles": {
-    "_doc": "Defines each source's PRIMARY job. Distillers are NOT advisory sources â€” measure them on pattern quality, not helpfulness.",
+    "_doc": "Defines each source's PRIMARY job. Distillers are NOT advisory sources Ã¢â‚¬â€ measure them on pattern quality, not helpfulness.",
     "distillers": {
-      "_doc": "These sources distill/funnel/learn â€” advisory helpfulness is NOT their metric",
+      "_doc": "These sources distill/funnel/learn Ã¢â‚¬â€ advisory helpfulness is NOT their metric",
       "cognitive": {
         "role": "learner",
         "metric": "insight_diversity_and_validation_rate",
@@ -237,7 +251,7 @@
       }
     },
     "direct_advisory": {
-      "_doc": "These sources exist TO advise â€” measure them on helpfulness",
+      "_doc": "These sources exist TO advise Ã¢â‚¬â€ measure them on helpfulness",
       "sources": [
         "semantic",
         "semantic-agentic",
@@ -433,6 +447,13 @@
     "enforce_meta_ralph_quality_band": true,
     "min_quality_samples": 50,
     "min_quality_rate": 0.3,
-    "max_quality_rate": 0.6
+    "max_quality_rate": 0.6,
+    "min_advisory_readiness_ratio": 0.4,
+    "min_advisory_freshness_ratio": 0.35,
+    "max_advisory_inactive_ratio": 0.4,
+    "min_advisory_avg_effectiveness": 0.35,
+    "max_advisory_store_queue_depth": 1200,
+    "max_advisory_top_category_concentration": 0.85
   }
 }
+

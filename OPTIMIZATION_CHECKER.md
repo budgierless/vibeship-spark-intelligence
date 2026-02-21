@@ -1,4 +1,4 @@
-# Spark Intelligence — Optimization Checker
+﻿# Spark Intelligence â€” Optimization Checker
 
 This file is the **post-optimization validation playbook**.
 
@@ -15,29 +15,29 @@ These optimizations were shipped as isolated commits so we can `git revert <sha>
 
 ### Current optimization batch (2026-02-14)
 
-1) `e4c1473` — Bound semantic retrieval log growth (rotation)
-2) `f094b59` — Avoid rewrite-on-append in capped advisor logs
-3) `437b383` — Fix queue lock release to not unlink when unacquired
-4) `2ad3d28` — Stream queue reads to avoid full-file loads
-5) `63729d7` — Reuse shared executor for bridge steps
-6) `e687f8a` — Reduce bridge cycle GC frequency (configurable)
-7) `2c4a31f` — Cache advisor prefilter tokenization
-8) `cca5c76` — Add sampling knob for semantic retrieval logging
-9) `7340030` — Add optimization checker playbook
-10) `3619dd4` — Docs: add rollback-map changelog to optimization checker
+1) `e4c1473` â€” Bound semantic retrieval log growth (rotation)
+2) `f094b59` â€” Avoid rewrite-on-append in capped advisor logs
+3) `437b383` â€” Fix queue lock release to not unlink when unacquired
+4) `2ad3d28` â€” Stream queue reads to avoid full-file loads
+5) `63729d7` â€” Reuse shared executor for bridge steps
+6) `e687f8a` â€” Reduce bridge cycle GC frequency (configurable)
+7) `2c4a31f` â€” Cache advisor prefilter tokenization
+8) `cca5c76` â€” Add sampling knob for semantic retrieval logging
+9) `7340030` â€” Add optimization checker playbook
+10) `3619dd4` â€” Docs: add rollback-map changelog to optimization checker
 
 ### Phase-1 behavior upgrades (2026-02-14)
-11) `7ceca23` — Advisory: require agreement before warning escalation (flagged)
-12) `9439361` — Pipeline: importance-sample low-priority events under backlog (flagged)
-13) `81d627e` — Pipeline: mine successful tool macros (flagged)
+11) `7ceca23` â€” Advisory: require agreement before warning escalation (flagged)
+12) `9439361` â€” Pipeline: importance-sample low-priority events under backlog (flagged)
+13) `81d627e` â€” Pipeline: mine successful tool macros (flagged)
 
 ### Phase-2 memory upgrades (2026-02-14)
-14) `fec25da` — Memory store: patchified (chunked) storage and parent dedupe (flagged)
-15) `7c05d8b` — Memory store: optional delta compaction for near-duplicate memories (flagged)
+14) `fec25da` â€” Memory store: patchified (chunked) storage and parent dedupe (flagged)
+15) `7c05d8b` â€” Memory store: optional delta compaction for near-duplicate memories (flagged)
 
 ### Phase-3 advisory intelligence (2026-02-14)
-16) `5c69b10` — Outcome predictor: lightweight risk scoring + advisory gate boost (flagged)
-17) `043e81b` — Tools: offline tune replay harness (safe suggest-by-default)
+16) `5c69b10` â€” Outcome predictor: lightweight risk scoring + advisory gate boost (flagged)
+17) `043e81b` â€” Tools: offline tune replay harness (safe suggest-by-default)
 
 Notes:
 - Prefer `git revert <sha>` (keeps history) instead of reset.
@@ -65,12 +65,12 @@ python -c "import json; from lib.service_control import service_status; print(js
 ```
 
 Expect:
-- `sparkd/dashboard/pulse/meta_ralph/bridge_worker/scheduler/watchdog` → `running: true`
+- `sparkd/dashboard/pulse/meta_ralph/bridge_worker/scheduler/watchdog` â†’ `running: true`
 - bridge_worker + scheduler heartbeats should be fresh (typically < 60s)
 
 ### API health endpoints
-- sparkd: `http://127.0.0.1:8787/health` → `ok`
-- sparkd status: `http://127.0.0.1:8787/status` → JSON, no obvious errors
+- sparkd: `http://127.0.0.1:8787/health` â†’ `ok`
+- sparkd status: `http://127.0.0.1:8787/status` â†’ JSON, no obvious errors
 
 ### Logs directory: last modified
 ```powershell
@@ -113,7 +113,7 @@ Look for:
 
 **Checks:**
 - `~/.spark/pipeline_metrics.json`:
-  - under backlog: processing_rate_eps ↑, queue_depth_after stabilizes
+  - under backlog: processing_rate_eps â†‘, queue_depth_after stabilizes
 - Watchdog log should not show new error loops.
 
 **Knobs:**
@@ -130,7 +130,7 @@ Look for:
 
 **Checks:**
 - Inspect `~/.spark/cognitive_insights.json` for entries starting with `Macro (often works):`.
-- Make sure cognitive insights don't explode in count (bounded by min_count + the “one per cycle” cap).
+- Make sure cognitive insights don't explode in count (bounded by min_count + the â€œone per cycleâ€ cap).
 
 **Knobs:**
 - `SPARK_MACROS_ENABLED=1|0`
@@ -153,7 +153,7 @@ Look for:
   ```powershell
   python -c "from lib.memory_store import retrieve; import json; print(json.dumps(retrieve('oauth', limit=6), indent=2)[:1200])"
   ```
-- Ensure results don’t include multiple `#pN` chunks from the same parent in the top-k.
+- Ensure results donâ€™t include multiple `#pN` chunks from the same parent in the top-k.
 
 **Knobs:**
 - `SPARK_MEMORY_PATCHIFIED=1|0`
@@ -163,10 +163,10 @@ Look for:
 ---
 
 #### L) Delta memory compaction (store updates as deltas when near-duplicate)
-**Change:** `SPARK_MEMORY_DELTAS=1` attempts to store only the “delta” when a new memory is very similar to a recent one (same scope/project/category).
+**Change:** `SPARK_MEMORY_DELTAS=1` attempts to store only the â€œdeltaâ€ when a new memory is very similar to a recent one (same scope/project/category).
 
 **What to look for:**
-- Repeated re-statements become short “Update (delta from …)” rows.
+- Repeated re-statements become short â€œUpdate (delta from â€¦)â€ rows.
 - Retrieval stays useful (deltas still understandable).
 
 **Checks:**
@@ -239,7 +239,7 @@ Look for:
 - nothing functional; only observability/logging.
 
 **Checks:**
-1) File doesn’t grow unbounded:
+1) File doesnâ€™t grow unbounded:
 ```powershell
 $path = "$env:USERPROFILE\.spark\logs\semantic_retrieval.jsonl"; if(Test-Path $path){ (Get-Item $path).Length } else { "missing" }
 ```
@@ -247,11 +247,11 @@ $path = "$env:USERPROFILE\.spark\logs\semantic_retrieval.jsonl"; if(Test-Path $p
 - `semantic_retrieval.jsonl.1`, `.2`, ...
 
 **Knobs:**
-- `~/.spark/tuneables.json` → `semantic.log_retrievals` (on/off)
-- `~/.spark/tuneables.json` → `semantic.log_max_bytes`, `semantic.log_backups`, `semantic.log_sample_rate`
+- `~/.spark/tuneables.json` â†’ `semantic.log_retrievals` (on/off)
+- `~/.spark/tuneables.json` â†’ `semantic.log_max_bytes`, `semantic.log_backups`, `semantic.log_sample_rate`
 
-**Symptom → likely cause:**
-- “semantic logs missing” → `log_sample_rate=0` or `log_retrievals=false`
+**Symptom â†’ likely cause:**
+- â€œsemantic logs missingâ€ â†’ `log_sample_rate=0` or `log_retrievals=false`
 
 ---
 
@@ -267,8 +267,8 @@ $path = "$env:USERPROFILE\.spark\logs\semantic_retrieval.jsonl"; if(Test-Path $p
 1) No CPU spikes attributable to log rewriting.
 2) `~/.spark/advisor/*.jsonl` still gets entries.
 
-**Symptom → likely cause:**
-- “advisor logs slightly over cap” → expected until compaction window.
+**Symptom â†’ likely cause:**
+- â€œadvisor logs slightly over capâ€ â†’ expected until compaction window.
 
 ---
 
@@ -288,8 +288,8 @@ Inspect:
 Get-ChildItem $env:USERPROFILE\.spark\queue -Force | Select-Object Name,LastWriteTime
 ```
 
-**Symptom → likely cause:**
-- “queue stops progressing + lock file persists” → dead process holding lock; restart bridge worker.
+**Symptom â†’ likely cause:**
+- â€œqueue stops progressing + lock file persistsâ€ â†’ dead process holding lock; restart bridge worker.
 
 ---
 
@@ -326,8 +326,8 @@ python -c "from lib.queue import get_queue_stats; import json; print(json.dumps(
 - `SPARK_BRIDGE_STEP_EXECUTOR_WORKERS` (default 4)
 - `SPARK_BRIDGE_STEP_TIMEOUT_S`
 
-**Symptom → likely cause:**
-- “bridge cycle stalls / timeouts increase” → a step is blocking and tying up workers; increase workers or investigate the blocking step.
+**Symptom â†’ likely cause:**
+- â€œbridge cycle stalls / timeouts increaseâ€ â†’ a step is blocking and tying up workers; increase workers or investigate the blocking step.
 
 ---
 
@@ -339,12 +339,12 @@ python -c "from lib.queue import get_queue_stats; import json; print(json.dumps(
 - memory could drift upward if GC is actually needed every cycle.
 
 **Checks:**
-1) Observe memory over time while running normally (15–60 min).
+1) Observe memory over time while running normally (15â€“60 min).
 2) If memory grows unbounded, temporarily set:
    - `SPARK_BRIDGE_GC_EVERY=1`
 
-**Symptom → likely cause:**
-- “RAM grows steadily after update” → GC too infrequent OR a real leak; revert this commit or set env override.
+**Symptom â†’ likely cause:**
+- â€œRAM grows steadily after updateâ€ â†’ GC too infrequent OR a real leak; revert this commit or set env override.
 
 ---
 
@@ -359,8 +359,8 @@ python -c "from lib.queue import get_queue_stats; import json; print(json.dumps(
 1) Advisor still returns advice.
 2) No exceptions in advisor path.
 
-**Symptom → likely cause:**
-- “advice seems irrelevant after edits” → bug in blob hashing/invalidation; revert this item.
+**Symptom â†’ likely cause:**
+- â€œadvice seems irrelevant after editsâ€ â†’ bug in blob hashing/invalidation; revert this item.
 
 ---
 
@@ -368,7 +368,7 @@ python -c "from lib.queue import get_queue_stats; import json; print(json.dumps(
 
 1) Confirm service health (`service_status`).
 2) Check `~/.spark/logs/watchdog.log` for restart loops.
-3) Check queue depth and whether it’s being consumed.
+3) Check queue depth and whether itâ€™s being consumed.
 4) If needed: roll back one optimization at a time via `git revert <sha>` (keep history).
 
 ---
@@ -385,7 +385,7 @@ git push origin main
 
 Prefer `revert` (keeps history) over `reset`.
 
-### chg-20260214-190329-repo-lightweight-untrack-large-gener — Repo lightweight: untrack large generated artifacts
+### chg-20260214-190329-repo-lightweight-untrack-large-gener â€” Repo lightweight: untrack large generated artifacts
 
 - Status: **PLANNED**
 - Started: `2026-02-14T19:03:29Z`
@@ -416,7 +416,7 @@ No issues; artifacts continue to be generated locally but not committed.
 
 - Mark verified: [ ]
 
-### chg-20260214-190824-advisory-quick-fallback-when-time-bu — Advisory: quick fallback when time budget is low
+### chg-20260214-190824-advisory-quick-fallback-when-time-bu â€” Advisory: quick fallback when time budget is low
 
 - Status: **PLANNED**
 - Started: `2026-02-14T19:08:24Z`
@@ -447,7 +447,7 @@ Monitor for increased delivered advisories with stable noise burden; ensure no s
 
 - Mark verified: [ ]
 
-### chg-20260214-192454-advisory-action-first-formatting-nex — Advisory: action-first formatting (Next check first line)
+### chg-20260214-192454-advisory-action-first-formatting-nex â€” Advisory: action-first formatting (Next check first line)
 
 - Status: **PLANNED**
 - Started: `2026-02-14T19:24:54Z`
@@ -480,10 +480,11 @@ Watch advice_followed rate + noise_burden; ensure no spam.
 
 #### Verification update: chg-20260214-192454-advisory-action-first-formatting-nex Day 0
 - Date (UTC): `2026-02-14`
-- Report: `C:/Users/USER/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-14_day0_chg-20260214-192454-advisory-action-first-formatting-nex.md`
+- Report: `<USER_HOME>/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-14_day0_chg-20260214-192454-advisory-action-first-formatting-nex.md`
 - Summary: sizes delta=+8362 bytes
 
 #### Verification update: chg-20260214-192454-advisory-action-first-formatting-nex Day 3
 - Date (UTC): `2026-02-17`
-- Report: `C:/Users/USER/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-17_day3_chg-20260214-192454-advisory-action-first-formatting-nex.md`
+- Report: `<USER_HOME>/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-17_day3_chg-20260214-192454-advisory-action-first-formatting-nex.md`
 - Summary: sizes delta=+60372784 bytes
+

@@ -40,6 +40,8 @@ telegram_token.txt
 *.swp
 *.swo
 *~
+.cursorrules
+.windsurfrules
 
 # Spark local data (user-specific)
 .spark/

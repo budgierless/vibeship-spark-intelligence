@@ -2160,20 +2160,6 @@ Moltbook adapter:
   - create_x_research_event(engagement) = 0 line=26 ctx=def create_x_research_event(
   - read_pending_research_events(limit) = 100 line=87 ctx=def read_pending_research_events(limit: int = 100) -> List[Dict[str, Any]]:
 
-### mcp-servers\x-twitter-mcp\src\x_twitter_mcp\http_server.py
-- env:
-  - PORT default=8081 cast=int line=60 ctx=port = int(os.environ.get("PORT", 8081))
-
-### mcp-servers\x-twitter-mcp\src\x_twitter_mcp\server.py
-- env:
-  - TWITTER_ACCESS_TOKEN default=None line=59 ctx=access_token=os.getenv("TWITTER_ACCESS_TOKEN"),
-  - TWITTER_ACCESS_TOKEN_SECRET default=None line=60 ctx=access_token_secret=os.getenv("TWITTER_ACCESS_TOKEN_SECRET"),
-  - TWITTER_API_KEY default=None line=57 ctx=consumer_key=os.getenv("TWITTER_API_KEY"),
-  - TWITTER_API_SECRET default=None line=58 ctx=consumer_secret=os.getenv("TWITTER_API_SECRET"),
-  - TWITTER_BEARER_TOKEN default=None line=61 ctx=bearer_token=os.getenv("TWITTER_BEARER_TOKEN")
-- constants:
-  - RATE_LIMITS = '{\n    "tweet_actions": {"limit": 300, "window": timedelta(minutes=15)},\n    "dm_actions": {"limit": 1000, "window": timedelta(minutes=15)},\n    "follow_actions": {"limit": 400, "window": timedelta(hours=24)},\n    "like_actions": {"limi... line=76 ctx=RATE_LIMITS = {
-
 ### mind_server.py
 - env:
   - MIND_MAX_BODY_BYTES default='262144' cast=int line=31 ctx=MAX_BODY_BYTES = int(os.environ.get("MIND_MAX_BODY_BYTES", "262144"))
@@ -2640,10 +2626,6 @@ Moltbook adapter:
 ### lib\x_research_events.py
 - lib.chips.runtime -> lib\chips\runtime.py
 - lib.queue -> lib\queue.py
-
-### mcp-servers\x-twitter-mcp\src\x_twitter_mcp\http_server.py
-- mcp-servers.x-twitter-mcp.src.x_twitter_mcp.middleware -> mcp-servers\x-twitter-mcp\src\x_twitter_mcp\middleware.py
-- mcp-servers.x-twitter-mcp.src.x_twitter_mcp.server -> mcp-servers\x-twitter-mcp\src\x_twitter_mcp\server.py
 
 ### scripts\daily_trend_research.py
 - lib.chip_merger -> lib\chip_merger.py

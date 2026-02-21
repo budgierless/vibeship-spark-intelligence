@@ -1,4 +1,4 @@
-# Meta-Ralph: The Quality Gate for Spark's Self-Evolution
+﻿# Meta-Ralph: The Quality Gate for Spark's Self-Evolution
 
 > "Evolve, don't disable. Roast until it's good."
 Navigation hub: `docs/GLOSSARY.md`
@@ -68,7 +68,7 @@ These rules govern ALL work on Spark Intelligence. They exist to ensure every im
 | # | Rule | Summary |
 |---|------|---------|
 | 6 | **Consult Architecture Before Changing** | Read Intelligence_Flow.md and Intelligence_Flow_Map.md first |
-| 7 | **Know the Real Data Flow** | Memorize: Sources → Queue → Bridge → Processing → Storage → Output |
+| 7 | **Know the Real Data Flow** | Memorize: Sources â†’ Queue â†’ Bridge â†’ Processing â†’ Storage â†’ Output |
 | 8 | **Verify Component Connectivity** | Before modifying, verify component is being called |
 | 9 | **Bridge Worker is Critical** | If bridge_worker isn't running, NOTHING gets processed |
 | 10 | **Layer-Aware Changes** | Identify which layer (Sources/Queue/Bridge/Processing/Storage/Output) |
@@ -89,20 +89,20 @@ These rules govern ALL work on Spark Intelligence. They exist to ensure every im
 
 ```
 Sources (observe.py, sparkd.py, adapters/*)
-    → Queue (~/.spark/queue/events.jsonl) [+trace_id]
-    → bridge_worker.py (every 60s)
-    → bridge_cycle.run_bridge_cycle
-    ├── memory_capture → cognitive_learner → cognitive_insights.json
-    ├── pattern_detection (aggregator → distiller → memory_gate) → eidos_store
-    ├── chips_router → chips_runtime → chip_insights/
-    └── context_sync → output_adapters → CLAUDE.md/AGENTS.md
+    â†’ Queue (~/.spark/queue/events.jsonl) [+trace_id]
+    â†’ bridge_worker.py (every 60s)
+    â†’ bridge_cycle.run_bridge_cycle
+    â”œâ”€â”€ memory_capture â†’ cognitive_learner â†’ cognitive_insights.json
+    â”œâ”€â”€ pattern_detection (aggregator â†’ distiller â†’ memory_gate) â†’ eidos_store
+    â”œâ”€â”€ chips_router â†’ chips_runtime â†’ chip_insights/
+    â””â”€â”€ context_sync â†’ output_adapters â†’ CLAUDE.md/AGENTS.md
 
 Advisor Feedback Loop (parallel path):
-    observe.py (PreToolUse) → advisor.get_advice() → advice given
-    observe.py (PostToolUse) → advisor.report_outcome() → meta_ralph.track_outcome()
-    meta_ralph → cognitive_learner (reliability updates)
+    observe.py (PreToolUse) â†’ advisor.get_advice() â†’ advice given
+    observe.py (PostToolUse) â†’ advisor.report_outcome() â†’ meta_ralph.track_outcome()
+    meta_ralph â†’ cognitive_learner (reliability updates)
 
-trace_id: Propagates from queue → EIDOS steps → outcomes → dashboards
+trace_id: Propagates from queue â†’ EIDOS steps â†’ outcomes â†’ dashboards
 ```
 
 ### Architecture Files (MUST READ)
@@ -124,7 +124,7 @@ trace_id: Propagates from queue → EIDOS steps → outcomes → dashboards
 | Meta-Ralph State | `~/.spark/meta_ralph/` | `get_meta_ralph().get_stats()` |
 | **Roast History** | `~/.spark/meta_ralph/roast_history.json` | Quality verdicts + scores |
 | **Outcome Tracking** | `~/.spark/meta_ralph/outcome_tracking.json` | Retrieval + outcome links |
-| **Advisor Effectiveness** | `~/.spark/advisor/effectiveness.json` | Advice → outcome correlation |
+| **Advisor Effectiveness** | `~/.spark/advisor/effectiveness.json` | Advice â†’ outcome correlation |
 | **Bridge Heartbeat** | `~/.spark/bridge_worker_heartbeat.json` | Bridge worker health |
 
 ### Mandatory Pre-Tuning Checklist
@@ -178,21 +178,21 @@ This methodology replaces the old "tune and test" approach with a reality-ground
 
 ```
 STEP 0: PIPELINE HEALTH     (MANDATORY - Blocks all other steps)
-   ↓
+   â†“
 STEP 0.5: META-RALPH QUALITY RATE (if 0.0% or suspicious)
-   ↓
+   â†“
 STEP 1: ARCHITECTURE REVIEW (Which components are you changing?)
-   ↓
+   â†“
 STEP 2: BASELINE           (Measure current reality from storage)
-   ↓
+   â†“
 STEP 3: CHANGE             (Make the improvement)
-   ↓
+   â†“
 STEP 4: VERIFY FLOW        (Did events flow through the change?)
-   ↓
+   â†“
 STEP 5: VERIFY STORAGE     (Did results persist?)
-   ↓
+   â†“
 STEP 6: VERIFY UTILIZATION (Are stored learnings being used?)
-   ↓
+   â†“
 STEP 7: DOCUMENT           (Record with evidence)
 ```
 
@@ -320,7 +320,7 @@ for r in get_meta_ralph().get_recent_roasts(5):
 
 ### Step 5: Verify Storage
 
-**Events processed ≠ Events stored. Verify storage explicitly.**
+**Events processed â‰  Events stored. Verify storage explicitly.**
 
 ```bash
 # Compare to baseline
@@ -395,9 +395,9 @@ print(f'Good outcomes: {stats.get(\"outcome_stats\", {}).get(\"good_outcomes\", 
 ### The Utilization Loop
 
 ```
-LEARN → STORE → RETRIEVE → USE → OUTCOME → VALIDATE
-   ↑                                           |
-   └───────────────────────────────────────────┘
+LEARN â†’ STORE â†’ RETRIEVE â†’ USE â†’ OUTCOME â†’ VALIDATE
+   â†‘                                           |
+   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
            (Good outcomes strengthen learning)
 ```
 
@@ -465,7 +465,7 @@ Instead of disabling components that produce bad output, we **evolve** them:
 
 > "Would a human find this useful to know next time?"
 
-If yes → Quality. If no → Primitive.
+If yes â†’ Quality. If no â†’ Primitive.
 
 ---
 
@@ -506,9 +506,9 @@ Each learning is scored on 5 dimensions (0-2 each):
 
 **Feedback Loop (Critical):**
 ```
-observe.py PreToolUse → advisor.get_advice() → advice logged
-observe.py PostToolUse → advisor.report_outcome() → meta_ralph.track_outcome()
-meta_ralph → cognitive_learner.update_reliability() → insight strengthened/weakened
+observe.py PreToolUse â†’ advisor.get_advice() â†’ advice logged
+observe.py PostToolUse â†’ advisor.report_outcome() â†’ meta_ralph.track_outcome()
+meta_ralph â†’ cognitive_learner.update_reliability() â†’ insight strengthened/weakened
 ```
 
 This loop is how Spark learns which advice actually helps.
@@ -556,7 +556,7 @@ This was the right conclusion - the threshold was appropriate, but most tool-use
 - reasoning: 2 (explicit "because")
 - specificity: 1 (domain-specific)
 - outcome_linked: 0 (no validation yet)
-Total: 7 ✓ PASSES
+Total: 7 âœ“ PASSES
 ```
 
 ### QUALITY (Score 6) - Passes (after tuning)
@@ -567,7 +567,7 @@ Total: 7 ✓ PASSES
 - reasoning: 2 (explicit "because")
 - specificity: 0 (generic advice)
 - outcome_linked: 1 (implied security outcome)
-Total: 6 ✓ PASSES
+Total: 6 âœ“ PASSES
 ```
 
 ### NEEDS_WORK (Score 3) - Held
@@ -578,7 +578,7 @@ Total: 6 ✓ PASSES
 - reasoning: 0 (no "why")
 - specificity: 1 (task-specific)
 - outcome_linked: 0 (no outcome)
-Total: 3 ✗ HELD - no reasoning, no novelty
+Total: 3 âœ— HELD - no reasoning, no novelty
 ```
 
 ### PRIMITIVE (Score 0) - Rejected
@@ -589,7 +589,7 @@ Total: 3 ✗ HELD - no reasoning, no novelty
 - reasoning: 0 (no "why")
 - specificity: 0 (generic)
 - outcome_linked: 0 (no outcome)
-Total: 0 ✗ REJECTED - pure tautology
+Total: 0 âœ— REJECTED - pure tautology
 ```
 
 ---
@@ -603,18 +603,18 @@ Meta-Ralph continuously analyzes its own performance and recommends adjustments:
 ```
 IF pass_rate < 10%:
     IF avg_needs_work_score >= threshold - 1:
-        → LOWER threshold (valuable items being blocked)
+        â†’ LOWER threshold (valuable items being blocked)
     ELSE:
-        → KEEP threshold (input is genuinely low-value)
+        â†’ KEEP threshold (input is genuinely low-value)
 
 ELIF pass_rate > 80% AND effectiveness < 50%:
-    → RAISE threshold (letting through noise)
+    â†’ RAISE threshold (letting through noise)
 
 ELIF needs_work_rate > 50%:
     IF avg_score close to threshold:
-        → CONSIDER_LOWERING
+        â†’ CONSIDER_LOWERING
     ELSE:
-        → KEEP (items are genuinely borderline)
+        â†’ KEEP (items are genuinely borderline)
 ```
 
 ### Sample-Size Guardrails
@@ -628,8 +628,8 @@ Meta-Ralph does not tune on tiny samples:
 
 The magic number isn't pass rate - it's whether blocked items are worth capturing:
 
-- Items scoring 2.5 when threshold is 4 → NOT worth lowering (1.5 points away)
-- Items scoring 3.5 when threshold is 4 → Worth considering (0.5 points away)
+- Items scoring 2.5 when threshold is 4 â†’ NOT worth lowering (1.5 points away)
+- Items scoring 3.5 when threshold is 4 â†’ Worth considering (0.5 points away)
 
 ---
 
@@ -675,7 +675,7 @@ Patterns that Meta-Ralph has learned to reject:
 - "Tool timeout: N"
 
 ### Operational Sequences
-- "Bash → Edit sequence"
+- "Bash â†’ Edit sequence"
 - "Read before Edit pattern"
 
 ---
@@ -740,7 +740,7 @@ Patterns that Meta-Ralph has learned to promote:
 
 ### Lessons Learned
 - "When [situation], [insight] because [outcome]"
-- "[Assumption] was wrong → [correction]"
+- "[Assumption] was wrong â†’ [correction]"
 
 ### Architectural Insights
 - "Why X over Y: [reasoning]"
@@ -775,7 +775,7 @@ curl http://localhost:8788/api/stats
 
 | Date | Change | Reason | Outcome |
 |------|--------|--------|---------|
-| 2026-02-05 | Made adapter budgets configurable via tuneables.json | Allow per‑LLM/IDE rules file caps without code changes | Budget policy now tuneable |
+| 2026-02-05 | Made adapter budgets configurable via tuneables.json | Allow perâ€‘LLM/IDE rules file caps without code changes | Budget policy now tuneable |
 | 2026-02-05 | Added adapter budget policy + auto-curation in promoter | Prevent rules files from bloating while keeping high-signal items | Promoted sections capped and deduped |
 | 2026-02-05 | Backfilled trace_id bindings + added trace fallbacks | Trace binding check failing across steps/evidence/outcomes | Trace binding now 0 missing |
 | 2026-02-05 | Fixed pipeline flow test queue shape + trace_id | `test_pipeline_health.py flow` broke after queue signature change | End-to-end flow test runs again |
@@ -797,43 +797,43 @@ curl http://localhost:8788/api/stats
 | 2026-02-03 | Persisted Minimal Mode state/history for UI | Minimal mode existed but was invisible across processes | Timeline + active state now visible in dashboards |
 | 2026-02-03 | Fixed pipeline health aggregator check to use persistent stats + backlog | Health check was reading non-existent keys, reporting false FAIL | Pattern detection now reported accurately (logged patterns + backlog) |
 | 2026-02-03 | Added sample-size guardrails + per-source quality checks | Avoid tuning on low data | More stable recommendations |
-| 2026-02-03 | quality_threshold 7→5→4 | Over-filtering (2.8% pass rate) | Pass rate 8.1%, quality maintained |
-| 2026-02-03 | needs_work_threshold 4→2 | Proportional adjustment | Better distribution |
+| 2026-02-03 | quality_threshold 7â†’5â†’4 | Over-filtering (2.8% pass rate) | Pass rate 8.1%, quality maintained |
+| 2026-02-03 | needs_work_threshold 4â†’2 | Proportional adjustment | Better distribution |
 | 2026-02-03 | Added dynamic recommendations | Hardcoded values were stale | Recommendations now use current threshold |
 | 2026-02-03 | Tightened "items_worth_capturing" | Was recommending LOWER for 2.5 avg items | Now correctly recommends KEEP |
-| 2026-02-03 | Enhanced cognitive detection | Filter accuracy only 70% - missing "remember this", decisions | Filter accuracy 100%, pass rate 8%→23% |
+| 2026-02-03 | Enhanced cognitive detection | Filter accuracy only 70% - missing "remember this", decisions | Filter accuracy 100%, pass rate 8%â†’23% |
 | 2026-02-03 | Added priority/decision boosts | "Remember this" not boosting score | Priority items get +2 novelty, decisions get +1 |
 | 2026-02-03 | Expanded reasoning patterns | Only explicit "because" detected | Now detects "for better X", "to avoid Y" |
 | 2026-02-03 | Added cognitive extraction hook | Only capturing tool events (94%) | Now extracts cognitive signals from user prompts |
-| 2026-02-03 | Integrated importance scorer | Pattern matching alone missed semantic value | Pass rate 8.1%→26.4%, dual scoring system |
+| 2026-02-03 | Integrated importance scorer | Pattern matching alone missed semantic value | Pass rate 8.1%â†’26.4%, dual scoring system |
 | 2026-02-03 | Fixed decision detection | "use/using" matched primitives like "use standard approach" | Now only matches "decided/chose/went with/switched to" |
 | 2026-02-03 | Validated quality items | Need to verify learnings are genuinely useful | 100% of passed items are human-valuable |
 | 2026-02-03 | Fixed primitive patterns | 65 items stuck in needs_work (score 2-3) were operational | Added patterns for "Recurring X errors", "File modified:", fixed "use standard" regex |
 | 2026-02-03 | **SESSION 2 START** | --- | --- |
-| 2026-02-03 | Fixed persistence pipeline | Quality items passed Meta-Ralph but were never stored (learnings_stored=0) | Insights now stored in cognitive_learner (0→1511+) |
+| 2026-02-03 | Fixed persistence pipeline | Quality items passed Meta-Ralph but were never stored (learnings_stored=0) | Insights now stored in cognitive_learner (0â†’1511+) |
 | 2026-02-03 | Enabled auto-refinement | needs_work items (70) stuck in limbo, refinements_made=0 | Refined versions re-scored, ~75% convert to quality |
 | 2026-02-03 | Fixed remember/don't forget refinement | Refinement lost "remember" signal, score dropped | Now converts to "Always X because it prevents issues" |
 | 2026-02-03 | Integrated outcome tracking | outcome_stats all zeros, no feedback loop | Advisor now tracks retrievals + outcomes in Meta-Ralph |
 | 2026-02-03 | Connected Advisor to observe hook | Advisor never called during tool execution | PreToolUse gets advice, PostToolUse reports outcomes |
 | 2026-02-03 | Fixed track_outcome() | Outcomes tracked but acted_on never set True | Now properly sets acted_on=True |
-| 2026-02-03 | Lowered promotion thresholds | Insights not reaching CLAUDE.md fast enough | DEFAULT_PROMOTION_THRESHOLD 0.7→0.65, MIN_VALIDATIONS 3→2 |
+| 2026-02-03 | Lowered promotion thresholds | Insights not reaching CLAUDE.md fast enough | DEFAULT_PROMOTION_THRESHOLD 0.7â†’0.65, MIN_VALIDATIONS 3â†’2 |
 | 2026-02-03 | Connected pattern aggregator | Aggregator had 0 events, pattern detection not working | observe.py now calls aggregator.process_event() |
 | 2026-02-03 | **SESSION 3 START** | --- | --- |
 | 2026-02-03 | Domain detection expansion | Only 3 domains had triggers | 10 domains with 170+ triggers (game_dev, fintech, marketing, etc.) |
 | 2026-02-03 | Distillation quality | Distillations lacked reasoning | Added _extract_reasoning() for "because" clauses |
-| 2026-02-03 | Advisor threshold tuning | Advice not surfacing | MIN_RELIABILITY 0.6→0.5, MAX_ITEMS 5→8 |
+| 2026-02-03 | Advisor threshold tuning | Advice not surfacing | MIN_RELIABILITY 0.6â†’0.5, MAX_ITEMS 5â†’8 |
 | 2026-02-03 | Importance scorer expansion | Missing domain keywords | Added decouple, batch, job, queue, scheduler weights |
-| 2026-02-03 | Chips auto-activation | Threshold too high | auto_activate_threshold 0.7→0.5, get_active_chips() added |
+| 2026-02-03 | Chips auto-activation | Threshold too high | auto_activate_threshold 0.7â†’0.5, get_active_chips() added |
 | 2026-02-03 | **CRITICAL FIX**: Code content extraction | Write/Edit content not analyzed for cognitive signals | Now extracts REMEMBER:, PRINCIPLE:, CORRECTION:, etc. from code |
 | 2026-02-03 | Importance patterns expansion | REMEMBER:, CORRECTION:, PRINCIPLE: not scoring as CRITICAL | Added 5 new CRITICAL patterns for explicit learning markers |
 | 2026-02-03 | **SESSION 4 START** | --- | --- |
-| 2026-02-03 | **METHODOLOGY OVERHAUL**: Reality-Grounded Iteration | Test suite tested scoring in isolation, not pipeline flow | New methodology: Pipeline Health → Architecture Review → Baseline → Change → Verify Flow → Verify Storage → Verify Utilization |
-| 2026-02-03 | Created test_pipeline_health.py | No automated check for pipeline operational status | Tests all layers from Intelligence_Flow.md (Sources → Queue → Bridge → Processing → Output) |
+| 2026-02-03 | **METHODOLOGY OVERHAUL**: Reality-Grounded Iteration | Test suite tested scoring in isolation, not pipeline flow | New methodology: Pipeline Health â†’ Architecture Review â†’ Baseline â†’ Change â†’ Verify Flow â†’ Verify Storage â†’ Verify Utilization |
+| 2026-02-03 | Created test_pipeline_health.py | No automated check for pipeline operational status | Tests all layers from Intelligence_Flow.md (Sources â†’ Queue â†’ Bridge â†’ Processing â†’ Output) |
 | 2026-02-03 | Added Rule 3: Pipeline Health Before Tuning | Session 2 had perfect scoring but broken pipeline (learnings_stored=0) | MANDATORY health check blocks tuning if pipeline unhealthy |
 | 2026-02-03 | Added Rule 4: Anti-Hallucination | Claims based on terminal output instead of storage | Must verify from persistent storage, not ephemeral logs |
-| 2026-02-03 | Added Learning Utilization Tracking | Stored learnings might never be used | Track retrieval → acted-on → outcome feedback loop |
+| 2026-02-03 | Added Learning Utilization Tracking | Stored learnings might never be used | Track retrieval â†’ acted-on â†’ outcome feedback loop |
 | 2026-02-03 | Updated Improvement Workflow | Old workflow skipped pipeline verification | 7-step workflow starting with mandatory health check |
-| 2026-02-03 | **FIX**: Case-insensitive tool name matching | Advice logged as `task` but looked up as `Task` - no match | `_get_recent_advice_entry` now uses case-insensitive comparison, acted_on rate 0.5% → 1.0%+ |
+| 2026-02-03 | **FIX**: Case-insensitive tool name matching | Advice logged as `task` but looked up as `Task` - no match | `_get_recent_advice_entry` now uses case-insensitive comparison, acted_on rate 0.5% â†’ 1.0%+ |
 
 ---
 
@@ -874,7 +874,7 @@ curl http://localhost:8788/api/stats
 | Component | Status | Evidence |
 |-----------|--------|----------|
 | Hooks installation | WORKING | `~/.claude/settings.json` exists with all 3 hooks |
-| Bridge worker | RESTARTED | Heartbeat was 39050s stale → now 17s fresh |
+| Bridge worker | RESTARTED | Heartbeat was 39050s stale â†’ now 17s fresh |
 | Outcome tracking | WORKING | `track_outcome()` being called via advisor |
 | Pattern aggregator | WORKING | 586 patterns in log file |
 | Advisor effectiveness | FIXED | Added atomic write with read-modify-write pattern |
@@ -892,12 +892,12 @@ curl http://localhost:8788/api/stats
 
 | Flow Map Component | Code Status | Notes |
 |-------------------|-------------|-------|
-| hooks_observe → queue | CONNECTED | observe.py enqueues to lib/queue.py |
-| queue → bridge_worker | CONNECTED | bridge_worker.py runs every 60s |
-| bridge_cycle → cognitive_learner | CONNECTED | Called in run_bridge_cycle() |
-| bridge_cycle → pattern_detection | CONNECTED | aggregator.process_event() called |
-| advisor → meta_ralph | CONNECTED | track_retrieval/track_outcome integrated |
-| meta_ralph → cognitive | CONNECTED | Feedback loop closes |
+| hooks_observe â†’ queue | CONNECTED | observe.py enqueues to lib/queue.py |
+| queue â†’ bridge_worker | CONNECTED | bridge_worker.py runs every 60s |
+| bridge_cycle â†’ cognitive_learner | CONNECTED | Called in run_bridge_cycle() |
+| bridge_cycle â†’ pattern_detection | CONNECTED | aggregator.process_event() called |
+| advisor â†’ meta_ralph | CONNECTED | track_retrieval/track_outcome integrated |
+| meta_ralph â†’ cognitive | CONNECTED | Feedback loop closes |
 | EIDOS hooks integration | PARTIAL | eidos/integration.py exists but needs verification |
 | mind_bridge | OPTIONAL | Requires Mind Lite running on `SPARK_MIND_PORT` (default 8080) |
 
@@ -1007,7 +1007,7 @@ Updated Rule 13 to explicitly require META_RALPH.md synchronization:
 
 | # | Task | What It Does |
 |---|------|--------------|
-| 8 | TTL 5→15 min | Longer tasks now link to outcomes |
+| 8 | TTL 5â†’15 min | Longer tasks now link to outcomes |
 | 9 | Actionability scoring | Action verbs boost, vague text penalized |
 | 10 | Source quality boost | EIDOS (1.4x), self_awareness (1.3x) rank higher |
 | 11 | Insight-level outcomes | Individual advice tracks good/bad outcomes |
@@ -1046,8 +1046,8 @@ Updated Rule 13 to explicitly require META_RALPH.md synchronization:
 
 | # | Task | Status | Result |
 |---|------|--------|--------|
-| 16 | Filter metadata patterns from bank advice | ✅ | Implemented `_is_metadata_pattern()` method |
-| 17 | Investigate Mind source returning 0 advice | ✅ | Expected behavior - Mind API not running |
+| 16 | Filter metadata patterns from bank advice | âœ… | Implemented `_is_metadata_pattern()` method |
+| 17 | Investigate Mind source returning 0 advice | âœ… | Expected behavior - Mind API not running |
 
 **Metadata Pattern Filter:**
 
@@ -1255,7 +1255,7 @@ Analysis of META_RALPH.md revealed that the iteration methodology was:
    ```
 
 5. **Added Learning Utilization Tracking**
-   - Track: Learn → Store → Retrieve → Use → Outcome → Validate
+   - Track: Learn â†’ Store â†’ Retrieve â†’ Use â†’ Outcome â†’ Validate
    - Close the feedback loop completely
 
 **Key Insight:**
@@ -1323,7 +1323,7 @@ if tool_name in ("Write", "Edit") and isinstance(tool_input, dict):
 
 **Live Test Environment Created:**
 
-Location: `C:\Users\USER\Desktop\spark-live-test`
+Location: `<SPARK_LIVE_TEST_DIR>`
 
 Files:
 - `SPARK_MONITOR.py` - Real-time learning observation
@@ -1360,7 +1360,7 @@ The project exercises 5 domains (game_dev, architecture, orchestration, debuggin
 - **Root Cause:** After Meta-Ralph approved an item, nothing called `cognitive.add_insight()`
 - **Fix:** Added storage call with category detection based on signals
 - **Commit:** 546c965
-- **Result:** Insights now persist (tested: 1509 → 1511 after test)
+- **Result:** Insights now persist (tested: 1509 â†’ 1511 after test)
 
 #### 2. Auto-Refinement Activation
 - **Problem:** 70 items stuck in needs_work, refinements_made=0
@@ -1382,10 +1382,10 @@ The project exercises 5 domains (game_dev, architecture, orchestration, debuggin
 #### 4. Promotion Threshold Adjustment
 - **Problem:** Insights not reaching CLAUDE.md fast enough
 - **Fix:**
-  - DEFAULT_PROMOTION_THRESHOLD: 0.7 → 0.65
-  - DEFAULT_MIN_VALIDATIONS: 3 → 2
+  - DEFAULT_PROMOTION_THRESHOLD: 0.7 â†’ 0.65
+  - DEFAULT_MIN_VALIDATIONS: 3 â†’ 2
 - **Commit:** 2b830c3
-- **Result:** Faster path from insight → permanent documentation
+- **Result:** Faster path from insight â†’ permanent documentation
 
 #### 5. Pattern Aggregator Connection
 - **Problem:** Aggregator had 0 events, pattern detection not working
@@ -1429,7 +1429,7 @@ The project exercises 5 domains (game_dev, architecture, orchestration, debuggin
 
 **Problem:** Decision detection was matching "use/using" which caught primitives.
 
-**Before:** "For X tasks, use standard approach" → counted as decision (wrong)
+**Before:** "For X tasks, use standard approach" â†’ counted as decision (wrong)
 **After:** Only matches explicit decisions: "decided to", "chose to", "went with", "switched to"
 
 **Impact:** Decision count dropped from 42 to 4 (all genuine decisions)
@@ -1439,7 +1439,7 @@ The project exercises 5 domains (game_dev, architecture, orchestration, debuggin
 ## The Ralph Loop
 
 ```
-PROPOSE → ROAST → REFINE → TEST → VERIFY → META-ROAST → repeat
+PROPOSE â†’ ROAST â†’ REFINE â†’ TEST â†’ VERIFY â†’ META-ROAST â†’ repeat
 ```
 
 Meta-Ralph doesn't just filter - it improves. Every rejected learning is an opportunity to:
@@ -1480,7 +1480,7 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 | Mind Persistence | 32,335+ | Cross-session memory |
 | **Aggregator Stats** | **Fixed** | Now shows persistent counts |
 | **Bank Metadata Filter** | **Working** | Filters key-value patterns |
-| **Advisor Feedback Loop** | **CONNECTED** | track_retrieval → track_outcome → reliability |
+| **Advisor Feedback Loop** | **CONNECTED** | track_retrieval â†’ track_outcome â†’ reliability |
 | **Meta-Ralph Dashboard** | **NEW** | Port `SPARK_META_RALPH_PORT` (default 8586), dedicated quality analyzer |
 | **Bridge Worker** | **RUNNING** | Heartbeat fresh (verified Session 11) |
 
@@ -1489,7 +1489,7 @@ The goal isn't to block things - it's to **evolve** the entire system until ever
 **Completed:**
 - Architecture verification (all documented components traced to code)
 - Meta-Ralph Quality Analyzer dashboard built (port `SPARK_META_RALPH_PORT`, default 8586)
-- Bridge worker restarted (was stale 39050s → now fresh)
+- Bridge worker restarted (was stale 39050s â†’ now fresh)
 - Documentation aligned with actual implementation
 - 9 files committed (atomic advisor writes, etc.)
 
@@ -1556,19 +1556,19 @@ r"tool timeout"                       # New pattern
 
 ## Future Improvements Roadmap
 
-### ✅ Phase 1: Skill Coverage (COMPLETE)
+### âœ… Phase 1: Skill Coverage (COMPLETE)
 
 **Status:** All 10 domains now have triggers (170+ total)
 - game_dev, fintech, marketing, product, orchestration
 - architecture, agent_coordination, team_management, ui_ux, debugging
 
-### ✅ Phase 2: Code Content Extraction (COMPLETE)
+### âœ… Phase 2: Code Content Extraction (COMPLETE)
 
 **Status:** Write/Edit content now analyzed for cognitive signals
 - Added extraction in observe.py PostToolUse
 - 5 new CRITICAL patterns (REMEMBER:, CORRECTION:, PRINCIPLE:, etc.)
 
-### 🔄 Phase 3: Outcome Tracking (In Progress)
+### ðŸ”„ Phase 3: Outcome Tracking (In Progress)
 
 **Current:** Infrastructure exists but acted_on outcomes = 0
 
@@ -1578,18 +1578,18 @@ r"tool timeout"                       # New pattern
 3. Use outcome data to adjust learning reliability
 4. Demote learnings with consistently bad outcomes
 
-### 📋 Phase 4: Auto-Refinement Enhancement
+### ðŸ“‹ Phase 4: Auto-Refinement Enhancement
 
 **Current:** Refinement logic exists, refinements_made = 0
 
-**Target:** 80% needs_work → quality conversion
+**Target:** 80% needs_work â†’ quality conversion
 
 **Actions:**
 1. Trigger refinement more aggressively
 2. Add better refinement templates
 3. Track which refinement strategies work
 
-### 📋 Phase 5: Cross-Session Learning
+### ðŸ“‹ Phase 5: Cross-Session Learning
 
 **Goal:** Learnings compound across sessions and projects
 
@@ -1599,7 +1599,7 @@ r"tool timeout"                       # New pattern
 3. Create domain expertise summaries
 4. Track what works across different project types
 
-### 📋 Phase 6: Predictive Intelligence
+### ðŸ“‹ Phase 6: Predictive Intelligence
 
 **Goal:** Anticipate what the user needs before they ask
 
@@ -1622,17 +1622,17 @@ r"tool timeout"                       # New pattern
 
 ### What's Now Working (Session 11)
 
-1. ✅ **Advisor feedback loop verified** - track_retrieval → track_outcome connected
-2. ✅ **Bridge worker running** - Heartbeat fresh, pipeline processing
-3. ✅ **Hooks installed** - All 3 hooks in ~/.claude/settings.json
-4. ✅ **Meta-Ralph dashboard** - Dedicated quality analyzer on port `SPARK_META_RALPH_PORT` (default 8586)
-5. ✅ **Architecture documentation** - META_RALPH.md aligned with code
+1. âœ… **Advisor feedback loop verified** - track_retrieval â†’ track_outcome connected
+2. âœ… **Bridge worker running** - Heartbeat fresh, pipeline processing
+3. âœ… **Hooks installed** - All 3 hooks in ~/.claude/settings.json
+4. âœ… **Meta-Ralph dashboard** - Dedicated quality analyzer on port `SPARK_META_RALPH_PORT` (default 8586)
+5. âœ… **Architecture documentation** - META_RALPH.md aligned with code
 
 ### Remaining Opportunities
 
 1. **Outcome tracking refinement** - Currently 0 acted_on outcomes recorded
 2. **Cross-project learning** - Insights don't yet transfer between project types
-3. **Auto-refinement rate** - Could improve needs_work → quality conversion
+3. **Auto-refinement rate** - Could improve needs_work â†’ quality conversion
 
 ### Meta-Ralph's Self-Assessment
 
@@ -1753,8 +1753,8 @@ python tests/test_cognitive_capture.py deep
 ```
 0. PIPELINE HEALTH (MANDATORY - BLOCKS ALL OTHER STEPS)
    python tests/test_pipeline_health.py
-   → If critical failures, STOP and fix pipeline first
-   → Do NOT proceed to tuning with broken pipeline
+   â†’ If critical failures, STOP and fix pipeline first
+   â†’ Do NOT proceed to tuning with broken pipeline
 
 1. ARCHITECTURE REVIEW
    - Read Intelligence_Flow_Map.md
@@ -1763,7 +1763,7 @@ python tests/test_cognitive_capture.py deep
 
 2. BASELINE
    python tests/test_cognitive_capture.py baseline
-   → Measure FROM STORAGE, not terminal
+   â†’ Measure FROM STORAGE, not terminal
 
 3. TUNE
    - Adjust thresholds in lib/meta_ralph.py
@@ -1772,11 +1772,11 @@ python tests/test_cognitive_capture.py deep
 
 4. VERIFY FLOW
    python tests/test_pipeline_health.py flow
-   → Confirm events flow through your change
+   â†’ Confirm events flow through your change
 
 5. VERIFY STORAGE
    python tests/test_cognitive_capture.py compare
-   → Check storage delta, not just scoring
+   â†’ Check storage delta, not just scoring
 
 6. VERIFY UTILIZATION
    - Are stored learnings being retrieved?
@@ -1784,7 +1784,7 @@ python tests/test_cognitive_capture.py deep
 
 7. DOCUMENT WITH EVIDENCE
    - Pipeline health: PASSED
-   - Storage before/after: X → Y
+   - Storage before/after: X â†’ Y
    - Utilization stats: Z retrievals, W outcomes
 ```
 
@@ -1840,3 +1840,4 @@ Tests that cognitive samples pass and operational samples fail:
 - "Pattern found: Edit follows Read"
 
 **Target:** 100% accuracy (currently achieved)
+

@@ -1420,15 +1420,34 @@ class CognitiveLearner:
             )
 
             # Word-matching: require 2+ meaningful word matches
+            # Scan more of the insight text (first 30 words) for better recall
             word_hit = False
+            word_match_count = 0
             if not direct_hit:
-                words = ii.split()[:12]
-                meaningful_words = [
-                    w for w in words
-                    if len(w) >= 4 and w.rstrip(".,;:!?()") not in self._RETRIEVAL_STOPWORDS
-                ]
-                matching_count = sum(1 for w in meaningful_words if w in context_lower)
-                word_hit = matching_count >= 2
+                words = ii.split()[:30]
+                meaningful_words = set(
+                    w.rstrip(".,;:!?()'\"") for w in words
+                    if len(w) >= 4 and w.rstrip(".,;:!?()'\"") not in self._RETRIEVAL_STOPWORDS
+                )
+                # Also extract meaningful words from query for bidirectional matching
+                query_words = set(
+                    w.rstrip(".,;:!?()'\"") for w in context_lower.split()
+                    if len(w) >= 4 and w.rstrip(".,;:!?()'\"") not in self._RETRIEVAL_STOPWORDS
+                )
+                # Basic suffix stemming for better recall
+                def _stem(w: str) -> str:
+                    for sfx in ("tion", "sion", "ment", "ness", "able", "ible", "ying", "ling", "ting", "ning", "ring", "ding", "ling", "ing", "ied", "ies", "ted", "ely", "ful", "ous", "ive", "ity", "ize", "ise", "ers", "ure", "ual", "ial", "ent", "ant", "ist", "ism", "age", "ary", "ory", "ery", "lly", "ily", "ed", "ly", "er", "es"):
+                        if w.endswith(sfx) and len(w) - len(sfx) >= 3:
+                            return w[:-len(sfx)]
+                    return w
+                stemmed_insight = {_stem(w) for w in meaningful_words}
+                stemmed_query = {_stem(w) for w in query_words}
+                word_match_count = len(meaningful_words & query_words) + len(stemmed_insight & stemmed_query - (meaningful_words & query_words))
+                # 2+ matches for normal insights, 1 match for high-reliability ones
+                word_hit = (
+                    word_match_count >= 2 or
+                    (word_match_count >= 1 and insight.reliability >= 0.8)
+                )
 
             if not direct_hit and not word_hit:
                 continue
@@ -1439,7 +1458,8 @@ class CognitiveLearner:
             if context_lower and context_lower in ii:
                 match_score += 0.7
             if word_hit and not direct_hit:
-                match_score += 0.3  # Word matches score lower than direct
+                # Scale word match score by how many words matched (more = better)
+                match_score += 0.2 + min(0.3, word_match_count * 0.08)
 
             relevant.append((match_score, key, insight))
 

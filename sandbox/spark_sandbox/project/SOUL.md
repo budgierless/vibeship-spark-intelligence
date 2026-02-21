@@ -1,4 +1,0 @@
-# SOUL.md
-
-## Spark Learnings
-

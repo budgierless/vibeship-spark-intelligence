@@ -1567,7 +1567,13 @@ def on_pre_tool(
         if not gate_result.emitted:
             if packet_id:
                 try:
-                    record_packet_usage(packet_id, emitted=False, route=route)
+                    record_packet_usage(
+                        packet_id,
+                        emitted=False,
+                        route=route,
+                        trace_id=resolved_trace_id,
+                        tool_name=tool_name,
+                    )
                 except Exception as e:
                     log_debug("advisory_engine", "AE_PKT_USAGE_NO_EMIT", e)
 
@@ -2034,7 +2040,13 @@ def on_pre_tool(
         if repeat_meta["repeat"]:
             if packet_id:
                 try:
-                    record_packet_usage(packet_id, emitted=False, route=f"{route}_repeat_suppressed")
+                    record_packet_usage(
+                        packet_id,
+                        emitted=False,
+                        route=f"{route}_repeat_suppressed",
+                        trace_id=resolved_trace_id,
+                        tool_name=tool_name,
+                    )
                 except Exception as e:
                     log_debug("advisory_engine", "AE_PKT_USAGE_REPEAT_SUPPRESS_FAILED", e)
             _record_advisory_gate_drop(
@@ -2129,171 +2141,177 @@ def on_pre_tool(
                 effective_text = " ".join(fragments)
         effective_action_meta = _ensure_actionability(effective_text, tool_name, task_plane) if emitted else {"text": effective_text, "added": False, "command": ""}
         effective_text = str(effective_action_meta.get("text") or effective_text)
-            if emitted:
-                shown_ids = [d.advice_id for d in gate_result.emitted]
-                dedupe_scope = _dedupe_scope_key(session_id)
-                session_lineage = _session_lineage(session_id)
-                mark_advice_shown(
-                    state,
-                    shown_ids,
-                    tool_name=tool_name,
-                    task_phase=state.task_phase,
-                )
-            suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
-            # Track retrieval only for delivered advice items (strict attribution).
-            try:
-                from .meta_ralph import get_meta_ralph
+        if emitted:
+            shown_ids = [d.advice_id for d in gate_result.emitted]
+            dedupe_scope = _dedupe_scope_key(session_id)
+            session_lineage = _session_lineage(session_id)
+            mark_advice_shown(
+                state,
+                shown_ids,
+                tool_name=tool_name,
+                task_phase=state.task_phase,
+            )
+        suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
+        # Track retrieval only for delivered advice items (strict attribution).
+        try:
+            from .meta_ralph import get_meta_ralph
 
-                ralph = get_meta_ralph()
-                for adv in list(emitted_advice or [])[:4]:
-                    ralph.track_retrieval(
-                        str(getattr(adv, "advice_id", "") or ""),
-                        str(getattr(adv, "text", "") or ""),
-                        insight_key=str(getattr(adv, "insight_key", "") or "") or None,
-                        source=str(getattr(adv, "source", "") or "") or None,
-                        trace_id=resolved_trace_id,
-                    )
-            except Exception:
-                pass
-            # Write delivery-backed recent_advice entry for post-tool outcome linkage.
-            try:
-                from .advisor import record_recent_delivery
-
-                record_recent_delivery(
-                    tool=tool_name,
-                    advice_list=list(emitted_advice or [])[:4],
+            ralph = get_meta_ralph()
+            for adv in list(emitted_advice or [])[:4]:
+                ralph.track_retrieval(
+                    str(getattr(adv, "advice_id", "") or ""),
+                    str(getattr(adv, "text", "") or ""),
+                    insight_key=str(getattr(adv, "insight_key", "") or "") or None,
+                    source=str(getattr(adv, "source", "") or "") or None,
                     trace_id=resolved_trace_id,
-                    route=route,
-                    delivered=True,
-                    categories=[getattr(adv, "category", None) for adv in list(emitted_advice or [])[:4]],
-                    advisory_readiness=[getattr(adv, "advisory_readiness", 0.0) for adv in list(emitted_advice or [])[:4]],
-                    advisory_quality=[
-                        q if isinstance(q, dict) else {}
-                        for q in [getattr(adv, "advisory_quality", None) for adv in list(emitted_advice or [])[:4]]
-                    ],
                 )
-            except Exception:
-                pass
+        except Exception:
+            pass
+        # Write delivery-backed recent_advice entry for post-tool outcome linkage.
+        try:
+            from .advisor import record_recent_delivery
 
-            # Update global low-authority dedupe log on successful WHISPER/NOTE emission.
-            try:
-                top_decision = gate_result.emitted[0] if gate_result.emitted else None
-                top_authority = str(getattr(top_decision, "authority", "") or "")
-                top_advice_id = str(getattr(top_decision, "advice_id", "") or "")
-                if (
-                    LOW_AUTH_GLOBAL_DEDUPE_ENABLED
-                    and top_authority in {"whisper", "note"}
-                    and top_advice_id
-                    and not str(session_id or "").startswith("advisory-bench-")
-                ):
+            record_recent_delivery(
+                tool=tool_name,
+                advice_list=list(emitted_advice or [])[:4],
+                trace_id=resolved_trace_id,
+                route=route,
+                delivered=True,
+                categories=[getattr(adv, "category", None) for adv in list(emitted_advice or [])[:4]],
+                advisory_readiness=[getattr(adv, "advisory_readiness", 0.0) for adv in list(emitted_advice or [])[:4]],
+                advisory_quality=[
+                    q if isinstance(q, dict) else {}
+                    for q in [getattr(adv, "advisory_quality", None) for adv in list(emitted_advice or [])[:4]]
+                ],
+            )
+        except Exception:
+            pass
+
+        # Update global low-authority dedupe log on successful WHISPER/NOTE emission.
+        try:
+            top_decision = gate_result.emitted[0] if gate_result.emitted else None
+            top_authority = str(getattr(top_decision, "authority", "") or "")
+            top_advice_id = str(getattr(top_decision, "advice_id", "") or "")
+            if (
+                LOW_AUTH_GLOBAL_DEDUPE_ENABLED
+                and top_authority in {"whisper", "note"}
+                and top_advice_id
+                and not str(session_id or "").startswith("advisory-bench-")
+            ):
+                _append_jsonl_capped(
+                    LOW_AUTH_DEDUPE_LOG,
+                    {
+                        "ts": time.time(),
+                        "tool": tool_name,
+                        "advice_id": top_advice_id,
+                        "authority": top_authority,
+                        "trace_id": resolved_trace_id,
+                        "route": route,
+                        "scope_key": dedupe_scope,
+                        "session_kind": session_lineage.get("session_kind"),
+                    },
+                    max_lines=int(LOW_AUTH_DEDUPE_LOG_MAX),
+                )
+        except Exception:
+            pass
+
+        # Update global dedupe log on successful emission (any authority).
+        try:
+            if (
+                GLOBAL_DEDUPE_ENABLED
+                and gate_result.emitted
+                and not str(session_id or "").startswith("advisory-bench-")
+            ):
+                for d in list(gate_result.emitted or [])[:4]:
+                    aid = str(getattr(d, "advice_id", "") or "").strip()
+                    if not aid:
+                        continue
+                    text_sig = ""
+                    if GLOBAL_DEDUPE_TEXT_ENABLED:
+                        try:
+                            item = advice_by_id.get(aid)
+                            text_sig = _text_fingerprint(str(getattr(item, "text", "") or "")) if item else ""
+                        except Exception:
+                            text_sig = ""
                     _append_jsonl_capped(
-                        LOW_AUTH_DEDUPE_LOG,
+                        GLOBAL_DEDUPE_LOG,
                         {
                             "ts": time.time(),
                             "tool": tool_name,
-                            "advice_id": top_advice_id,
-                            "authority": top_authority,
+                            "advice_id": aid,
+                            "authority": str(getattr(d, "authority", "") or ""),
                             "trace_id": resolved_trace_id,
                             "route": route,
                             "scope_key": dedupe_scope,
                             "session_kind": session_lineage.get("session_kind"),
+                            "text_sig": text_sig,
                         },
-                        max_lines=int(LOW_AUTH_DEDUPE_LOG_MAX),
+                        max_lines=int(GLOBAL_DEDUPE_LOG_MAX),
                     )
-            except Exception:
-                pass
+        except Exception:
+            pass
 
-            # Update global dedupe log on successful emission (any authority).
-            try:
-                if (
-                    GLOBAL_DEDUPE_ENABLED
-                    and gate_result.emitted
-                    and not str(session_id or "").startswith("advisory-bench-")
-                ):
-                    for d in list(gate_result.emitted or [])[:4]:
-                        aid = str(getattr(d, "advice_id", "") or "").strip()
-                        if not aid:
-                            continue
-                        text_sig = ""
-                        if GLOBAL_DEDUPE_TEXT_ENABLED:
-                            try:
-                                item = advice_by_id.get(aid)
-                                text_sig = _text_fingerprint(str(getattr(item, "text", "") or "")) if item else ""
-                            except Exception:
-                                text_sig = ""
-                        _append_jsonl_capped(
-                            GLOBAL_DEDUPE_LOG,
-                            {
-                                "ts": time.time(),
-                                "tool": tool_name,
-                                "advice_id": aid,
-                                "authority": str(getattr(d, "authority", "") or ""),
-                                "trace_id": resolved_trace_id,
-                                "route": route,
-                                "scope_key": dedupe_scope,
-                                "session_kind": session_lineage.get("session_kind"),
-                                "text_sig": text_sig,
-                            },
-                            max_lines=int(GLOBAL_DEDUPE_LOG_MAX),
-                        )
-            except Exception:
-                pass
-
-            if route == "live":
-                lineage_sources = []
-                for source_name, cnt in (emitted_advice_source_counts or advice_source_counts).items():
-                    if int(cnt or 0) > 0:
-                        lineage_sources.append(str(source_name))
-                packet_payload = build_packet(
-                    project_key=project_key,
-                    session_context_key=session_context_key,
-                    tool_name=tool_name,
-                    intent_family=intent_family,
-                    task_plane=task_plane,
-                    advisory_text=synth_text or _baseline_text(intent_family),
-                    source_mode="live_ai" if synth_text else "live_deterministic",
-                    advice_items=_advice_to_rows_with_proof(
-                        emitted_advice or advice_items,
-                        trace_id=resolved_trace_id,
+        if route == "live":
+            lineage_sources = []
+            for source_name, cnt in (emitted_advice_source_counts or advice_source_counts).items():
+                if int(cnt or 0) > 0:
+                    lineage_sources.append(str(source_name))
+            packet_payload = build_packet(
+                project_key=project_key,
+                session_context_key=session_context_key,
+                tool_name=tool_name,
+                intent_family=intent_family,
+                task_plane=task_plane,
+                advisory_text=synth_text or _baseline_text(intent_family),
+                source_mode="live_ai" if synth_text else "live_deterministic",
+                advice_items=_advice_to_rows_with_proof(
+                    emitted_advice or advice_items,
+                    trace_id=resolved_trace_id,
+                ),
+                lineage={
+                    "sources": lineage_sources,
+                    "memory_absent_declared": _infer_memory_absent_declared(
+                        emitted_advice_source_counts or advice_source_counts
                     ),
-                    lineage={
-                        "sources": lineage_sources,
-                        "memory_absent_declared": _infer_memory_absent_declared(
-                            emitted_advice_source_counts or advice_source_counts
-                        ),
-                        "trace_id": resolved_trace_id,
-                    },
-                    trace_id=resolved_trace_id,
-                )
-                packet_id = save_packet(packet_payload)
+                    "trace_id": resolved_trace_id,
+                },
+                trace_id=resolved_trace_id,
+            )
+            packet_id = save_packet(packet_payload)
 
-            try:
-                from .advice_feedback import record_advice_request
+        try:
+            from .advice_feedback import record_advice_request
 
-                record_advice_request(
-                    session_id=session_id,
-                    tool=tool_name,
-                    advice_ids=shown_ids,
-                    advice_texts=[str(getattr(a, "text", "") or "") for a in emitted_advice],
-                    sources=[str(getattr(a, "source", "") or "") for a in emitted_advice],
-                    trace_id=resolved_trace_id,
-                    route=route,
-                    packet_id=packet_id,
-                    min_interval_s=120,
-                )
-            except Exception as e:
-                log_debug("advisory_engine", "AE_ADVICE_FEEDBACK_REQUEST_FAILED", e)
+            record_advice_request(
+                session_id=session_id,
+                tool=tool_name,
+                advice_ids=shown_ids,
+                advice_texts=[str(getattr(a, "text", "") or "") for a in emitted_advice],
+                sources=[str(getattr(a, "source", "") or "") for a in emitted_advice],
+                trace_id=resolved_trace_id,
+                route=route,
+                packet_id=packet_id,
+                min_interval_s=120,
+            )
+        except Exception as e:
+            log_debug("advisory_engine", "AE_ADVICE_FEEDBACK_REQUEST_FAILED", e)
 
-            state.last_advisory_packet_id = str(packet_id or "")
-            state.last_advisory_route = str(route or "")
-            state.last_advisory_tool = str(tool_name or "")
-            state.last_advisory_advice_ids = list(shown_ids[:20])
-            state.last_advisory_at = time.time()
-            state.last_advisory_text_fingerprint = repeat_meta["fingerprint"]
+        state.last_advisory_packet_id = str(packet_id or "")
+        state.last_advisory_route = str(route or "")
+        state.last_advisory_tool = str(tool_name or "")
+        state.last_advisory_advice_ids = list(shown_ids[:20])
+        state.last_advisory_at = time.time()
+        state.last_advisory_text_fingerprint = repeat_meta["fingerprint"]
 
         if packet_id:
             try:
-                record_packet_usage(packet_id, emitted=bool(emitted), route=route)
+                record_packet_usage(
+                    packet_id,
+                    emitted=bool(emitted),
+                    route=route,
+                    trace_id=resolved_trace_id,
+                    tool_name=tool_name,
+                )
             except Exception as e:
                 log_debug("advisory_engine", "AE_PKT_USAGE_POST_EMIT_FAILED", e)
 
@@ -2652,12 +2670,33 @@ def _record_implicit_feedback(
         if not matching_ids:
             return
 
+        # Record in the standalone implicit tracker so advisory packets can be traced
+        # from a dedicated outcome stream.
+        try:
+            from .implicit_outcome_tracker import get_implicit_tracker
+
+            tracker = get_implicit_tracker()
+            tracker.record_advice(
+                tool_name=tool_name,
+                advice_texts=[str(x or "").strip() for x in (recent.get("advice_texts") or []) if str(x or "").strip()],
+                advice_sources=matching_ids[:5],
+                trace_id=trace_id,
+            )
+        except Exception:
+            tracker = None
+
         for aid in matching_ids[:3]:
             advisor.report_outcome(
                 aid,
                 was_followed=True,
                 was_helpful=success,
                 notes=f"implicit_feedback:{'success' if success else 'failure'}:{tool_name}",
+                trace_id=trace_id,
+            )
+        if tracker:
+            tracker.record_outcome(
+                tool_name=tool_name,
+                success=success,
                 trace_id=trace_id,
             )
 

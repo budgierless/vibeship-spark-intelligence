@@ -34,13 +34,14 @@ class AdvisoryQuality:
     outcome_linked: float = 0.0     # 0-1: tied to measurable result
     unified_score: float = 0.0      # 0-1: weighted blend of all dimensions
 
+    advisory_text: str = ""              # Composed advisory-ready text (empty = use raw)
     structure: Dict[str, Optional[str]] = field(default_factory=dict)
     domain: str = "general"
     suppressed: bool = False
     suppression_reason: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "actionability": round(self.actionability, 3),
             "novelty": round(self.novelty, 3),
             "reasoning": round(self.reasoning, 3),
@@ -52,6 +53,9 @@ class AdvisoryQuality:
             "suppressed": self.suppressed,
             "suppression_reason": self.suppression_reason,
         }
+        if self.advisory_text:
+            d["advisory_text"] = self.advisory_text
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AdvisoryQuality":
@@ -64,6 +68,7 @@ class AdvisoryQuality:
             specificity=float(data.get("specificity", 0.0) or 0.0),
             outcome_linked=float(data.get("outcome_linked", 0.0) or 0.0),
             unified_score=float(data.get("unified_score", 0.0) or 0.0),
+            advisory_text=str(data.get("advisory_text", "") or ""),
             structure=data.get("structure") or {},
             domain=str(data.get("domain", "general") or "general"),
             suppressed=bool(data.get("suppressed", False)),
@@ -336,6 +341,62 @@ def _compute_unified_score(dims: Dict[str, float]) -> float:
     return min(1.0, max(0.0, total))
 
 
+def _compose_advisory_text(
+    raw_text: str,
+    structure: Dict[str, Optional[str]],
+    dims: Dict[str, float],
+) -> str:
+    """Compose clean advisory text from extracted structure.
+
+    Rewrites raw distillation text into a concise, actionable format.
+    Returns empty string if no meaningful structure was extracted
+    (caller should fall back to raw text).
+    """
+    condition = structure.get("condition")
+    action = structure.get("action")
+    reasoning = structure.get("reasoning")
+    outcome = structure.get("outcome")
+
+    # Need at least an action to compose
+    if not action:
+        return ""
+
+    # Trim trailing punctuation from components
+    action = action.rstrip(".,;: ")
+    if condition:
+        condition = condition.rstrip(".,;: ")
+    if reasoning:
+        reasoning = reasoning.rstrip(".,;: ")
+    if outcome:
+        outcome = outcome.rstrip(".,;: ")
+
+    parts: list[str] = []
+
+    # Build: "When {condition}: {action}"
+    if condition and action:
+        parts.append(f"When {condition}: {action}")
+    elif action:
+        parts.append(action[0].upper() + action[1:] if action else "")
+
+    # Add reasoning: "because {reasoning}"
+    if reasoning and dims.get("reasoning", 0) >= 0.5:
+        parts.append(f"because {reasoning}")
+
+    # Add outcome: "— {outcome}"
+    if outcome and dims.get("outcome_linked", 0) >= 0.5:
+        parts.append(f"({outcome})")
+
+    composed = " ".join(parts).strip()
+
+    # Only use composed text if it's meaningfully different and shorter than raw
+    if not composed or len(composed) < 15:
+        return ""
+    # If composed is longer than raw, the raw was probably already concise
+    if len(composed) > len(raw_text) * 1.2:
+        return ""
+    return composed
+
+
 def should_suppress(text: str, dims: Dict[str, float], structure: Dict[str, Optional[str]]) -> Tuple[bool, str]:
     """Determine if a distillation should be suppressed from advisory.
 
@@ -373,6 +434,8 @@ def should_suppress(text: str, dims: Dict[str, float], structure: Dict[str, Opti
         # Allow if it has strong outcome evidence with specificity
         if dims.get("outcome_linked", 0) >= 0.5 and dims.get("specificity", 0) >= 0.5:
             pass  # Keep: outcome-backed specific observation
+        elif dims.get("novelty", 0) >= 0.5:
+            pass  # Keep: has quality signals (data, patterns, insights)
         else:
             return True, "no_action_no_reasoning"
 
@@ -461,6 +524,11 @@ def transform_for_advisory(
     # Check suppression
     suppressed, reason = should_suppress(text, dims, structure)
 
+    # Compose advisory-ready text from extracted structure
+    advisory_text = ""
+    if not suppressed:
+        advisory_text = _compose_advisory_text(text, structure, dims)
+
     return AdvisoryQuality(
         actionability=dims["actionability"],
         novelty=dims["novelty"],
@@ -468,6 +536,7 @@ def transform_for_advisory(
         specificity=dims["specificity"],
         outcome_linked=dims["outcome_linked"],
         unified_score=unified,
+        advisory_text=advisory_text,
         structure=structure,
         domain=domain,
         suppressed=suppressed,

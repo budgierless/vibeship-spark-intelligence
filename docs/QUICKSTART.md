@@ -1,4 +1,4 @@
-# Spark Quick Start Guide
+﻿# Spark Quick Start Guide
 
 Get Spark running in 5 minutes.
 
@@ -73,7 +73,7 @@ Spark auto-detects sibling `../vibeship-spark-pulse` first, then falls back to `
 Set `SPARK_PULSE_DIR` to override both.
 For this setup, use:
 ```bat
-set SPARK_PULSE_DIR=C:\Users\USER\Desktop\vibeship-spark-pulse
+set SPARK_PULSE_DIR=<SPARK_PULSE_DIR>
 ```
 If Mind CLI is installed but unstable, force Spark's built-in Mind server:
 ```bat
@@ -338,7 +338,7 @@ If you want a safety net (for sessions launched outside wrappers), run sync on a
 - Action: `spark`
 - Args: `sync-context`
 - Start in: your repo root
-- Trigger: every 10–30 minutes
+- Trigger: every 10â€“30 minutes
 
 **macOS/Linux (cron)**
 ```
@@ -452,22 +452,22 @@ After running, Spark creates:
 
 ```
 ~/.spark/                      # Config and data
-├── cognitive_insights.json    # Raw learnings
-├── mind_sync_state.json       # Sync tracking
-├── exposures.jsonl            # Surfaced insights (prediction inputs)
-├── predictions.jsonl          # Prediction registry
-├── outcomes.jsonl             # Outcomes log (skills/orchestration/project)
-├── skills_index.json          # Cached skills index
-├── skills_effectiveness.json  # Skill success/fail counters
-├── orchestration/
-│   ├── agents.json            # Registered agents
-│   └── handoffs.jsonl         # Handoff history
-└── queue/
-    └── events.jsonl           # Event queue
+â”œâ”€â”€ cognitive_insights.json    # Raw learnings
+â”œâ”€â”€ mind_sync_state.json       # Sync tracking
+â”œâ”€â”€ exposures.jsonl            # Surfaced insights (prediction inputs)
+â”œâ”€â”€ predictions.jsonl          # Prediction registry
+â”œâ”€â”€ outcomes.jsonl             # Outcomes log (skills/orchestration/project)
+â”œâ”€â”€ skills_index.json          # Cached skills index
+â”œâ”€â”€ skills_effectiveness.json  # Skill success/fail counters
+â”œâ”€â”€ orchestration/
+â”‚   â”œâ”€â”€ agents.json            # Registered agents
+â”‚   â””â”€â”€ handoffs.jsonl         # Handoff history
+â””â”€â”€ queue/
+    â””â”€â”€ events.jsonl           # Event queue
 
 .learnings/                    # In your project
-├── LEARNINGS.md              # Human-readable insights
-└── ERRORS.md                 # Error patterns
+â”œâ”€â”€ LEARNINGS.md              # Human-readable insights
+â””â”€â”€ ERRORS.md                 # Error patterns
 
 AGENTS.md                      # Promoted workflow patterns
 CLAUDE.md                      # Promoted conventions
@@ -500,7 +500,7 @@ CLAUDE.md                      # Promoted conventions
 
 Mind isn't running. Either:
 - Start Mind: `python3 -m mind.lite_tier`
-- Or ignore it — Spark works offline and queues for later
+- Or ignore it â€” Spark works offline and queues for later
 
 ### "requests not installed"
 
@@ -536,11 +536,12 @@ expand scope if needed.
 
 ## Next Steps
 
-1. **Integrate with your workflow** — Set up the hooks
-2. **Start Mind** — For persistent cross-project learning
-3. **Review learnings** — `python3 -m spark.cli learnings`
-4. **Promote insights** — `python3 -m spark.cli promote`
+1. **Integrate with your workflow** â€” Set up the hooks
+2. **Start Mind** â€” For persistent cross-project learning
+3. **Review learnings** â€” `python3 -m spark.cli learnings`
+4. **Promote insights** â€” `python3 -m spark.cli promote`
 
 ---
 
 *Part of the Vibeship Ecosystem*
+

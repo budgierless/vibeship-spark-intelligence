@@ -698,9 +698,10 @@ class EidosStore:
     def record_distillation_usage(self, distillation_id: str, helped: bool):
         """Record that a distillation was used and whether it helped.
 
-        Also applies confidence decay: when contradiction rate exceeds 80%
-        over 10+ uses, confidence drops by 0.05 per contradiction.
-        Distillations with confidence < 0.1 are effectively dead.
+        Confidence evolves based on outcomes:
+        - Positive: confidence grows toward 1.0 (diminishing returns)
+        - Negative: confidence decays (accelerates with high contradiction rate)
+        - Below 0.1 after 10+ uses: effectively dead, prunable
         """
         with sqlite3.connect(self.db_path) as conn:
             if helped:
@@ -721,7 +722,7 @@ class EidosStore:
                     (distillation_id,)
                 )
 
-            # Confidence decay: check if this distillation has a bad track record
+            # Evolve confidence based on track record
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT times_used, times_helped, contradiction_count, confidence "
@@ -729,17 +730,33 @@ class EidosStore:
                 (distillation_id,)
             ).fetchone()
 
-            if row and row["times_used"] >= 10:
+            if row and row["times_used"] >= 3:
                 total = row["times_used"]
+                helped_count = row["times_helped"]
                 contra = row["contradiction_count"]
-                contra_rate = contra / max(total, 1)
+                current_conf = row["confidence"]
+                success_ratio = helped_count / max(total, 1)
 
-                if contra_rate > 0.8:
-                    # High contradiction rate — decay confidence
-                    new_conf = max(0.05, row["confidence"] - 0.05)
+                if helped:
+                    # Boost confidence toward 1.0 with diminishing returns
+                    # Step size decreases as confidence grows (harder to reach 1.0)
+                    headroom = 1.0 - current_conf
+                    boost = min(0.05, headroom * 0.15)
+                    new_conf = min(1.0, current_conf + boost)
+                else:
+                    # Decay confidence — faster when contradiction rate is high
+                    contra_rate = contra / max(total, 1)
+                    if contra_rate > 0.8 and total >= 10:
+                        new_conf = max(0.05, current_conf - 0.05)
+                    elif contra_rate > 0.5:
+                        new_conf = max(0.05, current_conf - 0.03)
+                    else:
+                        new_conf = max(0.05, current_conf - 0.01)
+
+                if abs(new_conf - current_conf) > 0.001:
                     conn.execute(
                         "UPDATE distillations SET confidence = ? WHERE distillation_id = ?",
-                        (round(new_conf, 3), distillation_id)
+                        (round(new_conf, 4), distillation_id)
                     )
 
             conn.commit()
@@ -763,6 +780,58 @@ class EidosStore:
             created_at=row["created_at"],
             revalidate_by=row["revalidate_by"]
         )
+
+    def prune_distillations(self) -> dict:
+        """Prune low-performing and dead distillations.
+
+        Removes:
+        1. Dead playbooks (0 retrievals, older than 1 day)
+        2. Low success ratio (<0.15) after 10+ uses
+        3. Corrupted records (impossible counter values)
+
+        Returns dict with counts of pruned records by reason.
+        """
+        pruned = {"dead_playbooks": 0, "low_success": 0, "corrupted": 0}
+        one_day_ago = time.time() - 86400
+
+        with sqlite3.connect(self.db_path) as conn:
+            # 1. Dead playbooks
+            cur = conn.execute(
+                "DELETE FROM distillations WHERE times_retrieved = 0 "
+                "AND type = 'playbook' AND created_at < ?",
+                (one_day_ago,)
+            )
+            pruned["dead_playbooks"] = cur.rowcount
+
+            # 2. Low success ratio after 10+ uses
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT distillation_id, times_used, times_helped "
+                "FROM distillations WHERE times_used >= 10"
+            ).fetchall()
+            low_ids = []
+            for row in rows:
+                ratio = row["times_helped"] / max(row["times_used"], 1)
+                if ratio < 0.15:
+                    low_ids.append(row["distillation_id"])
+            if low_ids:
+                placeholders = ",".join("?" * len(low_ids))
+                conn.execute(
+                    f"DELETE FROM distillations WHERE distillation_id IN ({placeholders})",
+                    low_ids,
+                )
+                pruned["low_success"] = len(low_ids)
+
+            # 3. Corrupted records (impossible counts)
+            cur = conn.execute(
+                "DELETE FROM distillations WHERE times_retrieved > 1000000 "
+                "OR times_used > 1000000 OR times_helped > 1000000"
+            )
+            pruned["corrupted"] = cur.rowcount
+
+            conn.commit()
+
+        return pruned
 
     # ==================== Policy Operations ====================
 

@@ -1,4 +1,0 @@
-# CLAUDE.md
-
-## Spark Learnings
-

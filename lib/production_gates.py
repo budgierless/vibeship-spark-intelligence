@@ -46,6 +46,12 @@ class LoopMetrics:
     advice_helpful: int = 0
     chip_insights: int = 0
     chip_to_cognitive_ratio: float = 0.0
+    advisory_readiness_ratio: float = 0.0
+    advisory_freshness_ratio: float = 0.0
+    advisory_avg_effectiveness: float = 0.0
+    advisory_store_queue_depth: int = 0
+    advisory_inactive_ratio: float = 0.0
+    advisory_top_category_concentration: float = 0.0
 
 
 @dataclass
@@ -68,6 +74,12 @@ class LoopThresholds:
     min_quality_samples: int = 50
     max_queue_depth: int = 2000
     max_chip_to_cognitive_ratio: float = 100.0
+    min_advisory_readiness_ratio: float = 0.40
+    min_advisory_freshness_ratio: float = 0.35
+    max_advisory_inactive_ratio: float = 0.40
+    min_advisory_avg_effectiveness: float = 0.35
+    max_advisory_store_queue_depth: int = 1200
+    max_advisory_top_category_concentration: float = 0.85
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -240,6 +252,12 @@ def load_live_metrics() -> LoopMetrics:
     advice_total = 0
     advice_followed = 0
     advice_helpful = 0
+    advisory_readiness_ratio = 0.0
+    advisory_freshness_ratio = 0.0
+    advisory_avg_effectiveness = 0.0
+    advisory_store_queue_depth = 0
+    advisory_inactive_ratio = 0.0
+    advisory_top_category_concentration = 0.0
 
     meta = _read_meta_metrics()
     if meta:
@@ -270,6 +288,20 @@ def load_live_metrics() -> LoopMetrics:
 
     distillations = _read_distillation_count()
     queue_depth = _read_queue_depth()
+    try:
+        from .advisory_packet_store import get_store_status
+
+        packet_store_status = get_store_status()
+        advisory_readiness_ratio = float(packet_store_status.get("readiness_ratio", 0.0) or 0.0)
+        advisory_freshness_ratio = float(packet_store_status.get("freshness_ratio", 0.0) or 0.0)
+        advisory_avg_effectiveness = float(packet_store_status.get("avg_effectiveness_score", 0.0) or 0.0)
+        advisory_store_queue_depth = int(packet_store_status.get("queue_depth", 0) or 0)
+        advisory_inactive_ratio = float(packet_store_status.get("inactive_ratio", 0.0) or 0.0)
+        advisory_top_category_concentration = float(
+            packet_store_status.get("top_category_concentration", 0.0) or 0.0
+        )
+    except Exception:
+        pass
 
     eff = _read_effectiveness_metrics()
     advice_total = int(eff.get("total_advice_given", 0) or 0)
@@ -321,6 +353,12 @@ def load_live_metrics() -> LoopMetrics:
         advice_helpful=advice_helpful,
         chip_insights=chip_count,
         chip_to_cognitive_ratio=chip_ratio,
+        advisory_readiness_ratio=advisory_readiness_ratio,
+        advisory_freshness_ratio=advisory_freshness_ratio,
+        advisory_avg_effectiveness=advisory_avg_effectiveness,
+        advisory_store_queue_depth=advisory_store_queue_depth,
+        advisory_inactive_ratio=advisory_inactive_ratio,
+        advisory_top_category_concentration=advisory_top_category_concentration,
     )
 
 
@@ -474,6 +512,48 @@ def evaluate_gates(
         f">= {t.min_distillations}",
         "Increase distillation yield and episode completion quality.",
     )
+    _add(
+        "advisory_store_readiness",
+        metrics.advisory_readiness_ratio >= t.min_advisory_readiness_ratio,
+        round(metrics.advisory_readiness_ratio, 3),
+        f">= {t.min_advisory_readiness_ratio:.2f}",
+        "Improve packet freshness in the advisory store and stabilize exact lookup keys.",
+    )
+    _add(
+        "advisory_store_freshness",
+        metrics.advisory_freshness_ratio >= t.min_advisory_freshness_ratio,
+        round(metrics.advisory_freshness_ratio, 3),
+        f">= {t.min_advisory_freshness_ratio:.2f}",
+        "Tune packet TTL and invalidation policy to keep useful packets fresh.",
+    )
+    _add(
+        "advisory_store_inactive",
+        metrics.advisory_inactive_ratio <= t.max_advisory_inactive_ratio,
+        round(metrics.advisory_inactive_ratio, 3),
+        f"<= {t.max_advisory_inactive_ratio:.2f}",
+        "Reduce invalidation churn and strengthen packet reuse quality control.",
+    )
+    _add(
+        "advisory_store_effectiveness",
+        metrics.advisory_avg_effectiveness >= t.min_advisory_avg_effectiveness,
+        round(metrics.advisory_avg_effectiveness, 3),
+        f">= {t.min_advisory_avg_effectiveness:.2f}",
+        "Increase explicit feedback/actual outcome capture for packet ranking signal quality.",
+    )
+    _add(
+        "advisory_store_queue_depth",
+        metrics.advisory_store_queue_depth <= t.max_advisory_store_queue_depth,
+        metrics.advisory_store_queue_depth,
+        f"<= {t.max_advisory_store_queue_depth}",
+        "Increase worker throughput or raise prefetch thresholding to reduce packet queue pressure.",
+    )
+    _add(
+        "advisory_store_category_diversity",
+        metrics.advisory_top_category_concentration <= t.max_advisory_top_category_concentration,
+        round(metrics.advisory_top_category_concentration, 3),
+        f"<= {t.max_advisory_top_category_concentration:.2f}",
+        "Diversify packet authorship/categorization so single domains don’t dominate.",
+    )
     meta_ralph_quality_ok = (
         (not t.enforce_meta_ralph_quality_band)
         or metrics.quality_rate_samples < t.min_quality_samples
@@ -543,6 +623,14 @@ def format_gate_report(metrics: LoopMetrics, result: Dict[str, Any]) -> str:
     lines.append(
         f"  retrieval_rate={metrics.retrieval_rate:.1%} acted_on_rate={metrics.acted_on_rate:.1%} "
         f"effectiveness={metrics.effectiveness_rate:.1%}"
+    )
+    lines.append(
+        f"  advisory_readiness={metrics.advisory_readiness_ratio:.1%} "
+        f"advisory_freshness={metrics.advisory_freshness_ratio:.1%} "
+        f"advisory_effectiveness={metrics.advisory_avg_effectiveness:.1%} "
+        f"advisory_inactive={metrics.advisory_inactive_ratio:.1%} "
+        f"advisory_queue={metrics.advisory_store_queue_depth} "
+        f"advisory_cat_concentration={metrics.advisory_top_category_concentration:.1%}"
     )
     lines.append(
         f"  strict_acted_on={metrics.strict_acted_on} strict_with_outcome={metrics.strict_with_outcome} "

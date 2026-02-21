@@ -1,10 +1,10 @@
-import subprocess, os
+﻿import subprocess, os
 from pathlib import Path
 
 spark = Path.home() / ".spark"
 prompt_file = spark / "llm_prompt.txt"
 response_file = spark / "llm_response.txt"
-script = r"C:\Users\USER\Desktop\vibeship-spark-intelligence\scripts\claude_call.cmd"
+script = r"<REPO_ROOT>\scripts\claude_call.cmd"
 
 prompt_file.write_text("say just the word OK", encoding="utf-8")
 if response_file.exists():
@@ -23,3 +23,4 @@ if response_file.exists():
     print(f"Response: [{resp}]")
 else:
     print("No response file!")
+

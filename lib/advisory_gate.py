@@ -65,6 +65,10 @@ TOOL_COOLDOWN_S = 10
 # Don't repeat the same advice within N seconds
 ADVICE_REPEAT_COOLDOWN_S = 300  # 5 minutes
 
+# State-sourced shown-advice cooldown mirror (keeps suppression behavior aligned
+# between engine state and gate-layer checks).
+SHOWN_ADVICE_TTL_S = 600
+
 # Whether WHISPER-level advice should be emitted at all.
 # Default: off (whispers are high-noise in real operations).
 EMIT_WHISPERS = os.getenv("SPARK_ADVISORY_EMIT_WHISPERS", "1") == "1"
@@ -392,6 +396,15 @@ def evaluate(
     )
 
 
+def _tool_phase_shown_key(advice_id: str, tool_name: str, phase: str) -> str:
+    aid = str(advice_id or "").strip()
+    if not aid:
+        return ""
+    tool = str(tool_name or "").strip().lower() or "*"
+    phase_name = str(phase or "").strip().lower() or "*"
+    return f"{aid}|{tool}|{phase_name}"
+
+
 def _evaluate_single(
     advice,
     state,
@@ -419,6 +432,7 @@ def _evaluate_single(
     # ---- Filter 1: Already shown recently? (TTL-based) ----
     from .advisory_state import SHOWN_ADVICE_TTL_S
     shown_ids = state.shown_advice_ids if state else {}
+    shown_scope_key = _tool_phase_shown_key(advice_id, tool_name, phase)
     if isinstance(shown_ids, dict) and advice_id in shown_ids:
         shown_at = float(shown_ids.get(advice_id, 0.0) or 0.0)
         if shown_at > 0 and (time.time() - shown_at) < SHOWN_ADVICE_TTL_S:
@@ -427,6 +441,18 @@ def _evaluate_single(
                 authority=AuthorityLevel.SILENT,
                 emit=False,
                 reason=f"shown {int(time.time() - shown_at)}s ago (TTL {SHOWN_ADVICE_TTL_S}s)",
+                adjusted_score=0.0,
+                original_score=base_score,
+            )
+    if shown_scope_key and isinstance(shown_ids, dict) and shown_scope_key in shown_ids:
+        shown_at = float(shown_ids.get(shown_scope_key, 0.0) or 0.0)
+        if shown_at > 0 and (time.time() - shown_at) < SHOWN_ADVICE_TTL_S:
+            return GateDecision(
+                advice_id=advice_id,
+                authority=AuthorityLevel.SILENT,
+                emit=False,
+                reason=f"shown for {str(tool_name or '?').strip()}/{str(phase or '?')} "
+                f"recently ({int(time.time() - shown_at)}s ago)",
                 adjusted_score=0.0,
                 original_score=base_score,
             )

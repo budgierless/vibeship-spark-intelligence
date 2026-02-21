@@ -1,4 +1,4 @@
-import json
+﻿import json
 import time
 
 from lib import exposure_tracker as et
@@ -101,7 +101,7 @@ def test_record_exposures_redacts_secrets(tmp_path, monkeypatch):
     monkeypatch.setattr(et, "EXPOSURES_FILE", exposures_file)
     monkeypatch.setattr(et, "LAST_EXPOSURE_FILE", last_file)
 
-    text = "Authorization: Bearer supersecrettoken123 api_key=abcd1234efgh5678 sk-abcdefghijklmnopqrstuvwxyz"
+    text = "Authorization: Bearer API_TOKEN_SANDBOX api_key=api_key_placeholder sk-REDACTED_TEST"
     written = et.record_exposures(
         source="spark_context:warnings",
         items=[{"insight_key": "k1", "category": "warning", "text": text}],
@@ -113,7 +113,8 @@ def test_record_exposures_redacts_secrets(tmp_path, monkeypatch):
     rows = _read_jsonl(exposures_file)
     assert len(rows) == 1
     saved = rows[0]["text"]
-    assert "supersecrettoken123" not in saved
-    assert "abcd1234efgh5678" not in saved
-    assert "sk-abcdefghijklmnopqrstuvwxyz" not in saved
+    assert "API_TOKEN_SANDBOX" not in saved
+    assert "api_key_placeholder" not in saved
+    assert "sk-REDACTED" not in saved
     assert "[REDACTED" in saved
+

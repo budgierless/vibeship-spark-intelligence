@@ -1,86 +1,54 @@
-# OSS-only Manifest (Spark Public Launch)
+# OSS-only Manifest (Spark OSS launch)
 
-Date: Saturday, 2026-02-21  
-Branch context: `vibeship-spark-intelligence` public cleanup for Spark OSS launch
+Date: Saturday, February 21, 2026
+Source: `<USER_HOME>\Desktop\vibeship-spark-intelligence`
 
-## 1) What is public in this repo
+## Launch objective
 
-The repository now ships only the Spark OSS core needed for:
-- local reasoning loops
-- OpenClaw integration
-- Claude/Cursor and compatible agent workflows
-- developer experimentation and contribution
+- Keep Spark OSS minimal and safe to publish.
+- Preserve core intelligence runtime, OpenClaw bridge compatibility, CLI/scripting interfaces, and documentation.
+- Remove/disable premium and non-OSS artifacts for public visibility.
 
-Included at a high level:
-- Core runtime and orchestration modules under `spark/`, `lib/`, `scripts/`, `extensions/`, `hooks/`, `templates/`, `prompts/`, and `adapters/`
-- Core execution entry points (`sparkd.py`, `spark_pulse.py`, `spark_watchdog.py`, `bridge_worker.py`, `mind_server.py`, `tracer_*`)
-- Public docs and operating guides in `docs/` and repo root
-- Public packaging metadata and tooling references (`pyproject.toml`, `package.json`, `package-lock.json`)
-- Non-sensitive examples and tests
+## Current publication set
 
-## 2) What is intentionally excluded or inert
+- Kept: `CLAUDE.md`, `PROJECT.md`, `README.md`-style docs, `docs/` core guides, `lib/`, `scripts/`, `extensions/`, `prompts/`, `tests/`, and top-level config used by OSS runtime.
+- Kept but inert by default: chip/evolution modules remain present for architecture continuity; execution is premium-gated in code and defaults.
+- Kept for governance: sanitization and tuning files such as `config/tuneables.json`, `TUNEABLES.md`, `docs/ARCHITECTURE` docs, and `docs/openclaw` references.
 
-Excluded from public OSS runtime:
-- X/social/moltbook and other external social automations
-- All benchmark/reporting outputs and tuning artifacts
-- Trace HUD runtime and runtime-only instrumentation modules
-- Ephemeral local state and runtime scratch directories
-- Premium chip behavior is present as files but non-operational by default in OSS
+## Sanitization/launch pass performed
 
-## 3) Removed for launch hygiene
+Scans completed on tracked + ignored text/code surfaces for:
+- credential formats (`sk-`, `Bearer`, `api_key`, `token`, `secret`)
+- private key markers (`BEGIN ... KEY`)
+- embedded URL credentials (`user:pass@host`)
+- absolute path leaks (`<USER_HOME>`, `C:/...`)
 
-These paths are removed from the repo and should not be reintroduced:
-- `benchmarks/`
-- `trace_hud/`
-- `logs/`
-- `build/`
-- `dist/`
-- `docs/reports/`
-- `__pycache__/` and language/runtime cache dirs
-- `.pytest_cache/`
-- `.spark/`
-- `vibeship_spark.egg-info/`
-- `CORE_SELF_EVOLUTION_PROMPT.md`
-- `docs/security/SECRETS_AND_RELEASE_CHECKLIST.md`
-- `docs/token/TOKEN_LAUNCH_COMMS_AND_RISK.md`
-- `sandbox/spark_sandbox/report.json`
-- `sandbox/spark_sandbox_baseline.json`
-- `sandbox/spark_sandbox_diff.json`
-- Any unmasked launch-risk docs and local diagnostics generated for private runs
+Result:
+- No real hardcoded secrets found in tracked files after redaction updates.
+- Path hygiene now uses generic placeholders (`<USER_HOME>`, `%USERPROFILE%`, env-like tokens) where relevant.
+- Exposure test fixtures were neutralized and assertion strings updated.
 
-## 4) Required launch docs (read-first)
+## Hygiene removals and deletions
 
-Use this sequence first for release understanding:
-- `README.md`
-- `docs/LAUNCH_DOCUMENTATION_MAP.md`
-- `docs/DOCS_INDEX.md`
-- `docs/OSS_BOUNDARY.md`
-- `Intelligence_Flow.md`
-- `Intelligence_Flow_Map.md`
-- `TUNEABLES.md`
-- `OPENCLAW_IMPLEMENTATION_TASKS.md`
-- `SPARK_LEARNING_GUIDE.md`
-- `PRODUCTION_READINESS.md`
+The following folders/files were removed from the public tree for launch hygiene:
+- `docs/reports/` (operational/private advisory outputs)
+- `benchmarks/` (run artifacts)
+- `.spark/`, `.pytest_cache/`, `__pycache__/`, and other runtime cache directories
+- `sandbox/spark_sandbox/` tracked report/workspace metadata:
+  - `sandbox/spark_sandbox/project/AGENTS.md`
+  - `sandbox/spark_sandbox/project/CLAUDE.md`
+  - `sandbox/spark_sandbox/project/PROJECT.md`
+  - `sandbox/spark_sandbox/project/README.md`
+  - `sandbox/spark_sandbox/project/SOUL.md`
+  - `sandbox/spark_sandbox/project/TOOLS.md`
+  - `sandbox/spark_sandbox/skills/sandbox-skill.yaml`
+  - `sandbox/spark_sandbox/workspace/SPARK_CONTEXT.md`
+- Local-only workflow artifacts not suitable for OSS:
+  - `.cursorrules`
+  - `.windsurfrules`
 
-## 4.1) Agent-first docs map
+## Recommended publish check
 
-The quickest OSS onboarding stack:
-- `README.md` and `docs/OSS_BOUNDARY.md` for scope and limits
-- `docs/LAUNCH_DOCUMENTATION_MAP.md` and `docs/DOCS_INDEX.md` for where each topic lives
-- `Intelligence_Flow.md` and `Intelligence_Flow_Map.md` for inference/advisor wiring
-- `TUNEABLES.md` for operational knobs and expected behaviors
-- `OPENCLAW_IMPLEMENTATION_TASKS.md` + `docs/openclaw/` for OpenClaw bridge details
-- `SPARK_LEARNING_GUIDE.md` for tuning and maintenance
-- `PRODUCTION_READINESS.md` for hardening and launch checks
-
-## 5) Premium-capability summary
-
-- Chips module files are retained for architectural completeness.
-- OSS launch keeps chip execution disabled/inert by default.
-- Premium builds enable chip runtime with documented feature flags only.
-
-## 6) Public-only policy for future contributors
-
-- If a file references internal/private operations, personal reports, social automation, or live credentials, it should be moved under a premium/internal package or deleted before release.
-- If in doubt, prefer deleting generated outputs and keeping source-only assets.
-- Keep this manifest as the source of truth for what ships publicly.
+- Confirm `docs/reports/` and benchmark paths are absent before packaging.
+- Confirm `.gitignore` keeps non-OSS/generated files untracked.
+- Confirm chips remain inert in OSS by default and only enable under explicit premium controls.

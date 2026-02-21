@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Diagnose chip-to-learning yield and blockers.
 
 Outputs per-chip and global metrics for:
@@ -20,7 +20,7 @@ from lib import chip_merger as cm
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "benchmarks" / "out"
-DEFAULT_PROJECT_PATH = "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence"
+DEFAULT_PROJECT_PATH = "<USER_HOME>\\Desktop\\vibeship-spark-intelligence"
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -399,3 +399,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

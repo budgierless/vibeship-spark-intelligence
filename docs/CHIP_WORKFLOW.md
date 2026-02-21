@@ -381,22 +381,9 @@ questions:
     category: metric
 ```
 
-## Chip Evolution
+## Chip Evolution (Premium feature)
 
-Chips improve over time:
-
-```
-Week 1: Basic triggers, few observations
-    |
-    v
-Week 2: More observations, patterns emerging
-    |
-    v
-Week 4: Validated insights, confident learnings
-    |
-    v
-Week 8: Refined triggers, optimized questions
-```
+The chip evolution workflow is a premium capability and is not enabled in the OSS package.
 
 ## Best Practices
 

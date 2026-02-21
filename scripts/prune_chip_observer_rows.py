@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Prune chip insight rows for disabled/noisy observers.
 
 Reads observer policy from ~/.spark/chip_observer_policy.json and removes rows
@@ -117,7 +117,7 @@ def main() -> int:
     ap.add_argument("--active-only", action="store_true", help="Only process active chips for a project")
     ap.add_argument(
         "--project-path",
-        default="C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence",
+        default="<USER_HOME>\\Desktop\\vibeship-spark-intelligence",
         help="Project path key used in ~/.spark/chip_registry.json when --active-only is set",
     )
     ap.add_argument(
@@ -215,3 +215,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -290,6 +290,7 @@ class DistillationEngine:
         candidates = []
 
         # 1. Generate from new_rule (HEURISTIC)
+        # Initial confidence capped at 0.4 — must earn trust through usage
         if reflection.new_rule:
             candidates.append(DistillationCandidate(
                 type=DistillationType.HEURISTIC,
@@ -297,7 +298,7 @@ class DistillationEngine:
                 domains=self._extract_domains(episode, steps),
                 triggers=self._extract_triggers(steps),
                 source_steps=[s.step_id for s in steps if s.evaluation == Evaluation.PASS],
-                confidence=reflection.confidence,
+                confidence=min(0.4, reflection.confidence),
                 rationale=f"Derived from successful episode: {episode.goal[:50]}"
             ))
 
@@ -309,7 +310,7 @@ class DistillationEngine:
                 domains=self._extract_domains(episode, steps),
                 triggers=self._extract_triggers(steps),
                 source_steps=[s.step_id for s in steps if s.evaluation == Evaluation.FAIL],
-                confidence=reflection.confidence * 0.8,
+                confidence=min(0.35, reflection.confidence * 0.8),
                 rationale=f"Derived from failures in: {episode.goal[:50]}"
             ))
 
@@ -319,9 +320,9 @@ class DistillationEngine:
                 type=DistillationType.SHARP_EDGE,
                 statement=reflection.preventive_check,
                 domains=self._extract_domains(episode, steps),
-                triggers=["before", "check", "validate"],
-                source_steps=[s.step_id for s in steps[:3]],  # Early steps
-                confidence=reflection.confidence * 0.7,
+                triggers=self._extract_triggers(steps),
+                source_steps=[s.step_id for s in steps[:3]],
+                confidence=min(0.35, reflection.confidence * 0.7),
                 rationale=f"Would have prevented issues in: {episode.goal[:50]}"
             ))
 
@@ -350,7 +351,14 @@ class DistillationEngine:
         episode: Episode,
         steps: List[Step]
     ) -> Optional[DistillationCandidate]:
-        """Generate a playbook from successful episode."""
+        """Generate a playbook from successful episode.
+
+        Improvements over original:
+        - Uses full goal text (not truncated to 30 chars)
+        - Uses domain keywords as triggers (not just first word)
+        - Starts at low confidence (0.3) — must earn trust through usage
+        - Requires diverse step types (not just 2 unique decisions)
+        """
         # Reject generic goals
         goal_clean = (episode.goal or "").strip().lower().rstrip(".!?")
         if len(goal_clean) < 10 or goal_clean in self._GENERIC_GOALS:
@@ -367,20 +375,36 @@ class DistillationEngine:
         if len(unique_decisions) < 2:
             return None
 
-        # Build step-by-step
-        playbook_steps = []
-        for i, step in enumerate(success_steps[:5], 1):  # Max 5 steps
-            playbook_steps.append(f"{i}. {step.decision[:60]}")
+        # Require at least 2 different tools/actions for a meaningful playbook
+        tools = set()
+        for s in success_steps[:5]:
+            details = s.action_details or {}
+            tool = details.get("tool", "")
+            if tool:
+                tools.add(tool.lower())
+        if len(tools) < 2 and len(unique_decisions) < 3:
+            return None
 
-        statement = f"Playbook for '{episode.goal[:30]}': " + " → ".join(playbook_steps)
+        # Build step-by-step with full decisions
+        playbook_steps = []
+        for i, step in enumerate(success_steps[:5], 1):
+            decision_text = step.decision[:100] if step.decision else "unknown"
+            playbook_steps.append(f"{i}. {decision_text}")
+
+        # Use full goal (capped at 120 chars for readability)
+        goal_display = episode.goal[:120] if episode.goal else "unknown task"
+        statement = f"Playbook for '{goal_display}': " + "; ".join(playbook_steps)
+
+        # Use domain keywords as triggers instead of first word of goal
+        triggers = self._extract_triggers(success_steps)
 
         return DistillationCandidate(
             type=DistillationType.PLAYBOOK,
             statement=statement,
             domains=self._extract_domains(episode, steps),
-            triggers=[episode.goal.split()[0].lower()] if episode.goal else [],
+            triggers=triggers,
             source_steps=[s.step_id for s in success_steps],
-            confidence=0.6,
+            confidence=0.3,  # Start low — must earn trust
             rationale="Successful step sequence"
         )
 

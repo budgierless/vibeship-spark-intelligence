@@ -158,56 +158,90 @@ def importance_score(text: str) -> Tuple[float, Dict[str, float]]:
         score = min(1.0, score + 0.05)
 
     # --- Semantic signals (catch useful content without trigger phrases) ---
+    # These signals COMBINE: causal + quant + tech together can reach threshold
+
+    semantic_sum = 0.0
 
     # Causal language: explains WHY something works
     causal_score = 0.0
     if re.search(r"\b(because|due to|causes|leads to|results in|since|the reason)\b", t):
-        causal_score = 0.35
+        causal_score = 0.30
     elif re.search(r"\b(so that|in order to|prevents|ensures|helps|improves|reduces)\b", t):
-        causal_score = 0.25
+        causal_score = 0.20
+    elif re.search(r"\b(tends? to|generally|typically|usually|often leads|commonly|in practice)\b", t):
+        causal_score = 0.15
     if causal_score:
         breakdown["causal"] = causal_score
-        score = max(score, causal_score)
+        semantic_sum += causal_score
 
     # Quantitative evidence: numbers suggest data-backed insights
     quant_score = 0.0
-    if re.search(r"\d+\.?\d*\s*(%|percent|ms|seconds|MB|GB|x faster|x slower)", t):
-        quant_score = 0.40
+    if re.search(r"\d+\.?\d*\s*(%|percent|ms|seconds?|s\b|mb|gb|kb|fps|rpm|req|tps|x faster|x slower|x more|x less|x reduction|x improvement)", t, re.IGNORECASE):
+        quant_score = 0.30
+    elif re.search(r"\bfrom\s+\d+\.?\d*\S*\s+to\s+\d+", t):
+        quant_score = 0.30  # "from 4.2s to 1.6s" pattern
     elif re.search(r"\b\d{2,}\b", t) and re.search(r"\b(avg|average|median|reduced|increased|improved|from|to)\b", t):
-        quant_score = 0.35
+        quant_score = 0.25
     if quant_score:
         breakdown["quantitative"] = quant_score
-        score = max(score, quant_score)
+        semantic_sum += quant_score
 
     # Comparative language: preference/evaluation with specifics
     compare_score = 0.0
     if re.search(r"\b(better than|worse than|instead of|prefer .+ over|outperforms|compared to|rather than)\b", t):
-        compare_score = 0.40
-    elif re.search(r"\b(faster|slower|simpler|safer|cleaner|more reliable|less error)\b", t):
         compare_score = 0.25
+    elif re.search(r"\b(faster|slower|simpler|safer|cleaner|more reliable|less error|more \w+ than)\b", t):
+        compare_score = 0.15
     if compare_score:
         breakdown["comparative"] = compare_score
-        score = max(score, compare_score)
+        semantic_sum += compare_score
 
     # Technical specificity: named frameworks, patterns, or techniques
     tech_score = 0.0
     tech_hits = len(re.findall(
-        r"\b(React|Vue|Svelte|Next\.?js|Express|FastAPI|Django|bcrypt|JWT|OAuth|"
-        r"SQL|NoSQL|Redis|Docker|Kubernetes|CI/CD|webpack|vite|TypeScript|"
-        r"useEffect|useState|middleware|endpoint|schema|migration|"
+        r"\b(React|Vue|Svelte|Angular|Next\.?js|Express|FastAPI|Django|Flask|"
+        r"bcrypt|argon2|JWT|OAuth|PKCE|OIDC|"
+        r"SQL|NoSQL|Redis|Memcached|Elasticsearch|"
+        r"Docker|Kubernetes|Terraform|Ansible|"
+        r"CI/CD|GitHub.?Actions|Jenkins|ArgoCD|"
+        r"webpack|vite|esbuild|rollup|"
+        r"TypeScript|Python|Rust|"
+        r"useEffect|useState|useMemo|useCallback|React\.memo|"
+        r"middleware|endpoint|schema|migrat\w*|"
         r"async|await|promise|callback|hook|component|reducer|"
-        r"lazy.?load|memoiz|debounce|throttle|cache|index|partition|"
-        r"rate.?limit|CORS|CSRF|XSS|injection|sanitiz)\b", t, re.IGNORECASE
+        r"lazy.?load\w*|memoiz\w*|debounc\w*|throttl\w*|cach\w+|index\w*|partition\w*|"
+        r"rate.?limit\w*|CORS|CSRF|XSS|CSP|OWASP|inject\w*|sanitiz\w*|"
+        r"connection.?pool\w*|multi.?stage|canary|rolling|blue.?green|"
+        r"circuit.?breaker|dead.?letter|retr\w+|backoff|idempoten\w*|"
+        r"PostgreSQL|MySQL|MongoDB|SQLite|"
+        r"SQS|SNS|Lambda|S3|EC2|ECS|"
+        r"Datadog|Sentry|Pino|Winston|"
+        r"Prisma|Drizzle|Sequelize|"
+        r"dbt|Airflow|Spark|Kafka|RabbitMQ|"
+        r"PgBouncer|Nginx|HAProxy|CDN|"
+        r"BVH|ECS|GC|FPS|LCP|FCP|INP|CLS)\b", t, re.IGNORECASE
     ))
     if tech_hits >= 3:
-        tech_score = 0.40
-    elif tech_hits >= 2:
         tech_score = 0.30
+    elif tech_hits >= 2:
+        tech_score = 0.22
     elif tech_hits >= 1:
-        tech_score = 0.20
+        tech_score = 0.15
     if tech_score:
         breakdown["technical"] = tech_score
-        score = max(score, tech_score)
+        semantic_sum += tech_score
+
+    # Actionable language: concrete instruction or recommendation
+    action_score = 0.0
+    if re.search(r"\b(always|never|avoid\w*|make sure|ensure|check\w*|verify|consider\w*|us(?:e|ing|ed)|implement\w*|add\w*|set\w*|configur\w*)\b", t):
+        action_score = 0.15
+    if action_score:
+        breakdown["actionable"] = action_score
+        semantic_sum += action_score
+
+    # Apply semantic sum (signals stack additively)
+    if semantic_sum > 0:
+        score = max(score, min(1.0, semantic_sum))
 
     return float(min(1.0, score)), breakdown
 

@@ -1,4 +1,4 @@
-# Advisory Benchmark System
+﻿# Advisory Benchmark System
 
 ## Purpose
 
@@ -211,7 +211,7 @@ Run baseline diagnostics:
 python scripts/run_chip_learning_diagnostics.py \
   --limit-per-chip 400 \
   --active-only \
-  --project-path "C:\Users\USER\Desktop\vibeship-spark-intelligence" \
+  --project-path "<REPO_ROOT>" \
   --max-age-days 14 \
   --observer-limit 20 \
   --out-prefix chip_learning_diagnostics_v1
@@ -395,3 +395,4 @@ This enables concrete checks for:
 ## Expansion Backlog
 
 - Add optional automatic tuneable apply/rollback workflow after winner validation window.
+

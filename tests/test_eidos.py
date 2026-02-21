@@ -1,4 +1,4 @@
-"""
+﻿"""
 EIDOS Integration Tests
 
 Tests the EIDOS rehabilitation fixes:
@@ -506,8 +506,8 @@ class TestAntiPatternFixes:
         assert updated.confidence < 0.7  # Should have decayed
         assert updated.contradiction_count == 12
 
-    def test_confidence_stable_when_helped(self, tmp_path):
-        """Distillations with good track record should keep confidence."""
+    def test_confidence_grows_when_helped(self, tmp_path):
+        """Distillations with good track record should grow confidence."""
         store = EidosStore(str(tmp_path / "eidos.db"))
         dist = Distillation(
             distillation_id="", type=DistillationType.HEURISTIC,
@@ -522,4 +522,8 @@ class TestAntiPatternFixes:
             store.record_distillation_usage(did, helped=False)
 
         updated = store.get_distillation(did)
-        assert updated.confidence == 0.7  # No decay
+        # Confidence should grow above 0.7 due to positive outcomes
+        assert updated.confidence > 0.7
+        # But not hit 1.0 with only 8 positives
+        assert updated.confidence < 1.0
+

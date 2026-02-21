@@ -8,7 +8,7 @@ Spark exports three notes into:
 
 - `<obsidian_export_dir>\packets\index.md`
 - `<obsidian_export_dir>\watchtower.md`
-- `<obsidian_export_dir>\packets\pkt_<id>.md`
+- `<obsidian_export_dir>\packets\<packet_id>.md` (raw `packet_id`, not `pkt_` prefix)
 
 The watchtower is for:
 - quickly seeing what is currently ready vs stale/inactive
@@ -31,12 +31,23 @@ The watchtower is for:
   - `ready`, `stale`, `invalidated`, `entries`
 3. Check the **Top ready packets** section.
 4. Open `packets\index.md` for exact packet bodies and context.
-5. Review up to one **Ready Packet** in-session:
+5. In watchtower header, check `trace health` to see required-system score at a glance.
+6. Review up to one **Ready Packet** in-session:
    - pick one packet you can apply this session.
-6. Open packet and decide one action:
+7. Open packet and decide one action:
    - **Use now**: execute it in your workflow.
    - **Archive**: mark mentally for review.
    - **Ignore**: if unrelated context; no action needed.
+8. If this packet still feels unclear, open `packets\<packet_id>.md` and read in this fixed order:
+   - `Packet story for humans`
+   - `Here are the memories`
+   - `Here are the distilled versions`
+   - `Here are transformed ones`
+   - `Here is how they got transformed`
+   - `What Meta-Ralph said`
+   - `What is ready for advisory`
+   - `What is getting pulled as advisory`
+   - `What may need work`
 
 ## Weekly review flow (20–30 minutes)
 
@@ -61,10 +72,31 @@ Each packet page gives you:
 - readiness and freshness signals
 - invalidation reason if applicable
 - advisory text and actionability details
+- a readable pipeline walk-through:
+  - memories -> distilled -> transformed
+  - transformation and pull history
+  - what is ready now and what still needs work
 
 Use this pattern:
 - click a candidate packet from index
 - read only the top metadata + advisory text
+- check these sections in order:
+  - `Packet story for humans`
+  - `Here are the memories`
+  - `Here are the distilled versions`
+  - `Here are transformed ones`
+  - `Here is how they got transformed`
+  - `What Meta-Ralph said`
+   - `What is ready for advisory`
+   - `What is getting pulled as advisory`
+   - `Advisory Traceability Timeline` (then `Trace-system coverage`)
+     - verify trace IDs are present for this packet
+     - `ok` means at least one row from that system was seen in this packet context
+     - optional systems (`advisory_outcome`, `outcome_links`, `implicit_feedback`) can appear as data arrives
+   - `What may need work`
+9. Open `watchtower.md` and check:
+  - `Trace health pane (global, last N cycles)` for required/optional system activity and missing systems.
+  - `Trace-system heatmap (sample of recent packets)` for packet-level trace coverage.
 - either:
   - apply in current task immediately, or
   - defer and add a quick backlink in your task note
@@ -97,6 +129,18 @@ python scripts/set_obsidian_watchtower.py --show # (confirm path + enabled)
 ```
 
 Then run a normal advisory session to trigger real packet writes.
+
+## One-command watchtower health check
+
+```bash
+python scripts/check_obsidian_watchtower.py
+```
+
+- This checks:
+  - obsidian config + enabled flags
+  - export directory state
+  - sync execution (`_sync_obsidian_catalog`)
+  - presence of `index.md` + `watchtower.md`
 
 ## Troubleshooting
 

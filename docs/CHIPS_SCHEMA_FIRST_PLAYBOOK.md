@@ -1,4 +1,4 @@
-# Chips Schema-First Playbook
+﻿# Chips Schema-First Playbook
 
 Date: 2026-02-13
 Navigation hub: `docs/GLOSSARY.md`
@@ -215,7 +215,7 @@ Use fresh, active-chip windows:
 python scripts/run_chip_learning_diagnostics.py \
   --limit-per-chip 400 \
   --active-only \
-  --project-path "C:\Users\USER\Desktop\vibeship-spark-intelligence" \
+  --project-path "<REPO_ROOT>" \
   --max-age-days 14 \
   --observer-limit 20 \
   --out-prefix chip_learning_diagnostics_active_window
@@ -277,4 +277,5 @@ A healthy chip system has:
 - low chip-level fallback share,
 - stable schema payload/statement rates,
 - measurable advisory quality lift without noise inflation.
+
 

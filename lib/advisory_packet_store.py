@@ -31,6 +31,20 @@ OBSIDIAN_EXPORT_DIR = PACKET_DIR / "obsidian"
 OBSIDIAN_PACKETS_DIR = OBSIDIAN_EXPORT_DIR / "packets"
 OBSIDIAN_INDEX_FILE = OBSIDIAN_PACKETS_DIR / "index.md"
 ADVISORY_DECISION_LEDGER_FILE = Path.home() / ".spark" / "advisory_decision_ledger.jsonl"
+ADVISORY_ENGINE_LOG_FILE = Path.home() / ".spark" / "advisory_engine.jsonl"
+ADVISORY_EMIT_FILE = Path.home() / ".spark" / "advisory_emit.jsonl"
+ADVISORY_LOW_AUTH_DEDUPE_FILE = Path.home() / ".spark" / "advisory_low_auth_dedupe.jsonl"
+ADVISORY_GLOBAL_DEDUPE_FILE = Path.home() / ".spark" / "advisory_global_dedupe.jsonl"
+ADVICE_FEEDBACK_REQUESTS_FILE = Path.home() / ".spark" / "advice_feedback_requests.jsonl"
+ADVICE_FEEDBACK_FILE = Path.home() / ".spark" / "advice_feedback.jsonl"
+ADVISORY_RETRIEVAL_ROUTE_LOG_FILE = Path.home() / ".spark" / "advisor" / "retrieval_router.jsonl"
+ADVISOR_ADVICE_LOG_FILE = Path.home() / ".spark" / "advisor" / "advice_log.jsonl"
+ADVISOR_RECENT_ADVICE_FILE = Path.home() / ".spark" / "advisor" / "recent_advice.jsonl"
+OUTCOMES_FILE = Path.home() / ".spark" / "outcomes.jsonl"
+OUTCOME_LINKS_FILE = Path.home() / ".spark" / "outcome_links.jsonl"
+IMPLICIT_FEEDBACK_FILE = Path.home() / ".spark" / "advisor" / "implicit_feedback.jsonl"
+TRACE_EVENT_HISTORY_MAX = 12
+TRACE_HISTORY_TEXT_MAX = 60
 
 DEFAULT_PACKET_TTL_S = 900.0
 MAX_INDEX_PACKETS = 2000
@@ -109,6 +123,12 @@ PACKET_LOOKUP_LLM_FALLBACK_TO_SCORING = True
 OBSIDIAN_EXPORT_ENABLED = bool(DEFAULT_OBSIDIAN_EXPORT_ENABLED)
 OBSIDIAN_AUTO_EXPORT = bool(DEFAULT_OBSIDIAN_AUTO_EXPORT)
 OBSIDIAN_EXPORT_MAX_PACKETS = int(DEFAULT_OBSIDIAN_EXPORT_MAX_PACKETS)
+_OBSIDIAN_SYNC_STATUS: Dict[str, Any] = {
+    "status": "not_run",
+    "criticality": "non_critical",
+    "message": "obsidian sync not attempted yet",
+    "source": "advisory_packet_store",
+}
 
 
 def _obsidian_export_dir() -> Path:
@@ -138,6 +158,27 @@ def _obsidian_enabled() -> bool:
     return bool(OBSIDIAN_EXPORT_ENABLED)
 
 
+def _record_obsidian_status(
+    status: str,
+    *,
+    message: str = "",
+    source: str = "advisory_packet_store",
+) -> Dict[str, Any]:
+    _OBSIDIAN_SYNC_STATUS.update(
+        {
+            "status": status,
+            "criticality": "non_critical",
+            "message": str(message or "").strip(),
+            "source": str(source),
+        }
+    )
+    return dict(_OBSIDIAN_SYNC_STATUS)
+
+
+def _get_obsidian_status() -> Dict[str, Any]:
+    return dict(_OBSIDIAN_SYNC_STATUS)
+
+
 def _decision_ledger_enabled() -> bool:
     return True
 
@@ -159,6 +200,34 @@ def _read_advisory_decision_ledger(limit: int = 120) -> List[Dict[str, Any]]:
     if not raw:
         return []
 
+    if limit_count > 0:
+        raw = raw[-limit_count:]
+
+    out: List[Dict[str, Any]] = []
+    for line in raw:
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(row, dict):
+            out.append(row)
+    return out
+
+
+def _read_jsonl_lines(path: Path, limit: int = 1200) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        limit_count = max(0, int(limit or 0))
+    except Exception:
+        limit_count = 0
+
+    try:
+        raw = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return []
+    if not raw:
+        return []
     if limit_count > 0:
         raw = raw[-limit_count:]
 
@@ -199,6 +268,338 @@ def _decision_ledger_meta() -> Dict[str, Any]:
         }
     )
     return meta
+
+
+def _trace_ids_for_packet(packet: Dict[str, Any]) -> List[str]:
+    if not isinstance(packet, dict):
+        return []
+    out: List[str] = []
+    seen: set[str] = set()
+
+    lineage = packet.get("lineage") if isinstance(packet.get("lineage"), dict) else {}
+    for trace_id in (str(lineage.get("trace_id") or "").strip(), str(packet.get("last_trace_id") or "").strip()):
+        if trace_id and trace_id not in seen:
+            out.append(trace_id)
+            seen.add(trace_id)
+
+    for row in packet.get("trace_usage_history") or []:
+        if not isinstance(row, dict):
+            continue
+        trace_id = str(row.get("trace_id") or "").strip()
+        if trace_id and trace_id not in seen:
+            out.append(trace_id)
+            seen.add(trace_id)
+    return out
+
+
+def _advice_ids_for_packet(packet: Dict[str, Any]) -> List[str]:
+    out: List[str] = []
+    if not isinstance(packet, dict):
+        return out
+    seen: set[str] = set()
+    for row in packet.get("advice_items") or []:
+        if not isinstance(row, dict):
+            continue
+        advice_id = str(row.get("advice_id") or "").strip()
+        if advice_id and advice_id not in seen:
+            out.append(advice_id)
+            seen.add(advice_id)
+    return out
+
+
+def _advice_insight_keys_for_packet(packet: Dict[str, Any]) -> List[str]:
+    out: List[str] = []
+    if not isinstance(packet, dict):
+        return out
+    seen: set[str] = set()
+    for row in packet.get("advice_items") or []:
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("insight_key") or "").strip()
+        if key and key not in seen:
+            out.append(key)
+            seen.add(key)
+    return out
+
+
+def _normalize_trace_usage_history(
+    history: Any,
+    *,
+    limit: int = TRACE_EVENT_HISTORY_MAX,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not isinstance(history, list):
+        return []
+    max_items = max(1, int(limit or TRACE_EVENT_HISTORY_MAX))
+    for row in history:
+        if len(out) >= max_items:
+            break
+        if not isinstance(row, dict):
+            continue
+        payload = dict(row)
+        trace_id = str(payload.get("trace_id") or "").strip()
+        if trace_id:
+            payload["trace_id"] = trace_id
+        payload["tool_name"] = str(payload.get("tool_name") or "").strip()[:40]
+        payload["route"] = str(payload.get("route") or "").strip()[:80]
+        payload["emitted"] = bool(payload.get("emitted", False))
+        try:
+            payload["ts"] = float(payload.get("ts") or 0.0)
+        except Exception:
+            payload["ts"] = 0.0
+        payload["route_order"] = int(payload.get("route_order") or len(out) + 1)
+        out.append(payload)
+    # Most recent at the end in the UI.
+    return sorted(out, key=lambda row: float(row.get("ts", 0.0)), reverse=False)[-max_items:]
+
+
+def _packet_trace_history_events(
+    packet: Dict[str, Any],
+    *,
+    limit: int = 180,
+) -> List[Dict[str, Any]]:
+    if not isinstance(packet, dict):
+        return []
+
+    packet_id = str(packet.get("packet_id") or "").strip()
+    if not packet_id:
+        return []
+
+    trace_ids = set(_trace_ids_for_packet(packet))
+    advice_ids = set(_advice_ids_for_packet(packet))
+    packet_insight_keys = set(_advice_insight_keys_for_packet(packet))
+    linked_outcome_ids: set[str] = set()
+    outcome_trace_by_id: Dict[str, str] = {}
+    outcome_ts_by_id: Dict[str, float] = {}
+    events: List[Dict[str, Any]] = []
+
+    for row in _packet_decision_events(packet_id, limit=limit):
+        normalized = dict(row)
+        normalized["trace_system"] = "advisory_decision_ledger"
+        events.append(normalized)
+
+    if ADVISORY_ENGINE_LOG_FILE.exists():
+        for row in _read_jsonl_lines(ADVISORY_ENGINE_LOG_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if str(row.get("packet_id") or "").strip() == packet_id or row_trace in trace_ids:
+                normalized = dict(row)
+                normalized["trace_system"] = "advisory_engine"
+                events.append(normalized)
+
+    if ADVISORY_RETRIEVAL_ROUTE_LOG_FILE.exists():
+        for row in _read_jsonl_lines(ADVISORY_RETRIEVAL_ROUTE_LOG_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace in trace_ids:
+                normalized = dict(row)
+                normalized["trace_system"] = "advisor_retrieval_router"
+                events.append(normalized)
+
+    if ADVISORY_EMIT_FILE.exists():
+        for row in _read_jsonl_lines(ADVISORY_EMIT_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace in trace_ids:
+                normalized = dict(row)
+                normalized["trace_system"] = "advisory_emit"
+                events.append(normalized)
+
+    if ADVISORY_LOW_AUTH_DEDUPE_FILE.exists():
+        for row in _read_jsonl_lines(ADVISORY_LOW_AUTH_DEDUPE_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace not in trace_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advisory_low_auth_dedupe"
+            events.append(normalized)
+
+    if ADVISORY_GLOBAL_DEDUPE_FILE.exists():
+        for row in _read_jsonl_lines(ADVISORY_GLOBAL_DEDUPE_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace not in trace_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advisory_global_dedupe"
+            events.append(normalized)
+
+    if ADVISOR_ADVICE_LOG_FILE.exists():
+        for row in _read_jsonl_lines(ADVISOR_ADVICE_LOG_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace not in trace_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advisor_advice_log"
+            events.append(normalized)
+
+    if ADVISOR_RECENT_ADVICE_FILE.exists():
+        for row in _read_jsonl_lines(ADVISOR_RECENT_ADVICE_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace not in trace_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advisor_recent_advice"
+            events.append(normalized)
+
+    if ADVICE_FEEDBACK_REQUESTS_FILE.exists():
+        for row in _read_jsonl_lines(ADVICE_FEEDBACK_REQUESTS_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            match_packet = str(row.get("packet_id") or "").strip() == packet_id
+            row_trace = str(row.get("trace_id") or "").strip()
+            if not match_packet and row_trace not in trace_ids:
+                continue
+            row_advice_ids = row.get("advice_ids") or []
+            if not isinstance(row_advice_ids, list):
+                row_advice_ids = []
+            if not match_packet and not (advice_ids and set(str(x) for x in row_advice_ids).intersection(advice_ids)):
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advice_feedback_request"
+            events.append(normalized)
+
+    if ADVICE_FEEDBACK_FILE.exists():
+        for row in _read_jsonl_lines(ADVICE_FEEDBACK_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            match_packet = str(row.get("packet_id") or "").strip() == packet_id
+            row_trace = str(row.get("trace_id") or "").strip()
+            if not match_packet and row_trace not in trace_ids:
+                continue
+            row_advice_ids = row.get("advice_ids") or []
+            if not isinstance(row_advice_ids, list):
+                row_advice_ids = []
+            if not match_packet and not (advice_ids and set(str(x) for x in row_advice_ids).intersection(advice_ids)):
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "advice_feedback"
+            events.append(normalized)
+
+    if OUTCOMES_FILE.exists():
+        for row in _read_jsonl_lines(OUTCOMES_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            row_outcome_id = str(row.get("outcome_id") or "").strip()
+            if not row_trace and not row_outcome_id:
+                continue
+
+            row_insight_keys: set[str] = set()
+            outcome_insight = row.get("insight")
+            if isinstance(outcome_insight, str):
+                outcome_insight = outcome_insight.strip()
+                if outcome_insight:
+                    row_insight_keys.add(outcome_insight)
+            elif isinstance(outcome_insight, list):
+                for item in outcome_insight:
+                    text = str(item or "").strip()
+                    if text:
+                        row_insight_keys.add(text)
+            if packet_insight_keys:
+                row_insight_keys.update(str(item).strip() for item in _safe_list([row.get("insight_key")], max_items=10) if str(item).strip())
+
+            match_trace = bool(row_trace and row_trace in trace_ids)
+            match_insight = bool(packet_insight_keys and row_insight_keys.intersection(packet_insight_keys))
+            if not match_trace and not match_insight:
+                continue
+
+            normalized = dict(row)
+            normalized["trace_system"] = "advisory_outcome"
+            normalized.setdefault("trace_id", row_trace)
+            normalized["event"] = f"outcome:{str(row.get('event_type') or 'recorded')}"
+            if row_outcome_id:
+                linked_outcome_ids.add(row_outcome_id)
+                if row_trace:
+                    outcome_trace_by_id[row_outcome_id] = row_trace
+                try:
+                    outcome_ts_by_id[row_outcome_id] = float(
+                        row.get("created_at") or row.get("timestamp") or row.get("time") or row.get("event_ts") or 0.0
+                    )
+                except Exception:
+                    outcome_ts_by_id[row_outcome_id] = 0.0
+            if not normalized.get("ts"):
+                normalized["ts"] = outcome_ts_by_id.get(row_outcome_id, 0.0)
+            events.append(normalized)
+
+    if OUTCOME_LINKS_FILE.exists():
+        for row in _read_jsonl_lines(OUTCOME_LINKS_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_outcome_id = str(row.get("outcome_id") or "").strip()
+            if not row_outcome_id:
+                continue
+            if row_outcome_id not in linked_outcome_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "outcome_links"
+            normalized["trace_id"] = str(outcome_trace_by_id.get(row_outcome_id, "")).strip()
+            normalized["event"] = "outcome_link"
+            if not normalized.get("ts"):
+                normalized["ts"] = outcome_ts_by_id.get(row_outcome_id, 0.0)
+            events.append(normalized)
+
+    if IMPLICIT_FEEDBACK_FILE.exists():
+        for row in _read_jsonl_lines(IMPLICIT_FEEDBACK_FILE, limit=limit * 2):
+            if not isinstance(row, dict):
+                continue
+            row_trace = str(row.get("trace_id") or "").strip()
+            if row_trace not in trace_ids:
+                continue
+            normalized = dict(row)
+            normalized["trace_system"] = "implicit_feedback"
+            if not normalized.get("ts"):
+                normalized["ts"] = float(row.get("timestamp") or row.get("time") or 0.0)
+            events.append(normalized)
+
+    events = [row for row in events if isinstance(row, dict)]
+    events.sort(key=lambda row: float(row.get("ts") or 0.0), reverse=True)
+    return events[:limit]
+
+
+def _trace_coverage_summary(
+    packet: Dict[str, Any],
+    *,
+    events: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, int]:
+    coverage: Dict[str, int] = {
+        "advisory_decision_ledger": 0,
+        "advisory_engine": 0,
+        "advisor_retrieval_router": 0,
+        "advisory_emit": 0,
+        "advisory_low_auth_dedupe": 0,
+        "advisory_global_dedupe": 0,
+        "advisor_advice_log": 0,
+        "advisor_recent_advice": 0,
+        "advice_feedback_request": 0,
+        "advice_feedback": 0,
+        "advisory_outcome": 0,
+        "outcome_links": 0,
+        "implicit_feedback": 0,
+    }
+    if not isinstance(packet, dict):
+        return coverage
+    packet_id = str(packet.get("packet_id") or "").strip()
+    if not packet_id:
+        return coverage
+    rows = events
+    if rows is None:
+        rows = _packet_trace_history_events(packet, limit=180)
+    for row in rows:
+        system = str(row.get("trace_system") or "").strip()
+        if system in coverage:
+            coverage[system] += 1
+    return coverage
 
 
 def _load_packet_store_config(path: Optional[Path] = None) -> Dict[str, Any]:
@@ -524,6 +925,11 @@ def _normalize_packet(packet: Dict[str, Any]) -> Dict[str, Any]:
     out["blocked_count"] = max(0, _to_int(out.get("blocked_count", 0), 0))
     out["harmful_count"] = max(0, _to_int(out.get("harmful_count", 0), 0))
     out["ignored_count"] = max(0, _to_int(out.get("ignored_count", 0), 0))
+    out["last_trace_id"] = str(out.get("last_trace_id") or (out.get("lineage", {}).get("trace_id") if isinstance(out.get("lineage"), dict) else "") or "").strip()
+    out["trace_usage_history"] = _normalize_trace_usage_history(
+        out.get("trace_usage_history"),
+        limit=TRACE_EVENT_HISTORY_MAX,
+    )
     out["effectiveness_score"] = _compute_effectiveness_score(
         helpful_count=out["helpful_count"],
         unhelpful_count=out["unhelpful_count"],
@@ -575,6 +981,24 @@ def _packet_lookup_context(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+
+def _packet_decision_events(packet_id: str, limit: int = 120) -> List[Dict[str, Any]]:
+    if not packet_id:
+        return []
+    try:
+        limit_count = max(1, min(int(limit or 0), 500))
+    except Exception:
+        limit_count = 120
+    matched: List[Dict[str, Any]] = []
+    for row in _read_advisory_decision_ledger(limit=limit_count * 3):
+        try:
+            if str(row.get("packet_id") or "") == str(packet_id):
+                matched.append(dict(row))
+        except Exception:
+            continue
+    return matched[:limit_count]
+
+
 def _obsidian_payload(packet: Dict[str, Any]) -> str:
     packet_id = str(packet.get("packet_id") or "")
     if not packet_id:
@@ -593,6 +1017,10 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
     categories = _safe_list(packet.get("category_summary"), max_items=20)
     source_line = ", ".join(sources) if sources else "unset"
     category_line = ", ".join(categories) if categories else "unset"
+    lineage = packet.get("lineage") if isinstance(packet.get("lineage"), dict) else {}
+    lineage_sources = _safe_list(lineage.get("sources"), max_items=20)
+    memory_absent_declared = bool(lineage.get("memory_absent_declared", False))
+    trace_id = str(lineage.get("trace_id", "") or "").strip()
     flags = _readiness_flags(packet, now_ts=_now())
     freshness_remaining = float(packet.get("fresh_until_ts", 0.0) or 0.0) - _now()
     if freshness_remaining < 0.0:
@@ -620,6 +1048,182 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
         freshness_ratio = 0.0
 
     readiness = float(flags.get("readiness_score", 0.0) or 0.0)
+    advice_rows = [row for row in (packet.get("advice_items") or []) if isinstance(row, dict)]
+
+    def _bucket_source(value: str) -> str:
+        source = str(value or "").strip().lower()
+        if "eidos" in source or "distill" in source or "chip" in source:
+            return "distilled"
+        if "memory" in source or "mind" in source or "bridge" in source or "bank" in source or "semantic" in source:
+            return "memory"
+        if "packet" in source or "advisor" in source or "live" in source or "synth" in source:
+            return "transformed"
+        return "other"
+
+    advice_by_bucket: Dict[str, List[Dict[str, Any]]] = {
+        "memory": [],
+        "distilled": [],
+        "transformed": [],
+        "other": [],
+    }
+    for row in advice_rows:
+        advice_by_bucket[_bucket_source(str(row.get("source", "")))].append(row)
+
+    packet_events = _packet_decision_events(packet_id, limit=50)
+    packet_trace_events = _packet_trace_history_events(packet, limit=120)
+    selected_total = sum(int(row.get("selected_count", 0) or 0) for row in packet_events)
+    suppressed_total = sum(int(row.get("suppressed_count", 0) or 0) for row in packet_events)
+    route_hint = str(packet_events[0].get("route", "") or "none") if packet_events else "none"
+    trace_coverage = _trace_coverage_summary(packet, events=packet_trace_events)
+    stage_counter: Counter[str] = Counter()
+    suppression_reasons: List[str] = []
+    for row in packet_events:
+        stage_counter[str(row.get("stage", "") or "unspecified").strip() or "unspecified"] += 1
+        suppression_reasons.extend(
+            _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=4)
+        )
+    stage_text = ", ".join(f"{k}({v})" for k, v in stage_counter.most_common(8))
+    if not stage_text:
+        stage_text = "none"
+
+    def _event_lines(event: Dict[str, Any], idx: int) -> List[str]:
+        try:
+            ts = float(
+                event.get("ts")
+                or event.get("created_at")
+                or event.get("timestamp")
+                or event.get("time")
+                or 0.0
+            )
+        except Exception:
+            ts = 0.0
+        ts_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else "unknown"
+        stage = str(event.get("stage", "") or "unknown")
+        outcome = str(event.get("outcome", "") or stage)
+        suppressed = int(event.get("suppressed_count", 0) or 0)
+        selected = int(event.get("selected_count", 0) or 0)
+        reasons = _safe_list([str(r.get("reason") or "") for r in event.get("suppressed_reasons", [])], max_items=3)
+        return [
+            f"{idx}. {ts_text}",
+            f"   - tool={str(event.get('tool', '') or '*')} route={str(event.get('route', '') or 'none')}",
+            f"   - stage={stage} outcome={outcome}",
+            f"   - selected={selected} suppressed={suppressed}",
+            f"   - reasons={(', '.join(reasons) if reasons else 'none')}",
+        ]
+
+    def _trace_event_lines(event: Dict[str, Any], idx: int) -> List[str]:
+        try:
+            ts = float(
+                event.get("ts")
+                or event.get("created_at")
+                or event.get("timestamp")
+                or event.get("time")
+                or 0.0
+            )
+        except Exception:
+            ts = 0.0
+        ts_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else "unknown"
+        system = str(event.get("trace_system") or "unknown")
+        route = str(event.get("route", "") or event.get("path", "") or "none")
+        tool = str(event.get("tool", "") or event.get("tool_name", "") or "*")
+        stage = str(
+            event.get("stage", "")
+            or event.get("outcome", "")
+            or event.get("status", "")
+            or event.get("event", "")
+            or "pipeline"
+        )
+        outcome = str(event.get("outcome", "") or event.get("stage", "") or "unspecified").strip() or "unspecified"
+        event_name = str(event.get("event", "") or stage)
+        insight_key = str(event.get("insight_key", "")).strip()
+        outcome_id = str(event.get("outcome_id", "") or event.get("outcome_trace_id", "")).strip()
+        trace_status = str(event.get("status", "") or event.get("source", "") or "n/a").strip()
+        advice_rows = event.get("advice_ids") or event.get("advice_ids_merged") or event.get("advice_items") or []
+        advice_count = len(advice_rows) if isinstance(advice_rows, (list, tuple)) else 0
+        selected = int(event.get("selected_count", 0) or 0)
+        suppressed = int(event.get("suppressed_count", 0) or 0)
+        return [
+            f"{idx}. {ts_text} [{system}]",
+            f"   - tool={tool} route={route}",
+            f"   - stage={stage} outcome={outcome}",
+            f"   - event={event_name}",
+            f"   - trace_status={trace_status} insight={insight_key or 'none'}",
+            f"   - outcome_id={outcome_id or 'none'}",
+            f"   - trace_id={str(event.get('trace_id') or 'none')}",
+            f"   - advice_count={advice_count} selected={selected} suppressed={suppressed}",
+        ]
+
+    def _advice_lines(items: List[Dict[str, Any]], title: str, limit: int = 8) -> List[str]:
+        if not items:
+            return [f"### {title}", "- none"]
+        out: List[str] = [f"### {title} ({len(items)} items)"]
+        for idx, item in enumerate(items[:limit], start=1):
+            if not isinstance(item, dict):
+                continue
+            aid = str(item.get("advice_id") or f"item_{idx}")
+            source = str(item.get("source") or "unknown")
+            category = str(item.get("category") or item.get("source") or "general")
+            text = str(item.get("text") or "").strip()
+            confidence = item.get("confidence")
+            context_match = item.get("context_match")
+            try:
+                confidence_text = f"{float(confidence):.2f}"
+            except Exception:
+                confidence_text = "n/a"
+            try:
+                context_text = f"{float(context_match):.2f}"
+            except Exception:
+                context_text = "n/a"
+            out.append(f"{idx}. {aid}")
+            out.append(f"- source={source} bucket={_bucket_source(source)} category={category}")
+            out.append(f"- confidence={confidence_text} context_match={context_text}")
+            reason = str(item.get("reason") or "").strip()
+            if reason:
+                out.append(f"- reason={reason}")
+            if text:
+                out.append(f"- text={text}")
+            proof_refs = item.get("proof_refs")
+            if isinstance(proof_refs, dict) and proof_refs:
+                out.append(f"- evidence_hash={str(item.get('evidence_hash') or 'n/a')}")
+                proof_bits: List[str] = []
+                if str(proof_refs.get("trace_id") or "").strip():
+                    proof_bits.append(f"trace={str(proof_refs.get('trace_id') or '')}")
+                if str(proof_refs.get("insight_key") or "").strip():
+                    proof_bits.append(f"insight={str(proof_refs.get('insight_key') or '')}")
+            if proof_bits:
+                out.append("- proof=" + ", ".join(proof_bits))
+        return out
+
+    def _short_text(value: Any, max_chars: int = 240) -> str:
+        text = str(value or "").strip().replace("\n", " ").replace("\r", " ")
+        if not text:
+            return "(empty)"
+        if len(text) <= max_chars:
+            return text
+        return text[: max(1, max_chars - 1)].rstrip() + "…"
+
+    source_counter: Counter[str] = Counter()
+    route_history: List[str] = []
+    outcome_counter: Counter[str] = Counter()
+    for row in packet_events:
+        route = str(row.get("route", "") or "none").strip() or "none"
+        if route not in route_history:
+            route_history.append(route)
+        outcome = str(row.get("outcome", "") or row.get("stage", "") or "unspecified").strip().lower()
+        if not outcome:
+            outcome = "unspecified"
+        outcome_counter[outcome] += 1
+        row_sources = row.get("source_counts")
+        if isinstance(row_sources, dict):
+            for source_name, count in row_sources.items():
+                try:
+                    source_counter[str(source_name)] += int(count or 0)
+                except Exception:
+                    continue
+
+    outcome_summary = ", ".join(f"{name}:{count}" for name, count in outcome_counter.most_common()) or "none"
+    source_summary_for_events = ", ".join(_short_text(name) for name in _safe_list(list(source_counter.keys()), max_items=20)) or "none"
+
     lines = [
         "---",
         "type: spark-advisory-packet",
@@ -648,24 +1252,65 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
         f"noisy_count: {_yaml(int(packet.get('noisy_count', 0) or 0))}",
         f"sources: {_yaml_list(sources)}",
         f"categories: {_yaml_list(categories)}",
+        f"advice_count: {_yaml(len(advice_rows))}",
+        f"lineage_sources: {_yaml_list(lineage_sources)}",
+        f"memory_absent_declared: {_yaml(memory_absent_declared)}",
+        f"trace_id: {_yaml(trace_id or 'none')}",
+        f"selected_total: {_yaml(selected_total)}",
+        f"suppressed_total: {_yaml(suppressed_total)}",
+        f"route_history: {_yaml_list(route_history)}",
+        f"outcomes: {_yaml(outcome_summary)}",
+        f"event_sources: {_yaml(source_summary_for_events)}",
         f"tags: ['spark', 'advisory', 'watchtower', {_yaml(tool)}, {_yaml(intent)}]",
         "---",
         "",
-        f"# Packet {packet_id}",
+        f"# Packet {packet_id} | {tool} | {intent}",
         "",
-        "## Packet Metadata",
+        "## Packet story for humans",
+        f"- freshness: {'fresh' if bool(flags.get('is_fresh')) else 'stale'}",
+        f"- readiness: {readiness:.3f}",
+        f"- selected in decisions: {selected_total}",
+        f"- suppressed in decisions: {suppressed_total}",
+        f"- route history: {', '.join(route_history) if route_history else route_hint}",
+        f"- last read: {last_read_at}",
+        "",
+        "## Here are the memories",
+        f"- lineage sources: {', '.join(lineage_sources) if lineage_sources else 'none'}",
+        f"- memory_absent_declared: {memory_absent_declared}",
+        f"- source_mode: `{source_mode}`",
+        f"- trace_id: `{trace_id or 'none'}`",
+        f"- memory summary: {_short_text('; '.join(_short_text(row.get('text', ''), 120) for row in advice_by_bucket['memory']), 220) if advice_by_bucket['memory'] else '(no memory-derived rows captured)'}",
+        "",
+        *_advice_lines(advice_by_bucket['memory'], "Memory-derived inputs"),
+        "",
+        "## Here are the distilled versions",
+        f"- memory-derived: {len(advice_by_bucket['memory'])}",
+        f"- distillations: {len(advice_by_bucket['distilled'])}",
+        f"- transformed/live: {len(advice_by_bucket['transformed'])}",
+        f"- other: {len(advice_by_bucket['other'])}",
+        "",
+        *_advice_lines(advice_by_bucket['distilled'], "Distilled"),
+        *_advice_lines(advice_by_bucket['other'], "Other"),
+        "",
+        "## Here are transformed ones",
+        *_advice_lines(advice_by_bucket['transformed'], "Transformed/live"),
+        "",
+        "## Here is how they got transformed",
+        f"- advisory route: `{route_hint}`",
+        f"- route history: {', '.join(route_history) if route_history else route_hint}",
+        f"- gate stages seen: {stage_text}",
+        f"- decision outcomes: {outcome_summary}",
+        f"- suppression reasons: {', '.join(s for s in suppression_reasons if s) if suppression_reasons else 'none'}",
+        f"- advisory evidence sources: {source_summary_for_events}",
+        "",
+        "## Advisory Packet Metadata",
         f"- Project: `{project}`",
         f"- Session key: `{session_ctx}`",
         f"- Tool context: `{tool}`",
         f"- Intent family: `{intent}`",
         f"- Task plane: `{plane}`",
-        f"- Source mode: `{source_mode}`",
-        f"- Created: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_ts)) if created_ts else 'unknown'}",
-        f"- Updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(updated_ts)) if updated_ts else 'unknown'}",
-        f"- Fresh until: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(fresh_until_ts)) if fresh_until_ts else 'unknown'}",
         f"- Sources: {source_line}",
         f"- Categories: {category_line}",
-        f"- Invalidated: {bool(packet.get('invalidated', False))}",
         f"- Invalidation reason: `{str(packet.get('invalidate_reason', '') or 'none')}`",
         f"- Readiness: {float(flags.get('readiness_score', 0.0) or 0.0):.3f}",
         f"- Fresh now: {'yes' if bool(flags.get('is_fresh')) else 'no'}",
@@ -682,33 +1327,104 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
         f"- Unhelpful: {int(packet.get('unhelpful_count', 0) or 0)}",
         f"- Noisy: {int(packet.get('noisy_count', 0) or 0)}",
         "",
-        "## Advisory Text",
+        "## Here is what is ready for advisory",
+        f"- ready_for_use: {bool(flags.get('ready_for_use', False))}",
+        f"- selected total (all events): {selected_total}",
+        f"- suppressed total (all events): {suppressed_total}",
+        "",
+        "## Here is what is getting pulled as advisory",
     ]
-
-    if advisory_text:
-        lines.append(advisory_text)
-
-    lines.extend(["", "## Advice Items", ""])
-    for idx, row in enumerate(packet.get("advice_items") or [], start=1):
-        if not isinstance(row, dict):
-            continue
-        text = str(row.get("text") or "").strip()
-        if not text:
-            continue
-        src = str(row.get("source") or "unknown")
-        conf = row.get("confidence")
-        aid = str(row.get("advice_id") or f"item_{idx}")
-        cat = str(row.get("category") or row.get("source") or "general")
-        try:
-            conf_display = f"{float(conf):.2f}"
-        except Exception:
-            conf_display = "n/a"
-        lines.append(f"### {idx}. {aid}")
-        lines.append(f"- source: {src}")
-        lines.append(f"- category: {cat}")
-        lines.append(f"- confidence: {conf_display}")
-        lines.append(text)
+    if packet_events:
+        for idx, event in enumerate(packet_events[:25], start=1):
+            lines.extend(_event_lines(event, idx))
+            lines.append("")
+    else:
+        lines.append("- no decision events yet (ready to observe once advisory pulls happen)")
         lines.append("")
+
+    lines.extend(
+        [
+            "## Advisory Text (latest merged packet)",
+            advisory_text if advisory_text else "*(no advisory text payload)*",
+            "",
+            "## What Meta-Ralph said",
+            f"- outcome route: `{route_hint}`",
+            f"- selected events: {selected_total}",
+            f"- suppressed events: {suppressed_total}",
+            f"- outcomes seen: {outcome_summary}",
+            f"- decision event sources: {source_summary_for_events}",
+            "- check `~/.spark/advisory_engine.jsonl`, `~/.spark/advisory_emit.jsonl`, `~/.spark/advisory_decision_ledger.jsonl`, `~/.spark/advisor/retrieval_router.jsonl` for score trail",
+            "",
+            "## Advisory Traceability Timeline",
+        ]
+    )
+    if packet_trace_events:
+        for idx, event in enumerate(packet_trace_events[:35], start=1):
+            lines.extend(_trace_event_lines(event, idx))
+            lines.append("")
+    else:
+        lines.append("- no trace events available yet")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Trace-system coverage",
+            f"- advisory_decision_ledger: {'ok' if trace_coverage.get('advisory_decision_ledger', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_decision_ledger', 0)})",
+            f"- advisory_engine: {'ok' if trace_coverage.get('advisory_engine', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_engine', 0)})",
+            f"- advisor_retrieval_router: {'ok' if trace_coverage.get('advisor_retrieval_router', 0) > 0 else 'missing'} ({trace_coverage.get('advisor_retrieval_router', 0)})",
+            f"- advisory_emit: {'ok' if trace_coverage.get('advisory_emit', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_emit', 0)})",
+            f"- advisory_low_auth_dedupe: {'ok' if trace_coverage.get('advisory_low_auth_dedupe', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_low_auth_dedupe', 0)})",
+            f"- advisory_global_dedupe: {'ok' if trace_coverage.get('advisory_global_dedupe', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_global_dedupe', 0)})",
+            f"- advisor_advice_log: {'ok' if trace_coverage.get('advisor_advice_log', 0) > 0 else 'missing'} ({trace_coverage.get('advisor_advice_log', 0)})",
+            f"- advisor_recent_advice: {'ok' if trace_coverage.get('advisor_recent_advice', 0) > 0 else 'missing'} ({trace_coverage.get('advisor_recent_advice', 0)})",
+            f"- advice_feedback_request: {'ok' if trace_coverage.get('advice_feedback_request', 0) > 0 else 'missing'} ({trace_coverage.get('advice_feedback_request', 0)})",
+            f"- advice_feedback: {'ok' if trace_coverage.get('advice_feedback', 0) > 0 else 'missing'} ({trace_coverage.get('advice_feedback', 0)})",
+            f"- advisory_outcome: {'ok' if trace_coverage.get('advisory_outcome', 0) > 0 else 'missing'} ({trace_coverage.get('advisory_outcome', 0)})",
+            f"- outcome_links: {'ok' if trace_coverage.get('outcome_links', 0) > 0 else 'missing'} ({trace_coverage.get('outcome_links', 0)})",
+            f"- implicit_feedback: {'ok' if trace_coverage.get('implicit_feedback', 0) > 0 else 'missing'} ({trace_coverage.get('implicit_feedback', 0)})",
+            "",
+            "## Here is what may need work",
+        ]
+    )
+    trace_systems_required = {
+        "advisory_decision_ledger",
+        "advisory_engine",
+        "advisor_retrieval_router",
+        "advisory_emit",
+        "advice_feedback",
+        "advice_feedback_request",
+    }
+    trace_systems_optional = {
+        "advisory_outcome",
+        "outcome_links",
+        "implicit_feedback",
+    }
+    missing_systems = [name for name in trace_systems_required if trace_coverage.get(name, 0) <= 0]
+    if missing_systems:
+        lines.append(f"- missing trace systems this cycle: {', '.join(missing_systems)}")
+    missing_optional_systems = [name for name in trace_systems_optional if trace_coverage.get(name, 0) <= 0]
+    if missing_optional_systems:
+        lines.append(f"- optional trace systems not yet seen for this packet: {', '.join(missing_optional_systems)}")
+    if not packet.get("trace_usage_history"):
+        lines.append("- trace usage history: no usage/outcome markers yet")
+    lines.append(f"- timeline depth: {len(packet_trace_events)} events")
+    if bool(packet.get("invalidated", False)):
+        lines.append(f"- invalidated: yes ({str(packet.get('invalidate_reason', '') or 'none')})")
+    else:
+        lines.append("- invalidated: no")
+    if not bool(flags.get("is_fresh", False)):
+        lines.append("- stale: packet has exceeded freshness window")
+    if int(packet.get("noisy_count", 0) or 0) > 0:
+        lines.append(f"- noisy_count: {int(packet.get('noisy_count', 0) or 0)}")
+    if readiness < 0.35:
+        lines.append("- readiness is below advisory threshold 0.35")
+    if not advice_rows:
+        lines.append("- no structured advice rows: difficult to trace source transform")
+    elif len(advice_rows) < 2:
+        lines.append("- very small advisory payload: consider collecting more evidence")
+    else:
+        lines.append(f"- structured advice rows captured: {len(advice_rows)}")
+    lines.append(f"- other bucket size: {len(advice_by_bucket['other'])}")
 
     return "\n".join(lines).strip() + "\n"
 
@@ -774,6 +1490,11 @@ def _obsidian_catalog_entry(packet: Dict[str, Any], now_ts: Optional[float] = No
         "usage_count": int(packet.get("usage_count", 0) or 0),
         "emit_count": int(packet.get("emit_count", 0) or 0),
         "deliver_count": int(packet.get("deliver_count", packet.get("emit_count", 0)) or 0),
+        "last_trace_id": str(packet.get("last_trace_id", "") or "").strip(),
+        "trace_usage_history": _normalize_trace_usage_history(
+            packet.get("trace_usage_history", []),
+            limit=TRACE_EVENT_HISTORY_MAX,
+        ),
         "source_summary": _safe_list(packet.get("source_summary"), max_items=10),
         "category_summary": _safe_list(packet.get("category_summary"), max_items=8),
     }
@@ -846,6 +1567,11 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
     project_counter: Counter[str] = Counter()
     tool_counter: Counter[str] = Counter()
     intent_counter: Counter[str] = Counter()
+    pulled_ids: set[str] = set()
+    emitted_ids: set[str] = set()
+    suppressed_ids: set[str] = set()
+    trace_linked_count = 0
+    trace_history_count = 0
     for row in catalog:
         for category in _safe_list(row.get("category_summary"), max_items=20):
             if category:
@@ -862,10 +1588,23 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
         intent = str(row.get("intent_family") or "emergent_other").strip()
         if intent:
             intent_counter[intent] += 1
+        if str(row.get("last_trace_id") or "").strip():
+            trace_linked_count += 1
+        if row.get("trace_usage_history"):
+            trace_history_count += 1
 
     ready = [r for r in catalog if bool(r.get("ready_for_use"))]
     invalid = [r for r in catalog if bool(r.get("invalidated"))]
     stale = [r for r in catalog if not bool(r.get("is_fresh")) and not bool(r.get("invalidated"))]
+    for row in watchtower:
+        packet_id = str(row.get("packet_id") or "").strip()
+        if not packet_id:
+            continue
+        pulled_ids.add(packet_id)
+        if int(row.get("selected_count", 0) or 0) > 0 or str(row.get("outcome", "") or "").strip().lower() == "emitted":
+            emitted_ids.add(packet_id)
+        else:
+            suppressed_ids.add(packet_id)
 
     lines.append("# SPARK Advisory Packet Catalog")
     lines.append("")
@@ -881,7 +1620,21 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
             f"- stale: {len(stale)}",
             f"- invalidated: {len(invalid)}",
             f"- recent suppression events: {len(watchtower)}",
+            f"- packets with advisory pull events: {len(pulled_ids)}",
+            f"- packets seen as emitted: {len(emitted_ids)}",
+            f"- packets with active trace lineage: {trace_linked_count}",
+            f"- packets with local trace history entries: {trace_history_count}",
             "",
+        ]
+    )
+    unused = [r for r in catalog if str(r.get("packet_id") or "") not in pulled_ids]
+    never_used = [r for r in ready if str(r.get("packet_id") or "") not in pulled_ids]
+    lines.extend(
+        [
+            "## Readiness and usage snapshot",
+            f"- never pulled: {len(unused)}",
+            f"- ready + never pulled: {len(never_used)}",
+            ""
         ]
     )
     lines.extend(
@@ -908,19 +1661,16 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
 
     if ready:
         lines.append("## Top ready packets (open first)")
-        for idx, row in enumerate(
-            sorted(
-                ready,
-                key=lambda row: (
-                    float(row.get("readiness_score", 0.0) or 0.0),
-                    float(row.get("effectiveness_score", 0.0) or 0.0),
-                    float(row.get("updated_ts", 0.0) or 0.0),
-                ),
+        ready_rows = sorted(
+            ready,
+            key=lambda row: (
+                float(row.get("readiness_score", 0.0) or 0.0),
+                float(row.get("effectiveness_score", 0.0) or 0.0),
+                float(row.get("updated_ts", 0.0) or 0.0),
             ),
             reverse=True,
-        )[:12],
-            start=1,
-        ):
+        )[:12]
+        for idx, row in enumerate(ready_rows, start=1):
             packet_id = str(row.get("packet_id") or "")
             readiness = float(row.get("readiness_score") or 0.0)
             impact = float(row.get("effectiveness_score") or 0.0)
@@ -933,6 +1683,34 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
         lines.append("## Top ready packets")
         lines.append("- no ready packets currently")
     lines.append("")
+
+    lines.append("## Quick pullability list")
+    if never_used:
+        lines.append("### Ready packets with no pull history (investigate these first)")
+        for idx, row in enumerate(never_used[:10], start=1):
+            packet_id = str(row.get("packet_id") or "")
+            readiness = float(row.get("readiness_score", 0.0) or 0.0)
+            lines.append(
+                f"{idx}. [[{packet_id}]] readiness={readiness:.2f} "
+                "| selected=0 suppressed=0 (no advisory pulls)"
+            )
+        lines.append("")
+    elif ready:
+        lines.append("- ready packets all have recent pull history")
+        lines.append("")
+    else:
+        lines.append("- no ready packets currently")
+        lines.append("")
+
+    if emitted_ids:
+        lines.append("### Recently emitted packets")
+        for idx, row in enumerate(ready[:20], start=1):
+            pid = str(row.get("packet_id") or "")
+            if pid not in emitted_ids:
+                continue
+            selected_total = sum(1 for row_evt in watchtower if str(row_evt.get("packet_id") or "") == pid and int(row_evt.get("selected_count", 0) or 0) > 0)
+            lines.append(f"{idx}. [[{pid}]] selected_hits={selected_total}")
+        lines.append("")
 
     lines.append("## Packet catalog snapshot")
     for idx, row in enumerate(catalog[:80], start=1):
@@ -962,6 +1740,11 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
     tool_counter: Counter[str] = Counter()
     intent_counter: Counter[str] = Counter()
     category_counter: Counter[str] = Counter()
+    pulled_ids: set[str] = set()
+    emitted_ids: set[str] = set()
+    suppressed_ids: set[str] = set()
+    trace_linked_count = 0
+    trace_history_count = 0
     for row in catalog:
         for source in _safe_list(row.get("source_summary"), max_items=20):
             if source:
@@ -972,7 +1755,10 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
         project_counter[str(row.get("project_key") or "unknown_project")] += 1
         tool_counter[str(row.get("tool_name") or "*")] += 1
         intent_counter[str(row.get("intent_family") or "emergent_other")] += 1
-
+        if str(row.get("last_trace_id") or "").strip():
+            trace_linked_count += 1
+        if row.get("trace_usage_history"):
+            trace_history_count += 1
     try:
         watchtower = _read_advisory_decision_ledger(limit=max(0, int(OBSIDIAN_EXPORT_MAX_PACKETS // 2)))
     except Exception:
@@ -985,6 +1771,144 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
         for reason in _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=8):
             if reason:
                 watchtower_reasons[str(reason)] += 1
+        packet_id = str(row.get("packet_id") or "").strip()
+        if packet_id:
+            pulled_ids.add(packet_id)
+            if int(row.get("selected_count", 0) or 0) > 0 or str(row.get("outcome", "") or "").strip().lower() == "emitted":
+                emitted_ids.add(packet_id)
+            else:
+                suppressed_ids.add(packet_id)
+
+    trace_systems_all: List[str] = [
+        "advisory_decision_ledger",
+        "advisory_engine",
+        "advisor_retrieval_router",
+        "advisory_emit",
+        "advisory_low_auth_dedupe",
+        "advisory_global_dedupe",
+        "advisor_advice_log",
+        "advisor_recent_advice",
+        "advice_feedback_request",
+        "advice_feedback",
+        "advisory_outcome",
+        "outcome_links",
+        "implicit_feedback",
+    ]
+    trace_system_packets: Dict[str, set[str]] = {name: set() for name in trace_systems_all}
+    packet_trace_systems: Dict[str, set[str]] = {}
+    sample_size = min(120, len(catalog))
+    for row in catalog[:sample_size]:
+        pid = str(row.get("packet_id") or "").strip()
+        if not pid:
+            continue
+        packet_systems: set[str] = set()
+        try:
+            for event in _packet_trace_history_events(row, limit=120):
+                system = str(event.get("trace_system") or "").strip()
+                if system in trace_system_packets:
+                    trace_system_packets[system].add(pid)
+                if system:
+                    packet_systems.add(system)
+        except Exception:
+            continue
+        packet_trace_systems[pid] = packet_systems
+
+    trace_system_file_map: Dict[str, Path] = {
+        "advisory_decision_ledger": ADVISORY_DECISION_LEDGER_FILE,
+        "advisory_engine": ADVISORY_ENGINE_LOG_FILE,
+        "advisor_retrieval_router": ADVISORY_RETRIEVAL_ROUTE_LOG_FILE,
+        "advisory_emit": ADVISORY_EMIT_FILE,
+        "advisory_low_auth_dedupe": ADVISORY_LOW_AUTH_DEDUPE_FILE,
+        "advisory_global_dedupe": ADVISORY_GLOBAL_DEDUPE_FILE,
+        "advisor_advice_log": ADVISOR_ADVICE_LOG_FILE,
+        "advisor_recent_advice": ADVISOR_RECENT_ADVICE_FILE,
+        "advice_feedback_request": ADVICE_FEEDBACK_REQUESTS_FILE,
+        "advice_feedback": ADVICE_FEEDBACK_FILE,
+        "advisory_outcome": OUTCOMES_FILE,
+        "outcome_links": OUTCOME_LINKS_FILE,
+        "implicit_feedback": IMPLICIT_FEEDBACK_FILE,
+    }
+    trace_health_required = {
+        "advisory_decision_ledger",
+        "advisory_engine",
+        "advisor_retrieval_router",
+        "advisory_emit",
+        "advice_feedback_request",
+    }
+    trace_health_optional = {
+        "advisory_low_auth_dedupe",
+        "advisory_global_dedupe",
+        "advisor_advice_log",
+        "advisor_recent_advice",
+        "advice_feedback",
+        "advisory_outcome",
+        "outcome_links",
+        "implicit_feedback",
+    }
+    required_per_packet_values = []
+    for pid in packet_trace_systems.keys():
+        seen = packet_trace_systems.get(pid, set()) or set()
+        required_seen = len(trace_health_required.intersection(seen))
+        required_score = (required_seen / float(len(trace_health_required))) if trace_health_required else 0.0
+        required_per_packet_values.append(required_score)
+    required_sampled_packet_health = (
+        (sum(required_per_packet_values) / float(len(required_per_packet_values)))
+        if required_per_packet_values
+        else 0.0
+    )
+    required_system_sampled_coverage: Dict[str, float] = {
+        system: (len(trace_system_packets.get(system, set())) / float(max(1, len(catalog[:sample_size])))) * 100.0
+        for system in trace_health_required
+    }
+    required_system_ranked = sorted(
+        required_system_sampled_coverage.items(),
+        key=lambda item: (item[1], item[0]),
+        reverse=True,
+    )
+    required_rank_token_map = {
+        "critical": "🟢",
+        "warning": "🟡",
+        "blocked": "🔴",
+    }
+    def _rank_token_for_pct(pct: float) -> str:
+        if pct >= 80.0:
+            return required_rank_token_map["critical"]
+        if pct >= 50.0:
+            return required_rank_token_map["warning"]
+        return required_rank_token_map["blocked"]
+
+    if required_sampled_packet_health >= 0.85:
+        required_health_token = required_rank_token_map["critical"]
+        required_health_label = "healthy"
+    elif required_sampled_packet_health >= 0.65:
+        required_health_token = required_rank_token_map["warning"]
+        required_health_label = "degraded"
+    else:
+        required_health_token = required_rank_token_map["blocked"]
+        required_health_label = "critical"
+
+    trace_health_window = max(1, min(300, len(watchtower) if watchtower else 200))
+    trace_system_health_counts: Dict[str, int] = {}
+    for name, path in trace_system_file_map.items():
+        trace_system_health_counts[name] = len(_read_jsonl_lines(path, limit=trace_health_window))
+
+    trace_health_required_hits: Dict[str, int] = {
+        system: int(trace_system_health_counts.get(system, 0) or 0) for system in sorted(trace_health_required)
+    }
+    trace_health_optional_hits: Dict[str, int] = {
+        system: int(trace_system_health_counts.get(system, 0) or 0) for system in sorted(trace_health_optional)
+    }
+    required_missing = [name for name, hit in trace_health_required_hits.items() if hit <= 0]
+    optional_missing = [name for name, hit in trace_health_optional_hits.items() if hit <= 0]
+    required_present_count = len(trace_health_required_hits) - len(required_missing)
+    required_coverage_score = (
+        (required_present_count / float(len(trace_health_required_hits))) if trace_health_required_hits else 0.0
+    )
+    hot_systems = sorted(
+        trace_system_health_counts.items(),
+        key=lambda item: (item[1], item[0]),
+        reverse=True,
+    )
 
     lines.extend(
         [
@@ -1000,7 +1924,10 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
             f"- ready now: {len(ready)}",
             f"- stale: {len(stale)}",
             f"- invalidated: {len(invalid)}",
+            f"- trace health: {required_health_token} required systems seen per sampled packet: {required_sampled_packet_health:.0%} ({required_health_label})",
             f"- decision ledger events: {len(watchtower)}",
+            f"- packets with active trace lineage: {trace_linked_count}",
+            f"- packets with local trace history entries: {trace_history_count}",
             "",
         ]
     )
@@ -1019,20 +1946,89 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
             "- top suppression reasons: "
             + ", ".join(f"{k}({v})" for k, v in watchtower_reasons.most_common(12))
         )
+
+    lines.append("## Trace health pane (global, last N cycles)")
+    lines.append(f"- window: last {trace_health_window} cycles")
+    lines.append(f"- required-system coverage score: {required_coverage_score:.2f}")
+    lines.append(
+        "- required-system visibility by sample: "
+        + ", ".join(
+            f"{_rank_token_for_pct(float(pct))} {name}({pct:.1f}%)" for name, pct in required_system_ranked
+        )
+    )
+    if required_missing:
+        lines.append(
+            "- required systems missing all events in window: "
+            + ", ".join(sorted(required_missing))
+        )
+    else:
+        lines.append("- required systems present in window: all")
+    lines.append("")
+    lines.append("### Required systems")
+    for system, hit_count in trace_health_required_hits.items():
+        pct = (hit_count / float(trace_health_window)) * 100.0
+        lines.append(f"- {system}: {hit_count}/{trace_health_window} cycles ({pct:.1f}%)")
+
+    lines.append("")
+    lines.append("### Optional systems")
+    if optional_missing:
+        lines.append("- optional systems with no events in window: " + ", ".join(sorted(optional_missing)))
+    else:
+        lines.append("- optional systems with no events in window: none")
+    for system, hit_count in trace_health_optional_hits.items():
+        pct = (hit_count / float(trace_health_window)) * 100.0
+        lines.append(f"- {system}: {hit_count}/{trace_health_window} cycles ({pct:.1f}%)")
+
+    lines.append("")
+    lines.append("### Hot systems in window")
+    for system, hit_count in hot_systems[:10]:
+        pct = (hit_count / float(trace_health_window)) * 100.0
+        lines.append(f"- {system}: {hit_count} events ({pct:.1f}% of window)")
     lines.append("")
 
+    lines.append("## Trace-system heatmap (sample of recent packets)")
+    if sample_size:
+        for system in trace_systems_all:
+            count = len(trace_system_packets.get(system, set()))
+            pct = (count / float(sample_size)) * 100.0
+            lines.append(f"- {system}: {count}/{sample_size} packets ({pct:.1f}%)")
+    else:
+        lines.append("- no recent packets in sample window")
+    lines.append(f"- packets with pull events: {len(pulled_ids)}")
+    lines.append(f"- packets emitted in last watch window: {len(emitted_ids)}")
+    lines.append(f"- packets currently only suppressed: {len(suppressed_ids)}")
+    lines.append(
+        f"- packets with no trace usage history: {max(0, len(catalog) - trace_history_count)}"
+    )
+    lines.append("")
+
+    lines.append("## Readiness + pull triage")
+    unused_ready = [r for r in ready if str(r.get("packet_id") or "") not in pulled_ids]
+    if unused_ready:
+        lines.append("### Ready but never pulled")
+        for idx, row in enumerate(unused_ready[:12], start=1):
+            packet_id = str(row.get("packet_id") or "")
+            readiness = float(row.get("readiness_score", 0.0) or 0.0)
+            lines.append(
+                f"{idx}. [[{packet_id}]] readiness={readiness:.2f} "
+                f"| sources={', '.join(str(x) for x in _safe_list(row.get('source_summary'), max_items=3))}"
+            )
+        lines.append("")
+    else:
+        lines.append("- no ready packets pending pull actions")
+        lines.append("")
+
     lines.append("## Top ready packets")
-    for idx, row in enumerate(
-        sorted(
-            ready,
-            key=lambda row: (
-                float(row.get("readiness_score", 0.0) or 0.0),
-                float(row.get("effectiveness_score", 0.0) or 0.0),
-                float(row.get("updated_ts", 0.0) or 0.0),
-            ),
+    top_ready_rows = sorted(
+        ready,
+        key=lambda row: (
+            float(row.get("readiness_score", 0.0) or 0.0),
+            float(row.get("effectiveness_score", 0.0) or 0.0),
+            float(row.get("updated_ts", 0.0) or 0.0),
         ),
         reverse=True,
-    )[:15]:
+    )[:15]
+    for idx, row in enumerate(top_ready_rows, start=1):
         packet_id = str(row.get("packet_id") or "")
         readiness = float(row.get("readiness_score") or 0.0)
         impact = float(row.get("effectiveness_score") or 0.0)
@@ -1106,12 +2102,15 @@ def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]])
 
 def _sync_obsidian_catalog() -> Optional[str]:
     if not _obsidian_enabled():
+        _record_obsidian_status("disabled", message="obsidian_export disabled by tuneables")
         return None
     if not OBSIDIAN_AUTO_EXPORT:
+        _record_obsidian_status("disabled", message="obsidian_auto_export is false")
         return None
     try:
         packets_dir = _obsidian_packets_dir()
         if not packets_dir.exists():
+            _record_obsidian_status("skipped", message=f"obsidian packets dir missing: {packets_dir}")
             return None
 
         catalog = _build_obsidian_catalog(
@@ -1122,6 +2121,7 @@ def _sync_obsidian_catalog() -> Optional[str]:
             limit=max(1, OBSIDIAN_EXPORT_MAX_PACKETS),
         )
         if not catalog and not ADVISORY_DECISION_LEDGER_FILE.exists():
+            _record_obsidian_status("skipped", message="no obsidian catalog data or advisory events")
             return None
 
         lines: List[str] = []
@@ -1135,30 +2135,42 @@ def _sync_obsidian_catalog() -> Optional[str]:
         watchtower_target = _obsidian_watchtower_file()
         watchtower_target.parent.mkdir(parents=True, exist_ok=True)
         watchtower_target.write_text("\n".join(watchtower_lines) + "\n", encoding="utf-8")
+        _record_obsidian_status(
+            "success",
+            message=f"wrote index/watchtower to {_obsidian_export_dir()}",
+        )
         return str(target)
-    except Exception:
+    except Exception as e:
+        _record_obsidian_status(
+            "error",
+            message=f"sync failed: {e}",
+            source="advisory_packet_store._sync_obsidian_catalog",
+        )
         return None
 
 
 def _export_packet_to_obsidian(packet: Dict[str, Any], *, force: bool = False) -> Optional[str]:
     if not _obsidian_enabled() or not isinstance(packet, dict):
+        _record_obsidian_status("skipped", message="packet export skipped: obsidian disabled or packet invalid")
         return None
     packet_id = str(packet.get("packet_id") or "").strip()
     if not packet_id:
+        _record_obsidian_status("skipped", message="packet export skipped: missing packet_id")
         return None
     if not OBSIDIAN_AUTO_EXPORT and not force:
+        _record_obsidian_status("skipped", message="packet export skipped: auto_export is false")
         return None
 
     packets_dir = _obsidian_packets_dir()
-    packets_dir.mkdir(parents=True, exist_ok=True)
     payload = _obsidian_payload(packet)
     if not payload:
+        _record_obsidian_status("skipped", message="packet export skipped: empty payload")
         return None
 
-    target = packets_dir / f"{packet_id}.md"
-    target.write_text(payload, encoding="utf-8")
-
     try:
+        packets_dir.mkdir(parents=True, exist_ok=True)
+        target = packets_dir / f"{packet_id}.md"
+        target.write_text(payload, encoding="utf-8")
         all_exports = list(packets_dir.glob("*.md"))
         all_exports.sort(key=lambda p: p.stat().st_mtime)
         keep = max(1, OBSIDIAN_EXPORT_MAX_PACKETS)
@@ -1174,10 +2186,17 @@ def _export_packet_to_obsidian(packet: Dict[str, Any], *, force: bool = False) -
                     pass
 
         _sync_obsidian_catalog()
-    except Exception:
-        pass
+        _record_obsidian_status("success", message=f"exported packet {packet_id}")
+        return str(target)
+    except Exception as e:
+        _record_obsidian_status(
+            "error",
+            message=f"packet export failed for {packet_id}: {e}",
+            source="advisory_packet_store._export_packet_to_obsidian",
+        )
+        return None
 
-    return str(target)
+    return None
 
 
 def export_packet_packet(packet_id: str) -> Optional[str]:
@@ -1288,6 +2307,11 @@ def _normalize_packet_meta_row(row: Any) -> Optional[Dict[str, Any]]:
     out["blocked_count"] = max(0, _to_int(out.get("blocked_count", 0), 0))
     out["harmful_count"] = max(0, _to_int(out.get("harmful_count", 0), 0))
     out["ignored_count"] = max(0, _to_int(out.get("ignored_count", 0), 0))
+    out["last_trace_id"] = str(out.get("last_trace_id") or "").strip()
+    out["trace_usage_history"] = _normalize_trace_usage_history(
+        out.get("trace_usage_history"),
+        limit=TRACE_EVENT_HISTORY_MAX,
+    )
     out["source_summary"] = _safe_list(out.get("source_summary"), max_items=40)
     out["category_summary"] = _safe_list(out.get("category_summary"), max_items=20)
     out["readiness_score"] = float(out.get("readiness_score") or 0.0)
@@ -1473,6 +2497,8 @@ def build_packet(
         "read_count": 0,
         "last_read_ts": 0.0,
         "last_read_route": "",
+        "last_trace_id": (str((lineage.get("trace_id") or "") if isinstance(safe_lineage, dict) else "").strip() or ""),
+        "trace_usage_history": [],
         "usage_count": 0,
         "emit_count": 0,
         "deliver_count": 0,
@@ -1542,6 +2568,11 @@ def save_packet(packet: Dict[str, Any]) -> str:
         "updated_ts": packet.get("updated_ts"),
         "fresh_until_ts": packet.get("fresh_until_ts"),
         "invalidated": bool(packet.get("invalidated", False)),
+        "last_trace_id": str(packet.get("last_trace_id") or "").strip(),
+        "trace_usage_history": _normalize_trace_usage_history(
+            packet.get("trace_usage_history"),
+            limit=TRACE_EVENT_HISTORY_MAX,
+        ),
         "read_count": int(packet.get("read_count", 0) or 0),
         "last_read_ts": float(packet.get("last_read_ts", 0.0) or 0.0),
         "last_read_route": str(packet.get("last_read_route") or ""),
@@ -2009,7 +3040,7 @@ def invalidate_packets(
             items_text = json.dumps(items_blob, ensure_ascii=False).lower()
 
             if file_hint_lower not in pkt_text and file_hint_lower not in items_text:
-                # Also skip wildcard baseline packets — those aren't file-specific.
+                # Also skip wildcard baseline packets â€” those aren't file-specific.
                 if pkt_tool == "*":
                     continue
                 continue
@@ -2027,20 +3058,43 @@ def record_packet_usage(
     *,
     emitted: bool = False,
     route: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     packet = get_packet(packet_id)
     if not packet:
         return {"ok": False, "reason": "packet_not_found", "packet_id": packet_id}
 
+    usage_ts = _now()
+    trace_value = str(trace_id or "").strip()
+    tool_value = str(tool_name or "").strip()
     packet["read_count"] = int(packet.get("read_count", 0) or 0) + 1
-    packet["last_read_ts"] = _now()
+    packet["last_read_ts"] = usage_ts
     packet["last_read_route"] = str(route or packet.get("last_read_route") or "")
     packet["usage_count"] = int(packet.get("usage_count", 0) or 0) + 1
     if emitted:
         packet["emit_count"] = int(packet.get("emit_count", 0) or 0) + 1
         packet["deliver_count"] = int(packet.get("deliver_count", 0) or 0) + 1
+    if trace_value:
+        packet["last_trace_id"] = trace_value
+        usage_history = packet.get("trace_usage_history") or []
+        usage_history.append(
+            {
+                "ts": usage_ts,
+                "trace_id": trace_value,
+                "tool_name": tool_value,
+                "route": str(route or "").strip(),
+                "emitted": bool(emitted),
+                "route_order": len(usage_history) + 1,
+                "event": "packet_usage",
+            }
+        )
+        packet["trace_usage_history"] = _normalize_trace_usage_history(
+            usage_history,
+            limit=TRACE_EVENT_HISTORY_MAX,
+        )
     packet["last_route"] = str(route or packet.get("last_route") or "")
-    packet["last_used_ts"] = _now()
+    packet["last_used_ts"] = usage_ts
     packet = _normalize_packet(packet)
     save_packet(packet)
     return {
@@ -2050,6 +3104,7 @@ def record_packet_usage(
         "usage_count": int(packet.get("usage_count", 0) or 0),
         "emit_count": int(packet.get("emit_count", 0) or 0),
         "deliver_count": int(packet.get("deliver_count", 0) or 0),
+        "trace_id": str(packet.get("last_trace_id") or "").strip(),
     }
 
 
@@ -2060,6 +3115,7 @@ def record_packet_feedback(
     noisy: bool = False,
     followed: bool = True,
     source: str = "explicit",
+    trace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     packet = get_packet(packet_id)
     if not packet:
@@ -2076,12 +3132,35 @@ def record_packet_feedback(
     if noisy:
         packet["noisy_count"] = int(packet.get("noisy_count", 0) or 0) + 1
 
+    feedback_ts = _now()
+    if trace_id or packet.get("last_trace_id"):
+        resolved_trace = str(trace_id or packet.get("last_trace_id") or "").strip()
+        if resolved_trace:
+            feedback_history = packet.get("trace_usage_history") or []
+            feedback_history.append(
+                {
+                    "ts": feedback_ts,
+                    "trace_id": resolved_trace,
+                    "tool_name": str(packet.get("tool_name") or "").strip(),
+                    "route": "feedback",
+                    "event": f"feedback:{'helpful' if helpful is True else 'unhelpful' if helpful is False else 'unknown'}",
+                    "source": str(source or "").strip(),
+                    "route_order": len(feedback_history) + 1,
+                    "emitted": False,
+                }
+            )
+            packet["trace_usage_history"] = _normalize_trace_usage_history(
+                feedback_history,
+                limit=TRACE_EVENT_HISTORY_MAX,
+            )
+            packet["last_trace_id"] = resolved_trace
+
     packet["last_feedback"] = {
         "helpful": helpful,
         "noisy": bool(noisy),
         "followed": bool(followed),
         "source": str(source or "")[:80],
-        "ts": _now(),
+        "ts": feedback_ts,
     }
     packet = _normalize_packet(packet)
     save_packet(packet)
@@ -2130,6 +3209,26 @@ def record_packet_outcome(
         packet["harmful_count"] = int(packet.get("harmful_count", 0) or 0) + 1
     elif st == "ignored":
         packet["ignored_count"] = int(packet.get("ignored_count", 0) or 0) + 1
+    outcome_ts = _now()
+    if trace_id:
+        outcome_history = packet.get("trace_usage_history") or []
+        outcome_history.append(
+            {
+                "ts": outcome_ts,
+                "trace_id": str(trace_id or "").strip(),
+                "tool_name": str(tool_name or "").strip(),
+                "route": "outcome",
+                "event": f"outcome:{st}",
+                "source": str(source or "").strip(),
+                "emitted": False,
+                "route_order": len(outcome_history) + 1,
+            }
+        )
+        packet["last_trace_id"] = str(trace_id or "").strip()
+        packet["trace_usage_history"] = _normalize_trace_usage_history(
+            outcome_history,
+            limit=TRACE_EVENT_HISTORY_MAX,
+        )
 
     if count_effectiveness:
         # Conservative mapping: treat acted as weak-positive, blocked/harmful as negative.
@@ -2144,7 +3243,7 @@ def record_packet_outcome(
         "tool": str(tool_name or "")[:40] if tool_name else "",
         "trace_id": str(trace_id or "")[:120] if trace_id else "",
         "notes": str(notes or "")[:200] if notes else "",
-        "ts": _now(),
+        "ts": outcome_ts,
     }
     packet = _normalize_packet(packet)
     save_packet(packet)
@@ -2210,6 +3309,7 @@ def record_packet_feedback_for_advice(
     noisy: bool = False,
     followed: bool = True,
     source: str = "explicit",
+    trace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     advice = str(advice_id or "").strip()
     if not advice:
@@ -2235,6 +3335,7 @@ def record_packet_feedback_for_advice(
                     noisy=noisy,
                     followed=followed,
                     source=source,
+                    trace_id=trace_id,
                 )
                 result["matched_advice_id"] = advice
                 return result
@@ -2610,6 +3711,7 @@ def get_store_status() -> Dict[str, Any]:
         "obsidian_export_dir_exists": bool(_obsidian_export_dir().exists()),
         "obsidian_index_file": str(_obsidian_index_file()),
         "obsidian_watchtower_file": str(_obsidian_watchtower_file()),
+        "obsidian_sync_status": _get_obsidian_status(),
         "decision_ledger": _decision_ledger_meta(),
         "index_file": str(INDEX_FILE),
     }
@@ -2631,3 +3733,4 @@ try:
         pass
 except Exception:
     pass
+

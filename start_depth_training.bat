@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 echo.
 echo   SPARK DEPTH TRAINING
 echo   Autonomous Socratic reasoning gym
@@ -10,7 +10,7 @@ curl -s http://localhost:5555/api/health >nul 2>&1
 if %errorlevel% neq 0 (
     echo   [!!] DEPTH server not running on :5555
     echo   Starting DEPTH server...
-    start "DEPTH Server" /D "C:\Users\USER\Desktop\vibeship-depth-game" cmd /c "python server.py"
+    start "DEPTH Server" /D "%USERPROFILE%\Desktop\vibeship-depth-game" cmd /c "python server.py"
     echo   Waiting for server to start...
     ping -n 5 127.0.0.1 >nul
 )
@@ -26,9 +26,10 @@ if %errorlevel% neq 0 (
 echo   Prerequisites OK. Starting training...
 echo.
 
-cd /d "C:\Users\USER\Desktop\vibeship-spark-intelligence"
+cd /d "<REPO_ROOT>"
 python scripts/run_depth_training.py --cycles 5
 
 echo.
 echo   Training complete. Run 'python -m lib.depth_trainer --dashboard' for stats.
 pause
+

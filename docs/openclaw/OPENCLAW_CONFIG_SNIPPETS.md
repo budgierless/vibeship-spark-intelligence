@@ -1,6 +1,6 @@
-# OpenClaw Config Snippets
+﻿# OpenClaw Config Snippets
 
-Use these snippets in local `C:\Users\USER\.openclaw\openclaw.json` (not in repo).
+Use these snippets in local `<OPENCLAW_HOME>\openclaw.json` (not in repo).
 
 ## 1) Subagent depth policy
 
@@ -60,14 +60,14 @@ Use plugin-based hook capture + tailer ingestion:
   "plugins": {
     "load": {
       "paths": [
-        "C:\\Users\\USER\\Desktop\\vibeship-spark-intelligence\\extensions\\openclaw-spark-telemetry"
+        "<USER_HOME>\\Desktop\\vibeship-spark-intelligence\\extensions\\openclaw-spark-telemetry"
       ]
     },
     "entries": {
       "spark-telemetry-hooks": {
         "enabled": true,
         "config": {
-          "spoolFile": "C:\\Users\\USER\\.spark\\openclaw_hook_events.jsonl",
+          "spoolFile": "<USER_HOME>\\.spark\\openclaw_hook_events.jsonl",
           "includePromptPreview": false,
           "includeOutputPreview": false,
           "previewChars": 240
@@ -81,7 +81,7 @@ Use plugin-based hook capture + tailer ingestion:
 Run tailer with hook spool ingestion enabled:
 
 ```powershell
-python adapters\openclaw_tailer.py --agent main --hook-events-file C:\Users\USER\.spark\openclaw_hook_events.jsonl
+python adapters\openclaw_tailer.py --agent main --hook-events-file <SPARK_HOME>\openclaw_hook_events.jsonl
 ```
 
 Join fields emitted by plugin rows:
@@ -97,3 +97,5 @@ Join fields emitted by plugin rows:
 - Keep secrets in env or secret store, not raw JSON.
 - Rotate existing exposed tokens immediately.
 - Store only redacted operational artifacts in docs/reports.
+
+

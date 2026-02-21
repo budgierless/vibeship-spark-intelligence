@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 from scripts.openclaw_integration_audit import build_report, render_markdown
@@ -85,7 +85,7 @@ def test_build_report_redacts_sensitive_fields(tmp_path):
     _write_json(
         cfg,
         {
-            "channels": {"telegram": {"botToken": "123456:ABCDEFGHIJKLMNOPQRSTUV"}},
+            "channels": {"telegram": {"botToken": "000000:REDACTED_TOKEN"}},
             "gateway": {"auth": {"token": "pulse-local-bridge-token"}},
         },
     )
@@ -115,7 +115,7 @@ def test_build_report_detects_plugin_based_llm_hooks(tmp_path):
                     "spark-telemetry-hooks": {
                         "enabled": True,
                         "config": {
-                            "spoolFile": "C:\\Users\\USER\\.spark\\openclaw_hook_events.jsonl",
+                            "spoolFile": "<USER_HOME>\\.spark\\openclaw_hook_events.jsonl",
                         },
                     }
                 }
@@ -194,3 +194,5 @@ def test_build_report_does_not_flag_env_placeholders_as_secret_like(tmp_path):
     report = build_report(openclaw_config=cfg, cron_jobs=jobs, openclaw_package=pkg)
     assert report["sensitive_fields"]["count"] >= 1
     assert report["sensitive_fields"]["secret_like_count"] == 0
+
+

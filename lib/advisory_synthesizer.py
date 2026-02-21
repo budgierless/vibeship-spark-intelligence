@@ -700,7 +700,9 @@ def _query_openai(prompt: str) -> Optional[str]:
     return None
 
 
-def _query_minimax(prompt: str) -> Optional[str]:
+def _query_minimax(
+    prompt: str, *, model: Optional[str] = None, timeout_s: Optional[float] = None
+) -> Optional[str]:
     """Query MiniMax OpenAI-compatible API."""
     if not MINIMAX_API_KEY:
         return None
@@ -708,7 +710,15 @@ def _query_minimax(prompt: str) -> Optional[str]:
         if _httpx is None:
             log_debug("advisory_synth", "HTTPX_MISSING_MINIMAX", None)
             return None
-        with _httpx.Client(timeout=AI_TIMEOUT_S) as client:
+        chosen_model = str(model).strip() if str(model or "").strip() else MINIMAX_MODEL
+        try:
+            timeout = float(timeout_s)
+            if timeout <= 0:
+                timeout = AI_TIMEOUT_S
+        except Exception:
+            timeout = AI_TIMEOUT_S
+
+        with _httpx.Client(timeout=timeout) as client:
             want_json = "return only json" in str(prompt or "").strip().lower()
             resp = client.post(
                 f"{MINIMAX_BASE_URL}/chat/completions",
@@ -717,7 +727,7 @@ def _query_minimax(prompt: str) -> Optional[str]:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": MINIMAX_MODEL,
+                    "model": chosen_model,
                     "messages": [{"role": "user", "content": prompt}],
                     # MiniMax M2.5 uses extended thinking that consumes ~1000 tokens
                     # before the actual response; budget must accommodate both.

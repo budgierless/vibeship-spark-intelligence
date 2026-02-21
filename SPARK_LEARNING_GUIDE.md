@@ -20,7 +20,7 @@ Future: Predicts optimal solutions before problems arise, synthesizes cross-doma
 
 1. **Universal First**: Works for vibe-coders AND enterprise architects
 2. **Domain Agnostic**: No hardcoded domain limits - learns new domains organically
-3. **Continuous Evolution**: Each interaction makes the system smarter
+3. **Continuous Adaptation**: High-signal interactions improve future recommendations
 4. **Signal > Noise**: 10x filter on what gets promoted
 5. **Outcome-Anchored**: Every learning tied to success/failure
 
@@ -374,27 +374,14 @@ domain_emergence:
     action: "Create provisional 'aerospace' chip"
 ```
 
-### Chip Self-Evolution
+### Chip Self-Evolution (Premium feature)
 
-Chips should improve themselves:
+The chip self-evolution workflow exists as a premium capability and is disabled in OSS.
 
 ```yaml
 chip_evolution:
-  expand_triggers:
-    when: "High-confidence insight not matched by existing triggers"
-    action: "Add new trigger to chip"
-
-  merge_chips:
-    when: "Two chips consistently co-activate"
-    action: "Consider merging or creating parent chip"
-
-  split_chips:
-    when: "Chip triggers too broad (many false positives)"
-    action: "Split into specialized sub-chips"
-
-  deprecate_triggers:
-    when: "Trigger matches but never produces valuable insights"
-    action: "Remove trigger after 10+ false positives"
+  status: disabled_in_oss
+  note: "Available in premium release only."
 ```
 
 ### Cross-Domain Transfer
@@ -517,7 +504,7 @@ mastery_metrics:
 
   generative_to_transcendent:
     - "Paradigm shifts identified correctly"
-    - "Self-evolution improves outcomes"
+    - "Cross-domain synthesis improves outcomes"
 ```
 
 ---
@@ -560,7 +547,7 @@ mastery_metrics:
 - [ ] Anticipatory capabilities
 - [ ] Advisory recommendations
 - [ ] Generative synthesis
-- [ ] Self-evolution loops
+- [ ] Self-assessment loops
 
 ---
 

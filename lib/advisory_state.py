@@ -111,6 +111,10 @@ class SessionState:
     phase_history: List[str] = field(default_factory=list)  # last 5 phases
 
     # Advice already emitted: advice_id → timestamp (TTL-based, re-eligible after cooldown)
+    # Advice already emitted:
+    # - raw ids for backwards compatibility
+    # - context keys for focused repeat suppression (tool + phase)
+    #   format: "{advice_id}|{tool}|{phase}" (TTL-based)
     shown_advice_ids: Dict[str, float] = field(default_factory=dict)
     last_advisory_packet_id: str = ""
     last_advisory_route: str = ""
@@ -254,11 +258,33 @@ def record_user_intent(state: SessionState, intent: str) -> None:
 SHOWN_ADVICE_TTL_S = 600  # Re-eligible after 10 minutes
 
 
-def mark_advice_shown(state: SessionState, advice_ids: List[str]) -> None:
+def _advice_shown_key(advice_id: str, *, tool_name: str = "", task_phase: str = "") -> str:
+    aid = str(advice_id or "").strip()
+    if not aid:
+        return ""
+    tool = str(tool_name or "").strip().lower() or "*"
+    phase = str(task_phase or "").strip().lower() or "*"
+    return f"{aid}|{tool}|{phase}"
+
+
+def mark_advice_shown(
+    state: SessionState,
+    advice_ids: List[str],
+    *,
+    tool_name: str = "",
+    task_phase: str = "",
+) -> None:
     """Record that advice was emitted to Claude (with timestamp for TTL)."""
+    if not state:
+        return
     now = time.time()
     for aid in advice_ids:
-        state.shown_advice_ids[str(aid)] = now
+        aid = str(aid or "").strip()
+        if not aid:
+            continue
+        # Preserve backward compatibility for historical state readers.
+        state.shown_advice_ids[aid] = now
+        state.shown_advice_ids[_advice_shown_key(aid, tool_name=tool_name, task_phase=task_phase)] = now
 
     # Evict expired entries to keep bounded
     if len(state.shown_advice_ids) > MAX_SHOWN_ADVICE:

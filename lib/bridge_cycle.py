@@ -656,6 +656,18 @@ def run_bridge_cycle(
                         else:
                             stats["eidos_distillation_skipped"] = reason
                             log_debug("bridge_worker", f"EIDOS distillation skipped ({reason})", None)
+
+            # Periodic EIDOS pruning (every 50th cycle)
+            if counter % 50 == 0:
+                try:
+                    from lib.eidos.store import get_store
+                    pruned = get_store().prune_distillations()
+                    total_pruned = sum(pruned.values())
+                    if total_pruned > 0:
+                        stats["eidos_pruned"] = pruned
+                        log_debug("bridge_worker", f"EIDOS pruned {total_pruned} distillations: {pruned}", None)
+                except Exception as prune_err:
+                    log_debug("bridge_worker", f"EIDOS pruning failed ({prune_err})", None)
         except Exception as e:
             log_debug("bridge_worker", f"EIDOS distillation failed ({e})", None)
 

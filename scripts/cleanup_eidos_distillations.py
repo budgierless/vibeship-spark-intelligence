@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """One-time cleanup of low-quality EIDOS distillations.
 
 Removes tautologies, session-specific playbooks, tool-restating heuristics,
@@ -9,7 +9,7 @@ import re
 import sqlite3
 import sys
 
-DB_PATH = r"C:\Users\USER\.spark\eidos.db"
+DB_PATH = r"<SPARK_HOME>\eidos.db"
 
 TAUTOLOGY_PATTERNS = [
     "try a different approach", "step back and", "try something else",
@@ -114,3 +114,4 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

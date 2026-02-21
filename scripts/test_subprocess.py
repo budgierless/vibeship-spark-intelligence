@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Test different subprocess approaches for Claude CLI on Windows."""
 import subprocess, time
 
-claude = r"C:\Users\USER\.npm-global\claude.cmd"
+claude = r"<NPM_GLOBAL>\claude.cmd"
 prompt = "say just the word OK"
 
 # Test 1: shell=True
@@ -52,3 +52,4 @@ except Exception as e:
     print(f"  ERROR: {e}")
 
 print("\nDone")
+
