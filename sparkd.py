@@ -119,6 +119,13 @@ def _is_allowed_origin(headers) -> bool:
     return host in _ALLOWED_POST_HOSTS
 
 
+def _is_csrf_safe(headers) -> bool:
+    fetch_site = (headers.get("Sec-Fetch-Site") or "").strip().lower() if headers is not None else ""
+    if not fetch_site:
+        return True
+    return fetch_site in {"same-origin", "same-site", "none"}
+
+
 TOKEN = _resolve_token()
 
 
@@ -569,6 +576,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if not _is_allowed_origin(self.headers):
             return _json(self, 403, {'ok': False, 'error': 'origin not allowed'})
+
+        if not _is_csrf_safe(self.headers):
+            return _json(self, 403, {'ok': False, 'error': 'cross-site POST blocked'})
 
         client_ip = self.client_address[0] if self.client_address else "unknown"
         allowed, retry_after = _allow_rate_limited_request(client_ip)

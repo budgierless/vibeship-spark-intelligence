@@ -99,6 +99,13 @@ def _is_allowed_origin(headers) -> bool:
     return host in _ALLOWED_POST_HOSTS
 
 
+def _is_csrf_safe(headers) -> bool:
+    fetch_site = (headers.get("Sec-Fetch-Site") or "").strip().lower() if headers is not None else ""
+    if not fetch_site:
+        return True
+    return fetch_site in {"same-origin", "same-site", "none"}
+
+
 def _is_authorized(headers) -> bool:
     token = (headers.get("Authorization") or "").strip() if headers is not None else ""
     return token == f"Bearer {TOKEN}"
@@ -287,6 +294,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if not _is_allowed_origin(self.headers):
             return self._json(403, {'error': 'origin_not_allowed'})
+
+        if not _is_csrf_safe(self.headers):
+            return self._json(403, {'error': 'cross-site post blocked'})
 
         if not _is_authorized(self.headers):
             return self._json(401, {"error": "unauthorized"})
