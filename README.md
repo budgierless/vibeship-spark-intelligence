@@ -2,7 +2,7 @@
   <img src="logo.png" alt="Spark Intelligence" width="120">
   <h1 align="center">Spark Intelligence</h1>
   <p align="center">
-    <em>a local self-evolving intelligence.</em>
+    <em>self-evolving intelligent companion.</em>
   </p>
   <p align="center">
     <a href="https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
