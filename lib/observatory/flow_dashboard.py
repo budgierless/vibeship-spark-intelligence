@@ -192,6 +192,7 @@ def generate_flow_dashboard(data: dict[int, dict[str, Any]]) -> str:
 
     # Quick links to existing pages
     sections.append("## Quick Links\n")
+    sections.append("- [[explore/_index|Explore Individual Items]] — browse cognitive insights, distillations, episodes, verdicts")
     sections.append("- [[../watchtower|Advisory Watchtower]] — existing advisory deep-dive")
     sections.append("- [[../packets/index|Advisory Packet Catalog]] — existing packet view")
     sections.append("")

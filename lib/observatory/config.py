@@ -18,6 +18,13 @@ class ObservatoryConfig:
     vault_dir: str = _DEFAULT_VAULT
     generate_canvas: bool = True
     max_recent_items: int = 20
+    # Explorer limits (configurable per data type)
+    explore_cognitive_max: int = 200
+    explore_distillations_max: int = 200
+    explore_episodes_max: int = 100
+    explore_verdicts_max: int = 100
+    explore_promotions_max: int = 200
+    explore_advice_max: int = 200
 
 
 def load_config() -> ObservatoryConfig:
@@ -36,6 +43,12 @@ def load_config() -> ObservatoryConfig:
                         vault_dir=str(section.get("vault_dir", _DEFAULT_VAULT)),
                         generate_canvas=section.get("generate_canvas", True),
                         max_recent_items=int(section.get("max_recent_items", 20)),
+                        explore_cognitive_max=int(section.get("explore_cognitive_max", 200)),
+                        explore_distillations_max=int(section.get("explore_distillations_max", 200)),
+                        explore_episodes_max=int(section.get("explore_episodes_max", 100)),
+                        explore_verdicts_max=int(section.get("explore_verdicts_max", 100)),
+                        explore_promotions_max=int(section.get("explore_promotions_max", 200)),
+                        explore_advice_max=int(section.get("explore_advice_max", 200)),
                     )
             except Exception:
                 pass

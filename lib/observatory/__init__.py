@@ -25,6 +25,7 @@ def generate_observatory(*, force: bool = False, verbose: bool = False) -> dict:
     from .flow_dashboard import generate_flow_dashboard
     from .stage_pages import generate_all_stage_pages
     from .canvas_generator import generate_canvas
+    from .explorer import generate_explorer
 
     t0 = time.time()
     cfg = load_config()
@@ -60,14 +61,25 @@ def generate_observatory(*, force: bool = False, verbose: bool = False) -> dict:
         canvas_path.write_text(canvas_content, encoding="utf-8")
         files_written += 1
 
+    # Generate explorer (individual item detail pages)
+    t_explore = time.time()
+    explorer_counts = generate_explorer(cfg)
+    explorer_total = sum(explorer_counts.values()) + 1  # +1 for master index
+    files_written += explorer_total
+    if verbose:
+        print(f"  [observatory] explorer: {explorer_total} files in {(time.time()-t_explore)*1000:.0f}ms")
+        for section, count in explorer_counts.items():
+            print(f"    {section}: {count} pages")
+
     elapsed_ms = (time.time() - t0) * 1000
     if verbose:
-        print(f"  [observatory] wrote {files_written} files in {elapsed_ms:.0f}ms to {obs_dir}")
+        print(f"  [observatory] total: {files_written} files in {elapsed_ms:.0f}ms to {obs_dir}")
 
     return {
         "files_written": files_written,
         "elapsed_ms": round(elapsed_ms, 1),
         "vault_dir": str(vault),
+        "explorer": explorer_counts,
     }
 
 

@@ -449,7 +449,13 @@
     "sync_cooldown_s": 120,
     "vault_dir": "C:\\Users\\USER\\Documents\\Obsidian Vault\\Spark-Intelligence-Observatory",
     "generate_canvas": true,
-    "max_recent_items": 20
+    "max_recent_items": 20,
+    "explore_cognitive_max": 200,
+    "explore_distillations_max": 200,
+    "explore_episodes_max": 100,
+    "explore_verdicts_max": 100,
+    "explore_promotions_max": 200,
+    "explore_advice_max": 200
   },
   "production_gates": {
     "enforce_meta_ralph_quality_band": true,

@@ -335,6 +335,12 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "vault_dir": TuneableSpec("str", "", None, None, "Obsidian vault directory path"),
         "generate_canvas": TuneableSpec("bool", True, None, None, "Generate .canvas spatial view"),
         "max_recent_items": TuneableSpec("int", 20, 5, 100, "Max recent items per stage page"),
+        "explore_cognitive_max": TuneableSpec("int", 200, 1, 5000, "Max cognitive insights to export as detail pages"),
+        "explore_distillations_max": TuneableSpec("int", 200, 1, 5000, "Max EIDOS distillations to export"),
+        "explore_episodes_max": TuneableSpec("int", 100, 1, 2000, "Max EIDOS episodes to export"),
+        "explore_verdicts_max": TuneableSpec("int", 100, 1, 5000, "Max Meta-Ralph verdicts to export"),
+        "explore_promotions_max": TuneableSpec("int", 200, 1, 5000, "Max promotion log entries to export"),
+        "explore_advice_max": TuneableSpec("int", 200, 1, 5000, "Max advisory log entries to export"),
     },
 
     # ---- production_gates: quality enforcement ----
