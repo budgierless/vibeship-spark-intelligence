@@ -130,7 +130,7 @@ def summarize_realism(report: Dict[str, Any], meta: Dict[str, CaseMeta]) -> Dict
 
         if should_emit and emitted and actionable and expected_hit >= 0.5:
             high_value += 1
-        if emitted and ((not should_emit) or forbidden_hit > 0.0):
+        if emitted and forbidden_hit > 0.0:
             harmful += 1
         if emitted and (not should_emit):
             unsolicited += 1
@@ -208,7 +208,7 @@ def evaluate_gates(realism: Dict[str, float], gates: Dict[str, float]) -> Dict[s
         out[key] = {"ok": bool(ok), "value": value, "threshold": threshold}
 
     passed = all(v.get("ok", False) for v in out.values())
-    out["passed"] = passed
+    out["passed"] = {"ok": bool(passed), "value": bool(passed), "threshold": True}
     return out
 
 

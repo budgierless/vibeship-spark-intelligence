@@ -252,7 +252,31 @@ def retrieve_hybrid(
     **_extra: Any,
 ) -> List[RetrievedItem]:
     query = query or ""
-    raw = list(retriever.retrieve(query, insights=insights, limit=candidate_k))
+    def _retrieve_rows(q: str, limit: int) -> List[Any]:
+        try:
+            return list(retriever.retrieve(q, insights=insights, limit=limit))
+        except TypeError as exc:
+            if "unexpected keyword argument 'insights'" not in str(exc):
+                raise
+            # Compatibility for retrievers using legacy positional/_insights signatures.
+            try:
+                return list(retriever.retrieve(q, insights, limit=limit))
+            except TypeError:
+                return list(retriever.retrieve(q, _insights=insights, limit=limit))
+
+    raw = _retrieve_rows(query, candidate_k)
+    support_counts: Dict[str, int] = {}
+    for row in raw:
+        key = str(getattr(row, "insight_key", "") or "")
+        if key:
+            support_counts[key] = support_counts.get(key, 0) + 1
+    if agentic and support_boost_weight > 0.0:
+        # Reward candidates that remain consistent across an auxiliary facet query.
+        aux_query = f"{query} failure pattern and fix".strip()
+        for row in _retrieve_rows(aux_query, max(4, candidate_k // 2)):
+            key = str(getattr(row, "insight_key", "") or "")
+            if key:
+                support_counts[key] = support_counts.get(key, 0) + 1
     lex_scores = hybrid_lexical_scores(query, [getattr(r, "insight_text", "") for r in raw], bm25_mix=1.0)
 
     scored: List[RetrievedItem] = []
@@ -272,6 +296,9 @@ def retrieve_hybrid(
         lexical = lex_scores[idx] if idx < len(lex_scores) else 0.0
         intent_cov = 1.0 if any(t in text.lower() for t in _tokenize(query)) else 0.0
         support = _safe_float(getattr(row, "support_score", 0.0))
+        support_count = int(support_counts.get(item_key, 0))
+        if support_count > 1:
+            support = max(support, min(1.0, (support_count - 1) / 2.0))
         emotion = _emotion_similarity(raw_row.get("meta", {}), emotion_state or {})
         score = (
             semantic * 0.35
@@ -304,4 +331,3 @@ def retrieve_hybrid(
 
 def main() -> int:
     raise SystemExit(0)
-

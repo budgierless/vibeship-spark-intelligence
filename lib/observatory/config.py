@@ -25,6 +25,10 @@ class ObservatoryConfig:
     explore_verdicts_max: int = 100
     explore_promotions_max: int = 200
     explore_advice_max: int = 200
+    explore_routing_max: int = 100
+    explore_tuning_max: int = 200
+    explore_decisions_max: int = 200
+    explore_feedback_max: int = 200
 
 
 def load_config() -> ObservatoryConfig:
@@ -49,6 +53,10 @@ def load_config() -> ObservatoryConfig:
                         explore_verdicts_max=int(section.get("explore_verdicts_max", 100)),
                         explore_promotions_max=int(section.get("explore_promotions_max", 200)),
                         explore_advice_max=int(section.get("explore_advice_max", 200)),
+                        explore_routing_max=int(section.get("explore_routing_max", 100)),
+                        explore_tuning_max=int(section.get("explore_tuning_max", 200)),
+                        explore_decisions_max=int(section.get("explore_decisions_max", 200)),
+                        explore_feedback_max=int(section.get("explore_feedback_max", 200)),
                     )
             except Exception:
                 pass

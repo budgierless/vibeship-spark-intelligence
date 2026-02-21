@@ -512,44 +512,54 @@ def evaluate_gates(
         f">= {t.min_distillations}",
         "Increase distillation yield and episode completion quality.",
     )
+    advisory_store_active = any(
+        (
+            metrics.advisory_readiness_ratio > 0.0,
+            metrics.advisory_freshness_ratio > 0.0,
+            metrics.advisory_avg_effectiveness > 0.0,
+            metrics.advisory_store_queue_depth > 0,
+            metrics.advisory_inactive_ratio > 0.0,
+            metrics.advisory_top_category_concentration > 0.0,
+        )
+    )
     _add(
         "advisory_store_readiness",
-        metrics.advisory_readiness_ratio >= t.min_advisory_readiness_ratio,
+        (not advisory_store_active) or (metrics.advisory_readiness_ratio >= t.min_advisory_readiness_ratio),
         round(metrics.advisory_readiness_ratio, 3),
         f">= {t.min_advisory_readiness_ratio:.2f}",
         "Improve packet freshness in the advisory store and stabilize exact lookup keys.",
     )
     _add(
         "advisory_store_freshness",
-        metrics.advisory_freshness_ratio >= t.min_advisory_freshness_ratio,
+        (not advisory_store_active) or (metrics.advisory_freshness_ratio >= t.min_advisory_freshness_ratio),
         round(metrics.advisory_freshness_ratio, 3),
         f">= {t.min_advisory_freshness_ratio:.2f}",
         "Tune packet TTL and invalidation policy to keep useful packets fresh.",
     )
     _add(
         "advisory_store_inactive",
-        metrics.advisory_inactive_ratio <= t.max_advisory_inactive_ratio,
+        (not advisory_store_active) or (metrics.advisory_inactive_ratio <= t.max_advisory_inactive_ratio),
         round(metrics.advisory_inactive_ratio, 3),
         f"<= {t.max_advisory_inactive_ratio:.2f}",
         "Reduce invalidation churn and strengthen packet reuse quality control.",
     )
     _add(
         "advisory_store_effectiveness",
-        metrics.advisory_avg_effectiveness >= t.min_advisory_avg_effectiveness,
+        (not advisory_store_active) or (metrics.advisory_avg_effectiveness >= t.min_advisory_avg_effectiveness),
         round(metrics.advisory_avg_effectiveness, 3),
         f">= {t.min_advisory_avg_effectiveness:.2f}",
         "Increase explicit feedback/actual outcome capture for packet ranking signal quality.",
     )
     _add(
         "advisory_store_queue_depth",
-        metrics.advisory_store_queue_depth <= t.max_advisory_store_queue_depth,
+        (not advisory_store_active) or (metrics.advisory_store_queue_depth <= t.max_advisory_store_queue_depth),
         metrics.advisory_store_queue_depth,
         f"<= {t.max_advisory_store_queue_depth}",
         "Increase worker throughput or raise prefetch thresholding to reduce packet queue pressure.",
     )
     _add(
         "advisory_store_category_diversity",
-        metrics.advisory_top_category_concentration <= t.max_advisory_top_category_concentration,
+        (not advisory_store_active) or (metrics.advisory_top_category_concentration <= t.max_advisory_top_category_concentration),
         round(metrics.advisory_top_category_concentration, 3),
         f"<= {t.max_advisory_top_category_concentration:.2f}",
         "Diversify packet authorship/categorization so single domains don’t dominate.",

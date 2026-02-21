@@ -158,7 +158,7 @@ def _normalize_count_map(count_map: Mapping[str, int]) -> Dict[str, int]:
     for raw_key, raw_val in count_map.items():
         key = str(raw_key).lower()
         val = int(raw_val)
-        if key == "semantic-agentic":
+        if key in {"semantic-agentic", "semantic-hybrid", "trigger"}:
             key = "semantic"
         elif key == "chip":
             key = "chips"
@@ -212,7 +212,7 @@ def summarize_profile(
     error_counts = Counter(
         r.error_code for r in no_emit if isinstance(r.error_code, str) and r.error_code.strip()
     )
-    no_emit_error_codes = sorted(error_counts.items(), key=lambda kv: kv[0])
+    no_emit_error_codes = sorted(error_counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
     source_counts: Dict[str, int] = {}
     for row in rows:

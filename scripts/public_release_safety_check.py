@@ -24,6 +24,19 @@ FORBIDDEN_FILENAMES = [
     "C*Users*test_output*.txt",
 ]
 
+EXECUTABLE_SCRIPT_SUFFIXES = {".py", ".ps1", ".bat", ".sh", ".cmd"}
+PLACEHOLDER_TOKENS = (
+    "<REPO_ROOT>",
+    "<SPARK_PULSE_DIR>",
+    "<SPARKD_PORT>",
+    "<PULSE_PORT>",
+)
+PLACEHOLDER_SCAN_EXCLUDE_PREFIXES = (
+    "docs/",
+    "tests/",
+    "scripts/experimental/",
+)
+
 FORBIDDEN_LINE_PATTERNS = {
     "windows_users_path": re.compile(r"[\"']([A-Za-z]:\\Users\\[^\"']+)[\"']", re.IGNORECASE),
     "private_key": re.compile(r"BEGIN (?:RSA|EC|OPENSSH|PRIVATE) PRIVATE KEY"),
@@ -127,18 +140,31 @@ def _scan_file(path: Path) -> list[str]:
 
     issues: list[str] = []
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
     except Exception:
         return issues
 
     if path.suffix == ".py":
         issues.extend(_scan_python_source(path, text, include_risk=_is_ast_risk_scan_allowed(path)))
 
+    rel_path = path.relative_to(REPO_ROOT).as_posix()
+    if _is_placeholder_scan_target(rel_path):
+        for token in PLACEHOLDER_TOKENS:
+            if token in text:
+                issues.append(f"placeholder_token: {token} found in executable script")
+
     for label, pattern in FORBIDDEN_LINE_PATTERNS.items():
         if pattern.search(text):
             issues.append(f"{label}: matched pattern in tracked file content")
 
     return issues
+
+
+def _is_placeholder_scan_target(path_str: str) -> bool:
+    if any(path_str.startswith(prefix) for prefix in PLACEHOLDER_SCAN_EXCLUDE_PREFIXES):
+        return False
+    suffix = Path(path_str).suffix.lower()
+    return suffix in EXECUTABLE_SCRIPT_SUFFIXES
 
 
 def _is_ast_risk_scan_allowed(path: Path) -> bool:
@@ -170,7 +196,12 @@ def _scan_python_source(path: Path, text: str, include_risk: bool) -> list[str]:
 
 
 def _dependency_audit_is_strict() -> bool:
-    return os.environ.get("SPARK_RELEASE_REQUIRE_DEP_AUDIT", "").strip().lower() in {"1", "true", "yes", "on"}
+    raw = os.environ.get("SPARK_RELEASE_REQUIRE_DEP_AUDIT", "").strip().lower()
+    if raw:
+        return raw in {"1", "true", "yes", "on"}
+    ci = os.environ.get("CI", "").strip().lower()
+    gha = os.environ.get("GITHUB_ACTIONS", "").strip().lower()
+    return ci in {"1", "true", "yes", "on"} or gha in {"1", "true", "yes", "on"}
 
 
 def _run_dependency_audit() -> list[str]:

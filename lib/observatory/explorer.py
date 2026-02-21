@@ -653,6 +653,527 @@ def _export_advisory(explore_dir: Path, advice_limit: int) -> int:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  RETRIEVAL ROUTING DECISIONS
+# ═══════════════════════════════════════════════════════════════════════
+
+def _export_routing(explore_dir: Path, limit: int) -> int:
+    """Export retrieval routing decisions as a browsable index (no detail pages)."""
+    out = explore_dir / "routing"
+    out.mkdir(parents=True, exist_ok=True)
+    path = _SD / "advisor" / "retrieval_router.jsonl"
+    total = _count_jsonl(path)
+    recent = _tail_jsonl(path, limit)
+
+    # Aggregate distributions
+    routes: dict[str, int] = {}
+    reasons: dict[str, int] = {}
+    tools: dict[str, int] = {}
+    routed_count = 0
+    for entry in recent:
+        r = entry.get("route", "?")
+        routes[r] = routes.get(r, 0) + 1
+        reason = entry.get("reason", "?")
+        reasons[reason] = reasons.get(reason, 0) + 1
+        tool = entry.get("tool", "?")
+        tools[tool] = tools.get(tool, 0) + 1
+        if entry.get("routed"):
+            routed_count += 1
+
+    routed_pct = round(routed_count / max(len(recent), 1) * 100, 1)
+
+    index = [_frontmatter({
+        "type": "spark-routing-index",
+        "total": total,
+        "exported": len(recent),
+        "limit": limit,
+        "routed_rate": routed_pct,
+    })]
+    index.append(f"# Retrieval Routing Decisions ({len(recent)}/{total})\n")
+    index.append(f"> {flow_link()} | [[../stages/08-advisory|Stage 8: Advisory]]\n")
+    index.append(f"**Routed rate (recent):** {routed_pct}% ({routed_count}/{len(recent)})\n")
+    if len(recent) < total:
+        index.append(f"*Showing most recent {len(recent)}. Increase `explore_routing_max` in tuneables to see more.*\n")
+
+    # Route distribution
+    if routes:
+        index.append("## Route Distribution\n")
+        index.append("| Route | Count | % |")
+        index.append("|-------|-------|---|")
+        for r, c in sorted(routes.items(), key=lambda x: -x[1]):
+            pct = round(c / max(len(recent), 1) * 100, 1)
+            index.append(f"| `{r}` | {c} | {pct}% |")
+        index.append("")
+
+    # Reason distribution
+    if reasons:
+        index.append("## Reason Distribution\n")
+        index.append("| Reason | Count | % |")
+        index.append("|--------|-------|---|")
+        for r, c in sorted(reasons.items(), key=lambda x: -x[1]):
+            pct = round(c / max(len(recent), 1) * 100, 1)
+            index.append(f"| `{r}` | {c} | {pct}% |")
+        index.append("")
+
+    # Tool distribution
+    if tools:
+        index.append("## Tool Distribution\n")
+        index.append("| Tool | Count |")
+        index.append("|------|-------|")
+        for t, c in sorted(tools.items(), key=lambda x: -x[1]):
+            index.append(f"| {t} | {c} |")
+        index.append("")
+
+    # Recent decisions table
+    index.append("## Recent Decisions\n")
+    index.append("| Time | Tool | Route | Routed | Reason | Complexity |")
+    index.append("|------|------|-------|--------|--------|------------|")
+    for entry in reversed(recent[-50:]):
+        ts_val = entry.get("ts", 0)
+        ts = fmt_ts(ts_val) if ts_val else "?"
+        tool = entry.get("tool", "?")
+        route = entry.get("route", "?")
+        routed = "yes" if entry.get("routed") else "no"
+        reason = entry.get("reason", "")
+        complexity = entry.get("complexity_score", "?")
+        index.append(f"| {ts} | {tool} | `{route}` | {routed} | {reason} | {complexity} |")
+    index.append("")
+    (out / "_index.md").write_text("\n".join(index), encoding="utf-8")
+    return 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  TUNEABLE EVOLUTION HISTORY
+# ═══════════════════════════════════════════════════════════════════════
+
+def _export_tuning(explore_dir: Path, limit: int) -> int:
+    """Export auto-tuner parameter change history as a browsable index."""
+    out = explore_dir / "tuning"
+    out.mkdir(parents=True, exist_ok=True)
+    path = _SD / "auto_tune_log.jsonl"
+    total = _count_jsonl(path)
+    recent = _tail_jsonl(path, limit)
+
+    # Aggregate by section and by parameter
+    sections: dict[str, int] = {}
+    params: dict[str, int] = {}
+    confidence_sum = 0.0
+    confidence_count = 0
+    for entry in recent:
+        sec = entry.get("section", "?")
+        sections[sec] = sections.get(sec, 0) + 1
+        key = f"{sec}.{entry.get('key', '?')}"
+        params[key] = params.get(key, 0) + 1
+        conf = entry.get("confidence", 0)
+        if conf:
+            confidence_sum += conf
+            confidence_count += 1
+
+    avg_confidence = round(confidence_sum / max(confidence_count, 1), 2)
+
+    index = [_frontmatter({
+        "type": "spark-tuning-index",
+        "total": total,
+        "exported": len(recent),
+        "limit": limit,
+        "avg_confidence": avg_confidence,
+    })]
+    index.append(f"# Tuneable Evolution History ({len(recent)}/{total})\n")
+    index.append(f"> {flow_link()} | [[../stages/12-tuneables|Stage 12: Tuneables]]\n")
+    index.append(f"**Average confidence:** {avg_confidence} | **Total changes:** {total}\n")
+    if len(recent) < total:
+        index.append(f"*Showing most recent {len(recent)}. Increase `explore_tuning_max` in tuneables to see more.*\n")
+
+    # Section distribution
+    if sections:
+        index.append("## Changes by Section\n")
+        index.append("| Section | Changes |")
+        index.append("|---------|---------|")
+        for sec, c in sorted(sections.items(), key=lambda x: -x[1]):
+            index.append(f"| **{sec}** | {c} |")
+        index.append("")
+
+    # Most-changed parameters
+    if params:
+        index.append("## Most-Changed Parameters\n")
+        index.append("| Parameter | Changes |")
+        index.append("|-----------|---------|")
+        for p, c in sorted(params.items(), key=lambda x: -x[1])[:20]:
+            index.append(f"| `{p}` | {c} |")
+        index.append("")
+
+    # Tuneable impact correlation
+    # Cross-reference parameter changes with advisory effectiveness snapshots
+    eff = _load_json(_SD / "advisor" / "effectiveness.json") or {}
+    feedback_path = _SD / "advisor" / "implicit_feedback.jsonl"
+    feedback_entries = _tail_jsonl(feedback_path, 500) if feedback_path.exists() else []
+    if recent and (eff or feedback_entries):
+        index.append("## Tuneable Impact Analysis\n")
+        index.append("*Cross-referencing parameter changes with nearby feedback signals*\n")
+
+        # Group feedback by 1-hour windows
+        def _feedback_window(entries: list, center_ts: float, window_s: float = 3600) -> dict:
+            before_followed = before_total = after_followed = after_total = 0
+            for fb in entries:
+                try:
+                    fb_ts = float(fb.get("timestamp", 0))
+                except (ValueError, TypeError):
+                    continue
+                if center_ts - window_s <= fb_ts < center_ts:
+                    before_total += 1
+                    if fb.get("signal") == "followed":
+                        before_followed += 1
+                elif center_ts <= fb_ts <= center_ts + window_s:
+                    after_total += 1
+                    if fb.get("signal") == "followed":
+                        after_followed += 1
+            return {
+                "before_rate": round(before_followed / max(before_total, 1) * 100, 1),
+                "before_n": before_total,
+                "after_rate": round(after_followed / max(after_total, 1) * 100, 1),
+                "after_n": after_total,
+            }
+
+        # Find unique change timestamps (grouped within 5s)
+        change_groups: list[tuple[float, list[dict]]] = []
+        for entry in recent:
+            ts_val = entry.get("ts", 0)
+            if not ts_val:
+                continue
+            if change_groups and abs(ts_val - change_groups[-1][0]) < 5:
+                change_groups[-1][1].append(entry)
+            else:
+                change_groups.append((ts_val, [entry]))
+
+        # Show impact for last 10 change groups
+        impact_rows = []
+        for ts_val, group in change_groups[-10:]:
+            window = _feedback_window(feedback_entries, ts_val)
+            if window["before_n"] < 2 and window["after_n"] < 2:
+                continue  # Not enough data
+            changes_desc = ", ".join(
+                f"`{e.get('section','')}.{e.get('key','')}`={e.get('old','?')}->{e.get('new','?')}"
+                for e in group[:3]
+            )
+            delta = window["after_rate"] - window["before_rate"]
+            delta_str = f"+{delta:.1f}%" if delta >= 0 else f"{delta:.1f}%"
+            impact_rows.append((
+                fmt_ts(ts_val), changes_desc,
+                f"{window['before_rate']}% (n={window['before_n']})",
+                f"{window['after_rate']}% (n={window['after_n']})",
+                delta_str,
+            ))
+
+        if impact_rows:
+            index.append("| When | Changes | Follow Rate Before | Follow Rate After | Delta |")
+            index.append("|------|---------|-------------------|------------------|-------|")
+            for row in impact_rows:
+                index.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |")
+            index.append("")
+            index.append("*Window: 1 hour before vs 1 hour after each change. 'n' = feedback signals in window.*\n")
+        else:
+            index.append("*Not enough feedback data near parameter changes to show impact. Need more advisory cycles.*\n")
+
+    # Recent changes table
+    index.append("## Recent Changes\n")
+    index.append("| Time | Section | Key | Old | New | Reason | Confidence |")
+    index.append("|------|---------|-----|-----|-----|--------|------------|")
+    for entry in reversed(recent[-50:]):
+        ts_val = entry.get("ts", 0)
+        ts = fmt_ts(ts_val) if ts_val else "?"
+        sec = entry.get("section", "?")
+        key = entry.get("key", "?")
+        old = str(entry.get("old", "?"))[:20]
+        new = str(entry.get("new", "?"))[:20]
+        reason = entry.get("reason", "")[:60].replace("|", "/")
+        conf = entry.get("confidence", "?")
+        index.append(f"| {ts} | {sec} | `{key}` | {old} | {new} | {reason} | {conf} |")
+    index.append("")
+    (out / "_index.md").write_text("\n".join(index), encoding="utf-8")
+    return 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  ADVISORY DECISION LEDGER
+# ═══════════════════════════════════════════════════════════════════════
+
+def _export_decisions(explore_dir: Path, limit: int) -> int:
+    """Export advisory decision ledger showing emit/suppress/block decisions."""
+    out = explore_dir / "decisions"
+    out.mkdir(parents=True, exist_ok=True)
+    path = _SD / "advisory_decision_ledger.jsonl"
+    total = _count_jsonl(path)
+    recent = _tail_jsonl(path, limit)
+
+    # Aggregate distributions
+    outcomes: dict[str, int] = {}
+    stages: dict[str, int] = {}
+    routes: dict[str, int] = {}
+    tools: dict[str, int] = {}
+    suppression_reasons: dict[str, int] = {}
+    source_totals: dict[str, int] = {}
+    emitted = 0
+    blocked = 0
+
+    for entry in recent:
+        outcome = entry.get("outcome", "?")
+        outcomes[outcome] = outcomes.get(outcome, 0) + 1
+        if outcome == "emitted":
+            emitted += 1
+        elif outcome == "blocked":
+            blocked += 1
+        stage = entry.get("stage", "?")
+        stages[stage] = stages.get(stage, 0) + 1
+        route = entry.get("route", "?")
+        routes[route] = routes.get(route, 0) + 1
+        tool = entry.get("tool", "?")
+        tools[tool] = tools.get(tool, 0) + 1
+
+        # Parse suppression reasons
+        sup_reasons = entry.get("suppressed_reasons", "[]")
+        if isinstance(sup_reasons, str):
+            try:
+                import ast
+                sup_reasons = ast.literal_eval(sup_reasons)
+            except Exception:
+                sup_reasons = []
+        for sr in (sup_reasons or []):
+            reason = sr.get("reason", "?") if isinstance(sr, dict) else str(sr)
+            reason = reason[:60]
+            suppression_reasons[reason] = suppression_reasons.get(reason, 0) + 1
+
+        # Source counts
+        sc = entry.get("source_counts", "{}")
+        if isinstance(sc, str):
+            try:
+                import ast
+                sc = ast.literal_eval(sc)
+            except Exception:
+                sc = {}
+        for src, cnt in (sc or {}).items():
+            source_totals[src] = source_totals.get(src, 0) + int(cnt)
+
+    emit_rate = round(emitted / max(len(recent), 1) * 100, 1)
+
+    index = [_frontmatter({
+        "type": "spark-decisions-index",
+        "total": total,
+        "exported": len(recent),
+        "limit": limit,
+        "emit_rate": emit_rate,
+    })]
+    index.append(f"# Advisory Decision Ledger ({len(recent)}/{total})\n")
+    index.append(f"> {flow_link()} | [[../stages/08-advisory|Stage 8: Advisory]]\n")
+    index.append(f"**Emit rate (recent):** {emit_rate}% ({emitted}/{len(recent)}) | **Blocked:** {blocked}\n")
+    if len(recent) < total:
+        index.append(f"*Showing most recent {len(recent)}. Increase `explore_decisions_max` in tuneables to see more.*\n")
+
+    # Outcome distribution
+    if outcomes:
+        index.append("## Decision Outcomes\n")
+        index.append("| Outcome | Count | % |")
+        index.append("|---------|-------|---|")
+        for o, c in sorted(outcomes.items(), key=lambda x: -x[1]):
+            pct = round(c / max(len(recent), 1) * 100, 1)
+            index.append(f"| **{o}** | {c} | {pct}% |")
+        index.append("")
+
+    # Route distribution
+    if routes:
+        index.append("## Delivery Routes\n")
+        index.append("| Route | Count |")
+        index.append("|-------|-------|")
+        for r, c in sorted(routes.items(), key=lambda x: -x[1]):
+            index.append(f"| `{r}` | {c} |")
+        index.append("")
+
+    # Source distribution
+    if source_totals:
+        index.append("## Advisory Sources Used\n")
+        index.append("| Source | Items Retrieved |")
+        index.append("|--------|----------------|")
+        for s, c in sorted(source_totals.items(), key=lambda x: -x[1]):
+            index.append(f"| **{s}** | {c} |")
+        index.append("")
+
+    # Suppression reasons
+    if suppression_reasons:
+        index.append("## Suppression Reasons\n")
+        index.append("*Why advice was blocked from delivery*\n")
+        index.append("| Reason | Count |")
+        index.append("|--------|-------|")
+        for r, c in sorted(suppression_reasons.items(), key=lambda x: -x[1]):
+            index.append(f"| {r} | {c} |")
+        index.append("")
+
+    # Tool distribution
+    if tools:
+        index.append("## Decisions by Tool\n")
+        index.append("| Tool | Decisions |")
+        index.append("|------|-----------|")
+        for t, c in sorted(tools.items(), key=lambda x: -x[1]):
+            index.append(f"| {t} | {c} |")
+        index.append("")
+
+    # Recent decisions table
+    index.append("## Recent Decisions\n")
+    index.append("| Time | Tool | Outcome | Route | Selected | Suppressed | Sources |")
+    index.append("|------|------|---------|-------|----------|------------|---------|")
+    for entry in reversed(recent[-50:]):
+        ts_val = entry.get("ts", 0)
+        ts = fmt_ts(float(ts_val)) if ts_val else "?"
+        tool = entry.get("tool", "?")
+        outcome = entry.get("outcome", "?")
+        route = entry.get("route", "?")
+        selected = entry.get("selected_count", 0)
+        suppressed = entry.get("suppressed_count", 0)
+        sc = entry.get("source_counts", "{}")
+        if isinstance(sc, str):
+            try:
+                import ast
+                sc = ast.literal_eval(sc)
+            except Exception:
+                sc = {}
+        sources = ", ".join(f"{k}:{v}" for k, v in (sc or {}).items())
+        index.append(f"| {ts} | {tool} | **{outcome}** | `{route}` | {selected} | {suppressed} | {sources} |")
+    index.append("")
+    (out / "_index.md").write_text("\n".join(index), encoding="utf-8")
+    return 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  IMPLICIT FEEDBACK LOOP
+# ═══════════════════════════════════════════════════════════════════════
+
+def _export_feedback(explore_dir: Path, limit: int) -> int:
+    """Export implicit feedback showing whether advice was followed/ignored."""
+    out = explore_dir / "feedback"
+    out.mkdir(parents=True, exist_ok=True)
+    path = _SD / "advisor" / "implicit_feedback.jsonl"
+    total = _count_jsonl(path)
+    recent = _tail_jsonl(path, limit)
+
+    # Aggregate
+    signals: dict[str, int] = {}
+    tools: dict[str, int] = {}
+    sources: dict[str, int] = {}
+    success_count = 0
+    total_latency = 0.0
+    latency_count = 0
+
+    for entry in recent:
+        sig = entry.get("signal", "?")
+        signals[sig] = signals.get(sig, 0) + 1
+        tool = entry.get("tool", "?")
+        tools[tool] = tools.get(tool, 0) + 1
+        if entry.get("success") in (True, "True", "true"):
+            success_count += 1
+        lat = entry.get("latency_s", 0)
+        try:
+            lat = float(lat)
+            if lat > 0:
+                total_latency += lat
+                latency_count += 1
+        except (ValueError, TypeError):
+            pass
+
+        # Parse advice sources
+        srcs = entry.get("advice_sources", "[]")
+        if isinstance(srcs, str):
+            try:
+                import ast
+                srcs = ast.literal_eval(srcs)
+            except Exception:
+                srcs = []
+        for src in (srcs or []):
+            # Extract source type (e.g., "eidos:eidos:heuristic:f145d3b5" -> "eidos")
+            src_type = str(src).split(":")[0] if ":" in str(src) else str(src)
+            sources[src_type] = sources.get(src_type, 0) + 1
+
+    followed_count = signals.get("followed", 0)
+    ignored_count = signals.get("ignored", 0)
+    follow_rate = round(followed_count / max(followed_count + ignored_count, 1) * 100, 1)
+    success_rate = round(success_count / max(len(recent), 1) * 100, 1)
+    avg_latency = round(total_latency / max(latency_count, 1), 2)
+
+    index = [_frontmatter({
+        "type": "spark-feedback-index",
+        "total": total,
+        "exported": len(recent),
+        "limit": limit,
+        "follow_rate": follow_rate,
+        "success_rate": success_rate,
+    })]
+    index.append(f"# Implicit Feedback Loop ({len(recent)}/{total})\n")
+    index.append(f"> {flow_link()} | [[../stages/08-advisory|Stage 8: Advisory]]\n")
+    index.append(f"**Follow rate:** {follow_rate}% | **Success rate:** {success_rate}% | **Avg latency:** {avg_latency}s\n")
+    if len(recent) < total:
+        index.append(f"*Showing most recent {len(recent)}. Increase `explore_feedback_max` in tuneables to see more.*\n")
+
+    # Signal distribution
+    if signals:
+        index.append("## Signal Distribution\n")
+        index.append("*Whether the tool action after receiving advice succeeded (followed) or not (ignored)*\n")
+        index.append("| Signal | Count | % |")
+        index.append("|--------|-------|---|")
+        for s, c in sorted(signals.items(), key=lambda x: -x[1]):
+            pct = round(c / max(len(recent), 1) * 100, 1)
+            index.append(f"| **{s}** | {c} | {pct}% |")
+        index.append("")
+
+    # Per-tool follow rates
+    if tools:
+        # Compute per-tool follow rate
+        tool_followed: dict[str, int] = {}
+        tool_total: dict[str, int] = {}
+        for entry in recent:
+            tool = entry.get("tool", "?")
+            tool_total[tool] = tool_total.get(tool, 0) + 1
+            if entry.get("signal") == "followed":
+                tool_followed[tool] = tool_followed.get(tool, 0) + 1
+        index.append("## Follow Rate by Tool\n")
+        index.append("| Tool | Followed | Total | Rate |")
+        index.append("|------|----------|-------|------|")
+        for t, tot in sorted(tool_total.items(), key=lambda x: -x[1]):
+            fol = tool_followed.get(t, 0)
+            rate = round(fol / max(tot, 1) * 100, 1)
+            index.append(f"| {t} | {fol} | {tot} | {rate}% |")
+        index.append("")
+
+    # Source effectiveness
+    if sources:
+        index.append("## Advice Sources (when followed)\n")
+        index.append("| Source | Times in Followed Advice |")
+        index.append("|--------|-------------------------|")
+        for s, c in sorted(sources.items(), key=lambda x: -x[1]):
+            index.append(f"| **{s}** | {c} |")
+        index.append("")
+
+    # Recent feedback entries
+    index.append("## Recent Feedback\n")
+    index.append("| Time | Tool | Signal | Success | Sources | Latency |")
+    index.append("|------|------|--------|---------|---------|---------|")
+    for entry in reversed(recent[-50:]):
+        ts_val = entry.get("timestamp", 0)
+        ts = fmt_ts(float(ts_val)) if ts_val else "?"
+        tool = entry.get("tool", "?")
+        signal = entry.get("signal", "?")
+        success = "yes" if entry.get("success") in (True, "True", "true") else "no"
+        srcs = entry.get("advice_sources", "[]")
+        if isinstance(srcs, str):
+            try:
+                import ast
+                srcs = ast.literal_eval(srcs)
+            except Exception:
+                srcs = []
+        src_display = ", ".join(str(s).split(":")[0] for s in (srcs or [])[:3])
+        lat = entry.get("latency_s", "?")
+        index.append(f"| {ts} | {tool} | **{signal}** | {success} | {src_display} | {lat}s |")
+    index.append("")
+    (out / "_index.md").write_text("\n".join(index), encoding="utf-8")
+    return 1
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  PUBLIC API
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -669,6 +1190,10 @@ def generate_explorer(cfg: ObservatoryConfig) -> dict[str, int]:
     counts["verdicts"] = _export_verdicts(explore_dir, cfg.explore_verdicts_max)
     counts["promotions"] = _export_promotions(explore_dir, cfg.explore_promotions_max)
     counts["advisory"] = _export_advisory(explore_dir, cfg.explore_advice_max)
+    counts["routing"] = _export_routing(explore_dir, cfg.explore_routing_max)
+    counts["tuning"] = _export_tuning(explore_dir, cfg.explore_tuning_max)
+    counts["decisions"] = _export_decisions(explore_dir, cfg.explore_decisions_max)
+    counts["feedback"] = _export_feedback(explore_dir, cfg.explore_feedback_max)
 
     # Generate master explore index
     _generate_explore_index(explore_dir, counts, cfg)
@@ -690,6 +1215,10 @@ def _generate_explore_index(explore_dir: Path, counts: dict[str, int], cfg: Obse
         ("verdicts", "Meta-Ralph Verdicts", cfg.explore_verdicts_max, "explore_verdicts_max"),
         ("promotions", "Promotion Log", cfg.explore_promotions_max, "explore_promotions_max"),
         ("advisory", "Advisory Effectiveness", cfg.explore_advice_max, "explore_advice_max"),
+        ("routing", "Retrieval Routing", cfg.explore_routing_max, "explore_routing_max"),
+        ("tuning", "Tuneable Evolution", cfg.explore_tuning_max, "explore_tuning_max"),
+        ("decisions", "Advisory Decisions", cfg.explore_decisions_max, "explore_decisions_max"),
+        ("feedback", "Implicit Feedback", cfg.explore_feedback_max, "explore_feedback_max"),
     ]
     for key, label, max_val, tuneable in sections:
         n = counts.get(key, 0)
@@ -704,7 +1233,11 @@ def _generate_explore_index(explore_dir: Path, counts: dict[str, int], cfg: Obse
     index.append(f'    "explore_episodes_max": {cfg.explore_episodes_max},')
     index.append(f'    "explore_verdicts_max": {cfg.explore_verdicts_max},')
     index.append(f'    "explore_promotions_max": {cfg.explore_promotions_max},')
-    index.append(f'    "explore_advice_max": {cfg.explore_advice_max}')
+    index.append(f'    "explore_advice_max": {cfg.explore_advice_max},')
+    index.append(f'    "explore_routing_max": {cfg.explore_routing_max},')
+    index.append(f'    "explore_tuning_max": {cfg.explore_tuning_max},')
+    index.append(f'    "explore_decisions_max": {cfg.explore_decisions_max},')
+    index.append(f'    "explore_feedback_max": {cfg.explore_feedback_max}')
     index.append("}")
     index.append("```\n")
     index.append("Then regenerate: `python scripts/generate_observatory.py --force --verbose`\n")

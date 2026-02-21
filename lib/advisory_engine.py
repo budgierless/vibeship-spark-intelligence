@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -180,6 +181,37 @@ def _append_jsonl_capped(path: Path, entry: Dict[str, Any], max_lines: int) -> N
         return
 
 
+def _emit_advisory_compat(
+    emit_fn,
+    gate_result,
+    synthesized_text: str,
+    advice_items: List[Any],
+    *,
+    trace_id: Optional[str],
+    tool_name: str,
+    route: str,
+    task_plane: str,
+) -> bool:
+    try:
+        return bool(
+            emit_fn(
+                gate_result,
+                synthesized_text,
+                advice_items,
+                trace_id=trace_id,
+                tool_name=tool_name,
+                route=route,
+                task_plane=task_plane,
+            )
+        )
+    except TypeError as exc:
+        msg = str(exc)
+        if "unexpected keyword argument" not in msg and "positional arguments but" not in msg:
+            raise
+        # Backward-compatible call shape used by older tests/helpers.
+        return bool(emit_fn(gate_result, synthesized_text, advice_items))
+
+
 def _low_auth_recently_emitted(
     *,
     tool_name: str,
@@ -319,6 +351,17 @@ def _global_recently_emitted_text_sig(
 def _load_engine_config(path: Optional[Path] = None) -> Dict[str, Any]:
     """Load advisory engine tuneables from ~/.spark/tuneables.json."""
     tuneables = path or (Path.home() / ".spark" / "tuneables.json")
+    if (
+        path is None
+        and "pytest" in sys.modules
+        and str(os.environ.get("SPARK_TEST_ALLOW_HOME_TUNEABLES", "")).strip().lower()
+        not in {"1", "true", "yes", "on"}
+    ):
+        try:
+            if tuneables.resolve() == (Path.home() / ".spark" / "tuneables.json").resolve():
+                return {}
+        except Exception:
+            return {}
     if not tuneables.exists():
         return {}
     try:
@@ -1790,16 +1833,15 @@ def on_pre_tool(
             fallback_error: Optional[Dict[str, Any]] = None
             try:
                 from .advisory_emitter import emit_advisory
-                fallback_emitted = bool(
-                    emit_advisory(
-                        gate_result,
-                        fallback_text,
-                        advice_items,
-                        trace_id=resolved_trace_id,
-                        tool_name=tool_name,
-                        route=route,
-                        task_plane=task_plane,
-                    )
+                fallback_emitted = _emit_advisory_compat(
+                    emit_advisory,
+                    gate_result,
+                    fallback_text,
+                    advice_items,
+                    trace_id=resolved_trace_id,
+                    tool_name=tool_name,
+                    route=route,
+                    task_plane=task_plane,
                 )
                 if fallback_emitted:
                     state.last_advisory_text_fingerprint = repeat_meta["fingerprint"]
@@ -1862,7 +1904,6 @@ def on_pre_tool(
         try:
             if (
                 GLOBAL_DEDUPE_ENABLED
-                and GLOBAL_DEDUPE_TEXT_ENABLED
                 and gate_result.emitted
                 and not str(session_id or "").startswith("advisory-bench-")
             ):
@@ -1880,7 +1921,7 @@ def on_pre_tool(
                         sig = _text_fingerprint(str(getattr(item, "text", "") or "")) if item else ""
                     except Exception:
                         sig = ""
-                    if sig:
+                    if sig and GLOBAL_DEDUPE_TEXT_ENABLED:
                         hit_sig = _global_recently_emitted_text_sig(
                             text_sig=sig,
                             now_ts=now_ts,
@@ -1897,6 +1938,23 @@ def on_pre_tool(
                                 }
                             )
                             continue
+                    hit_id = _global_recently_emitted(
+                        tool_name=tool_name,
+                        advice_id=aid,
+                        now_ts=now_ts,
+                        cooldown_s=cooldown,
+                        scope_key=dedupe_scope,
+                    )
+                    if hit_id:
+                        suppressed.append(
+                            {
+                                "advice_id": aid,
+                                "reason": "advice_id",
+                                "repeat_age_s": round(float(hit_id.get("age_s") or 0.0), 2),
+                                "repeat_cooldown_s": round(float(hit_id.get("cooldown_s") or cooldown), 2),
+                            }
+                        )
+                        continue
                     kept.append(decision)
 
                 if suppressed:
@@ -2120,7 +2178,8 @@ def on_pre_tool(
             return None
 
         t_emit = time.time() * 1000.0
-        emitted = emit_advisory(
+        emitted = _emit_advisory_compat(
+            emit_advisory,
             gate_result,
             synth_text,
             advice_items,

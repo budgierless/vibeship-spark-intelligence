@@ -455,7 +455,11 @@
     "explore_episodes_max": 100,
     "explore_verdicts_max": 100,
     "explore_promotions_max": 200,
-    "explore_advice_max": 200
+    "explore_advice_max": 200,
+    "explore_routing_max": 100,
+    "explore_tuning_max": 200,
+    "explore_decisions_max": 200,
+    "explore_feedback_max": 200
   },
   "production_gates": {
     "enforce_meta_ralph_quality_band": true,

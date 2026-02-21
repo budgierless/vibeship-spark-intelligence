@@ -76,6 +76,9 @@ claude -p "say OK"
 python scripts/test_advisory.py
 ```
 
+Manual bridge diagnostics are archived under `scripts/experimental/manual_llm/`.
+They are useful for troubleshooting, but they are not part of the canonical startup path.
+
 ### Environment
 
 | Variable | Default | Description |

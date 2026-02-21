@@ -7,7 +7,9 @@ so they can be validated, promoted, and injected into context.
 """
 
 import json
+import os
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Any
@@ -194,7 +196,17 @@ def _prune_rejected_state(entries: Dict[str, Any], now_ts: float) -> Dict[str, f
 def _load_merge_tuneables() -> Dict[str, float]:
     cfg: Dict[str, Any] = {}
     try:
-        if TUNEABLES_FILE.exists():
+        use_host_tuneables = True
+        if (
+            "pytest" in sys.modules
+            and str(os.environ.get("SPARK_TEST_ALLOW_HOME_TUNEABLES", "")).strip().lower()
+            not in {"1", "true", "yes", "on"}
+        ):
+            try:
+                use_host_tuneables = TUNEABLES_FILE.resolve() != (Path.home() / ".spark" / "tuneables.json").resolve()
+            except Exception:
+                use_host_tuneables = False
+        if use_host_tuneables and TUNEABLES_FILE.exists():
             # Accept UTF-8 with BOM (common on Windows).
             data = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             section = data.get("chip_merge") or {}
@@ -324,6 +336,8 @@ def _field_based_learning_statement(chip_id: str, captured_data: Dict[str, Any])
         if len(keyvals) >= 3:
             break
     if keyvals:
+        if "engagement" in cid:
+            return f"Use engagement evidence ({', '.join(keyvals)}) when deciding next actions."
         return f"Use observed domain signals ({', '.join(keyvals)}) when deciding next actions."
     return ""
 

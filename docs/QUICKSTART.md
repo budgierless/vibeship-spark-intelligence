@@ -69,6 +69,8 @@ Windows (repo):
 ```bat
 start_spark.bat
 ```
+Preferred launch paths on Windows are `start_spark.bat` and `python -m spark.cli ...`.
+`scripts/spark.ps1` and `scripts/spark.cmd` are deprecated compatibility wrappers.
 This also starts Mind on `SPARK_MIND_PORT` (default `8080`) if `mind.exe` is available.  
 Set `SPARK_NO_MIND=1` to skip Mind startup.
 Set `SPARK_LITE=1` to skip dashboards/pulse/watchdog (core services only).
@@ -551,6 +553,12 @@ Mind isn't running. Either:
 ```bash
 pip install requests
 ```
+
+### Maintenance script locations
+
+- One-time cleanup scripts now live under `scripts/maintenance/one_time/`.
+- Archived manual LLM bridge diagnostics live under `scripts/experimental/manual_llm/`.
+- Old top-level cleanup paths remain as compatibility shims.
 
 ### Learnings not appearing
 

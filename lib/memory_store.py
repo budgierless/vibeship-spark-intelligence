@@ -15,6 +15,7 @@ import re
 import sqlite3
 import hashlib
 import difflib
+import sys
 import time
 from array import array
 from pathlib import Path
@@ -66,10 +67,21 @@ _MEMORY_LEARNING_CFG_MTIME: Optional[float] = None
 MEMORY_RETRIEVAL_GUARD_DEFAULTS: Dict[str, Any] = {
     "enabled": True,
     "base_score_floor": 0.22,
-    "max_total_boost": 0.42,
+    "max_total_boost": 1.0,
 }
 _MEMORY_RETRIEVAL_GUARD_CFG_CACHE: Dict[str, Any] = dict(MEMORY_RETRIEVAL_GUARD_DEFAULTS)
 _MEMORY_RETRIEVAL_GUARD_CFG_MTIME: Optional[float] = None
+
+
+def _tuneables_read_allowed() -> bool:
+    if "pytest" not in sys.modules:
+        return True
+    if str(os.environ.get("SPARK_TEST_ALLOW_HOME_TUNEABLES", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    try:
+        return TUNEABLES_FILE.resolve() != (Path.home() / ".spark" / "tuneables.json").resolve()
+    except Exception:
+        return False
 
 
 def _safe_bool(value: Any, default: bool) -> bool:
@@ -97,7 +109,7 @@ def _load_memory_emotion_config(*, force: bool = False) -> Dict[str, Any]:
 
     current_mtime: Optional[float] = None
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             current_mtime = float(TUNEABLES_FILE.stat().st_mtime)
     except Exception:
         current_mtime = None
@@ -107,7 +119,7 @@ def _load_memory_emotion_config(*, force: bool = False) -> Dict[str, Any]:
 
     cfg = dict(MEMORY_EMOTION_DEFAULTS)
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             payload = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             section = payload.get("memory_emotion") if isinstance(payload, dict) else None
             if isinstance(section, dict):
@@ -147,7 +159,7 @@ def _load_memory_learning_config(*, force: bool = False) -> Dict[str, Any]:
 
     current_mtime: Optional[float] = None
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             current_mtime = float(TUNEABLES_FILE.stat().st_mtime)
     except Exception:
         current_mtime = None
@@ -157,7 +169,7 @@ def _load_memory_learning_config(*, force: bool = False) -> Dict[str, Any]:
 
     cfg = dict(MEMORY_LEARNING_DEFAULTS)
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             payload = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             section = payload.get("memory_learning") if isinstance(payload, dict) else None
             if isinstance(section, dict):
@@ -199,7 +211,7 @@ def _load_memory_retrieval_guard_config(*, force: bool = False) -> Dict[str, Any
 
     current_mtime: Optional[float] = None
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             current_mtime = float(TUNEABLES_FILE.stat().st_mtime)
     except Exception:
         current_mtime = None
@@ -209,7 +221,7 @@ def _load_memory_retrieval_guard_config(*, force: bool = False) -> Dict[str, Any
 
     cfg = dict(MEMORY_RETRIEVAL_GUARD_DEFAULTS)
     try:
-        if TUNEABLES_FILE.exists():
+        if TUNEABLES_FILE.exists() and _tuneables_read_allowed():
             payload = json.loads(TUNEABLES_FILE.read_text(encoding="utf-8-sig"))
             section = payload.get("memory_retrieval_guard") if isinstance(payload, dict) else None
             if isinstance(section, dict):
@@ -1123,10 +1135,9 @@ def retrieve(
                     state_boost = state_weight * state_match
 
                     eligible = True
-                    if guard_enabled and float(it.get("base_score") or 0.0) < base_floor:
-                        eligible = False
                     if guard_enabled and (float(it.get("total_context_boost") or 0.0) + state_boost) > max_total_boost:
-                        state_boost = max(0.0, max_total_boost - float(it.get("total_context_boost") or 0.0))
+                        remaining = max(0.0, max_total_boost - float(it.get("total_context_boost") or 0.0))
+                        state_boost = min(state_boost, remaining * max(0.0, state_match))
 
                     if state_boost > 0.0 and eligible:
                         it["score"] += state_boost

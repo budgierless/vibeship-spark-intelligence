@@ -622,18 +622,12 @@ def _chips_enabled() -> bool:
         "on",
     }:
         return False
-    chips_switch = str(os.environ.get("SPARK_CHIPS_ENABLED", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    premium_switch = str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    chips_raw = str(os.environ.get("SPARK_CHIPS_ENABLED", "")).strip().lower()
+    premium_raw = str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower()
+    truthy = {"1", "true", "yes", "on"}
+    # Default-on for local OSS behavior unless explicitly disabled.
+    chips_switch = True if not chips_raw else chips_raw in truthy
+    premium_switch = True if not premium_raw else premium_raw in truthy
     return chips_switch and premium_switch
 
 
@@ -1065,6 +1059,8 @@ class SparkAdvisor:
         self._memory_emotion_cfg_cache: Dict[str, Any] = dict(MEMORY_EMOTION_DEFAULTS)
         self._memory_emotion_cfg_mtime: Optional[float] = None
         self._last_minimax_rerank_ts: float = 0.0
+        # Legacy benchmark/profile tooling mutates this map directly.
+        self._SOURCE_BOOST: Dict[str, float] = dict(self._SOURCE_QUALITY)
 
         # Prefilter cache: avoid per-query regex tokenization across large insight sets.
         # key -> (blob_hash, token_set, blob_lower)
@@ -2540,9 +2536,22 @@ class SparkAdvisor:
         advice_list.extend(self._get_bank_advice(context))
 
         # 2. Query cognitive insights (semantic + keyword fallback)
-        advice_list.extend(
-            self._get_cognitive_advice(tool_name, context, semantic_context, trace_id)
-        )
+        try:
+            cognitive_advice = self._get_cognitive_advice(
+                tool_name,
+                context,
+                semantic_context,
+                trace_id=trace_id,
+            )
+        except TypeError as exc:
+            msg = str(exc)
+            if "unexpected keyword argument 'trace_id'" in msg or "positional arguments but" in msg:
+                # Backward-compatible call shape for tests/overrides that still
+                # implement the pre-trace_id signature.
+                cognitive_advice = self._get_cognitive_advice(tool_name, context, semantic_context)
+            else:
+                raise
+        advice_list.extend(cognitive_advice)
 
         # 2.5. Query chip insights (domain-specific intelligence).
         advice_list.extend(self._get_chip_advice(context))
@@ -4754,7 +4763,10 @@ class SparkAdvisor:
         else:
             text_quality = self._score_actionability(a.text)
 
-        source_quality = self._SOURCE_QUALITY.get(a.source, 0.50)
+        source_quality_map = getattr(self, "_SOURCE_BOOST", self._SOURCE_QUALITY)
+        if not isinstance(source_quality_map, dict):
+            source_quality_map = self._SOURCE_QUALITY
+        source_quality = float(source_quality_map.get(a.source, 0.50))
         quality = max(text_quality, source_quality)
 
         # --- Dimension 3: Trust (best of confidence, effectiveness) ---

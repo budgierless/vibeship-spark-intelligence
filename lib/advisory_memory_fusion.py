@@ -741,12 +741,14 @@ def build_memory_bundle(
                 meta=dict(meta),
             )
             continue
-        relevance = _intent_relevance_score(intent_tokens, text)
+        intent_relevance = _intent_relevance_score(intent_tokens, text)
+        relevance = intent_relevance
         # Boost relevance with advisory quality structure match
         readiness = _coerce_readiness(meta, float(row.get("confidence") or 0.0))
         if isinstance(adv_q, dict) and adv_q.get("unified_score"):
             relevance += float(adv_q["unified_score"]) * 0.15
         relevance += 0.12 * readiness
+        meta["intent_relevance"] = round(float(intent_relevance), 4)
         if readiness and not meta.get("advisory_readiness"):
             meta["advisory_readiness"] = round(readiness, 4)
         row["meta"] = meta
@@ -760,7 +762,11 @@ def build_memory_bundle(
         )
 
     if scored and intent_tokens:
-        relevant = [entry for entry in scored if entry[0] > 0.0]
+        relevant = [
+            entry
+            for entry in scored
+            if float(((entry[3] or {}).get("meta") or {}).get("intent_relevance", 0.0)) > 0.0
+        ]
         if relevant:
             scored = relevant
 

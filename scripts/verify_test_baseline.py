@@ -11,6 +11,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_TARGETS_FILE = Path(__file__).resolve().parent / "test_baseline_targets.txt"
 BASELINE_OPTIONAL_TARGETS_FILE = Path(__file__).resolve().parent / "test_baseline_optional_targets.txt"
+BROAD_BASELINE_ARGS = [
+    "-q",
+    "-m",
+    "not integration",
+    "--ignore=tests/test_compact_chip_insights.py",
+    "--ignore=tests/test_trace_hud.py",
+]
 
 
 def _load_targets() -> list[str]:
@@ -72,6 +79,16 @@ def _run_pytest(targets: list[str], *, allow_failure: bool = False) -> tuple[int
     return (0, 0)
 
 
+def _run_pytest_args(args: list[str], *, allow_failure: bool = False) -> tuple[int, int]:
+    if not args:
+        return (0, 0)
+    cmd = [sys.executable, "-m", "pytest", *args]
+    result = subprocess.run(cmd, cwd=REPO_ROOT)
+    if result.returncode != 0:
+        return (result.returncode if not allow_failure else 0, result.returncode)
+    return (0, 0)
+
+
 def main() -> int:
     targets = _load_targets()
     if not targets:
@@ -85,6 +102,11 @@ def main() -> int:
     if mandatory_code != 0:
         print("Release baseline tests failed.")
         return mandatory_code
+
+    broad_code, _ = _run_pytest_args(BROAD_BASELINE_ARGS, allow_failure=False)
+    if broad_code != 0:
+        print("Release broad baseline failed.")
+        return broad_code
 
     optional_targets = _load_optional_targets()
     optional_missing = _validate_optional_targets(optional_targets)

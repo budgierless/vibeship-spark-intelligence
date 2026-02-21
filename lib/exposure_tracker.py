@@ -33,7 +33,7 @@ _REDACT_PATTERNS = [
     # Generic API key assignments (api_key=..., token: ...)
     (re.compile(r"(?i)\b(api[_-]?key|token|secret|password)\s*[:=]\s*([A-Za-z0-9_\-]{8,})"), r"\1=[REDACTED]"),
     # OpenAI-style keys
-    (re.compile(r"\bsk-[A-Za-z0-9]{16,}\b"), "[REDACTED_SK]"),
+    (re.compile(r"\bsk-[A-Za-z0-9_\-]{8,}\b"), "[REDACTED_SK]"),
     # Telegram bot token-ish pattern
     (re.compile(r"\b\d{6,12}:[A-Za-z0-9_\-]{20,}\b"), "[REDACTED_TELEGRAM_TOKEN]"),
 ]

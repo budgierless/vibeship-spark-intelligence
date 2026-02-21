@@ -193,7 +193,7 @@ class NicheMapper:
         self.accounts[handle] = account
 
         # Sync warmth with XVoice
-        if callable(self.x_voice):
+        if self.x_voice is not None and hasattr(self.x_voice, "get_user_warmth"):
             xv_warmth = self.x_voice.get_user_warmth(handle)
             if xv_warmth != "cold":
                 account.warmth = xv_warmth
@@ -249,21 +249,31 @@ class NicheMapper:
 
         # Delegate warmth transitions to XVoice
         warmth_events = {
-            "reply": "we_reply",
-            "reply_received": "reply_received",
+            "reply": "reply",
+            "reply_received": "reply",
             "like": "mutual_like",
             "mention": "they_mention_us",
             "multi_turn": "multi_turn_convo",
-            "share": "they_share_our_content",
+            "share": "share",
             "collab": "collaboration",
             "sustained": "sustained_engagement",
         }
         xv_event = warmth_events.get(event_type, event_type)
-        if callable(self.x_voice):
+        if self.x_voice is not None and hasattr(self.x_voice, "update_warmth"):
+            before_warmth = (
+                self.x_voice.get_user_warmth(handle)
+                if hasattr(self.x_voice, "get_user_warmth")
+                else None
+            )
             self.x_voice.update_warmth(handle, xv_event)
+            # Fall back to original event value when mapped aliases are unsupported.
+            if xv_event != event_type and hasattr(self.x_voice, "get_user_warmth"):
+                after_warmth = self.x_voice.get_user_warmth(handle)
+                if before_warmth == after_warmth:
+                    self.x_voice.update_warmth(handle, event_type)
 
         # Sync warmth from XVoice
-        if callable(self.x_voice):
+        if self.x_voice is not None and hasattr(self.x_voice, "get_user_warmth"):
             account.warmth = self.x_voice.get_user_warmth(handle)
 
         self._save()

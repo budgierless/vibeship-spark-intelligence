@@ -38,8 +38,11 @@ CHIP_ENABLED_VALUES = {"1", "true", "yes", "on"}
 
 
 def chips_enabled() -> bool:
-    """Return True only when chips runtime is explicitly enabled."""
-    return os.getenv("SPARK_CHIPS_ENABLED", "").strip().lower() in CHIP_ENABLED_VALUES
+    """Return True unless explicitly disabled via env."""
+    raw = os.getenv("SPARK_CHIPS_ENABLED", "").strip().lower()
+    if not raw:
+        return True
+    return raw in CHIP_ENABLED_VALUES
 
 
 @dataclass

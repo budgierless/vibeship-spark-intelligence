@@ -4263,7 +4263,7 @@ def _base_page(title: str, active: str, body: str, data: Dict[str, Any], endpoin
     const authHeaders = () => {{
       const headers = {{ 'Content-Type': 'application/json' }};
       if (DASHBOARD_AUTH_TOKEN) {{
-        headers.Authorization = `Bearer ${DASHBOARD_AUTH_TOKEN}`;
+        headers.Authorization = `Bearer ${{DASHBOARD_AUTH_TOKEN}}`;
       }}
       return headers;
     }};

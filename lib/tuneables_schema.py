@@ -341,6 +341,10 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "explore_verdicts_max": TuneableSpec("int", 100, 1, 5000, "Max Meta-Ralph verdicts to export"),
         "explore_promotions_max": TuneableSpec("int", 200, 1, 5000, "Max promotion log entries to export"),
         "explore_advice_max": TuneableSpec("int", 200, 1, 5000, "Max advisory log entries to export"),
+        "explore_routing_max": TuneableSpec("int", 100, 1, 5000, "Max retrieval routing decisions to export"),
+        "explore_tuning_max": TuneableSpec("int", 200, 1, 5000, "Max tuneable evolution entries to export"),
+        "explore_decisions_max": TuneableSpec("int", 200, 1, 5000, "Max advisory decision ledger entries to export"),
+        "explore_feedback_max": TuneableSpec("int", 200, 1, 5000, "Max implicit feedback entries to export"),
     },
 
     # ---- production_gates: quality enforcement ----

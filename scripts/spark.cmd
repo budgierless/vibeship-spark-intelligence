@@ -1,2 +1,5 @@
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0spark.ps1" %*
+setlocal
+cd /d "%~dp0.."
+python -m spark.cli %*
+exit /b %errorlevel%

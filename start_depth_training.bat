@@ -27,7 +27,7 @@ if %errorlevel% neq 0 (
 echo   Prerequisites OK. Starting training...
 echo.
 
-cd /d "<REPO_ROOT>"
+cd /d "%~dp0"
 python scripts/run_depth_training.py --cycles 5
 
 echo.
