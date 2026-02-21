@@ -240,7 +240,7 @@ Save this as `eidos_dashboard.py`:
 """EIDOS Dashboard - Quick health check"""
 
 import sys
-sys.path.insert(0, '<USER_HOME>/Desktop/vibeship-spark-intelligence')
+sys.path.insert(0, '/path/to/vibeship-spark-intelligence')
 
 from lib.eidos import (
     get_store, get_elevated_control_plane,

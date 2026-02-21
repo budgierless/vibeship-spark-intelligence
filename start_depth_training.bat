@@ -10,7 +10,8 @@ curl -s http://localhost:5555/api/health >nul 2>&1
 if %errorlevel% neq 0 (
     echo   [!!] DEPTH server not running on :5555
     echo   Starting DEPTH server...
-    start "DEPTH Server" /D "%USERPROFILE%\Desktop\vibeship-depth-game" cmd /c "python server.py"
+    if "%DEPTH_GAME_PATH%"=="" set "DEPTH_GAME_PATH=%~dp0..\vibeship-depth-game"
+    start "DEPTH Server" /D "%DEPTH_GAME_PATH%" cmd /c "python server.py"
     echo   Waiting for server to start...
     ping -n 5 127.0.0.1 >nul
 )

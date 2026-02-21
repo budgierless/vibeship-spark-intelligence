@@ -1,7 +1,7 @@
 # OSS-only Manifest (Spark OSS launch)
 
 Date: Saturday, February 21, 2026
-Source: `<USER_HOME>\Desktop\vibeship-spark-intelligence`
+Source: `vibeship-spark-intelligence (repo root)`
 
 ## Launch objective
 

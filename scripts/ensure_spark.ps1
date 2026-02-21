@@ -10,7 +10,7 @@ if (-not $env:SPARK_PULSE_DIR) {
     if (Test-Path (Join-Path $siblingPulse "app.py")) {
         $env:SPARK_PULSE_DIR = $siblingPulse
     } else {
-        $env:SPARK_PULSE_DIR = Join-Path ([Environment]::GetFolderPath("Desktop")) "vibeship-spark-pulse"
+        Write-Host "[warn] vibeship-spark-pulse not found. Set SPARK_PULSE_DIR env var."
     }
 }
 

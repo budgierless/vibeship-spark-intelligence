@@ -8,7 +8,7 @@ set PYTHONIOENCODING=utf-8
 set PYTHONUNBUFFERED=1
 if "%SPARK_PULSE_DIR%"=="" (
     set "SPARK_PULSE_DIR=%~dp0..\vibeship-spark-pulse"
-    if not exist "%SPARK_PULSE_DIR%\app.py" set "SPARK_PULSE_DIR=%USERPROFILE%\Desktop\vibeship-spark-pulse"
+    if not exist "%SPARK_PULSE_DIR%\app.py" echo [warn] vibeship-spark-pulse not found. Set SPARK_PULSE_DIR env var.
 )
 cd /d %~dp0
 

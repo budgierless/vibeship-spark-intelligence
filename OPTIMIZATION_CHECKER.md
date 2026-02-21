@@ -60,7 +60,7 @@ Keep this file updated as we ship more optimizations.
 Run (Python):
 
 ```powershell
-cd $env:USERPROFILE\Desktop\vibeship-spark-intelligence
+cd /path/to/vibeship-spark-intelligence
 python -c "import json; from lib.service_control import service_status; print(json.dumps(service_status(include_pulse_probe=True), indent=2))"
 ```
 
@@ -480,11 +480,11 @@ Watch advice_followed rate + noise_burden; ensure no spam.
 
 #### Verification update: chg-20260214-192454-advisory-action-first-formatting-nex Day 0
 - Date (UTC): `2026-02-14`
-- Report: `<USER_HOME>/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-14_day0_chg-20260214-192454-advisory-action-first-formatting-nex.md`
+- Report: `<REPO_ROOT>/.optcheck/reports/2026-02-14_day0_chg-20260214-192454-advisory-action-first-formatting-nex.md`
 - Summary: sizes delta=+8362 bytes
 
 #### Verification update: chg-20260214-192454-advisory-action-first-formatting-nex Day 3
 - Date (UTC): `2026-02-17`
-- Report: `<USER_HOME>/Desktop/vibeship-spark-intelligence/.optcheck/reports/2026-02-17_day3_chg-20260214-192454-advisory-action-first-formatting-nex.md`
+- Report: `<REPO_ROOT>/.optcheck/reports/2026-02-17_day3_chg-20260214-192454-advisory-action-first-formatting-nex.md`
 - Summary: sizes delta=+60372784 bytes
 

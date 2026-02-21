@@ -161,7 +161,7 @@ def main() -> int:
     parser.add_argument("--active-only", action="store_true", help="compact only project active chip files")
     parser.add_argument(
         "--project-path",
-        default="<USER_HOME>\\Desktop\\vibeship-spark-intelligence",
+        default=".",
         help="project path key used in ~/.spark/chip_registry.json when --active-only is set",
     )
     parser.add_argument("--archive", action="store_true", help="backup original files to ~/.spark/archive/chip_insights/<timestamp>")

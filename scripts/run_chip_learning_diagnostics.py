@@ -20,7 +20,7 @@ from lib import chip_merger as cm
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "benchmarks" / "out"
-DEFAULT_PROJECT_PATH = "<USER_HOME>\\Desktop\\vibeship-spark-intelligence"
+DEFAULT_PROJECT_PATH = "."
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:

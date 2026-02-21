@@ -340,10 +340,7 @@ STRATEGY_MEMORY = SPARK_DIR / "depth_strategies.json"
 BENCHMARK_LOG = SPARK_DIR / "depth_benchmarks.jsonl"
 GAPS_FILE = SPARK_DIR / "depth_gaps.json"
 GOLDEN_ANSWERS_FILE = SPARK_DIR / "depth_golden_answers.json"
-BENCHMARKS_DIR = Path(__file__).resolve().parent.parent / "vibeship-depth-game" / "benchmarks"
-# Also check relative to DEPTH game directory
-if not BENCHMARKS_DIR.exists():
-    BENCHMARKS_DIR = Path.home() / "Desktop" / "vibeship-depth-game" / "benchmarks"
+BENCHMARKS_DIR = Path(os.getenv("DEPTH_GAME_PATH", str(Path(__file__).resolve().parent.parent / "vibeship-depth-game"))) / "benchmarks"
 
 # -- Depth levels and Socratic lenses --
 # Classic 10-level philosophical lenses (backward compat)
@@ -477,7 +474,7 @@ def _load_domain_topics() -> Dict[str, List[str]]:
     """Load topics from YAML domain files if available."""
     try:
         import sys
-        depth_game = Path.home() / "Desktop" / "vibeship-depth-game"
+        depth_game = Path(os.getenv("DEPTH_GAME_PATH", str(Path(__file__).resolve().parent.parent / "vibeship-depth-game")))
         if depth_game.exists():
             sys.path.insert(0, str(depth_game))
             from domains import list_domains, get_domain

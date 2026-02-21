@@ -25,7 +25,8 @@ if ([string]::IsNullOrWhiteSpace($PulsePath)) {
     if (Test-Path (Join-Path $siblingPulse "app.py")) {
         $PulsePath = $siblingPulse
     } else {
-        $PulsePath = Join-Path ([Environment]::GetFolderPath("Desktop")) "vibeship-spark-pulse"
+        Write-Host "[warn] vibeship-spark-pulse not found. Set SPARK_PULSE_DIR env var."
+        $PulsePath = $null
     }
 }
 

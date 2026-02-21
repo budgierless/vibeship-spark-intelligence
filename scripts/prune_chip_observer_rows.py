@@ -117,7 +117,7 @@ def main() -> int:
     ap.add_argument("--active-only", action="store_true", help="Only process active chips for a project")
     ap.add_argument(
         "--project-path",
-        default="<USER_HOME>\\Desktop\\vibeship-spark-intelligence",
+        default=".",
         help="Project path key used in ~/.spark/chip_registry.json when --active-only is set",
     )
     ap.add_argument(

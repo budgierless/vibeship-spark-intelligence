@@ -147,8 +147,11 @@ _test_*.txt
 .mcp.json
 
 # Runtime-modified files (Spark hook writes to these)
-# CLAUDE.md is auto-generated per-user by Spark's promoter; not for version control.
+# These are auto-generated per-user by Spark's promoter; not for version control.
 CLAUDE.md
+AGENTS.md
+SOUL.md
+TOOLS.md
 
 # Any file with local Windows paths in name
 C?UsersUSER*

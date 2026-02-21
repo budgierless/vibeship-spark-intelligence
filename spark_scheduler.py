@@ -468,7 +468,7 @@ def _run_external_trend_builder() -> Dict[str, Any]:
     builder_root = Path(
         os.getenv(
             "SPARK_X_BUILDER_PATH",
-            str(Path.home() / "Desktop" / "spark-x-builder"),
+            str(Path(__file__).resolve().parent.parent / "spark-x-builder"),
         )
     ).expanduser()
     script_path = builder_root / "scripts" / "daily_trend_research.py"
@@ -598,7 +598,7 @@ def task_mention_poll(state: Dict[str, Any]) -> Dict[str, Any]:
     # Resolve spark-multiplier path
     multiplier_candidates = [
         Path(__file__).resolve().parent.parent / "spark-multiplier",
-        Path.home() / "Desktop" / "spark-multiplier",
+        Path(__file__).resolve().parent.parent / "spark-multiplier",
     ]
     multiplier_path = None
     for candidate in multiplier_candidates:

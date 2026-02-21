@@ -39,7 +39,6 @@ def _resolve_pulse_dir() -> Path:
 
     candidates = [
         ROOT_DIR.parent / "vibeship-spark-pulse",
-        Path.home() / "Desktop" / "vibeship-spark-pulse",
     ]
     for candidate in candidates:
         if (candidate / "app.py").exists():

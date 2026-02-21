@@ -12,7 +12,7 @@ OpenClaw `openclaw.json` snippet:
   "plugins": {
     "load": {
       "paths": [
-        "<USER_HOME>\\Desktop\\vibeship-spark-intelligence\\extensions\\openclaw-spark-telemetry"
+        "/path/to/vibeship-spark-intelligence\\extensions\\openclaw-spark-telemetry"
       ]
     },
     "entries": {

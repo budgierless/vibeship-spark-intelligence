@@ -49,7 +49,7 @@ def check_prerequisites() -> bool:
             ok = False
     except Exception:
         print("  [!!] DEPTH server not running. Start it:")
-        print("       cd Desktop/vibeship-depth-game && python server.py")
+        print("       cd vibeship-depth-game && python server.py")
         ok = False
 
     # Check Ollama
