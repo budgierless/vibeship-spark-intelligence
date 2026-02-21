@@ -2,116 +2,108 @@
   <img src="logo.png" alt="Spark Intelligence" width="120">
   <h1 align="center">Spark Intelligence</h1>
   <p align="center">
-    <strong>Your AI coding agent gets smarter every day. Automatically.</strong>
+    <em>a local self-evolving intelligence.</em>
   </p>
   <p align="center">
+    <a href="https://github.com/vibeship/spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License"></a>
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
-    <img src="https://img.shields.io/badge/no_API_keys-Claude_OAuth-green?style=flat-square" alt="OAuth">
-    <img src="https://img.shields.io/badge/embeddings-OFF_(free)-orange?style=flat-square" alt="Embeddings">
+    <img src="https://img.shields.io/badge/runs-100%25_local-green?style=flat-square" alt="Local">
     <img src="https://img.shields.io/badge/platform-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
   </p>
 </p>
 
 ---
 
-## What is this?
+Learns constantly. Resonates and evolves with you.
+Runs 100% on your machine as a local AI companion. Brings a spark to everything.
 
-Spark Intelligence is a self-evolution layer for AI coding agents.
-It captures interaction signals, distills them into learnings, and feeds those learnings back into your agent to improve behavior over time.
+```
+You code → Spark learns → Agent adapts → You code better → Spark learns more
+```
+
+## What is Spark?
+
+Spark Intelligence is a self-evolution layer for AI coding agents. It captures interaction signals, distills them into learnings, and feeds those learnings back into your agent to improve behavior over time.
 
 Not a chatbot. Not a wrapper. A learning engine.
 
-## Responsible Use (Important)
-
-This repo is dual-use. If you are planning a public release or high-autonomy deployment, read:
-- `docs/RESPONSIBLE_PUBLIC_RELEASE.md`
-- `docs/security/THREAT_MODEL.md`
-- `docs/research/AGI_GUARDRAILS_IMMUTABILITY.md`
-
-Vulnerability reporting: `SECURITY.md`
-
-```
-You code -> Spark learns -> Agent adapts -> You code better -> Spark learns more
-```
-
-## Install (One Command)
-
-```powershell
-# Windows
-git clone https://github.com/vibeforge1111/spark-openclaw-installer.git; cd spark-openclaw-installer; .\\install.ps1
-```
+## Install
 
 ```bash
-# Mac/Linux
-git clone https://github.com/vibeforge1111/spark-openclaw-installer.git && cd spark-openclaw-installer && ./install.sh
+git clone https://github.com/vibeship/spark-intelligence
+cd spark-intelligence
+pip install -e .[services]
 ```
 
-The installer handles Python deps, OpenClaw, Claude CLI, config files, and starts services.
-No API keys needed (Claude OAuth only).
+## Quick Start
 
-## Quickstart
+```bash
+# Start services
+spark up
 
-- Newcomer path: `docs/GETTING_STARTED_5_MIN.md`
-- Full setup + ops: `docs/QUICKSTART.md`
+# Check health
+spark health
+
+# View what Spark has learned
+spark learnings
+```
+
+Windows: run `start_spark.bat` from the repo root.
+
+Lightweight mode (core only, no dashboards): `spark up --lite`
+
+## Connect Your Agent
+
+Spark works with any coding agent that supports hooks or event capture.
+
+| Agent | Integration | Guide |
+|-------|------------|-------|
+| **Claude Code** | Hooks (PreToolUse, PostToolUse, UserPromptSubmit) | `docs/claude_code.md` |
+| **Cursor / VS Code** | tasks.json + emit_event | `docs/cursor.md` |
+| **OpenClaw** | Session JSONL tailer | `docs/openclaw/` |
 
 ## What You Get
 
-- Local services:
-  - `sparkd` API + ingest pipeline
-  - bridge workers and learning/distillation loops (EIDOS)
-- Dashboards:
-  - Spark Pulse (primary dashboard)
-  - Meta-Ralph quality analyzer (aux, telemetry-only by default for production gates)
-- Tooling:
-  - CLI (`spark ...`) for status, services, opportunities, etc.
-  - Hook integration for Claude Code (and other agents that can run a hook command)
+- **Learning engine** — captures signals, distills insights, promotes high-value learnings to your agent context
+- **Quality gates** — Meta-Ralph scores every insight before it enters the knowledge base
+- **Advisory system** — pre-tool advice ranked by fusion scoring across 7 sources
+- **Episodic intelligence (EIDOS)** — prediction → outcome → evaluation loop
+- **Domain chips** — pluggable YAML modules for domain-specific learning
+- **Dashboards** — Spark Pulse (primary), Meta-Ralph analyzer
+- **CLI** — `spark status`, `spark learnings`, `spark promote`, `spark up/down`, and more
+- **Hot-reloadable config** — tuneables system with schema validation and drift tracking
 
-## Architecture (High-Level)
+## Architecture
 
 ```
-Your Agent (OpenClaw/Claude Code/Cursor)
-  -> hooks + tailers capture events
-  -> Spark Intelligence processes + distills learnings
-  -> context files updated (agent reads and adapts)
-  -> dashboards show health, loops, and outcomes
-```
-
-## Common Commands
-
-Start/stop services:
-```bash
-spark up
-spark down
-spark services
-```
-
-Health/status:
-```bash
-spark health
-spark status
+Your Agent (Claude Code / Cursor / OpenClaw)
+  → hooks capture events
+  → queue → bridge worker → pipeline
+  → quality gate (Meta-Ralph) → cognitive learner
+  → advisory system delivers insights pre-tool
+  → context files updated → agent reads and adapts
 ```
 
 ## Documentation
 
-Primary navigation hub: `docs/LAUNCH_DOCUMENTATION_MAP.md`
+- **5-minute start**: `docs/GETTING_STARTED_5_MIN.md`
+- **Full setup**: `docs/QUICKSTART.md`
+- **Docs index**: `docs/DOCS_INDEX.md`
+- **Website**: [spark.vibeship.com](https://spark.vibeship.com)
 
-If you use:
-- Claude Code: `docs/claude_code.md`
-- Cursor/VS Code: `docs/cursor.md`
+## Responsible Use
 
-For launch operators:
-- `docs/launch/LAUNCH_SCOPE_AND_GATES.md`
-- `docs/launch/POST_LAUNCH_MONITORING.md`
+This is a self-evolving system. If you are planning a public release or high-autonomy deployment:
 - `docs/RESPONSIBLE_PUBLIC_RELEASE.md`
+- `docs/security/THREAT_MODEL.md`
+- `SECURITY.md` for vulnerability reporting
 
-## Related Repos
+## License
 
-- `spark-openclaw-installer`: installer
-- `vibeship-spark-pulse`: primary dashboard
+[AGPL-3.0](LICENSE) — free to use, modify, and distribute. Network use requires source disclosure.
 
 ---
 
 <p align="center">
-  <sub>Built by <a href="https://github.com/vibeforge1111">Vibeforge</a> - AI agents that evolve</sub>
+  <sub>Built by <a href="https://vibeship.com">Vibeship</a></sub>
 </p>
-
