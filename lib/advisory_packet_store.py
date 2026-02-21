@@ -57,6 +57,8 @@ DEFAULT_OBSIDIAN_EXPORT_MAX_PACKETS = 300
 DEFAULT_OBSIDIAN_EXPORT_ENABLED = False
 DEFAULT_OBSIDIAN_AUTO_EXPORT = False
 DEFAULT_OBSIDIAN_EXPORT_DIR = str(OBSIDIAN_EXPORT_DIR)
+INDEX_SCHEMA_VERSION_KEY = "_schema_version"
+INDEX_SCHEMA_VERSION = 2
 
 REQUIRED_PACKET_FIELDS = {
     "packet_id",
@@ -168,6 +170,17 @@ def _safe_list(value: Any, *, max_items: int = 20) -> List[str]:
         if text:
             out.append(text)
     return out
+
+
+def _meta_count(row: Dict[str, Any], key: str, *, fallback_key: Optional[str] = None) -> int:
+    if not isinstance(row, dict):
+        return 0
+    value = row.get(key)
+    if key in row or fallback_key is None:
+        return max(0, _to_int(value, 0))
+    if fallback_key in row:
+        return max(0, _to_int(row.get(fallback_key), 0))
+    return 0
 
 
 def _sanitize_lookup_provider(raw: Any) -> str:
@@ -422,9 +435,11 @@ def _normalize_packet(packet: Dict[str, Any]) -> Dict[str, Any]:
     out["read_count"] = max(0, _to_int(out.get("read_count", 0), 0))
     out["last_read_ts"] = float(_to_float(out.get("last_read_ts", 0.0), 0.0))
     out["last_read_route"] = str(out.get("last_read_route", "") or "")
-    out["usage_count"] = max(0, _to_int(out.get("usage_count", 0), 0))
+    # Backwards compatibility with older packets where usage_count/deliver_count were
+    # not tracked independently yet.
+    out["usage_count"] = max(0, _to_int(out.get("usage_count", out.get("read_count", 0)), 0))
     out["emit_count"] = max(0, _to_int(out.get("emit_count", 0), 0))
-    out["deliver_count"] = max(0, _to_int(out.get("deliver_count", 0), 0))
+    out["deliver_count"] = max(0, _to_int(out.get("deliver_count", out.get("emit_count", 0)), 0))
     out["helpful_count"] = max(0, _to_int(out.get("helpful_count", 0), 0))
     out["unhelpful_count"] = max(0, _to_int(out.get("unhelpful_count", 0), 0))
     out["noisy_count"] = max(0, _to_int(out.get("noisy_count", 0), 0))
@@ -612,6 +627,7 @@ def _obsidian_catalog_entry(packet: Dict[str, Any], now_ts: Optional[float] = No
         "last_read_route": str(packet.get("last_read_route", "") or ""),
         "usage_count": int(packet.get("usage_count", 0) or 0),
         "emit_count": int(packet.get("emit_count", 0) or 0),
+        "deliver_count": int(packet.get("deliver_count", packet.get("emit_count", 0)) or 0),
         "source_summary": _safe_list(packet.get("source_summary"), max_items=10),
         "category_summary": _safe_list(packet.get("category_summary"), max_items=8),
     }
@@ -660,10 +676,24 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
             return ""
         return " ".join(f"`{v}`" for v in values[:8])
 
+    category_counter: Counter[str] = Counter()
+    source_counter: Counter[str] = Counter()
+    for row in catalog:
+        for category in _safe_list(row.get("category_summary"), max_items=20):
+            if category:
+                category_counter[str(category)] += 1
+        for source in _safe_list(row.get("source_summary"), max_items=20):
+            if source:
+                source_counter[str(source)] += 1
+
     lines.append("# SPARK Advisory Packet Catalog")
     lines.append("")
     lines.append(f"- entries: {len(catalog)}")
     lines.append(f"- updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now()))}")
+    if source_counter:
+        lines.append("- top sources: " + ", ".join(f"{k}({v})" for k, v in source_counter.most_common(8)))
+    if category_counter:
+        lines.append("- top categories: " + ", ".join(f"{k}({v})" for k, v in category_counter.most_common(8)))
     lines.append("")
     lines.append("## Ready Packets")
     ready = [r for r in catalog if bool(r.get("ready_for_use"))]
@@ -678,6 +708,7 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
             f"| readiness={float(row.get('readiness_score') or 0.0):.2f} "
             f"| eff={float(row.get('effectiveness_score') or 0.0):.2f} "
             f"| reads={int(row.get('read_count', 0) or 0)} "
+            f"| deliveries={int(row.get('deliver_count', row.get('emit_count', 0)) or 0} "
             f"| updated={updated_text}"
         )
         lines.append(f"   - sources: {_render_tags(_safe_list(row.get('source_summary'), max_items=10))}")
@@ -856,6 +887,76 @@ def _derive_packet_metadata(
     return _uniq(sources), _uniq(categories)
 
 
+def _normalize_packet_meta_row(row: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(row, dict):
+        return None
+    out = dict(row)
+    out["read_count"] = max(0, _to_int(out.get("read_count", 0), 0))
+    out["usage_count"] = max(0, _to_int(out.get("usage_count", out.get("read_count", 0)), 0))
+    out["emit_count"] = max(0, _to_int(out.get("emit_count", 0), 0))
+    out["deliver_count"] = max(0, _to_int(out.get("deliver_count", out.get("emit_count", 0)), 0))
+    out["feedback_count"] = max(0, _to_int(out.get("feedback_count", 0), 0))
+    out["helpful_count"] = max(0, _to_int(out.get("helpful_count", 0), 0))
+    out["unhelpful_count"] = max(0, _to_int(out.get("unhelpful_count", 0), 0))
+    out["noisy_count"] = max(0, _to_int(out.get("noisy_count", 0), 0))
+    out["acted_count"] = max(0, _to_int(out.get("acted_count", 0), 0))
+    out["blocked_count"] = max(0, _to_int(out.get("blocked_count", 0), 0))
+    out["harmful_count"] = max(0, _to_int(out.get("harmful_count", 0), 0))
+    out["ignored_count"] = max(0, _to_int(out.get("ignored_count", 0), 0))
+    out["source_summary"] = _safe_list(out.get("source_summary"), max_items=40)
+    out["category_summary"] = _safe_list(out.get("category_summary"), max_items=20)
+    out["readiness_score"] = float(out.get("readiness_score") or 0.0)
+    out["effectiveness_score"] = float(out.get("effectiveness_score", 0.5) or 0.5)
+    out["fresh_until_ts"] = float(out.get("fresh_until_ts", 0.0) or 0.0)
+    out["updated_ts"] = float(out.get("updated_ts", 0.0) or 0.0)
+    out["last_read_ts"] = float(out.get("last_read_ts", 0.0) or 0.0)
+    out["last_read_route"] = str(out.get("last_read_route", "") or "")
+    out["invalidated"] = bool(out.get("invalidated", False))
+    out["project_key"] = str(out.get("project_key") or "")
+    out["session_context_key"] = str(out.get("session_context_key") or "")
+    out["tool_name"] = str(out.get("tool_name") or "")
+    out["intent_family"] = str(out.get("intent_family") or "")
+    out["task_plane"] = str(out.get("task_plane") or "")
+    out["source_mode"] = str(out.get("source_mode") or "")
+    return out
+
+
+def _normalize_packet_meta(index: Dict[str, Any]) -> bool:
+    meta = index.get("packet_meta")
+    if not isinstance(meta, dict):
+        index["packet_meta"] = {}
+        return True
+
+    changed = False
+    normalized_meta: Dict[str, Any] = {}
+    for packet_id, row in meta.items():
+        normalized = _normalize_packet_meta_row(row)
+        if normalized is None:
+            changed = True
+            continue
+        if not isinstance(row, dict) or row != normalized:
+            changed = True
+        normalized_meta[str(packet_id or "")] = normalized
+
+    if not isinstance(index.get("packet_meta"), dict):
+        changed = True
+    index["packet_meta"] = normalized_meta
+    return changed
+
+
+def _migrate_packet_index_schema(index: Dict[str, Any]) -> bool:
+    try:
+        if not isinstance(index, dict):
+            return False
+        current = int(index.get(INDEX_SCHEMA_VERSION_KEY, 1))
+    except Exception:
+        current = 1
+    if current >= INDEX_SCHEMA_VERSION:
+        return False
+    index[INDEX_SCHEMA_VERSION_KEY] = INDEX_SCHEMA_VERSION
+    return True
+
+
 def _load_index() -> Dict[str, Any]:
     _ensure_dirs()
     default = {"by_exact": {}, "packet_meta": {}}
@@ -874,6 +975,16 @@ def _load_index() -> Dict[str, Any]:
     data = _read_json(INDEX_FILE, default)
     data.setdefault("by_exact", {})
     data.setdefault("packet_meta", {})
+
+    migrated = _migrate_packet_index_schema(data)
+    meta_changed = _normalize_packet_meta(data)
+    if migrated or meta_changed:
+        try:
+            _save_index(data)
+            mtime_ns = int(INDEX_FILE.stat().st_mtime_ns) if INDEX_FILE.exists() else mtime_ns
+        except Exception:
+            pass
+
     _INDEX_CACHE = data
     _INDEX_CACHE_MTIME_NS = mtime_ns
     return data
@@ -1332,10 +1443,10 @@ def lookup_relaxed_candidates(
             "source_summary": _safe_list(row.get("source_summary"), max_items=20),
             "category_summary": _safe_list(row.get("category_summary"), max_items=20),
             "effectiveness_score": float(row.get("effectiveness_score", 0.5) or 0.5),
-            "read_count": int(row.get("read_count", 0) or 0),
-            "usage_count": int(row.get("usage_count", 0) or 0),
-            "emit_count": int(row.get("emit_count", 0) or 0),
-            "deliver_count": int(row.get("deliver_count", 0) or 0),
+            "read_count": _meta_count(row, "read_count"),
+            "usage_count": _meta_count(row, "usage_count", fallback_key="read_count"),
+            "emit_count": _meta_count(row, "emit_count"),
+            "deliver_count": _meta_count(row, "deliver_count", fallback_key="emit_count"),
             "fresh_until_ts": float(row.get("fresh_until_ts", 0.0) or 0.0),
             "advisory_text_preview": preview,
             "invalidated": bool(row.get("invalidated", False)),
@@ -1422,10 +1533,10 @@ def get_advisory_catalog(
                 "is_fresh": bool(flags.get("is_fresh", False)),
                 "readiness_score": float(flags.get("readiness_score", 0.0)),
                 "effectiveness_score": score,
-                "read_count": int(row.get("read_count", 0) or 0),
-                "usage_count": int(row.get("usage_count", 0) or 0),
-                "emit_count": int(row.get("emit_count", 0) or 0),
-                "deliver_count": int(row.get("deliver_count", 0) or 0),
+                "read_count": _meta_count(row, "read_count"),
+                "usage_count": _meta_count(row, "usage_count", fallback_key="read_count"),
+                "emit_count": _meta_count(row, "emit_count"),
+                "deliver_count": _meta_count(row, "deliver_count", fallback_key="emit_count"),
                 "source_summary": _safe_list(row.get("source_summary"), max_items=10),
                 "category_summary": _safe_list(row.get("category_summary"), max_items=8),
                 "packet_meta_only": True,
@@ -1998,12 +2109,12 @@ def get_store_status() -> Dict[str, Any]:
             queue_depth = len([ln for ln in PREFETCH_QUEUE_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()])
     except Exception:
         queue_depth = 0
-    usage_total = sum(int((row or {}).get("usage_count", 0) or 0) for row in meta.values())
-    emit_total = sum(int((row or {}).get("emit_count", 0) or 0) for row in meta.values())
-    deliver_total = sum(int((row or {}).get("deliver_count", 0) or 0) for row in meta.values())
-    read_total = sum(int((row or {}).get("read_count", 0) or 0) for row in meta.values())
-    feedback_total = sum(int((row or {}).get("feedback_count", 0) or 0) for row in meta.values())
-    noisy_total = sum(int((row or {}).get("noisy_count", 0) or 0) for row in meta.values())
+    usage_total = sum(_meta_count(row, "usage_count", fallback_key="read_count") for row in meta.values())
+    emit_total = sum(_meta_count(row, "emit_count") for row in meta.values())
+    deliver_total = sum(_meta_count(row, "deliver_count", fallback_key="emit_count") for row in meta.values())
+    read_total = sum(_meta_count(row, "read_count") for row in meta.values())
+    feedback_total = sum(_meta_count(row, "feedback_count") for row in meta.values())
+    noisy_total = sum(_meta_count(row, "noisy_count") for row in meta.values())
     avg_effectiveness = 0.0
     freshness_age_sum = 0.0
     freshness_age_count = 0
@@ -2056,6 +2167,7 @@ def get_store_status() -> Dict[str, Any]:
     if top_categories:
         top_concentration = top_categories[0]["count"] / float(max(active_rows, 1))
     return {
+        "schema_version": int(index.get(INDEX_SCHEMA_VERSION_KEY, 1) or 1),
         "total_packets": total,
         "active_packets": active,
         "fresh_packets": fresh,
@@ -2082,6 +2194,14 @@ def get_store_status() -> Dict[str, Any]:
         "read_total": read_total,
         "emit_total": emit_total,
         "deliver_total": deliver_total,
+        "category_inventory": [
+            {"category": str(name), "count": int(count)}
+            for name, count in category_counter.most_common(20)
+        ],
+        "source_inventory": [
+            {"source": str(name), "count": int(count)}
+            for name, count in source_counter.most_common(20)
+        ],
         "feedback_total": feedback_total,
         "noisy_total": noisy_total,
         "emit_hit_rate": (emit_total / max(usage_total, 1)) if usage_total > 0 else None,
