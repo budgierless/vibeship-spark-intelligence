@@ -403,6 +403,15 @@ Chips:
 - loader preference env SPARK_CHIP_PREFERRED_FORMAT=single|multifile|hybrid (default multifile)
 Auto-tuner hygiene:
 - auto_tuner only writes tuneables when values actually change (no-op recommendation/boost writes are skipped)
+- auto_tuner validates via `lib/tuneables_schema.py` before every write (clamps out-of-bounds)
+- auto_tuner records drift distance after every write via `lib/tuneables_drift.py`
+
+Tuneables infrastructure:
+- `lib/tuneables_schema.py`: Central schema (25 sections, 153 keys) with type, bounds, defaults validation
+- `lib/tuneables_reload.py`: Mtime-based hot-reload coordinator. `check_and_reload()` called at top of every bridge cycle
+- `lib/tuneables_drift.py`: Normalized distance between runtime and `config/tuneables.json` baseline (alerts when >0.3)
+- Hot-reload registered: meta_ralph, eidos, pipeline (values), queue, advisory_gate, advisor
+- Reference doc: `docs/TUNEABLES_REFERENCE.md` (auto-generated from schema via `generate_reference_doc()`)
 
 Outcomes + prediction:
 - prediction_loop: prediction max age 6h, project prediction max age 14 days, match sim threshold 0.72

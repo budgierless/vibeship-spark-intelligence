@@ -1527,26 +1527,60 @@ The dedicated section always takes precedence:
 
 ### Config Load Pattern
 
-Each component follows the same pattern:
+Each component loads tuneables at import time **and** registers a hot-reload callback:
 
 ```python
+# 1. Import-time load (backwards compatible)
 def _load_X_config():
     tuneables = Path.home() / ".spark" / "tuneables.json"
     data = json.loads(tuneables.read_text())
     cfg = data.get("section_name") or {}
     # Override module-level constants from cfg
+
+_load_X_config()
+
+# 2. Hot-reload registration (new — auto-applies on file change)
+def reload_X_from(cfg: dict):
+    # Update module globals from cfg dict
+    ...
+
+try:
+    from lib.tuneables_reload import register_reload
+    register_reload("section_name", reload_X_from)
+except ImportError:
+    pass
 ```
 
-Most components load config once at module import. The advisory synthesizer hot-reloads when `tuneables.json` changes, and Pulse runtime apply now hot-updates `advisory_engine`, `advisory_gate`, `advisory_packet_store`, and `advisory_prefetch` without restart.
+The coordinator (`lib/tuneables_reload.py`) checks file mtime each bridge cycle. When `tuneables.json` changes, it validates via schema (`lib/tuneables_schema.py`), then dispatches changed sections to registered callbacks.
+
+### Tuneables Infrastructure
+
+| Module | Purpose |
+|--------|---------|
+| `lib/tuneables_schema.py` | Central schema (25 sections, 153 keys). Validates types, bounds, defaults. Clamps out-of-bounds values. |
+| `lib/tuneables_reload.py` | Mtime-based hot-reload coordinator. Modules register callbacks; `check_and_reload()` dispatches changes. |
+| `lib/tuneables_drift.py` | Drift distance metric. Compares runtime vs `config/tuneables.json` baseline. Alerts when drift > 0.3. |
+
+### Hot-reload registered modules
+
+| Section | Module | Callback |
+|---------|--------|----------|
+| `meta_ralph` | `lib/meta_ralph.py` | Quality thresholds, attribution window, suppression settings |
+| `eidos` | `lib/eidos/models.py` | Budget constraints (max_steps, max_time, max_retries) |
+| `values` | `lib/pipeline.py` | Batch size (queue_batch_size) |
+| `queue` | `lib/queue.py` | Max events, tail chunk bytes |
+| `advisory_gate` | `lib/advisory_gate.py` | Emit limits, cooldowns, authority thresholds |
+| `advisor` | `lib/advisor.py` | Replay config, ranking params, advice limits |
 
 ### Hot-apply vs restart-required (operator quick matrix)
 
 | Area | Hot-apply | Restart required |
 |------|-----------|------------------|
-| `advisory_engine`, `advisory_gate`, `advisory_packet_store`, `advisory_prefetch` | Yes (Pulse runtime apply) | No (unless process unhealthy) |
+| `meta_ralph`, `eidos`, `advisor`, `advisory_gate`, `queue`, `values` (pipeline) | Yes (bridge cycle hot-reload) | No |
+| `advisory_engine`, `advisory_packet_store`, `advisory_prefetch` | Yes (Pulse runtime apply) | No |
 | `synthesizer` section | Yes (file mtime reload in synthesizer) | No |
-| Most import-time modules (`queue`, parts of `pipeline`, some EIDOS defaults) | Partial/No | Yes (restart service process) |
+| `auto_tuner` section | N/A (auto_tuner writes, not reads) | N/A |
 | Environment variables (`SPARK_*`) | No (after process starts) | Yes |
 
-Practical rule: if unsure, apply config then restart only the affected service (`bridge_worker` first), and confirm via heartbeat + live cycle behavior.
+Practical rule: most sections now hot-apply every bridge cycle. Edit `~/.spark/tuneables.json`, wait one cycle (~60s), changes take effect.
 

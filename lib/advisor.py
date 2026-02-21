@@ -103,7 +103,7 @@ MIN_VALIDATIONS_FOR_STRONG_ADVICE = 2
 # Some experiments may tune this lower via config.
 MAX_ADVICE_ITEMS = 8
 ADVICE_CACHE_TTL_SECONDS = 120  # 2 minutes (lowered from 5 for fresher advice)
-MIN_RANK_SCORE = 0.60  # Drop advice below this after ranking — raised from 0.55 (Phase 1 retrieval improvement)
+MIN_RANK_SCORE = 0.45  # Lowered from 0.60 — downstream gates already filter effectively
 MIND_MAX_STALE_SECONDS = float(os.environ.get("SPARK_ADVISOR_MIND_MAX_STALE_S", "0"))
 MIND_STALE_ALLOW_IF_EMPTY = os.environ.get("SPARK_ADVISOR_MIND_STALE_ALLOW_IF_EMPTY", "1") != "0"
 MIND_MIN_SALIENCE = float(os.environ.get("SPARK_ADVISOR_MIND_MIN_SALIENCE", "0.5"))
@@ -861,6 +861,9 @@ def record_recent_delivery(
     trace_id: Optional[str] = None,
     route: str = "",
     delivered: bool = True,
+    categories: Optional[List[str]] = None,
+    advisory_readiness: Optional[List[float]] = None,
+    advisory_quality: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """Record advice that was actually surfaced to the agent.
 
@@ -872,6 +875,51 @@ def record_recent_delivery(
     advice_ids = [a.advice_id for a in advice_list]
     run_seed = f"{tool}|{str(trace_id or '').strip()}|{','.join(sorted(str(x) for x in advice_ids if str(x).strip()))}"
     run_id = hashlib.sha1(run_seed.encode("utf-8", errors="ignore")).hexdigest()[:20]
+    advisory_readiness = advisory_readiness or []
+    advisory_quality = advisory_quality or []
+    categories = categories or []
+    cat_items = [str(c).strip().lower() or "general" for c in categories if categories]
+    if not cat_items:
+        cat_items = ["general"] * len(advice_ids)
+    if len(cat_items) < len(advice_ids):
+        cat_items.extend(["general"] * (len(advice_ids) - len(cat_items)))
+    if len(cat_items) > len(advice_ids):
+        cat_items = cat_items[: len(advice_ids)]
+    advisory_readiness = [float(r) if r is not None else 0.0 for r in advisory_readiness]
+    if len(advisory_readiness) < len(advice_ids):
+        advisory_readiness.extend([0.0] * (len(advice_ids) - len(advisory_readiness)))
+    if len(advisory_readiness) > len(advice_ids):
+        advisory_readiness = advisory_readiness[: len(advice_ids)]
+    advisory_quality = [q if isinstance(q, dict) else {} for q in advisory_quality]
+    if len(advisory_quality) < len(advice_ids):
+        advisory_quality.extend([{}] * (len(advice_ids) - len(advisory_quality)))
+    if len(advisory_quality) > len(advice_ids):
+        advisory_quality = advisory_quality[: len(advice_ids)]
+    category_summary: Dict[str, Dict[str, Any]] = {}
+    for idx, (cat, readiness) in enumerate(zip(cat_items, advisory_readiness)):
+        cat_key = str(cat or "general").strip().lower() or "general"
+        c_sum = category_summary.setdefault(
+            cat_key,
+            {
+                "count": 0,
+                "readiness_sum": 0.0,
+                "readiness_max": 0.0,
+                "readiness_min": 1.0,
+                "quality_sum": 0.0,
+                "quality_count": 0,
+            },
+        )
+        c_sum["count"] += 1
+        c_sum["readiness_sum"] += float(readiness or 0.0)
+        c_sum["readiness_max"] = max(c_sum["readiness_max"], float(readiness or 0.0))
+        c_sum["readiness_min"] = min(c_sum["readiness_min"], float(readiness or 0.0))
+        quality = advisory_quality[idx] if idx < len(advisory_quality) else {}
+        quality_score = float(quality.get("unified_score", 0.0) or 0.0) if isinstance(quality, dict) else 0.0
+        quality_score = max(0.0, min(1.0, quality_score))
+        c_sum["quality_sum"] += quality_score
+        c_sum["quality_count"] += 1
+
+    now = time.time()
     recent = {
         "ts": time.time(),
         "tool": tool,
@@ -881,8 +929,19 @@ def record_recent_delivery(
         "advice_texts": [a.text[:160] for a in advice_list],
         "insight_keys": [a.insight_key for a in advice_list],
         "sources": [a.source for a in advice_list],
+        "categories": [str(c).strip().lower() for c in cat_items],
+        "advisory_readiness": [round(max(0.0, min(1.0, float(r))), 4) for r in advisory_readiness],
+        "advisory_quality": [
+            {
+                "unified_score": round(max(0.0, min(1.0, float(q.get("unified_score", 0.0) or 0.0)), 4),
+                "domain": str(q.get("domain", "general") or "general").strip().lower(),
+            }
+            for q in advisory_quality
+        ],
         "delivered": bool(delivered),
         "route": str(route or ""),
+        "category_summary": category_summary,
+        "recorded_at": now,
     }
     # Keep this bounded but roomy enough for short windows + debugging.
     _append_jsonl_capped(RECENT_ADVICE_LOG, recent, max_lines=max(500, RECENT_ADVICE_MAX_LINES * 10))
@@ -899,6 +958,7 @@ class Advice:
     source: str  # "cognitive", "mind", "pattern", "surprise"
     context_match: float  # How well it matches current context
     reason: str = ""  # Task #13: WHY this advice matters (evidence/context)
+    category: str = "general"
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     # Emotional priority metadata from pipeline distillation (0.0-1.0).
     # Bridges emotional salience into final ranking without dominating it.
@@ -944,6 +1004,7 @@ class SparkAdvisor:
         self._agentic_route_history: List[bool] = []
         self._memory_emotion_cfg_cache: Dict[str, Any] = dict(MEMORY_EMOTION_DEFAULTS)
         self._memory_emotion_cfg_mtime: Optional[float] = None
+        self._last_minimax_rerank_ts: float = 0.0
 
         # Prefilter cache: avoid per-query regex tokenization across large insight sets.
         # key -> (blob_hash, token_set, blob_lower)
@@ -956,6 +1017,53 @@ class SparkAdvisor:
             preload_reranker()
         except Exception:
             pass  # Cross-encoder is optional
+
+    @staticmethod
+    def _coerce_category_bucket(raw: Any) -> Dict[str, Any]:
+        """Normalize per-category effectiveness bucket into a stable schema."""
+        def _as_int(value: Any, default: int = 0) -> int:
+            try:
+                return max(0, int(value))
+            except Exception:
+                return default
+
+        def _as_float(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value)
+            except Exception:
+                return default
+
+        bucket = {
+            "surfaced": 0,
+            "total": 0,
+            "helpful": 0,
+            "readiness_sum": 0.0,
+            "readiness_count": 0,
+            "quality_sum": 0.0,
+            "quality_count": 0,
+            "last_ts": 0.0,
+        }
+
+        if isinstance(raw, dict):
+            bucket["surfaced"] = _as_int(raw.get("surfaced", raw.get("offered", 0)))
+            bucket["total"] = _as_int(raw.get("total", 0))
+            bucket["helpful"] = _as_int(raw.get("helpful", 0))
+            bucket["readiness_sum"] = _as_float(raw.get("readiness_sum", 0.0))
+            bucket["readiness_count"] = _as_int(raw.get("readiness_count", 0))
+            bucket["quality_sum"] = _as_float(raw.get("quality_sum", 0.0))
+            bucket["quality_count"] = _as_int(raw.get("quality_count", 0))
+            bucket["last_ts"] = _as_float(raw.get("last_ts", 0.0))
+        elif isinstance(raw, (int, float)):
+            # Preserve compatibility with legacy serialized formats.
+            bucket["surfaced"] = _as_int(raw, 0)
+
+        # Keep invariants.
+        bucket["helpful"] = min(bucket["helpful"], bucket["total"])
+        bucket["readiness_sum"] = max(0.0, bucket["readiness_sum"])
+        bucket["quality_sum"] = max(0.0, bucket["quality_sum"])
+        bucket["readiness_count"] = max(0, bucket["readiness_count"])
+        bucket["quality_count"] = max(0, bucket["quality_count"])
+        return bucket
 
     def _load_effectiveness(self) -> Dict[str, Any]:
         """Load effectiveness tracking data."""
@@ -1000,9 +1108,14 @@ class SparkAdvisor:
             helpful = min(_as_int(row.get("helpful", 0)), total)
             by_source[str(key)] = {"total": total, "helpful": helpful}
 
-        by_category = src.get("by_category")
-        if not isinstance(by_category, dict):
-            by_category = {}
+        by_category = {}
+        raw_by_category = src.get("by_category")
+        if isinstance(raw_by_category, dict):
+            for cat, row in raw_by_category.items():
+                category = str(cat or "").strip().lower()
+                if not category:
+                    continue
+                by_category[category] = self._coerce_category_bucket(row)
 
         recent_outcomes: Dict[str, Dict[str, Any]] = {}
         raw_recent = src.get("recent_outcomes") or {}
@@ -1155,9 +1268,35 @@ class SparkAdvisor:
                     "helpful": max(disk_src.get("helpful", 0), mem_src.get("helpful", 0)),
                 }
 
-            # Merge by_category as shallow union.
-            merged["by_category"] = dict(disk_data.get("by_category", {}))
-            merged["by_category"].update(mem_data.get("by_category", {}))
+            # Merge per-category buckets conservatively (monotonic-safe fields).
+            merged["by_category"] = {}
+            disk_cat = disk_data.get("by_category") or {}
+            mem_cat = mem_data.get("by_category") or {}
+            for cat in set(list(disk_cat.keys()) + list(mem_cat.keys())):
+                disk_bucket = self._coerce_category_bucket(disk_cat.get(cat, {}))
+                mem_bucket = self._coerce_category_bucket(mem_cat.get(cat, {}))
+                merged["by_category"][str(cat)] = {
+                    "surfaced": max(disk_bucket["surfaced"], mem_bucket["surfaced"]),
+                    "total": max(disk_bucket["total"], mem_bucket["total"]),
+                    "helpful": max(disk_bucket["helpful"], mem_bucket["helpful"]),
+                    "readiness_sum": max(
+                        disk_bucket["readiness_sum"],
+                        mem_bucket["readiness_sum"],
+                    ),
+                    "readiness_count": max(
+                        disk_bucket["readiness_count"],
+                        mem_bucket["readiness_count"],
+                    ),
+                    "quality_sum": max(
+                        disk_bucket["quality_sum"],
+                        mem_bucket["quality_sum"],
+                    ),
+                    "quality_count": max(
+                        disk_bucket["quality_count"],
+                        mem_bucket["quality_count"],
+                    ),
+                    "last_ts": max(disk_bucket["last_ts"], mem_bucket["last_ts"]),
+                }
 
             # Merge per-advice outcome index to avoid repeated counter inflation.
             recent_outcomes = dict(disk_data.get("recent_outcomes", {}))
@@ -1196,6 +1335,7 @@ class SparkAdvisor:
         advice_id: str,
         was_followed: bool,
         was_helpful: Optional[bool],
+        category: Optional[str] = None,
     ) -> Tuple[bool, bool]:
         """Return whether aggregate counters should increment for this advice_id."""
         outcomes = self.effectiveness.setdefault("recent_outcomes", {})
@@ -1219,6 +1359,21 @@ class SparkAdvisor:
             entry["helpful_counted"] = True
         entry["ts"] = now
         outcomes[key] = entry
+
+        # Category-level aggregates help surface what categories are actually acting.
+        if category:
+            cat = self._coerce_advisory_category(category, fallback="general")
+            cat_bucket = self._coerce_category_bucket(
+                self.effectiveness.setdefault("by_category", {}).get(cat, {})
+            )
+            if inc_followed:
+                cat_bucket["total"] += 1
+            if inc_helpful:
+                cat_bucket["helpful"] += 1
+            cat_bucket["last_ts"] = now
+            if cat_bucket["total"]:
+                cat_bucket["helpful"] = min(cat_bucket["helpful"], cat_bucket["total"])
+            self.effectiveness["by_category"][cat] = cat_bucket
 
         # Keep bounded to avoid unbounded growth.
         if len(outcomes) > RECENT_OUTCOMES_MAX:
@@ -1261,6 +1416,57 @@ class SparkAdvisor:
 
         payload = "|".join([src, key, _norm_text(text)])
         return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()[:12]
+
+    @staticmethod
+    def _coerce_advisory_category(raw: Any, *, fallback: str = "general") -> str:
+        category = str(raw or "").strip().lower()
+        if not category:
+            return fallback
+        # Keep storage categories stable and concise.
+        if category.startswith("eidos"):
+            category = category.replace(":", "_")
+        return category[:64]
+
+    def _advice_category(self, advice: Advice) -> str:
+        if advice is not None and str(getattr(advice, "category", "") or "").strip():
+            return self._coerce_advisory_category(advice.category)
+
+        source = str(getattr(advice, "source", "") or "").strip().lower()
+        if source in {"semantic", "semantic-hybrid", "semantic-agentic", "trigger"}:
+            source = "cognitive"
+        key = str(getattr(advice, "insight_key", "") or "")
+        if key:
+            prefix = str(key.split(":", 1)[0]).strip().lower()
+            if prefix:
+                source = source or prefix
+                if prefix in {"eidos", "mind", "bank", "chip", "niche", "convo", "engagement", "replay", "opportunity", "skill"}:
+                    source = prefix
+                elif prefix == "cognitive":
+                    source = "cognitive"
+        if source:
+            return self._coerce_advisory_category(source)
+
+        adv_q = getattr(advice, "advisory_quality", None)
+        if isinstance(adv_q, dict):
+            domain = adv_q.get("domain")
+            if domain:
+                return self._coerce_advisory_category(domain)
+
+        return "general"
+
+    @staticmethod
+    def _advice_quality_summary(advice: Advice) -> Dict[str, Any]:
+        adv_q = getattr(advice, "advisory_quality", None)
+        if isinstance(adv_q, dict):
+            return {
+                "unified_score": round(max(0.0, min(1.0, float(adv_q.get("unified_score", 0.0) or 0.0)), 4),
+                "domain": str(adv_q.get("domain", "general") or "general").strip().lower(),
+            }
+        return {"unified_score": 0.0, "domain": "general"}
+
+    @staticmethod
+    def _advice_readiness_score(advice: Advice) -> float:
+        return float(getattr(advice, "advisory_readiness", 0.0) or 0.0)
 
     def _cache_key(
         self,
@@ -1410,6 +1616,15 @@ class SparkAdvisor:
                             "intent_coverage_weight",
                             "support_boost_weight",
                             "reliability_weight",
+                            "minimax_fast_rerank",
+                            "minimax_fast_rerank_top_k",
+                            "minimax_fast_rerank_min_items",
+                            "minimax_fast_rerank_min_complexity",
+                            "minimax_fast_rerank_high_volume_min_items",
+                            "minimax_fast_rerank_require_agentic",
+                            "minimax_fast_rerank_model",
+                            "minimax_fast_rerank_timeout_s",
+                            "minimax_fast_rerank_cooldown_s",
                         ):
                             if key in overrides:
                                 retrieval_keys_present.add(key)
@@ -1451,17 +1666,26 @@ class SparkAdvisor:
                     ):
                         if key in retrieval:
                             policy[key] = retrieval.get(key)
-                            if key in {
-                                "semantic_context_min",
-                                "semantic_lexical_min",
-                                "semantic_strong_override",
-                                "lexical_weight",
-                                "semantic_intent_min",
-                                "intent_coverage_weight",
-                                "support_boost_weight",
-                                "reliability_weight",
-                            }:
-                                retrieval_keys_present.add(key)
+                        if key in {
+                            "semantic_context_min",
+                            "semantic_lexical_min",
+                            "semantic_strong_override",
+                            "lexical_weight",
+                            "semantic_intent_min",
+                            "intent_coverage_weight",
+                            "support_boost_weight",
+                            "reliability_weight",
+                            "minimax_fast_rerank",
+                            "minimax_fast_rerank_top_k",
+                            "minimax_fast_rerank_min_items",
+                            "minimax_fast_rerank_min_complexity",
+                            "minimax_fast_rerank_high_volume_min_items",
+                            "minimax_fast_rerank_require_agentic",
+                            "minimax_fast_rerank_model",
+                            "minimax_fast_rerank_timeout_s",
+                            "minimax_fast_rerank_cooldown_s",
+                        }:
+                            retrieval_keys_present.add(key)
         except Exception:
             pass
 
@@ -1474,6 +1698,56 @@ class SparkAdvisor:
         env_mode = str(os.getenv("SPARK_RETRIEVAL_MODE", "") or "").strip().lower()
         if env_mode in {"auto", "embeddings_only", "hybrid_agentic"}:
             policy["mode"] = env_mode
+
+        env_minimax_fast = str(os.getenv("SPARK_ADVISORY_MINIMAX_FAST_RERANK", "") or "").strip().lower()
+        if env_minimax_fast in {"1", "true", "yes", "on"}:
+            policy["minimax_fast_rerank"] = True
+        elif env_minimax_fast in {"0", "false", "no", "off"}:
+            policy["minimax_fast_rerank"] = False
+        env_minimax_top_k = os.getenv("SPARK_ADVISORY_MINIMAX_TOP_K")
+        if env_minimax_top_k is not None:
+            try:
+                policy["minimax_fast_rerank_top_k"] = max(4, int(env_minimax_top_k))
+            except Exception:
+                pass
+        env_minimax_min_items = os.getenv("SPARK_ADVISORY_MINIMAX_MIN_ITEMS")
+        if env_minimax_min_items is not None:
+            try:
+                policy["minimax_fast_rerank_min_items"] = max(6, int(env_minimax_min_items))
+            except Exception:
+                pass
+        env_minimax_min_complexity = os.getenv("SPARK_ADVISORY_MINIMAX_MIN_COMPLEXITY")
+        if env_minimax_min_complexity is not None:
+            try:
+                policy["minimax_fast_rerank_min_complexity"] = max(0, int(env_minimax_min_complexity))
+            except Exception:
+                pass
+        env_minimax_high_volume_items = os.getenv("SPARK_ADVISORY_MINIMAX_HIGH_VOLUME_ITEMS")
+        if env_minimax_high_volume_items is not None:
+            try:
+                policy["minimax_fast_rerank_high_volume_min_items"] = max(0, int(env_minimax_high_volume_items))
+            except Exception:
+                pass
+        env_minimax_require_agentic = str(os.getenv("SPARK_ADVISORY_MINIMAX_REQUIRE_AGENTIC") or "").strip().lower()
+        if env_minimax_require_agentic in {"1", "true", "yes", "on"}:
+            policy["minimax_fast_rerank_require_agentic"] = True
+        elif env_minimax_require_agentic in {"0", "false", "no", "off"}:
+            policy["minimax_fast_rerank_require_agentic"] = False
+        env_minimax_model = str(os.getenv("SPARK_ADVISORY_MINIMAX_MODEL") or "").strip()
+        if env_minimax_model:
+            policy["minimax_fast_rerank_model"] = env_minimax_model
+        env_minimax_timeout = os.getenv("SPARK_ADVISORY_MINIMAX_TIMEOUT_S")
+        if env_minimax_timeout is not None:
+            try:
+                policy["minimax_fast_rerank_timeout_s"] = max(2.0, float(env_minimax_timeout))
+            except Exception:
+                pass
+        env_minimax_cooldown = os.getenv("SPARK_ADVISORY_MINIMAX_COOLDOWN_S")
+        if env_minimax_cooldown is not None:
+            try:
+                policy["minimax_fast_rerank_cooldown_s"] = max(0.0, float(env_minimax_cooldown))
+            except Exception:
+                pass
 
         # Normalize types.
         policy["mode"] = str(policy.get("mode") or "auto").strip().lower()
@@ -1523,6 +1797,25 @@ class SparkAdvisor:
         )
         policy["reliability_weight"] = max(
             0.0, min(1.0, float(policy.get("reliability_weight", 0.0) or 0.0))
+        )
+        policy["minimax_fast_rerank"] = _parse_bool(policy.get("minimax_fast_rerank", True), True)
+        policy["minimax_fast_rerank_top_k"] = max(4, int(policy.get("minimax_fast_rerank_top_k", 16) or 16))
+        policy["minimax_fast_rerank_min_items"] = max(6, int(policy.get("minimax_fast_rerank_min_items", 12) or 12))
+        policy["minimax_fast_rerank_min_complexity"] = max(0, int(policy.get("minimax_fast_rerank_min_complexity", 1) or 1))
+        policy["minimax_fast_rerank_high_volume_min_items"] = max(
+            0, int(policy.get("minimax_fast_rerank_high_volume_min_items", 0) or 0)
+        )
+        policy["minimax_fast_rerank_require_agentic"] = _parse_bool(
+            policy.get("minimax_fast_rerank_require_agentic", False), False
+        )
+        policy["minimax_fast_rerank_model"] = str(
+            policy.get("minimax_fast_rerank_model", os.getenv("SPARK_MINIMAX_MODEL", "MiniMax-M2.5")) or "MiniMax-M2.5"
+        ).strip() or "MiniMax-M2.5"
+        policy["minimax_fast_rerank_timeout_s"] = max(
+            2.0, float(policy.get("minimax_fast_rerank_timeout_s", 7.0) or 7.0)
+        )
+        policy["minimax_fast_rerank_cooldown_s"] = max(
+            0.0, float(policy.get("minimax_fast_rerank_cooldown_s", 30.0) or 30.0)
         )
         policy["bm25_k1"] = max(0.1, float(policy.get("bm25_k1", 1.2) or 1.2))
         policy["bm25_b"] = max(0.0, min(1.0, float(policy.get("bm25_b", 0.75) or 0.75)))
@@ -1703,6 +1996,74 @@ class SparkAdvisor:
             "complexity_hits": complexity_hits[:4],
             "high_risk_hits": high_risk_hits[:4],
             "reasons": reasons,
+        }
+
+    def _should_use_minimax_fast_rerank(
+        self,
+        tool_name: str,
+        context: str,
+        advice_count: int,
+        policy: Dict[str, Any],
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """Decide whether minimax rerank should run for this query."""
+        policy = policy or {}
+        if not bool(policy.get("minimax_fast_rerank", False)):
+            return False, {
+                "decision": "skip",
+                "reason": "disabled",
+                "analysis": {"score": 0, "threshold": 0, "requires_agentic": False},
+                "used": False,
+            }
+
+        min_items = max(6, int(policy.get("minimax_fast_rerank_min_items", 12) or 12))
+        if advice_count < min_items:
+            return False, {
+                "decision": "skip",
+                "reason": "below_min_items",
+                "analysis": {"score": 0, "threshold": 0, "requires_agentic": False},
+                "used": False,
+                "advice_count": advice_count,
+                "min_items": min_items,
+            }
+
+        analysis = self._analyze_query_complexity(tool_name, context)
+        complexity_min = max(0, int(policy.get("minimax_fast_rerank_min_complexity", 1) or 1))
+        high_volume_min_items = max(0, int(policy.get("minimax_fast_rerank_high_volume_min_items", 0) or 0))
+        require_agentic = _parse_bool(policy.get("minimax_fast_rerank_require_agentic", False), False)
+
+        if require_agentic and not analysis.get("requires_agentic"):
+            return False, {
+                "decision": "skip",
+                "reason": "agentic_only",
+                "analysis": analysis,
+                "used": False,
+                "complexity_min": complexity_min,
+            }
+
+        if high_volume_min_items and advice_count >= high_volume_min_items:
+            return True, {
+                "decision": "use",
+                "reason": "high_volume_override",
+                "analysis": analysis,
+                "used": True,
+                "high_volume_min_items": high_volume_min_items,
+            }
+
+        if analysis.get("score", 0) >= complexity_min:
+            return True, {
+                "decision": "use",
+                "reason": "complexity_threshold",
+                "analysis": analysis,
+                "used": True,
+                "complexity_min": complexity_min,
+            }
+
+        return False, {
+            "decision": "skip",
+            "reason": "low_complexity",
+            "analysis": analysis,
+            "used": False,
+            "complexity_min": complexity_min,
         }
 
     def _log_retrieval_route(self, entry: Dict[str, Any]) -> None:
@@ -2076,9 +2437,61 @@ class SparkAdvisor:
         # into non-social tasks from non-semantic sources (chip/mind/cognitive/etc.).
         advice_list = self._filter_cross_domain_advice(advice_list, context)
         advice_list = [a for a in advice_list if not self._should_drop_advice(a, tool_name=tool_name)]
+        for a in advice_list:
+            a.category = self._advice_category(a)
 
         # Sort by relevance (confidence * context_match * effectiveness_boost)
         advice_list = self._rank_advice(advice_list)
+
+        # Fast LLM-assisted rerank for shortlists where ranking quality can materially
+        # improve relevance without requiring full cross-encoder cost.
+        policy = self._effective_retrieval_policy(tool_name=tool_name, context=context)
+        min_candidates = max(MAX_ADVICE_ITEMS, int(policy.get("minimax_fast_rerank_min_items", 12) or 12)
+        if len(advice_list) > min_candidates:
+            should_use_minimax, rerank_gate_meta = self._should_use_minimax_fast_rerank(
+                tool_name=tool_name,
+                context=context,
+                advice_count=len(advice_list),
+                policy=policy,
+            )
+            if should_use_minimax:
+                advice_list, rerank_meta = self._minimax_fast_rerank(
+                    semantic_context,
+                    advice_list,
+                    policy,
+                )
+                # Optional telemetry (lightweight + no extra IO path).
+                self._log_retrieval_route(
+                    {
+                        "tool": tool_name,
+                        "route": "minimax_fast_rerank",
+                        "routed": rerank_meta.get("used", False),
+                        "reason": str(rerank_meta.get("reason", "")),
+                        "model": str(rerank_meta.get("model", "")),
+                        "top_k": int(rerank_meta.get("top_k", 0)),
+                        "order_len": int(rerank_meta.get("order_len", 0)),
+                        "elapsed_ms": int(rerank_meta.get("elapsed_ms", 0)),
+                        "complexity_score": int((rerank_gate_meta.get("analysis") or {}).get("score", 0)),
+                        "complexity_threshold": int(rerank_gate_meta.get("analysis") or {}).get("threshold", 0),
+                    }
+                )
+            else:
+                self._log_retrieval_route(
+                    {
+                        "tool": tool_name,
+                        "route": "minimax_fast_rerank",
+                        "routed": False,
+                        "reason": str(rerank_gate_meta.get("reason", "")),
+                        "decision": str(rerank_gate_meta.get("decision", "")),
+                        "complexity_score": int((rerank_gate_meta.get("analysis") or {}).get("score", 0)),
+                        "complexity_threshold": int((rerank_gate_meta.get("analysis") or {}).get("threshold", 0)),
+                        "requires_agentic": bool((rerank_gate_meta.get("analysis") or {}).get("requires_agentic", False)),
+                        "min_items": int(rerank_gate_meta.get("min_items", 0) or 0),
+                        "high_volume_min_items": int(rerank_gate_meta.get("high_volume_min_items", 0) or 0),
+                        "complexity_min": int(rerank_gate_meta.get("complexity_min", 0) or 0),
+                        "advice_count": int(rerank_gate_meta.get("advice_count", 0) or len(advice_list)),
+                    }
+                )
 
         # Cross-encoder reranking (Phase 2): rerank top candidates using
         # full query-document relevance scoring for higher precision.
@@ -4101,7 +4514,10 @@ class SparkAdvisor:
         readiness = float(getattr(a, "advisory_readiness", 0.0) or 0.0)
         if not readiness and isinstance(adv_q, dict):
             readiness = float(adv_q.get("unified_score", 0.0) or 0.0)
-        base_score *= (0.5 + min(0.5, max(0.0, readiness)))
+        if readiness > 0:
+            base_score *= (0.5 + min(0.5, readiness))  # 0.5x to 1.0x based on readiness
+        else:
+            base_score *= 0.85  # Unknown readiness — mild penalty, not 0.5x
 
         # Insight-level outcome boost (Task #11)
         try:
@@ -4111,7 +4527,9 @@ class SparkAdvisor:
             ralph = None
         if ralph and a.insight_key:
             insight_effectiveness = ralph.get_insight_effectiveness(a.insight_key)
-            base_score *= (0.5 + insight_effectiveness)
+            if insight_effectiveness > 0:
+                base_score *= (0.5 + insight_effectiveness)  # 0.5x to 1.5x
+            # else: no data yet — skip penalty entirely instead of *0.5
 
         # EIDOS store-backed effectiveness boost.
         # The SQLite store tracks times_helped/times_used across all sessions,
@@ -4157,6 +4575,159 @@ class SparkAdvisor:
         """Rank advice by relevance, actionability, and effectiveness."""
         return sorted(advice_list, key=self._rank_score, reverse=True)
 
+    @staticmethod
+    def _build_minimax_rerank_prompt(query: str, candidates: List[Advice], top_k: int) -> str:
+        top_k = max(4, int(top_k or 4))
+        rows = []
+        for idx, adv in enumerate(candidates[:top_k]):
+            source = str(getattr(adv, "source", "") or "").strip().lower() or "unknown"
+            context_match = float(getattr(adv, "context_match", 0.0) or 0.0)
+            conf = float(getattr(adv, "confidence", 0.0) or 0.0)
+            rows.append(
+                f"{idx}. source={source} context_match={context_match:.3f} conf={conf:.3f} text={str(getattr(adv,'text','') or '')[:180].replace(chr(10),' ')}"
+            )
+        if not rows:
+            return ""
+        return f"""You are a strict ranking engine for actionable developer advice.
+
+Return ONLY compact JSON.
+You must return strict JSON: {{"order":[...],"reason":"..."}}
+
+Inputs:
+query: {str(query or "").strip()[:320]}
+
+Candidates (index is fixed by position):
+{chr(10).join(rows)}
+
+Task:
+Return the best ordering for the top {top_k} candidates by likely immediate usefulness for the query.
+Output only JSON with `order` as a list of 0-based indices (descending by relevance)."""
+
+    @staticmethod
+    def _parse_minimax_rerank_response(raw: str, max_items: int) -> List[int]:
+        if not raw:
+            return []
+        cleaned = str(raw).strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+        parsed = None
+        try:
+            parsed = json.loads(cleaned)
+        except Exception:
+            parsed = None
+
+        candidates = []
+        if isinstance(parsed, dict):
+            for key in ("order", "indices", "ranking", "rerank"):
+                value = parsed.get(key)
+                if isinstance(value, list) and value:
+                    candidates = value
+                    break
+            if isinstance(parsed.get("items"), list):
+                item_payload = [item for item in parsed.get("items", []) if isinstance(item, dict)]
+                parsed_order = []
+                for item in item_payload:
+                    idx = item.get("index")
+                    if idx is None:
+                        continue
+                    parsed_order.append(idx)
+                if parsed_order:
+                    candidates = parsed_order
+        elif isinstance(parsed, list):
+            candidates = parsed
+
+        if not candidates:
+            # Fall back to first-run number extraction (e.g., "2, 0, 5")
+            candidates = [int(v) for v in re.findall(r"\d+", cleaned)]
+            if not candidates:
+                return []
+
+        order: List[int] = []
+        seen = set()
+        for v in candidates:
+            try:
+                idx = int(v)
+            except Exception:
+                continue
+            if idx < 0 or idx >= max_items:
+                continue
+            if idx in seen:
+                continue
+            seen.add(idx)
+            order.append(idx)
+        return order
+
+    def _minimax_fast_rerank(self, query: str, advice_list: List[Advice], policy: Dict[str, Any]) -> Tuple[List[Advice], Dict[str, Any]]:
+        if not isinstance(advice_list, list) or len(advice_list) < 2:
+            return advice_list, {"used": False, "reason": "insufficient_items"}
+        if not policy:
+            policy = {}
+
+        if not bool(policy.get("minimax_fast_rerank", False)):
+            return advice_list, {"used": False, "reason": "disabled"}
+
+        min_items = max(6, int(policy.get("minimax_fast_rerank_min_items", 12) or 12))
+        if len(advice_list) < min_items:
+            return advice_list, {"used": False, "reason": "below_min_items"}
+
+        top_k = max(min_items, int(policy.get("minimax_fast_rerank_top_k", 16) or 16))
+        top_k = min(top_k, len(advice_list))
+
+        cooldown = max(0.0, float(policy.get("minimax_fast_rerank_cooldown_s", 30.0) or 0.0))
+        now = time.time()
+        if cooldown > 0 and (now - self._last_minimax_rerank_ts) < cooldown:
+            return advice_list, {"used": False, "reason": "cooldown"}
+
+        start = time.perf_counter()
+        model = str(policy.get("minimax_fast_rerank_model", "MiniMax-M2.5") or "MiniMax-M2.5").strip()
+        timeout_s = max(2.0, float(policy.get("minimax_fast_rerank_timeout_s", 7.0) or 7.0))
+
+        prompt = self._build_minimax_rerank_prompt(query, advice_list, top_k)
+        if not prompt:
+            return advice_list, {"used": False, "reason": "empty_prompt"}
+
+        try:
+            from .advisory_synthesizer import _query_minimax
+        except Exception:
+            return advice_list, {"used": False, "reason": "synth_import_error"}
+
+        try:
+            response = _query_minimax(prompt, model=model, timeout_s=timeout_s)
+        except Exception:
+            return advice_list, {"used": False, "reason": "query_failed"}
+
+        if not response:
+            return advice_list, {"used": False, "reason": "empty_response"}
+
+        order = self._parse_minimax_rerank_response(response, len(advice_list))
+        if not order:
+            return advice_list, {"used": False, "reason": "bad_order"}
+
+        seen = set()
+        top_order: List[Advice] = []
+        for idx in order[:top_k]:
+            if idx in seen:
+                continue
+            if idx < 0 or idx >= len(advice_list):
+                continue
+            seen.add(idx)
+            top_order.append(advice_list[idx])
+        # Keep unknown tail in original order for safety.
+        remaining = [adv for idx, adv in enumerate(advice_list) if idx not in seen]
+        merged = top_order + remaining
+        self._last_minimax_rerank_ts = now
+        return (
+            merged,
+            {
+                "used": True,
+                "model": model,
+                "top_k": top_k,
+                "order_len": len(order),
+                "elapsed_ms": int((time.perf_counter() - start) * 1000),
+            },
+        )
+
     def _cross_encoder_rerank(self, query: str, advice_list: List[Advice]) -> List[Advice]:
         """Rerank advice using cross-encoder for precise relevance scoring.
 
@@ -4189,6 +4760,31 @@ class SparkAdvisor:
         if not advice_list:
             return
 
+        categories = [self._coerce_advisory_category(self._advice_category(a), fallback="general") for a in advice_list]
+        readiness_values = [self._advice_readiness_score(a) for a in advice_list]
+        quality_values = [self._advice_quality_summary(a) for a in advice_list]
+        category_summary: Dict[str, Dict[str, Any]] = {}
+        for idx, cat in enumerate(categories):
+            bucket = category_summary.setdefault(
+                cat,
+                {
+                    "count": 0,
+                    "readiness_sum": 0.0,
+                    "readiness_max": 0.0,
+                    "readiness_min": 1.0,
+                    "quality_sum": 0.0,
+                    "quality_count": 0,
+                },
+            )
+            readiness = float(readiness_values[idx] if idx < len(readiness_values) else 0.0)
+            quality = quality_values[idx] if idx < len(quality_values) else {}
+            score = float(quality.get("unified_score", 0.0) or 0.0) if isinstance(quality, dict) else 0.0
+            bucket["count"] += 1
+            bucket["readiness_sum"] += readiness
+            bucket["readiness_max"] = max(bucket["readiness_max"], readiness)
+            bucket["readiness_min"] = min(bucket["readiness_min"], readiness)
+            bucket["quality_sum"] += score
+            bucket["quality_count"] += 1
         entry = {
             "timestamp": datetime.now().isoformat(),
             "tool": tool,
@@ -4198,14 +4794,17 @@ class SparkAdvisor:
             "advice_texts": [a.text[:100] for a in advice_list],
             "insight_keys": [a.insight_key for a in advice_list],
             "sources": [a.source for a in advice_list],
+            "categories": categories,
             "confidences": [round(a.confidence, 3) for a in advice_list],
+            "advisory_readiness": [round(float(r), 4) for r in readiness_values],
+            "advisory_quality": quality_values,
             "context_matches": [round(a.context_match, 3) for a in advice_list],
+            "category_summary": category_summary,
         }
 
         _append_jsonl_capped(ADVICE_LOG, entry, max_lines=4000)
 
         self.effectiveness["total_advice_given"] += len(advice_list)
-        self._save_effectiveness()
 
         if log_recent:
             # Default direct-advisor semantics: advice retrieved is assumed delivered.
@@ -4215,7 +4814,48 @@ class SparkAdvisor:
                 trace_id=trace_id,
                 route="advisor",
                 delivered=True,
+                categories=categories,
+                advisory_readiness=readiness_values,
+                advisory_quality=quality_values,
             )
+
+            self._record_category_delivery(
+                categories=categories,
+                advisory_readiness=readiness_values,
+                advisory_quality=quality_values,
+            )
+
+        self._save_effectiveness()
+
+    def _record_category_delivery(
+        self,
+        categories: List[str],
+        advisory_readiness: List[float],
+        advisory_quality: List[Dict[str, Any]],
+    ) -> None:
+        """Accumulate per-category surfaced/advice readiness+quality aggregates."""
+        if not categories:
+            return
+        if not isinstance(self.effectiveness, dict):
+            return
+
+        buckets = self.effectiveness.setdefault("by_category", {})
+        now = time.time()
+        for idx, cat in enumerate(categories):
+            c_key = self._coerce_advisory_category(cat, fallback="general")
+            bucket = self._coerce_category_bucket(buckets.get(c_key, {}))
+            bucket["surfaced"] += 1
+            readiness = float(advisory_readiness[idx] if idx < len(advisory_readiness) else 0.0)
+            readiness = max(0.0, min(1.0, readiness))
+            bucket["readiness_sum"] += readiness
+            bucket["readiness_count"] += 1 if idx < len(advisory_readiness) else 0
+            q = advisory_quality[idx] if idx < len(advisory_quality) else {}
+            if isinstance(q, dict):
+                q_score = float(q.get("unified_score", 0.0) or 0.0)
+                bucket["quality_sum"] += max(0.0, min(1.0, q_score))
+                bucket["quality_count"] += 1
+            bucket["last_ts"] = now
+            buckets[c_key] = self._coerce_category_bucket(bucket)
 
     def _get_recent_advice_entry(
         self,
@@ -4333,10 +4973,26 @@ class SparkAdvisor:
         )
 
         # Update effectiveness stats
+        category = None
+        try:
+            entry = self._find_recent_advice_by_id(advice_id)
+            if entry:
+                ids = entry.get("advice_ids") or []
+                idx = ids.index(advice_id) if advice_id in ids else -1
+                cats = entry.get("categories") or []
+                if 0 <= idx < len(cats):
+                    category = cats[idx]
+                srcs = entry.get("sources") or []
+                if not category and 0 <= idx < len(srcs):
+                    category = srcs[idx]
+        except Exception:
+            category = None
+
         inc_followed, inc_helpful = self._mark_outcome_counted(
             advice_id=advice_id,
             was_followed=was_followed,
             was_helpful=was_helpful,
+            category=category,
         )
         if inc_followed:
             self.effectiveness["total_followed"] += 1
@@ -4603,12 +5259,34 @@ class SparkAdvisor:
         total = self.effectiveness.get("total_advice_given", 0)
         followed = self.effectiveness.get("total_followed", 0)
         helpful = self.effectiveness.get("total_helpful", 0)
+        by_category = self.effectiveness.get("by_category", {}) if isinstance(self.effectiveness.get("by_category"), dict) else {}
+        category_report = {}
+        for category, row in by_category.items():
+            if not isinstance(row, dict):
+                continue
+            surfaced = float(row.get("surfaced", 0) or 0.0)
+            total_seen = float(row.get("total", 0) or 0.0)
+            helpful_seen = float(row.get("helpful", 0) or 0.0)
+            readiness_sum = float(row.get("readiness_sum", 0.0) or 0.0)
+            readiness_count = float(row.get("readiness_count", 0) or 0.0)
+            quality_sum = float(row.get("quality_sum", 0.0) or 0.0)
+            quality_count = float(row.get("quality_count", 0) or 0.0)
+            category_report[str(category)] = {
+                "surfaced": int(surfaced),
+                "followed": int(total_seen),
+                "helpful": int(helpful_seen),
+                "follow_rate": round(total_seen / max(1.0, surfaced), 4) if surfaced else 0.0,
+                "helpful_rate": round(helpful_seen / max(1.0, total_seen), 4) if total_seen else 0.0,
+                "avg_readiness": round(readiness_sum / max(1.0, readiness_count), 4),
+                "avg_quality": round(quality_sum / max(1.0, quality_count), 4),
+            }
 
         return {
             "total_advice_given": total,
             "follow_rate": followed / max(total, 1),
             "helpfulness_rate": helpful / max(followed, 1) if followed > 0 else 0,
             "by_source": self.effectiveness.get("by_source", {}),
+            "by_category": category_report,
         }
 
     def compute_contrast_effectiveness(self) -> Dict[str, Any]:

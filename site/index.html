@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spark - Local Self-Evolving Intelligence</title>
+<meta name="description" content="Open-source intelligence that learns from every coding session. Runs 100% local.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0e1016;
+  --bg-card: #1a1e28;
+  --border: #2a3042;
+  --green: #00C49A;
+  --green-dim: rgba(0, 196, 154, 0.15);
+  --orange: #D97757;
+  --text: #e2e4e9;
+  --text-secondary: #9aa3b5;
+  --text-muted: #6b7489;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+a { color: var(--green); text-decoration: none; }
+
+/* ---- NAV ---- */
+
+nav {
+  padding: 24px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+.nav-logo-img {
+  height: 24px;
+  width: auto;
+}
+
+.nav-logo-text {
+  font-family: 'Instrument Serif', serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.nav-links {
+  display: flex;
+  gap: 28px;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 150ms;
+}
+
+.nav-links a:hover { color: var(--text); }
+
+/* ---- MAIN ---- */
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0 24px;
+  gap: 0;
+}
+
+.label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--green);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(64px, 10vw, 108px);
+  line-height: 1;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+h1 span { color: var(--green); }
+
+.sub {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(16px, 2vw, 20px);
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.desc {
+  max-width: 480px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 40px;
+}
+
+.clone-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 14px 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--green);
+  cursor: pointer;
+  transition: border-color 150ms, box-shadow 150ms;
+  user-select: all;
+}
+
+.clone-box:hover {
+  border-color: var(--green);
+  box-shadow: 0 0 30px var(--green-dim);
+}
+
+.clone-hint {
+  color: var(--text-muted);
+  font-size: 11px;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+/* ---- FOOTER ---- */
+
+footer {
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+footer a { color: var(--text-muted); transition: color 150ms; }
+footer a:hover { color: var(--text-secondary); }
+
+.footer-links { display: flex; gap: 20px; list-style: none; }
+
+/* ---- ANIMATION ---- */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.label, h1, .sub, .desc, .clone-box {
+  animation: fade-up 0.6s cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+h1 { animation-delay: 0.08s; }
+.sub { animation-delay: 0.16s; }
+.desc { animation-delay: 0.24s; }
+.clone-box { animation-delay: 0.32s; }
+
+/* ---- RESPONSIVE ---- */
+
+@media (max-width: 600px) {
+  nav, footer { padding: 16px 20px; }
+  .clone-box { font-size: 11px; padding: 12px 16px; }
+  .clone-hint { display: none; }
+  .footer-links { gap: 14px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <img src="logo.png" alt="vibeship" class="nav-logo-img">
+    <span class="nav-logo-text">vibeship</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="https://github.com/vibeship/spark-intelligence" target="_blank">GitHub</a></li>
+    <li><a href="https://github.com/vibeship/spark-intelligence/blob/main/docs/QUICKSTART.md" target="_blank">Docs</a></li>
+  </ul>
+</nav>
+
+<main>
+  <div class="label">open source</div>
+  <h1><span>Spark</span></h1>
+  <div class="sub">Local self-evolving intelligence</div>
+  <p class="desc">
+    Learns from every coding session. Filters noise ruthlessly.
+    Tunes itself. Runs 100% on your machine. No cloud. No API keys.
+  </p>
+  <div class="clone-box" onclick="navigator.clipboard.writeText('git clone https://github.com/vibeship/spark-intelligence')">
+    git clone https://github.com/vibeship/spark-intelligence
+    <span class="clone-hint">click to copy</span>
+  </div>
+</main>
+
+<footer>
+  <span>vibeship</span>
+  <ul class="footer-links">
+    <li><a href="https://x.com/Spark_coded" target="_blank">@Spark_coded</a></li>
+  </ul>
+</footer>
+
+</body>
+</html>

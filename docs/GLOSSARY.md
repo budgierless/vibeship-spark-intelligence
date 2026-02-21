@@ -1,13 +1,13 @@
 # Glossary and Documentation Launch Map
 
-Updated: 2026-02-20
+Updated: 2026-02-21
 
 Use this file as the single, stable documentation entrypoint for public OSS onboarding.
 
 ## 1) Core documentation path
 
-- `docs/LAUNCH_DOCUMENTATION_MAP.md` (start here)
-- `docs/DOCS_INDEX.md`
+- `docs/DOCS_INDEX.md` (comprehensive navigation hub)
+- `docs/LAUNCH_DOCUMENTATION_MAP.md`
 - `docs/GLOSSARY.md`
 - `docs/GETTING_STARTED_5_MIN.md`
 - `docs/QUICKSTART.md`
@@ -15,38 +15,54 @@ Use this file as the single, stable documentation entrypoint for public OSS onbo
 
 ## 2) Intelligence and tuning
 
-- `Intelligence_Flow.md`
+- `Intelligence_Flow.md` — Full architecture
 - `docs/PROJECT_INTELLIGENCE.md`
 - `docs/CONSCIOUSNESS_BRIDGE_V1.md`
 - `docs/MEMORY_ACTIONABILITY_FRAMEWORK.md`
 - `docs/RETRIEVAL_LEVELS.md`
-- `TUNEABLES.md`
-- `docs/TUNEABLES_REFERENCE.md`
+- `TUNEABLES.md` — All tuneable parameters + hot-reload matrix
+- `docs/TUNEABLES_REFERENCE.md` — Auto-generated schema reference (25 sections, 153 keys)
 - `docs/SPARK_LIGHTWEIGHT_OPERATING_MODE.md`
 
-## 3) Integrations
+## 3) Subsystem references
+
+- `META_RALPH.md` — Quality gate
+- `EIDOS_GUIDE.md` — Episodic intelligence
+- `SEMANTIC_ADVISOR_DESIGN.md` — Retrieval + ranking
+- `docs/ADVISORY_AND_LEARNING_BENCHMARKS.md`
+- `docs/SELF_IMPROVEMENT_SYSTEMS.md`
+
+## 4) Integrations
 
 - `docs/claude_code.md`
 - `docs/cursor.md`
+- `docs/adapters.md`
 - `docs/OPENCLAW_INTEGRATION.md`
 - `docs/OPENCLAW_OPERATIONS.md`
 - `docs/OPENCLAW_PATHS_AND_DATA_BOUNDARIES.md`
-- `docs/adapters.md`
+- `docs/LLM_INTEGRATION.md`
+- `docs/DEEPSEEK_ISOLATION_RULES.md`
 
-## 4) Boundary, safety, and launch posture
+## 5) Boundary, safety, and launch posture
 
 - `docs/OSS_BOUNDARY.md`
 - `docs/OPEN_CORE_FREEMIUM_MODEL.md`
 - `docs/RESPONSIBLE_PUBLIC_RELEASE.md`
 - `docs/security/THREAT_MODEL.md`
 
-## 5) Terms (open docs glossary)
+## 6) Terms (open docs glossary)
 
-- Advisor: Decision-time guidance produced from memory, retrieval, and event context.
-- Bridge cycle: Periodic event capture + learning cycle for capture, distillation, and distillate promotion.
-- Chip: Domain module for trigger/observer/mapping logic (present but premium-gated in OSS).
-- Cognitive insight: Confidence-scored, actionability-annotated learned advice.
-- Context sync: Process that publishes verified insights to runtime-facing context artifacts.
-- Evidence gate: Tunable confidence/quality threshold path for storing or rejecting learnings.
-- Retrievers: Routes incoming prompts/events to memory and domain-specific evidence.
-- Tuneables: Runtime knobs in `TUNEABLES.md` and `docs/TUNEABLES_REFERENCE.md`.
+- **Advisor**: Decision-time guidance produced from memory, retrieval, and event context.
+- **Auto-tuner**: Feedback-driven optimizer that adjusts source boosts in tuneables based on effectiveness data. Validates via schema and tracks drift before writing.
+- **Bridge cycle**: Periodic event capture + learning cycle. Hot-reloads tuneables at start of each cycle.
+- **Chip**: Domain module for trigger/observer/mapping logic (present but premium-gated in OSS).
+- **Cognitive insight**: Confidence-scored, actionability-annotated learned advice.
+- **Context sync**: Process that publishes verified insights to runtime-facing context artifacts.
+- **Drift (tuneables)**: Normalized distance between runtime `~/.spark/tuneables.json` and version-controlled `config/tuneables.json` baseline. Tracked by `lib/tuneables_drift.py`, alerts when >0.3.
+- **EIDOS**: Episodic intelligence with mandatory prediction->outcome->evaluation loop. Budget-constrained episodes with phase-driven state machine.
+- **Evidence gate**: Tunable confidence/quality threshold path for storing or rejecting learnings.
+- **Hot-reload**: Mtime-based change detection for tuneables. Coordinator (`lib/tuneables_reload.py`) dispatches changed sections to registered module callbacks each bridge cycle.
+- **Meta-Ralph**: Quality gate that scores insights 0-10. Threshold configurable via tuneables (default 4.5). Rejects noise, tautologies, platitudes.
+- **Retrievers**: Routes incoming prompts/events to memory and domain-specific evidence.
+- **Schema (tuneables)**: Central validation in `lib/tuneables_schema.py`. 25 sections, 153 keys with type, default, min/max bounds, descriptions. Clamps out-of-bounds values rather than rejecting.
+- **Tuneables**: Runtime knobs in `~/.spark/tuneables.json`. Schema-validated, hot-reloaded each bridge cycle, drift-tracked against baseline. Reference: `TUNEABLES.md` and `docs/TUNEABLES_REFERENCE.md`.

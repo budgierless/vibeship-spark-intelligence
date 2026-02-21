@@ -86,9 +86,9 @@ def _load_meta_ralph_config() -> None:
         if not isinstance(cfg, dict):
             return
         if "quality_threshold" in cfg:
-            QUALITY_THRESHOLD = int(cfg["quality_threshold"])
+            QUALITY_THRESHOLD = float(cfg["quality_threshold"])
         if "needs_work_threshold" in cfg:
-            NEEDS_WORK_THRESHOLD = int(cfg["needs_work_threshold"])
+            NEEDS_WORK_THRESHOLD = float(cfg["needs_work_threshold"])
         if "needs_work_close_delta" in cfg:
             NEEDS_WORK_CLOSE_DELTA = float(cfg["needs_work_close_delta"])
         if "min_outcome_samples" in cfg:
@@ -147,9 +147,9 @@ def reload_meta_ralph_from(cfg: Dict[str, Any]) -> None:
     global QUALITY_WINDOW_TRACE_REPEAT_CAP
     global QUALITY_WINDOW_EXCLUDE_TRACE_PREFIXES, QUALITY_WINDOW_EXCLUDE_TEXT_PREFIXES
     if "quality_threshold" in cfg:
-        QUALITY_THRESHOLD = int(cfg["quality_threshold"])
+        QUALITY_THRESHOLD = float(cfg["quality_threshold"])
     if "needs_work_threshold" in cfg:
-        NEEDS_WORK_THRESHOLD = int(cfg["needs_work_threshold"])
+        NEEDS_WORK_THRESHOLD = float(cfg["needs_work_threshold"])
     if "needs_work_close_delta" in cfg:
         NEEDS_WORK_CLOSE_DELTA = float(cfg["needs_work_close_delta"])
     if "min_outcome_samples" in cfg:
@@ -1008,20 +1008,34 @@ class MetaRalph:
             if arrow_count >= 2:
                 score.actionability = 0
                 score.novelty = 0
+        # Also catch "Used X tool to Y" patterns
+        if re.search(r"\bused\s+(bash|edit|read|write|glob|grep|task)\s+(tool\s+)?(to|for)\b", learning_lower):
+            score.actionability = 0
+            score.novelty = 0
 
         # Platitudes: "Good code should be well-tested" - sounds wise but teaches nothing
         platitude_patterns = [
             r"^(good|best|proper|clean|quality)\s+(code|software|practice)",
             r"\b(best practice|industry standard|common sense|goes without saying)\b",
             r"^(it.s important|you should|one should|we should)\s+(to|always|never)\b",
+            r"^(code should|testing helps|security is|architecture should|good design)\b",
+            r"\b(well.?written|well.?maintained|well.?tested|well.?documented)\b",
+            r"\b(is valuable|is important|should be addressed|should be managed|should be prioritized)\b",
+            r"\b(feedback is|debt should|practices are|communication is|documentation is)\b",
+            r"\b(horizontal scaling adds|vertical scaling adds|load balancing distributes)\b",
         ]
         if any(re.search(p, learning_lower) for p in platitude_patterns):
             if not has_numeric_evidence and not re.search(r"\b(because|due to|causes)\b", learning_lower):
                 score.reasoning = 0
                 score.novelty = 0
+                score.specificity = 0
 
         # System noise: operational status, health checks, metrics dumps
         if re.search(r"\b(status|health|heartbeat|uptime|process(es)?)\s*[:=]", learning_lower):
+            score.actionability = 0
+            score.specificity = 0
+        # Queue/bridge/pipeline telemetry
+        if re.search(r"\b(queue depth|processed|bridge.?cycle|pipeline|heartbeat)\s*[:=\d]", learning_lower):
             score.actionability = 0
             score.specificity = 0
 
@@ -1030,6 +1044,93 @@ class MetaRalph:
             score.actionability = 0
             score.novelty = 0
             score.reasoning = 0
+
+        # Timing metrics: "Response time: 342ms", "latency p95: 89ms"
+        if re.search(r"\b(response time|latency|elapsed|cold start|warm start|boot time)\s*[:=]\s*\d+", learning_lower):
+            score.actionability = 0
+            score.novelty = 0
+
+        # Raw code without explanation (just code, no surrounding prose)
+        code_indicators = learning_lower.count("(") + learning_lower.count("{") + learning_lower.count(";")
+        if code_indicators >= 3 and len(learning) < 200:
+            word_count = len(learning.split())
+            # If more than 40% of content looks like code syntax
+            if code_indicators / max(word_count, 1) > 0.3:
+                score.reasoning = 0
+                score.novelty = 0
+
+        # Sophisticated garbage: circular reasoning
+        # "We need X because X isn't good" pattern
+        if re.search(r"\bneed\s+(\w+).{5,30}\b\1\b", learning_lower):
+            if not has_numeric_evidence:
+                score.reasoning = 0
+
+        # Tautology: same 4-char fragment appears in 3+ separate words
+        # "reliability...unreliable...reliable" all contain "reli"
+        tautology_words = re.findall(r"[a-z]{5,}", learning_lower)
+        seen_fragments: dict = {}  # fragment -> set of word indices
+        for idx, w in enumerate(tautology_words):
+            frag = w[:4]
+            seen_fragments.setdefault(frag, set()).add(idx)
+            # Also check if this word CONTAINS a previous fragment
+            for prev_frag in list(seen_fragments.keys()):
+                if prev_frag in w:
+                    seen_fragments[prev_frag].add(idx)
+        for frag, indices in seen_fragments.items():
+            if len(indices) >= 3 and not has_numeric_evidence:
+                score.reasoning = 0
+                score.novelty = 0
+                score.actionability = 0
+                break
+
+        # Broader circular reasoning: same root word appears in both halves
+        # of a because/by/since split (e.g. "reliable...because...not reliable")
+        def _strip_prefix(w):
+            for pfx in ("un", "in", "im", "ir", "non", "dis", "re"):
+                if w.startswith(pfx) and len(w) - len(pfx) >= 5:
+                    return w[len(pfx):]
+            return w
+
+        for splitter in [" because ", " since ", " by ", " due to "]:
+            if splitter in learning_lower:
+                parts = learning_lower.split(splitter, 1)
+                if len(parts) == 2:
+                    left_stems = set(_strip_prefix(w)[:6] for w in parts[0].split() if len(w) >= 5)
+                    right_stems = set(_strip_prefix(w)[:6] for w in parts[1].split() if len(w) >= 5)
+                    shared_stems = left_stems & right_stems
+                    # >= 2 shared stems is strong tautology signal
+                    if len(shared_stems) >= 2 and not has_numeric_evidence:
+                        score.reasoning = 0
+                        score.novelty = 0
+                        score.actionability = 0
+                        break
+                    # 1 shared stem in short text is suspicious
+                    if shared_stems and len(learning) < 80 and not has_numeric_evidence:
+                        score.reasoning = 0
+                        score.novelty = 0
+                        break
+
+        # Sophisticated garbage: decisions without reasoning
+        # "We decided to use X" with no because/why
+        if re.search(r"\b(decided to|chose to|went with|selected)\b", learning_lower):
+            if not re.search(r"\b(because|since|due to|reason|for|over|instead|rather|vs|compared)\b", learning_lower):
+                score.reasoning = 0
+
+        # Short reactions: "lgtm", "nice", "ok", "ship it"
+        stripped = learning.strip()
+        if len(stripped) < 20 and not re.search(r"\b(always|never|use|avoid)\b", learning_lower):
+            score.actionability = 0
+            score.novelty = 0
+            score.reasoning = 0
+            score.specificity = 0
+
+        # Edge cases: empty, whitespace-only, special chars only
+        if not stripped or not re.search(r"[a-zA-Z]{3,}", stripped):
+            score.actionability = 0
+            score.novelty = 0
+            score.reasoning = 0
+            score.specificity = 0
+            score.outcome_linked = 0
 
         return score
 
