@@ -95,6 +95,9 @@ def main() -> int:
         optional_targets = [t for t in optional_targets if t not in optional_missing]
 
     if optional_targets:
+        print("Running optional baseline checks:")
+        for target in optional_targets:
+            print(f"- {target}")
         _, optional_raw = _run_pytest(optional_targets, allow_failure=True)
     else:
         optional_raw = 0
