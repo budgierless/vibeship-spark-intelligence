@@ -16,7 +16,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from lib.x_voice import get_x_voice, XVoice, TONE_PROFILES
+try:
+    from lib.x_voice import get_x_voice, XVoice, TONE_PROFILES
+except ImportError:
+    get_x_voice = None
+    XVoice = None
+    TONE_PROFILES = {}
 
 
 # State directory

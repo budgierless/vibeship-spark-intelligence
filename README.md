@@ -5,7 +5,7 @@
     <em>a local self-evolving intelligence.</em>
   </p>
   <p align="center">
-    <a href="https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%20License%202.0-blue?style=flat-square" alt="License"></a>
+    <a href="https://github.com/vibeforge1111/vibeship-spark-intelligence/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License"></a>
     <img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" alt="Python">
     <img src="https://img.shields.io/badge/runs-100%25_local-green?style=flat-square" alt="Local">
     <img src="https://img.shields.io/badge/platform-Win%20%7C%20Mac%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">

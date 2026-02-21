@@ -18,7 +18,7 @@ The watchtower is for:
 ## Recommended folder structure
 
 - Keep the packets folder at a stable location, e.g.
-  - `C:\Users\USER\Documents\Obsidian Vault\Spark-Intelligence-Observatory`
+  - `<YOUR_OBSIDIAN_VAULT>/Spark-Intelligence-Observatory`
 - In Obsidian, create a pinned note tab for:
   - `Spark\Watchtower\watchtower.md`
   - `Spark\Watchtower\packets\index.md`

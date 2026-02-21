@@ -454,9 +454,9 @@ class TestAntiPatternFixes:
 
     def test_generalize_failed_decision_bash(self):
         from lib.eidos.elevated_control import _generalize_failed_decision
-        result = _generalize_failed_decision("Execute: cd C:\\Users\\USER && find . -name '*.py'")
+        result = _generalize_failed_decision("Execute: cd /home/user/project && find . -name '*.py'")
         assert "commands" in result.lower()  # Should generalize to "'cd' commands" or similar
-        assert "C:\\Users" not in result  # No literal paths
+        assert "/home/user" not in result  # No literal paths
 
     def test_generalize_failed_decision_git(self):
         from lib.eidos.elevated_control import _generalize_failed_decision
