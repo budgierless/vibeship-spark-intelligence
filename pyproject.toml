@@ -7,7 +7,7 @@ name = "vibeship-spark"
 version = "0.1.0"
 description = "Self-evolving intelligence layer for AI agents"
 readme = "README.md"
-license = "Apache-2.0"
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Vibeship", email = "hello@vibeship.co"}

@@ -50,7 +50,7 @@ See:
 
 ## 5) Recommended Packaging
 
-- This repo: `vibeship-spark` OSS core (Apache-2.0; premium modules remain separate).
+- This repo: `vibeship-spark` OSS core (MIT; premium modules remain separate).
 - Private packages:
   - `vibeship-spark-chips-premium`
   - `vibeship-spark-forge` (or a hosted Forge API)

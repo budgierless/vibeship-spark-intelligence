@@ -21,7 +21,7 @@ So the goal of a responsible release is:
 
 ## 2) Release Modes (Choose Deliberately)
 
-Mode A: OSI Open Source License (Apache-2.0)
+Mode A: OSI Open Source License (MIT)
 - Pros: maximal adoption and external audit.
 - Cons: you cannot legally restrict harmful fields of use in an OSI-compliant license.
 
