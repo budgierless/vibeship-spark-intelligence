@@ -1026,18 +1026,28 @@ def generate_html() -> str:
         }
         createParticles();
         
+        // Parse numeric fields safely for DOM rendering.
+        function toSafeNumber(value, fallback = 0) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return fallback;
+            return num;
+        }
+
         // Format duration
         function formatDuration(ms) {
-            if (!ms) return '—';
-            if (ms < 1000) return ms + 'ms';
-            return (ms / 1000).toFixed(1) + 's';
+            const safeMs = toSafeNumber(ms, -1);
+            if (safeMs < 0) return '—';
+            if (safeMs < 1000) return `${safeMs}ms`;
+            return (safeMs / 1000).toFixed(1) + 's';
         }
         
         // Format time ago
         function timeAgo(ms) {
-            if (ms < 60000) return Math.floor(ms / 1000) + 's ago';
-            if (ms < 3600000) return Math.floor(ms / 60000) + 'm ago';
-            return Math.floor(ms / 3600000) + 'h ago';
+            const safeMs = toSafeNumber(ms, -1);
+            if (safeMs < 0) return '—';
+            if (safeMs < 60000) return Math.floor(safeMs / 1000) + 's ago';
+            if (safeMs < 3600000) return Math.floor(safeMs / 60000) + 'm ago';
+            return Math.floor(safeMs / 3600000) + 'h ago';
         }
         
         // Render active trace
@@ -1050,8 +1060,9 @@ def generate_html() -> str:
                 ? `<span class="trace-action">→ ${escapeHtml(trace.action)}</span>` 
                 : '';
             
-            const blockerHtml = trace.blockers > 0
-                ? `<span style="color: var(--error)">⚠ ${trace.blockers} blocker${trace.blockers > 1 ? 's' : ''}</span>`
+            const blockerCount = toSafeNumber(trace.blockers);
+            const blockerHtml = blockerCount > 0
+                ? `<span style="color: var(--error)">⚠ ${Math.max(0, Math.trunc(blockerCount))} blocker${blockerCount > 1 ? 's' : ''}</span>`
                 : '';
             
             return `
@@ -1065,7 +1076,7 @@ def generate_html() -> str:
                         ${actionHtml}
                         ${blockerHtml}
                         <span>${formatDuration(trace.duration_ms)}</span>
-                        ${trace.files && trace.files.length ? `<span>${Number(trace.files.length || 0)} files</span>` : ''}
+                        ${Array.isArray(trace.files) && trace.files.length ? `<span>${trace.files.length} files</span>` : ''}
                     </div>
                     ${lessonHtml}
                 </li>
@@ -1074,7 +1085,8 @@ def generate_html() -> str:
         
         // Render blocked trace
         function renderBlockedTrace(trace) {
-            const blockersHtml = trace.blockers.map(b => 
+            const blockersList = Array.isArray(trace.blockers) ? trace.blockers : [];
+            const blockersHtml = blockersList.map((b) => 
                 `<div class="trace-blocker">${escapeHtml(b)}</div>`
             ).join('');
             
