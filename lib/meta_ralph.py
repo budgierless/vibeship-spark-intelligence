@@ -899,8 +899,10 @@ class MetaRalph:
             score.actionability = 2
         elif any(word in learning_lower for word in [
             "consider", "try", "might", "could", "optimal", "sweet spot", "balance",
-            # Data-backed action words
+            # Data-backed action words (present + past tense)
             "drives", "increases", "decreases", "reduces", "outperforms",
+            "increased", "decreased", "reduced", "dropped", "moved",
+            "eliminated", "achieved", "measured",
             # Strategy/approach patterns
             "strategy", "approach", "pattern", "technique", "prioritize",
         ]):
@@ -913,7 +915,7 @@ class MetaRalph:
         # NOVELTY: Is this new information?
         quality_matches = sum(1 for pattern in self.QUALITY_SIGNALS if re.search(pattern, learning_lower))
         # Data-backed claims with numbers are inherently novel
-        has_numeric_evidence = bool(re.search(r"\d{3,}", learning_lower))
+        has_numeric_evidence = bool(re.search(r"\d{2,}", learning_lower))
         if quality_matches >= 2 or priority_boost > 0 or (has_numeric_evidence and quality_matches >= 1):
             score.novelty = 2
         elif quality_matches >= 1 or decision_boost > 0 or has_numeric_evidence:
@@ -927,6 +929,8 @@ class MetaRalph:
             "for better", "for easier", "for safer", "for faster",
             "to avoid", "to ensure", "to prevent", "to improve",
             "which means", "which allows", "which prevents",
+            # Causal/temporal reasoning
+            "after", "resulted", "caused", "led to", "when",
             # Data-backed reasoning
             "data shows", "evidence", "correlates", "consistently",
         ]):
@@ -960,6 +964,9 @@ class MetaRalph:
             "helps", "improves", "prevents", "causes",
             "better", "safer", "faster", "easier",
             "type safety", "security", "performance",
+            # Past-tense outcomes
+            "reduced", "dropped", "increased", "decreased",
+            "improved", "eliminated", "measured", "achieved",
             # Game feel outcomes
             "feels fair", "feels good", "feels right", "punishing", "boring", "satisfying",
             # Architecture outcomes
