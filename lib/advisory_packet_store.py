@@ -122,6 +122,14 @@ def _obsidian_packets_dir() -> Path:
     return _obsidian_export_dir() / "packets"
 
 
+def _obsidian_root_dir() -> Path:
+    return _obsidian_export_dir()
+
+
+def _obsidian_watchtower_file() -> Path:
+    return _obsidian_root_dir() / "watchtower.md"
+
+
 def _obsidian_index_file() -> Path:
     return _obsidian_packets_dir() / "index.md"
 
@@ -596,7 +604,53 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
         else "never"
     )
 
+    def _yaml(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False)
+
+    def _yaml_list(values: List[str]) -> str:
+        safe_values = [str(v) for v in _safe_list(values, max_items=20)]
+        if not safe_values:
+            return "[]"
+        return "[" + ", ".join(_yaml(v) for v in safe_values) + "]"
+
+    freshness_ratio = 0.0
+    try:
+        freshness_ratio = max(0.0, min(1.0, float(packet.get("freshness_ratio", 0.0) or 0.0)))
+    except Exception:
+        freshness_ratio = 0.0
+
+    readiness = float(flags.get("readiness_score", 0.0) or 0.0)
     lines = [
+        "---",
+        "type: spark-advisory-packet",
+        f"packet_id: {_yaml(packet_id)}",
+        f"project_key: {_yaml(project)}",
+        f"session_context_key: {_yaml(session_ctx)}",
+        f"tool_name: {_yaml(tool)}",
+        f"intent_family: {_yaml(intent)}",
+        f"task_plane: {_yaml(plane)}",
+        f"source_mode: {_yaml(source_mode)}",
+        f"created_at: {_yaml(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created_ts)) if created_ts else '')}",
+        f"updated_at: {_yaml(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(updated_ts)) if updated_ts else '')}",
+        f"fresh_until: {_yaml(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(fresh_until_ts)) if fresh_until_ts else '')}",
+        f"ready_for_use: {_yaml(bool(flags.get('ready_for_use', False)))}",
+        f"fresh_now: {_yaml(bool(flags.get('is_fresh', False)))}",
+        f"invalidated: {_yaml(bool(packet.get('invalidated', False)))}",
+        f"invalidation_reason: {_yaml(str(packet.get('invalidate_reason', '') or '')[:240])}",
+        f"effectiveness_score: {_yaml(float(packet.get('effectiveness_score', 0.5) or 0.5))}",
+        f"readiness_score: {_yaml(readiness)}",
+        f"freshness_ratio: {_yaml(freshness_ratio)}",
+        f"usage_count: {_yaml(int(packet.get('usage_count', 0) or 0))}",
+        f"emit_count: {_yaml(int(packet.get('emit_count', 0) or 0))}",
+        f"deliver_count: {_yaml(int(packet.get('deliver_count', packet.get('emit_count', 0)) or 0))}",
+        f"helpful_count: {_yaml(int(packet.get('helpful_count', 0) or 0))}",
+        f"unhelpful_count: {_yaml(int(packet.get('unhelpful_count', 0) or 0))}",
+        f"noisy_count: {_yaml(int(packet.get('noisy_count', 0) or 0))}",
+        f"sources: {_yaml_list(sources)}",
+        f"categories: {_yaml_list(categories)}",
+        f"tags: ['spark', 'advisory', 'watchtower', {_yaml(tool)}, {_yaml(intent)}]",
+        "---",
+        "",
         f"# Packet {packet_id}",
         "",
         "## Packet Metadata",
@@ -769,25 +823,29 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
     except Exception:
         watchtower: List[Dict[str, Any]] = []
     try:
-        watchtower_reasons: Counter[str] = Counter()
         watchtower_stage: Counter[str] = Counter()
         for row in watchtower:
             stage = str(row.get("stage", "") or "unspecified").strip() or "unspecified"
             watchtower_stage[stage] += 1
-            for reason in _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=6):
-                if reason:
-                    watchtower_reasons[str(reason)] += 1
     except Exception:
-        watchtower_reasons = Counter()
         watchtower_stage = Counter()
 
-    def _render_tags(values: List[str]) -> str:
+    def _format_status_values(values: List[str]) -> str:
         if not values:
-            return ""
+            return "-"
         return " ".join(f"`{v}`" for v in values[:8])
+
+    def _render_obsidian_counter_lines(title: str, counter: Counter[str], limit: int = 8) -> List[str]:
+        items = [f"{k} ({v})" for k, v in counter.most_common(limit)]
+        if not items:
+            return [f"- {title}: none"]
+        return [f"- {title}: {', '.join(items)}"]
 
     category_counter: Counter[str] = Counter()
     source_counter: Counter[str] = Counter()
+    project_counter: Counter[str] = Counter()
+    tool_counter: Counter[str] = Counter()
+    intent_counter: Counter[str] = Counter()
     for row in catalog:
         for category in _safe_list(row.get("category_summary"), max_items=20):
             if category:
@@ -795,6 +853,15 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
         for source in _safe_list(row.get("source_summary"), max_items=20):
             if source:
                 source_counter[str(source)] += 1
+        project = str(row.get("project_key") or "unknown_project").strip()
+        if project:
+            project_counter[project] += 1
+        tool = str(row.get("tool_name") or "*").strip()
+        if tool:
+            tool_counter[tool] += 1
+        intent = str(row.get("intent_family") or "emergent_other").strip()
+        if intent:
+            intent_counter[intent] += 1
 
     ready = [r for r in catalog if bool(r.get("ready_for_use"))]
     invalid = [r for r in catalog if bool(r.get("invalidated"))]
@@ -802,35 +869,188 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
 
     lines.append("# SPARK Advisory Packet Catalog")
     lines.append("")
-    lines.append(f"- entries: {len(catalog)}")
-    lines.append(f"- decision ledger entries: {len(watchtower)}")
-    lines.append(f"- decision ledger enabled: {bool(_decision_ledger_enabled())}")
-    lines.append(f"- ledger path: `{ADVISORY_DECISION_LEDGER_FILE}`")
-    lines.append(f"- ready: {len(ready)}")
-    lines.append(f"- stale: {len(stale)}")
-    if invalid:
-        lines.append(f"- invalidated: {len(invalid)}")
-    lines.append(f"- updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now()))}")
+    lines.extend(
+        [
+            "## How to use this view",
+            "- Think of this as the **operational entry point**.",
+            "- [[../watchtower|Open watchtower dashboard]] for suppression + trend context.",
+            "",
+            f"- updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now()))}",
+            f"- entries: {len(catalog)}",
+            f"- ready now: {len(ready)}",
+            f"- stale: {len(stale)}",
+            f"- invalidated: {len(invalid)}",
+            f"- recent suppression events: {len(watchtower)}",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "## Distribution snapshot",
+            *_render_obsidian_counter_lines("top sources", source_counter),
+            *_render_obsidian_counter_lines("top categories", category_counter),
+            *_render_obsidian_counter_lines("top projects", project_counter),
+            *_render_obsidian_counter_lines("top tools", tool_counter),
+            *_render_obsidian_counter_lines("top intents", intent_counter),
+            "",
+        ]
+    )
+
+    lines.append("## Watchtower highlights")
     if watchtower_stage:
-        stage_text = ", ".join(f"{k}({v})" for k, v in watchtower_stage.most_common(8))
-        lines.append(f"- watchtower stages: {stage_text}")
-    if watchtower_reasons:
         lines.append(
-            "- watchtower top suppressions: "
-            + ", ".join(f"{k}({v})" for k, v in watchtower_reasons.most_common(8))
+            "- recent stages: "
+            + ", ".join(f"{k}({v})" for k, v in watchtower_stage.most_common(8))
         )
-    if source_counter:
-        lines.append("- top sources: " + ", ".join(f"{k}({v})" for k, v in source_counter.most_common(8)))
-    if category_counter:
-        lines.append("- top categories: " + ", ".join(f"{k}({v})" for k, v in category_counter.most_common(8)))
+    else:
+        lines.append("- no recent suppression events")
     lines.append("")
 
-    lines.append("## Advisory Watchtower")
-    if not watchtower:
-        lines.append("- no ledger entries yet")
-        lines.append("")
+    if ready:
+        lines.append("## Top ready packets (open first)")
+        for idx, row in enumerate(
+            sorted(
+                ready,
+                key=lambda row: (
+                    float(row.get("readiness_score", 0.0) or 0.0),
+                    float(row.get("effectiveness_score", 0.0) or 0.0),
+                    float(row.get("updated_ts", 0.0) or 0.0),
+                ),
+            ),
+            reverse=True,
+        )[:12],
+            start=1,
+        ):
+            packet_id = str(row.get("packet_id") or "")
+            readiness = float(row.get("readiness_score") or 0.0)
+            impact = float(row.get("effectiveness_score") or 0.0)
+            stage = str(row.get("stage", "") or "unknown")
+            lines.append(
+                f"{idx}. [[{packet_id}]] readiness={readiness:.2f} effect={impact:.2f} stage={stage} "
+                f"| sources: {_format_status_values(_safe_list(row.get('source_summary'), max_items=4))}"
+            )
     else:
-        for idx, row in enumerate(watchtower[-80:], start=1):
+        lines.append("## Top ready packets")
+        lines.append("- no ready packets currently")
+    lines.append("")
+
+    lines.append("## Packet catalog snapshot")
+    for idx, row in enumerate(catalog[:80], start=1):
+        packet_id = str(row.get("packet_id") or "")
+        project_key = str(row.get("project_key") or "unknown_project")
+        task_plane = str(row.get("task_plane") or "build_delivery")
+        readiness = float(row.get("readiness_score") or 0.0)
+        freshness = "fresh" if bool(row.get("is_fresh")) else "stale"
+        updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
+        updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
+        lines.append(
+            f"{idx}. [[{packet_id}]] project={project_key} plane={task_plane} "
+            f"readiness={readiness:.2f} {freshness} updated={updated_text}"
+        )
+    lines.append("")
+
+
+def _render_obsidian_watchtower(lines: List[str], catalog: List[Dict[str, Any]]) -> None:
+    now_value = _now()
+    now_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_value))
+    ready = [r for r in catalog if bool(r.get("ready_for_use"))]
+    invalid = [r for r in catalog if bool(r.get("invalidated"))]
+    stale = [r for r in catalog if not bool(r.get("is_fresh")) and not bool(r.get("invalidated"))]
+
+    source_counter: Counter[str] = Counter()
+    project_counter: Counter[str] = Counter()
+    tool_counter: Counter[str] = Counter()
+    intent_counter: Counter[str] = Counter()
+    category_counter: Counter[str] = Counter()
+    for row in catalog:
+        for source in _safe_list(row.get("source_summary"), max_items=20):
+            if source:
+                source_counter[str(source)] += 1
+        for category in _safe_list(row.get("category_summary"), max_items=20):
+            if category:
+                category_counter[str(category)] += 1
+        project_counter[str(row.get("project_key") or "unknown_project")] += 1
+        tool_counter[str(row.get("tool_name") or "*")] += 1
+        intent_counter[str(row.get("intent_family") or "emergent_other")] += 1
+
+    try:
+        watchtower = _read_advisory_decision_ledger(limit=max(0, int(OBSIDIAN_EXPORT_MAX_PACKETS // 2)))
+    except Exception:
+        watchtower = []
+    watchtower_reasons: Counter[str] = Counter()
+    watchtower_stage: Counter[str] = Counter()
+    for row in watchtower:
+        stage = str(row.get("stage", "") or "unknown").strip() or "unknown"
+        watchtower_stage[stage] += 1
+        for reason in _safe_list([str(r.get("reason") or "") for r in row.get("suppressed_reasons", [])], max_items=8):
+            if reason:
+                watchtower_reasons[str(reason)] += 1
+
+    lines.extend(
+        [
+            "# SPARK Advisory Watchtower",
+            "",
+            "## Entry point",
+            "- This is the deeper observability layer for advisory behavior.",
+            "- Open this page first when you want to understand *what changed and why*.",
+            "",
+            "- updated: " + now_text,
+            f"- packet notes: [[packets/index|Packet Catalog]]",
+            f"- total packets: {len(catalog)}",
+            f"- ready now: {len(ready)}",
+            f"- stale: {len(stale)}",
+            f"- invalidated: {len(invalid)}",
+            f"- decision ledger events: {len(watchtower)}",
+            "",
+        ]
+    )
+
+    lines.append("## Quick summary")
+    lines.append(f"- decision ledger enabled: {bool(_decision_ledger_enabled())}")
+    lines.append(f"- ledger path: `{ADVISORY_DECISION_LEDGER_FILE}`")
+    lines.append(f"- watchtower file: `{_obsidian_watchtower_file()}`")
+    if watchtower_stage:
+        lines.append(
+            "- gate outcomes: "
+            + ", ".join(f"{k}({v})" for k, v in watchtower_stage.most_common(10))
+        )
+    if watchtower_reasons:
+        lines.append(
+            "- top suppression reasons: "
+            + ", ".join(f"{k}({v})" for k, v in watchtower_reasons.most_common(12))
+        )
+    lines.append("")
+
+    lines.append("## Top ready packets")
+    for idx, row in enumerate(
+        sorted(
+            ready,
+            key=lambda row: (
+                float(row.get("readiness_score", 0.0) or 0.0),
+                float(row.get("effectiveness_score", 0.0) or 0.0),
+                float(row.get("updated_ts", 0.0) or 0.0),
+            ),
+        ),
+        reverse=True,
+    )[:15]:
+        packet_id = str(row.get("packet_id") or "")
+        readiness = float(row.get("readiness_score") or 0.0)
+        impact = float(row.get("effectiveness_score") or 0.0)
+        usage_count = int(row.get("usage_count", 0) or 0)
+        lines.append(
+            f"{idx}. [[{packet_id}]] "
+            f"| readiness={readiness:.2f} "
+            f"| effect={impact:.2f} "
+            f"| usage={usage_count} "
+            f"| sources={', '.join(str(x) for x in _safe_list(row.get('source_summary'), max_items=3))}"
+        )
+    lines.append("")
+
+    lines.append("## Decision tail (most recent)")
+    if not watchtower:
+        lines.append("- no decision events yet")
+    else:
+        for idx, row in enumerate(watchtower[:100], start=1):
             ts = float(row.get("ts", 0.0) or 0.0)
             ts_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else "unknown"
             tool = str(row.get("tool", "") or "*")
@@ -840,65 +1060,49 @@ def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> N
             selected = int(row.get("selected_count", 0) or 0)
             suppressed = int(row.get("suppressed_count", 0) or 0)
             lines.append(
-                f"{idx}. {ts_text} | tool={tool} | route={route} | outcome={outcome} | selected={selected} suppressed={suppressed}"
+                f"{idx}. {ts_text} | tool={tool} | route={route} | outcome={outcome} "
+                f"| selected={selected} suppressed={suppressed}"
             )
-            if suppressed > 0:
-                top = _safe_list([str(reason.get("reason") or "") for reason in row.get("suppressed_reasons", [])], max_items=2)
-                if top:
-                    lines.append(f"   - suppressions: {', '.join(top)}")
-            preview = str(row.get("route_hint", "") or row.get("suppressed_reasons", "") or "")
-            if preview:
-                lines.append(f"   - hint: {preview if isinstance(preview, str) else str(preview)}")
-        lines.append("")
+    lines.append("")
 
     if invalid:
-        lines.append("## Invalid Packets")
-        for idx, row in enumerate(invalid[:80], start=1):
+        lines.append("## Invalidated packet list (for cleanup review)")
+        for idx, row in enumerate(invalid[:30], start=1):
             packet_id = str(row.get("packet_id") or "")
             updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
             updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
             lines.append(
-                f"{idx}. [[{packet_id}]] "
-                f"| {str(row.get('tool_name') or '*')} "
-                f"| {str(row.get('intent_family') or 'emergent_other')} "
-                f"| reason: {str(row.get('invalidate_reason') or 'none')} "
-                f"| updated={updated_text}"
+                f"{idx}. [[{packet_id}]] reason={str(row.get('invalidate_reason') or 'none')} updated={updated_text}"
             )
         lines.append("")
 
-    lines.append("## Ready Packets")
-    for idx, row in enumerate(ready[:100], start=1):
-        packet_id = str(row.get("packet_id") or "")
-        updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
-        updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
-        lines.append(
-            f"{idx}. [[{packet_id}]] "
-            f"| {str(row.get('tool_name') or '*')} "
-            f"| {str(row.get('intent_family') or 'emergent_other')} "
-            f"| readiness={float(row.get('readiness_score') or 0.0):.2f} "
-            f"| eff={float(row.get('effectiveness_score') or 0.0):.2f} "
-            f"| reads={int(row.get('read_count', 0) or 0)} "
-            f"| usages={int(row.get('usage_count', 0) or 0)} "
-            f"| deliveries={int(row.get('deliver_count', row.get('emit_count', 0)) or 0)} "
-            f"| updated={updated_text}"
-        )
-        lines.append(f"   - sources: {_render_tags(_safe_list(row.get('source_summary'), max_items=10))}")
-        lines.append(f"   - categories: {_render_tags(_safe_list(row.get('category_summary'), max_items=10))}")
+    lines.append("## Distribution summary")
+    lines.extend(
+        [
+            "- top source: " + ", ".join(f"{k}({v})" for k, v in source_counter.most_common(8)),
+            "- top categories: " + ", ".join(f"{k}({v})" for k, v in category_counter.most_common(8)),
+            "- top projects: " + ", ".join(f"{k}({v})" for k, v in project_counter.most_common(8)),
+            "- top tools: " + ", ".join(f"{k}({v})" for k, v in tool_counter.most_common(8)),
+            "- top intents: " + ", ".join(f"{k}({v})" for k, v in intent_counter.most_common(8)),
+            "",
+        ]
+    )
+
+    packets_path = str(_obsidian_packets_dir()).replace("\\", "/")
+    lines.extend(
+        [
+            "## Quick queries (Dataview optional)",
+            "```dataview",
+            "TABLE file.link as packet, readiness_score, effectiveness_score, usage_count, project_key",
+            f'FROM "{packets_path}"',
+            "WHERE type = \"spark-advisory-packet\"",
+            "SORT file.mtime desc",
+            "LIMIT 80",
+            "```",
+        ]
+    )
 
     lines.append("")
-    lines.append("## Full Packet Index")
-    for idx, row in enumerate(catalog[:200], start=1):
-        packet_id = str(row.get("packet_id") or "")
-        updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
-        updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
-        lines.append(
-            f"{idx}. [[{packet_id}]] "
-            f"| {str(row.get('project_key') or 'unknown_project')} "
-            f"| {str(row.get('task_plane') or 'build_delivery')} "
-            f"| freshness={'fresh' if bool(row.get('is_fresh')) else 'stale'} "
-            f"| updated={updated_text}"
-        )
-
 
 def _sync_obsidian_catalog() -> Optional[str]:
     if not _obsidian_enabled():
@@ -923,7 +1127,14 @@ def _sync_obsidian_catalog() -> Optional[str]:
         lines: List[str] = []
         _render_obsidian_index(lines, catalog)
         target = _obsidian_index_file()
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        watchtower_lines: List[str] = []
+        _render_obsidian_watchtower(watchtower_lines, catalog)
+        watchtower_target = _obsidian_watchtower_file()
+        watchtower_target.parent.mkdir(parents=True, exist_ok=True)
+        watchtower_target.write_text("\n".join(watchtower_lines) + "\n", encoding="utf-8")
         return str(target)
     except Exception:
         return None
@@ -2398,6 +2609,7 @@ def get_store_status() -> Dict[str, Any]:
         "obsidian_export_dir": str(_obsidian_export_dir()),
         "obsidian_export_dir_exists": bool(_obsidian_export_dir().exists()),
         "obsidian_index_file": str(_obsidian_index_file()),
+        "obsidian_watchtower_file": str(_obsidian_watchtower_file()),
         "decision_ledger": _decision_ledger_meta(),
         "index_file": str(INDEX_FILE),
     }

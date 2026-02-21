@@ -290,8 +290,8 @@ The watchtower is the packet-first observability layer: every emitted advisory p
   - `obsidian_export_dir`
   - `obsidian_export_max_packets`
 - Exports land under:
-  - `<obsidian_export_dir>\packets\`
-  - `index.md` inside that folder
+- `<obsidian_export_dir>\packets\` (with `index.md` and packet notes)
+- `<obsidian_export_dir>\watchtower.md` (watchtower dashboard)
 
 ### Setup on Windows
 
@@ -316,10 +316,12 @@ The watchtower is the packet-first observability layer: every emitted advisory p
 
 ### Expected output
 
-- `.\Spark-Intelligence-Observatory\packets\index.md` updates with:
+- `.\Spark-Intelligence-Observatory\watchtower.md` updates with:
   - summary
+  - suppression/reason trend view
   - decision-ledger tail
-  - ready/invalid packets
+  - project/tool/intent distributions
+- `.\Spark-Intelligence-Observatory\packets\index.md` remains the packet catalog.
 - Per-packet files appear as:
   - `pkt_<id>.md`
 

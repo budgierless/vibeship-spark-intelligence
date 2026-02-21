@@ -4,9 +4,10 @@ Use this for best-practice observability use of advisory packets.
 
 ## What you get in the watchtower
 
-Spark exports two kinds of notes into:
+Spark exports three notes into:
 
 - `<obsidian_export_dir>\packets\index.md`
+- `<obsidian_export_dir>\watchtower.md`
 - `<obsidian_export_dir>\packets\pkt_<id>.md`
 
 The watchtower is for:
@@ -19,25 +20,28 @@ The watchtower is for:
 - Keep the packets folder at a stable location, e.g.
   - `C:\Users\USER\Documents\Obsidian Vault\Spark-Intelligence-Observatory`
 - In Obsidian, create a pinned note tab for:
+  - `Spark\Watchtower\watchtower.md`
   - `Spark\Watchtower\packets\index.md`
 - Optional: create a quick note `Spark Watchtower Log` and copy high-value packets there.
 
 ## Daily "quick read" flow (5 minutes)
 
-1. Open `packets\index.md`.
+1. Open `watchtower.md`.
 2. Check header counters:
-   - `ready`, `stale`, `invalidated`, `entries`
-3. Read **Advisory Watchtower** section (decision-ledger tail).
-4. Review **Ready Packets** first:
+  - `ready`, `stale`, `invalidated`, `entries`
+3. Check the **Top ready packets** section.
+4. Open `packets\index.md` for exact packet bodies and context.
+5. Review up to one **Ready Packet** in-session:
    - pick one packet you can apply this session.
-5. Open packet and decide one action:
+6. Open packet and decide one action:
    - **Use now**: execute it in your workflow.
    - **Archive**: mark mentally for review.
    - **Ignore**: if unrelated context; no action needed.
 
 ## Weekly review flow (20–30 minutes)
 
-1. Open `index.md` and scan `Full Packet Index`.
+1. Open `watchtower.md` and review suppression trends.
+2. Open `packets\index.md` and scan `Packet catalog snapshot`.
 2. For stale packets with high effect scores, decide if context changed or they still belong:
    - same root advice: consolidate and pin a single evergreen entry
    - contradictory advice: keep both as alternatives and add a decision note
@@ -100,4 +104,3 @@ Then run a normal advisory session to trigger real packet writes.
 - Missing packet list: exports are blocked or disabled (check `obsidian_enabled` and `obsidian_auto_export`).
 - Wrong folder: verify `obsidian_export_dir` points at the vault path used by Obsidian.
 - Noisy output: temporarily disable auto export, inspect pipeline behavior, re-enable once cleaned.
-
