@@ -29,6 +29,7 @@ INDEX_FILE = PACKET_DIR / "index.json"
 PREFETCH_QUEUE_FILE = PACKET_DIR / "prefetch_queue.jsonl"
 OBSIDIAN_EXPORT_DIR = PACKET_DIR / "obsidian"
 OBSIDIAN_PACKETS_DIR = OBSIDIAN_EXPORT_DIR / "packets"
+OBSIDIAN_INDEX_FILE = OBSIDIAN_PACKETS_DIR / "index.md"
 
 DEFAULT_PACKET_TTL_S = 900.0
 MAX_INDEX_PACKETS = 2000
@@ -550,13 +551,175 @@ def _obsidian_payload(packet: Dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def _export_packet_to_obsidian(packet: Dict[str, Any]) -> Optional[str]:
+def _packet_readiness_score(packet: Dict[str, Any], now_ts: Optional[float] = None) -> float:
+    if not isinstance(packet, dict):
+        return 0.0
+    if bool(packet.get("invalidated")):
+        return 0.0
+    now_value = float(now_ts if now_ts is not None else _now())
+    freshness_until = float(packet.get("fresh_until_ts", 0.0) or 0.0)
+    if freshness_until <= now_value:
+        return 0.0
+
+    updated_ts = float(packet.get("updated_ts", 0.0) or 0.0)
+    ttl = float(max(30.0, float(packet.get("ttl_s", 0.0) or (freshness_until - updated_ts) or DEFAULT_PACKET_TTL_S)))
+    remaining = min(ttl, max(0.0, freshness_until - now_value))
+    freshness_ratio = remaining / ttl if ttl > 0 else 0.0
+    effectiveness = float(packet.get("effectiveness_score", 0.5) or 0.5)
+    effectiveness = max(0.0, min(1.0, effectiveness))
+    score = (0.35 * max(0.0, min(1.0, freshness_ratio))) + (0.65 * effectiveness)
+    return max(0.0, min(1.0, score))
+
+
+def _readiness_flags(packet: Dict[str, Any], now_ts: Optional[float] = None) -> Dict[str, Any]:
+    now_value = float(now_ts if now_ts is not None else _now())
+    freshness_until = float(packet.get("fresh_until_ts", 0.0) or 0.0)
+    is_fresh = (not bool(packet.get("invalidated"))) and (freshness_until >= now_value)
+    score = _packet_readiness_score(packet, now_value)
+    return {
+        "is_fresh": bool(is_fresh),
+        "ready_for_use": bool(is_fresh and score >= 0.35),
+        "readiness_score": float(score),
+        "ready_age_s": max(0.0, now_value - float(packet.get("updated_ts", 0.0) or 0.0)),
+    }
+
+
+def _obsidian_catalog_entry(packet: Dict[str, Any], now_ts: Optional[float] = None) -> Dict[str, Any]:
+    now_value = float(now_ts if now_ts is not None else _now())
+    flags = _readiness_flags(packet, now_ts=now_value)
+    return {
+        "packet_id": str(packet.get("packet_id") or ""),
+        "project_key": str(packet.get("project_key") or ""),
+        "session_context_key": str(packet.get("session_context_key") or ""),
+        "tool_name": str(packet.get("tool_name") or ""),
+        "intent_family": str(packet.get("intent_family") or ""),
+        "task_plane": str(packet.get("task_plane") or ""),
+        "updated_ts": float(packet.get("updated_ts", 0.0) or 0.0),
+        "fresh_until_ts": float(packet.get("fresh_until_ts", 0.0) or 0.0),
+        "ready_for_use": bool(flags.get("ready_for_use")),
+        "is_fresh": bool(flags.get("is_fresh")),
+        "readiness_score": float(flags.get("readiness_score", 0.0)),
+        "effectiveness_score": float(packet.get("effectiveness_score", 0.5) or 0.5),
+        "usage_count": int(packet.get("usage_count", 0) or 0),
+        "emit_count": int(packet.get("emit_count", 0) or 0),
+        "source_summary": _safe_list(packet.get("source_summary"), max_items=10),
+        "category_summary": _safe_list(packet.get("category_summary"), max_items=8),
+    }
+
+
+def _build_obsidian_catalog(
+    *,
+    now_ts: Optional[float] = None,
+    only_ready: bool = False,
+    include_stale: bool = False,
+    limit: int = 0,
+) -> List[Dict[str, Any]]:
+    index = _load_index()
+    meta = index.get("packet_meta") or {}
+    out: List[Dict[str, Any]] = []
+    now_value = float(now_ts if now_ts is not None else _now())
+    limit_count = max(0, int(limit or 0))
+    for packet_id, row in meta.items():
+        pid = str(packet_id or "").strip()
+        if not pid:
+            continue
+        row_packet = get_packet(pid)
+        if not row_packet:
+            continue
+        flags = _readiness_flags(row_packet, now_value)
+        if bool(flags.get("invalidated", False)):
+            continue
+        if not include_stale and not bool(flags.get("is_fresh", False)):
+            continue
+        if only_ready and not bool(flags.get("ready_for_use", False)):
+            continue
+        entry = _obsidian_catalog_entry(row_packet, now_ts=now_value)
+        if not entry.get("packet_id"):
+            continue
+        out.append(entry)
+
+    out.sort(key=lambda row: (float(row.get("readiness_score", 0.0) or 0.0), float(row.get("updated_ts", 0.0) or 0.0), str(row.get("packet_id") or "")), reverse=True)
+    if limit_count > 0:
+        return out[:limit_count]
+    return out
+
+
+def _render_obsidian_index(lines: List[str], catalog: List[Dict[str, Any]]) -> None:
+    def _render_tags(values: List[str]) -> str:
+        if not values:
+            return ""
+        return " ".join(f"`{v}`" for v in values[:8])
+
+    lines.append("# SPARK Advisory Packet Catalog")
+    lines.append("")
+    lines.append(f"- entries: {len(catalog)}")
+    lines.append(f"- updated: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(_now()))}")
+    lines.append("")
+    lines.append("## Ready Packets")
+    ready = [r for r in catalog if bool(r.get("ready_for_use"))]
+    for idx, row in enumerate(ready[:100], start=1):
+        packet_id = str(row.get("packet_id") or "")
+        updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
+        updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
+        lines.append(
+            f"{idx}. [[{packet_id}]] "
+            f"| {str(row.get('tool_name') or '*')} "
+            f"| {str(row.get('intent_family') or 'emergent_other')} "
+            f"| readiness={float(row.get('readiness_score') or 0.0):.2f} "
+            f"| eff={float(row.get('effectiveness_score') or 0.0):.2f} "
+            f"| updated={updated_text}"
+        )
+        lines.append(f"   - sources: {_render_tags(_safe_list(row.get('source_summary'), max_items=10))}")
+        lines.append(f"   - categories: {_render_tags(_safe_list(row.get('category_summary'), max_items=10))}")
+
+    lines.append("")
+    lines.append("## Full Packet Index")
+    for idx, row in enumerate(catalog[:200], start=1):
+        packet_id = str(row.get("packet_id") or "")
+        updated_ts = float(row.get("updated_ts", 0.0) or 0.0)
+        updated_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated_ts)) if updated_ts else "unknown"
+        lines.append(
+            f"{idx}. [[{packet_id}]] "
+            f"| {str(row.get('project_key') or 'unknown_project')} "
+            f"| {str(row.get('task_plane') or 'build_delivery')} "
+            f"| freshness={'fresh' if bool(row.get('is_fresh')) else 'stale'} "
+            f"| updated={updated_text}"
+        )
+
+
+def _sync_obsidian_catalog() -> Optional[str]:
+    if not _obsidian_enabled():
+        return None
+    if not OBSIDIAN_AUTO_EXPORT:
+        return None
+
+    packets_dir = _obsidian_packets_dir()
+    if not packets_dir.exists():
+        return None
+
+    catalog = _build_obsidian_catalog(
+        now_ts=_now(),
+        only_ready=False,
+        include_stale=True,
+        limit=max(1, OBSIDIAN_EXPORT_MAX_PACKETS),
+    )
+    if not catalog:
+        return None
+
+    lines: List[str] = []
+    _render_obsidian_index(lines, catalog)
+    target = _obsidian_packets_dir() / "index.md"
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(target)
+
+
+def _export_packet_to_obsidian(packet: Dict[str, Any], *, force: bool = False) -> Optional[str]:
     if not _obsidian_enabled() or not isinstance(packet, dict):
         return None
     packet_id = str(packet.get("packet_id") or "").strip()
     if not packet_id:
         return None
-    if not OBSIDIAN_AUTO_EXPORT:
+    if not OBSIDIAN_AUTO_EXPORT and not force:
         return None
 
     packets_dir = _obsidian_packets_dir()
@@ -572,12 +735,18 @@ def _export_packet_to_obsidian(packet: Dict[str, Any]) -> Optional[str]:
         all_exports = list(packets_dir.glob("*.md"))
         all_exports.sort(key=lambda p: p.stat().st_mtime)
         keep = max(1, OBSIDIAN_EXPORT_MAX_PACKETS)
+        # Keep the catalog file if it exists.
+        catalog_name = OBSIDIAN_INDEX_FILE.name.lower()
         if len(all_exports) > keep:
             for stale in all_exports[: len(all_exports) - keep]:
+                if stale.name.lower() == catalog_name:
+                    continue
                 try:
                     stale.unlink()
                 except Exception:
                     pass
+
+        _sync_obsidian_catalog()
     except Exception:
         pass
 
@@ -591,7 +760,7 @@ def export_packet_packet(packet_id: str) -> Optional[str]:
         return None
     original_auto = OBSIDIAN_AUTO_EXPORT
     try:
-        return _export_packet_to_obsidian(packet)
+        return _export_packet_to_obsidian(packet, force=True)
     except Exception:
         return None
     finally:
@@ -850,6 +1019,7 @@ def save_packet(packet: Dict[str, Any]) -> str:
         str(packet.get("intent_family", "")),
     )
     index["by_exact"][exact_key] = packet_id
+    flags = _readiness_flags(packet, now_ts=packet.get("updated_ts"))
     index["packet_meta"][packet_id] = {
         "project_key": packet.get("project_key"),
         "session_context_key": packet.get("session_context_key"),
@@ -870,6 +1040,8 @@ def save_packet(packet: Dict[str, Any]) -> str:
         "effectiveness_score": float(packet.get("effectiveness_score", 0.5) or 0.5),
         "source_mode": str(packet.get("source_mode") or ""),
         "age_s": max(0.0, _now() - float(packet.get("updated_ts", 0.0) or 0.0)),
+        "is_ready": bool(flags.get("ready_for_use", False)),
+        "readiness_score": float(flags.get("readiness_score", 0.0)),
     }
     _prune_index(index)
     _save_index(index)
@@ -1093,6 +1265,92 @@ def lookup_relaxed_candidates(
     if context_text and len(out) > 1:
         out = _rerank_candidates_with_lookup_llm(out, context_text=context_text)
     return out
+
+
+def get_advisory_catalog(
+    *,
+    project_key: str = "",
+    tool_name: str = "",
+    intent_family: str = "",
+    task_plane: str = "",
+    only_ready: bool = True,
+    include_stale: bool = False,
+    min_effectiveness: Optional[float] = None,
+    limit: int = 60,
+) -> List[Dict[str, Any]]:
+    """Read a curated advisory catalog directly from packet meta + packet payload."""
+    index = _load_index()
+    meta = index.get("packet_meta") or {}
+    normalized_project = str(project_key or "").strip().lower()
+    normalized_tool = str(tool_name or "").strip().lower()
+    normalized_intent = str(intent_family or "").strip().lower()
+    normalized_plane = str(task_plane or "").strip().lower()
+    limit_rows = max(1, min(500, int(limit or 60)))
+
+    out: List[Dict[str, Any]] = []
+    for packet_id, row in meta.items():
+        if not isinstance(row, dict):
+            continue
+        row_project = str(row.get("project_key") or "").strip().lower()
+        if normalized_project and row_project and row_project != normalized_project:
+            continue
+        row_tool = str(row.get("tool_name") or "").strip().lower()
+        if normalized_tool and row_tool and row_tool != normalized_tool:
+            continue
+        row_intent = str(row.get("intent_family") or "").strip().lower()
+        if normalized_intent and row_intent and row_intent != normalized_intent:
+            continue
+        row_plane = str(row.get("task_plane") or "").strip().lower()
+        if normalized_plane and row_plane and row_plane != normalized_plane:
+            continue
+
+        try:
+            packet = get_packet(str(packet_id or ""))
+            if not packet:
+                continue
+            flags = _readiness_flags(packet)
+            if not include_stale and not bool(flags.get("is_fresh", False)):
+                continue
+            if only_ready and not bool(flags.get("ready_for_use", False)):
+                continue
+            min_effective = min_effectiveness
+            if min_effective is not None and float(packet.get("effectiveness_score", 0.5) or 0.0) < float(min_effective):
+                continue
+            item = _obsidian_catalog_entry(packet, now_ts=_now())
+            item["packet_meta_only"] = False
+            out.append(item)
+        except Exception:
+            # Fall back to meta-only row if packet body cannot be read.
+            flags = _readiness_flags(row)
+            if not include_stale and not bool(flags.get("is_fresh", False)):
+                continue
+            if only_ready and not bool(flags.get("ready_for_use", False)):
+                continue
+            score = float(row.get("effectiveness_score", 0.5) or 0.5)
+            if min_effectiveness is not None and score < float(min_effectiveness):
+                continue
+            out.append({
+                "packet_id": str(packet_id or ""),
+                "project_key": str(row.get("project_key") or ""),
+                "session_context_key": str(row.get("session_context_key") or ""),
+                "tool_name": str(row.get("tool_name") or ""),
+                "intent_family": str(row.get("intent_family") or ""),
+                "task_plane": str(row.get("task_plane") or ""),
+                "updated_ts": float(row.get("updated_ts", 0.0) or 0.0),
+                "fresh_until_ts": float(row.get("fresh_until_ts", 0.0) or 0.0),
+                "ready_for_use": bool(flags.get("ready_for_use", False)),
+                "is_fresh": bool(flags.get("is_fresh", False)),
+                "readiness_score": float(flags.get("readiness_score", 0.0)),
+                "effectiveness_score": score,
+                "usage_count": int(row.get("usage_count", 0) or 0),
+                "emit_count": int(row.get("emit_count", 0) or 0),
+                "source_summary": _safe_list(row.get("source_summary"), max_items=10),
+                "category_summary": _safe_list(row.get("category_summary"), max_items=8),
+                "packet_meta_only": True,
+            })
+
+    out.sort(key=lambda r: (float(r.get("readiness_score", 0.0) or 0.0, float(r.get("updated_ts", 0.0) or 0.0), str(r.get("packet_id") or "")), reverse=True)
+    return out[:limit_rows]
 
 
 def invalidate_packet(packet_id: str, reason: str = "manual") -> bool:
@@ -1655,6 +1913,7 @@ def get_store_status() -> Dict[str, Any]:
     age_sum = 0.0
     age_count = 0
     stale = 0
+    ready_meta = 0
     inactive = total - active
     if meta:
         avg_effectiveness = sum(
@@ -1664,6 +1923,9 @@ def get_store_status() -> Dict[str, Any]:
         for row in meta.values():
             if bool((row or {}).get("invalidated")):
                 continue
+            flags = _readiness_flags(_normalize_packet(dict(row)))
+            if bool(flags.get("ready_for_use")):
+                ready_meta += 1
             for source in _safe_list(row.get("source_summary"), max_items=1):
                 source_counter[source] += 1
             for category in _safe_list(row.get("category_summary"), max_items=1):
@@ -1703,9 +1965,12 @@ def get_store_status() -> Dict[str, Any]:
         "stale_packets": stale,
         "inactive_packets": inactive,
         "freshness_ratio": round(float(fresh) / max(total, 1), 3),
+        "ready_packets": int(ready_meta),
         "stale_ratio": round(float(stale) / max(total, 1), 3),
         "inactive_ratio": round(float(inactive) / max(total, 1), 3),
         "readiness_ratio": round(float(fresh) / max(active_rows, 1), 3),
+        "catalog_size": int(total),
+        "catalog_ready_packets": int(ready_meta),
         "top_sources": top_sources,
         "top_categories": top_categories,
         "top_category_concentration": round(float(top_concentration), 3),
@@ -1729,6 +1994,7 @@ def get_store_status() -> Dict[str, Any]:
         "obsidian_auto_export": bool(OBSIDIAN_AUTO_EXPORT),
         "obsidian_export_dir": str(_obsidian_export_dir()),
         "obsidian_export_dir_exists": bool(_obsidian_export_dir().exists()),
+        "obsidian_index_file": str(OBSIDIAN_INDEX_FILE),
         "index_file": str(INDEX_FILE),
     }
 
