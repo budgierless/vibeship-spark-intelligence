@@ -147,7 +147,8 @@ _test_*.txt
 .mcp.json
 
 # Runtime-modified files (Spark hook writes to these)
-# CLAUDE.md is removed from public sources; keep it out of version control.
+# CLAUDE.md is auto-generated per-user by Spark's promoter; not for version control.
+CLAUDE.md
 
 # Any file with local Windows paths in name
 C?UsersUSER*
