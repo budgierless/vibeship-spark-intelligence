@@ -112,56 +112,113 @@ Your Agent (Claude Code / Cursor / OpenClaw)
 
 ## Obsidian Observatory
 
-Spark ships with an [Obsidian](https://obsidian.md) integration that turns the entire intelligence pipeline into a human-readable vault you can browse, search, and query.
+Spark ships with an [Obsidian](https://obsidian.md) integration that turns the entire intelligence pipeline into a human-readable vault you can browse, search, and query — every insight, every decision, every quality verdict, visible in one place.
 
-### What you get
+### Install Obsidian
 
-- **Flow Dashboard** — Mermaid diagram of all 12 pipeline stages with live metrics
-- **Stage Detail Pages** — per-stage health, recent activity, upstream/downstream links
-- **Explorer** — browse individual cognitive insights, EIDOS episodes, distillations, Meta-Ralph verdicts, promotions, advisory decisions, feedback signals, routing, and tuneable evolution
-- **Canvas View** — spatial layout of the full pipeline (Obsidian Canvas)
-- **Dataview Dashboard** — pre-built queries for daily monitoring (requires Dataview plugin)
-- **Tuneable Impact Analysis** — cross-references parameter changes with follow-rate outcomes
+1. Download [Obsidian](https://obsidian.md) (free, available on Windows / Mac / Linux)
+2. Install and open it
 
-### Quick start
+### Generate the Observatory
 
 ```bash
-# Generate the observatory (creates ~465 markdown files in < 1 second)
+# From the spark-intelligence repo:
 python scripts/generate_observatory.py --force --verbose
-
-# Open the vault in Obsidian:
-# File > Open vault > Open folder as vault > select the generated vault directory
 ```
 
-The observatory auto-syncs every 120 seconds when the pipeline is running. No manual regeneration needed.
+This reads your `~/.spark/` state files and generates ~465+ markdown pages in under 1 second.
 
-### What's inside
+**Default vault location:** `~/Documents/Obsidian Vault/Spark-Intelligence-Observatory`
 
-```
-Spark-Intelligence-Observatory/
-  _observatory/
-    flow.md              # Main dashboard + Mermaid pipeline diagram
-    flow.canvas          # Spatial Canvas view
-    stages/              # 12 stage detail pages
-    explore/             # 10 browsable data stores
-      cognitive/         # Individual insights (with detail pages)
-      distillations/     # EIDOS distillations (with detail pages)
-      episodes/          # EIDOS episodes + steps (with detail pages)
-      verdicts/          # Meta-Ralph verdicts (with detail pages)
-      decisions/         # Advisory emit/suppress/block decisions
-      feedback/          # Implicit feedback (followed/ignored signals)
-      routing/           # Retrieval router decisions
-      tuning/            # Tuneable evolution + impact analysis
-      promotions/        # Promotion log
-      advisory/          # Advisory effectiveness
-  Dashboard.md           # Dataview dashboard (safe to customize)
-  packets/               # Advisory packets (existing)
-  watchtower.md          # Advisory watchtower (existing)
+To change it, edit `observatory.vault_dir` in `~/.spark/tuneables.json` or `config/tuneables.json`.
+
+### Open the Vault
+
+1. In Obsidian: **File > Open vault > Open folder as vault**
+2. Select `Spark-Intelligence-Observatory`
+3. It opens to `_observatory/flow.md` — the main pipeline dashboard
+
+The vault comes pre-configured with:
+- **Dataview plugin** pre-installed (for live queries on all data)
+- **Workspace** set to open the Flow Dashboard + Dataview Dashboard
+- **Graph view** color-coded: green = pipeline stages, blue = explorer items, orange = advisory packets
+
+### Install Dataview (recommended)
+
+If Dataview didn't auto-install from the pre-configured vault:
+
+1. Go to **Settings > Community plugins > Turn on community plugins**
+2. Click **Browse** > search "Dataview" > **Install** > **Enable**
+3. The `Dashboard.md` queries will now render live tables
+
+### What You Can See
+
+#### Flow Dashboard (`_observatory/flow.md`)
+
+A live Mermaid diagram of the full 12-stage pipeline with embedded metrics — queue depth, processing rate, insight counts, advisory follow rate, and more. Plus a system health table with status badges.
+
+#### 12 Stage Detail Pages (`_observatory/stages/`)
+
+Each pipeline stage gets its own page with health metrics, recent activity, and upstream/downstream links:
+
+| Stage | What it shows |
+|-------|--------------|
+| Event Capture | Hook heartbeat, session tracking |
+| Queue | Pending events, file size, overflow |
+| Pipeline | Processing rate, batch size, empty cycles |
+| Memory Capture | Importance scores, category distribution |
+| Meta-Ralph | Quality verdicts, pass rate, score distribution |
+| Cognitive Learner | Insight count, reliability leaders, categories |
+| EIDOS | Episodes, steps, distillations, predict-evaluate loop |
+| Advisory | Follow rate, source effectiveness, recent advice |
+| Promotion | Targets, recent activity, result distribution |
+| Chips | Domain modules, per-chip activity and size |
+| Predictions | Outcomes, surprise tracking, link rate |
+| Tuneables | Current config, all sections listed |
+
+#### Explorer — Browse Your Data (`_observatory/explore/`)
+
+Click into any data store and browse individual items:
+
+| Dataset | Pages | What you see |
+|---------|-------|-------------|
+| **Cognitive Insights** | ~150 detail pages | Reliability, validations, evidence, counter-examples |
+| **EIDOS Distillations** | ~90 detail pages | Statement, confidence, domains, triggers |
+| **EIDOS Episodes** | ~100 detail pages | Goal, outcome, every step with prediction vs evaluation |
+| **Meta-Ralph Verdicts** | ~100 detail pages | Score breakdown (6 dimensions), input text, issues |
+| **Advisory Decisions** | Index table | Every emit/suppress/block decision with reasons |
+| **Implicit Feedback** | Index table | Followed/ignored signals, per-tool follow rates |
+| **Retrieval Routing** | Index table | Route distribution, why advice was/wasn't surfaced |
+| **Tuneable Evolution** | Index table | Parameter changes over time with impact analysis |
+| **Promotions** | Index table | What got promoted to CLAUDE.md and why |
+| **Advisory Effectiveness** | Index table | Source effectiveness, overall follow rate |
+
+#### Canvas View (`_observatory/flow.canvas`)
+
+A spatial layout of the pipeline — drag, zoom, click through to any stage. Great for presentations or getting the big picture.
+
+#### Dataview Dashboard (`Dashboard.md`)
+
+Pre-built live queries you can customize:
+- High-reliability insights (90%+)
+- Promoted insights and where they went
+- Recent successful and failed episodes
+- Meta-Ralph verdicts with high scores
+- Most-retrieved distillations
+- Advisory health and feedback signals
+- System evolution tracking
+
+### Auto-Sync
+
+When Spark's pipeline is running, the observatory auto-refreshes every 120 seconds. No manual regeneration needed. To regenerate manually:
+
+```bash
+python scripts/generate_observatory.py --force --verbose
 ```
 
 ### Configuration
 
-All observatory settings are in the `observatory` section of `tuneables.json`:
+All settings live in the `observatory` section of your tuneables:
 
 ```json
 {
@@ -173,12 +230,30 @@ All observatory settings are in the `observatory` section of `tuneables.json`:
     "generate_canvas": true,
     "max_recent_items": 20,
     "explore_cognitive_max": 200,
-    "explore_episodes_max": 100
+    "explore_distillations_max": 200,
+    "explore_episodes_max": 100,
+    "explore_verdicts_max": 100,
+    "explore_decisions_max": 200,
+    "explore_feedback_max": 200,
+    "explore_routing_max": 100,
+    "explore_tuning_max": 200
   }
 }
 ```
 
-Full guide: `docs/OBSIDIAN_OBSERVATORY_GUIDE.md`
+Edit `~/.spark/tuneables.json` (runtime) or `config/tuneables.json` (version-controlled).
+
+### Tips
+
+- **Start from `flow.md`** — it's the entry point. Drill down into stages, then into the explorer.
+- **Don't edit `_observatory/` files** — they get regenerated. Use `Dashboard.md` or create your own notes alongside.
+- **Use Graph View** — filter to `_observatory` to see how everything connects.
+- **Bookmark items** — bookmarks persist across regenerations since file paths stay stable.
+- **Keep limits under 500** per explorer section for smooth Obsidian performance.
+- **Pin `flow.md` as a tab** — always-visible health check.
+- **Use the Canvas for demos** — `flow.canvas` is a great way to explain the system to others.
+
+Full guide: [`docs/OBSIDIAN_OBSERVATORY_GUIDE.md`](docs/OBSIDIAN_OBSERVATORY_GUIDE.md)
 
 ## Documentation
 
