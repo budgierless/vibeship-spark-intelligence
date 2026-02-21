@@ -11,7 +11,7 @@ This log tracks Spark x OpenClaw integration changes that should be easy to audi
   - canonical tracking hub set to `docs/openclaw/README.md`
 - Converted `docs/OPENCLAW_INTEGRATION.md` into a compatibility pointer to canonical docs.
 - Archived full legacy integration body:
-  - `docs/archive/docs/OPENCLAW_INTEGRATION_LEGACY.md`
+  - Internal legacy notes were moved to archived references not included in this public snapshot.
 - Updated documentation index references to reduce duplicated/competing entry points.
 
 ## 2026-02-16

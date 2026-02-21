@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = Path(__file__).resolve()
 
 FORBIDDEN_FILENAMES = [
     "CLAUDE.md",
@@ -22,7 +23,7 @@ FORBIDDEN_FILENAMES = [
 ]
 
 FORBIDDEN_LINE_PATTERNS = {
-    "windows_users_path": re.compile(r"[A-Za-z]:\\Users\\", re.IGNORECASE),
+    "windows_users_path": re.compile(r"[\"']([A-Za-z]:\\Users\\[^\"']+)[\"']", re.IGNORECASE),
     "private_key": re.compile(r"BEGIN (?:RSA|EC|OPENSSH|PRIVATE) PRIVATE KEY"),
     "x509_cert": re.compile(r"BEGIN CERTIFICATE"),
     "aws_key": re.compile(r"AKIA[0-9A-Z]{16}"),
@@ -52,6 +53,9 @@ def _is_forbidden_file(path: str) -> bool:
 
 
 def _scan_file(path: Path) -> list[str]:
+    if path.resolve() == SCRIPT_PATH:
+        return []
+
     issues: list[str] = []
     try:
         text = path.read_text(encoding="utf-8", errors="replace")

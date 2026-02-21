@@ -8,4 +8,4 @@ Use these sources:
 
 - Active authoring and runtime rules: `docs/CHIPS_SCHEMA_FIRST_PLAYBOOK.md`
 - Operational workflow: `docs/CHIP_WORKFLOW.md`
-- Historical long-form reference: `docs/archive/docs/CHIP_VIBECODING.md`
+- Historical long-form reference is maintained in internal release notes (not included in this public snapshot).

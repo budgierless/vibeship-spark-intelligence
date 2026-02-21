@@ -62,5 +62,5 @@ This file consolidates status from older roadmap and integration plan docs.
 
 ## Consolidation Notes
 
-Superseded status and roadmap docs were moved to `docs/archive/docs/`.
+Superseded status and roadmap docs are maintained in internal project archives and are not included in this public snapshot.
 Point-in-time deep analysis reports were moved to `docs/reports/`.
