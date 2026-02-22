@@ -27,6 +27,13 @@ WORKSPACE = Path(os.environ.get("SPARK_WORKSPACE", str(Path.home() / "clawd"))).
 MEMORY_FILE = WORKSPACE / "MEMORY.md"
 SPARK_CONTEXT_FILE = WORKSPACE / "SPARK_CONTEXT.md"
 HIGH_VALIDATION_OVERRIDE = 50
+CONTEXT_MIND_RESERVED_SLOTS = max(0, int(os.environ.get("SPARK_CONTEXT_MIND_RESERVED_SLOTS", "1") or 1))
+CONTEXT_ADVISOR_INCLUDE_MIND = str(os.environ.get("SPARK_CONTEXT_ADVISOR_INCLUDE_MIND", "1")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _normalize_insight_text(text: str) -> str:
@@ -335,7 +342,25 @@ def get_contextual_insights(query: str, limit: int = 6) -> List[Dict[str, Any]]:
             seen.add(key)
             deduped.append(item)
 
-    return deduped[:limit]
+    capped_limit = max(0, int(limit or 0))
+    if capped_limit <= 0:
+        return []
+
+    selected = deduped[:capped_limit]
+
+    reserve = max(0, min(capped_limit, int(CONTEXT_MIND_RESERVED_SLOTS or 0)))
+    if reserve > 0:
+        present = sum(1 for row in selected if (row.get("source") or "") == "mind")
+        if present < reserve:
+            extra_mind = [row for row in deduped[capped_limit:] if (row.get("source") or "") == "mind"]
+            need = min(reserve, present + len(extra_mind)) - present
+            replace_indexes = [idx for idx in range(len(selected) - 1, -1, -1) if (selected[idx].get("source") or "") != "mind"]
+            while need > 0 and extra_mind and replace_indexes:
+                idx = replace_indexes.pop(0)
+                selected[idx] = extra_mind.pop(0)
+                need -= 1
+
+    return selected
 
 
 def get_relevant_skills(query: str, limit: int = 3) -> List[Dict[str, Any]]:
@@ -402,7 +427,11 @@ def generate_active_context(query: Optional[str] = None) -> str:
     if query:
         try:
             from lib.advisor import get_advisor
-            advisor_block = get_advisor().generate_context_block("task", query, include_mind=False)
+            advisor_block = get_advisor().generate_context_block(
+                "task",
+                query,
+                include_mind=CONTEXT_ADVISOR_INCLUDE_MIND,
+            )
         except Exception as e:
             log_debug("bridge", "advisor block failed", e)
 

@@ -112,6 +112,11 @@ CATEGORY_EFFECTIVENESS_STALE_SECONDS = 180 * 24 * 3600
 MIND_MAX_STALE_SECONDS = float(os.environ.get("SPARK_ADVISOR_MIND_MAX_STALE_S", "0"))
 MIND_STALE_ALLOW_IF_EMPTY = os.environ.get("SPARK_ADVISOR_MIND_STALE_ALLOW_IF_EMPTY", "1") != "0"
 MIND_MIN_SALIENCE = float(os.environ.get("SPARK_ADVISOR_MIND_MIN_SALIENCE", "0.5"))
+MIND_RESERVE_SLOTS = max(0, int(os.environ.get("SPARK_ADVISOR_MIND_RESERVE_SLOTS", "1") or 1))
+MIND_RESERVE_MIN_RANK = max(
+    0.0,
+    min(1.0, float(os.environ.get("SPARK_ADVISOR_MIND_RESERVE_MIN_RANK", "0.45") or 0.45)),
+)
 RETRIEVAL_ROUTE_LOG = ADVISOR_DIR / "retrieval_router.jsonl"
 RETRIEVAL_ROUTE_LOG_MAX = 800
 
@@ -649,6 +654,7 @@ def _load_advisor_config() -> None:
     global MIN_RELIABILITY_FOR_ADVICE, MIN_VALIDATIONS_FOR_STRONG_ADVICE
     global MAX_ADVICE_ITEMS, ADVICE_CACHE_TTL_SECONDS, MIN_RANK_SCORE
     global MIND_MAX_STALE_SECONDS, MIND_STALE_ALLOW_IF_EMPTY, MIND_MIN_SALIENCE
+    global MIND_RESERVE_SLOTS, MIND_RESERVE_MIN_RANK
     global REPLAY_ADVISORY_ENABLED, REPLAY_MIN_STRICT_SAMPLES, REPLAY_MIN_IMPROVEMENT_DELTA
     global REPLAY_MAX_RECORDS, REPLAY_MAX_AGE_S, REPLAY_STRICT_WINDOW_S, REPLAY_MIN_CONTEXT_MATCH
     global REPLAY_MODE, GUIDANCE_STYLE
@@ -703,6 +709,10 @@ def _load_advisor_config() -> None:
             )
         if "mind_min_salience" in cfg:
             MIND_MIN_SALIENCE = max(0.0, min(1.0, float(cfg["mind_min_salience"])))
+        if "mind_reserve_slots" in cfg:
+            MIND_RESERVE_SLOTS = max(0, min(4, int(cfg.get("mind_reserve_slots") or 0)))
+        if "mind_reserve_min_rank" in cfg:
+            MIND_RESERVE_MIN_RANK = max(0.0, min(1.0, float(cfg.get("mind_reserve_min_rank") or 0.0)))
 
         if "replay_mode" in cfg:
             mode = str(cfg.get("replay_mode") or "").strip().lower()
@@ -2670,6 +2680,7 @@ class SparkAdvisor:
 
         # Drop low-quality items — prefer fewer, higher-quality results
         advice_list = [a for a in advice_list if self._rank_score(a) >= MIN_RANK_SCORE]
+        advice_list = self._apply_mind_slot_reserve(advice_list, max_items=MAX_ADVICE_ITEMS)
 
         # Limit to top N
         advice_list = advice_list[:MAX_ADVICE_ITEMS]
@@ -4846,6 +4857,66 @@ class SparkAdvisor:
     def _rank_advice(self, advice_list: List[Advice]) -> List[Advice]:
         """Rank advice by relevance, actionability, and effectiveness."""
         return sorted(advice_list, key=self._rank_score, reverse=True)
+
+    def _apply_mind_slot_reserve(self, advice_list: List[Advice], *, max_items: int) -> List[Advice]:
+        """Reserve a bounded number of top slots for strong Mind items."""
+        reserve = max(0, int(MIND_RESERVE_SLOTS or 0))
+        cap = max(0, int(max_items or 0))
+        if reserve <= 0 or cap <= 0:
+            return advice_list
+        if not advice_list:
+            return advice_list
+
+        head = list(advice_list[:cap])
+        if not head:
+            return advice_list
+
+        score_cache: Dict[int, float] = {}
+
+        def _score(item: Advice) -> float:
+            key = id(item)
+            if key not in score_cache:
+                score_cache[key] = float(self._rank_score(item))
+            return score_cache[key]
+
+        qualified_mind = [
+            item
+            for item in advice_list
+            if str(getattr(item, "source", "") or "").lower() == "mind" and _score(item) >= MIND_RESERVE_MIN_RANK
+        ]
+        if not qualified_mind:
+            return advice_list
+
+        current_mind = sum(1 for item in head if str(getattr(item, "source", "") or "").lower() == "mind")
+        target_mind = min(reserve, len(qualified_mind))
+        needed = target_mind - current_mind
+        if needed <= 0:
+            return advice_list
+
+        inserted = {id(item) for item in head}
+        candidates = [item for item in qualified_mind if id(item) not in inserted]
+        if not candidates:
+            return advice_list
+
+        changed = False
+        for candidate in candidates:
+            if needed <= 0:
+                break
+            replace_indexes = [
+                idx
+                for idx, item in enumerate(head)
+                if str(getattr(item, "source", "") or "").lower() != "mind"
+            ]
+            if not replace_indexes:
+                break
+            worst_idx = min(replace_indexes, key=lambda idx: _score(head[idx]))
+            head[worst_idx] = candidate
+            needed -= 1
+            changed = True
+
+        if not changed:
+            return advice_list
+        return self._rank_advice(head)
 
     @staticmethod
     def _build_minimax_rerank_prompt(query: str, candidates: List[Advice], top_k: int) -> str:

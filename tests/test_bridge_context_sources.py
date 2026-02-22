@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import lib.bridge as bridge_mod
 
 
@@ -31,3 +33,35 @@ def test_generate_active_context_labels_true_source_prefixes(monkeypatch):
     assert "- [bank:memory] bank" in out
     assert "- [taste:taste:ui_design] taste" in out
     assert "- [mind:principle] mind" in out
+
+
+def test_contextual_insights_reserve_mind_slot(monkeypatch):
+    class _FakeCog:
+        def get_insights_for_context(self, _query, limit=6):
+            return [
+                SimpleNamespace(
+                    category=SimpleNamespace(value="reasoning"),
+                    insight="cognitive one",
+                    reliability=0.9,
+                    times_validated=5,
+                ),
+                SimpleNamespace(
+                    category=SimpleNamespace(value="reasoning"),
+                    insight="cognitive two",
+                    reliability=0.8,
+                    times_validated=3,
+                ),
+            ]
+
+    class _FakeMind:
+        def retrieve_relevant(self, _query, limit=5):
+            return [{"content": "mind memory line", "content_type": "principle", "memory_id": "m-1"}]
+
+    monkeypatch.setattr("lib.cognitive_learner.CognitiveLearner", _FakeCog)
+    monkeypatch.setattr("lib.mind_bridge.MindBridge", _FakeMind)
+    monkeypatch.setattr(bridge_mod, "bank_retrieve", lambda *_a, **_k: [])
+    monkeypatch.setattr(bridge_mod, "CONTEXT_MIND_RESERVED_SLOTS", 1)
+
+    out = bridge_mod.get_contextual_insights("auth regression", limit=2)
+    assert len(out) == 2
+    assert any(item.get("source") == "mind" for item in out)

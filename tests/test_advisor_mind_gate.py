@@ -120,3 +120,51 @@ def test_cache_key_includes_include_mind_flag(monkeypatch, tmp_path):
     k_with_mind = advisor._cache_key("Read", "ctx", {"file_path": "x.py"}, "task", include_mind=True)
 
     assert k_no_mind != k_with_mind
+
+
+def test_mind_slot_reserved_when_configured(monkeypatch, tmp_path):
+    fresh_sync = datetime.now(timezone.utc).isoformat()
+    _patch_advisor_runtime(monkeypatch, tmp_path, fresh_sync)
+
+    bank_items = [
+        _advice("b1", "bank 1", "bank"),
+        _advice("b2", "bank 2", "bank"),
+        _advice("b3", "bank 3", "bank"),
+    ]
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_bank_advice", lambda _s, _c: list(bank_items))
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_cognitive_advice", lambda _s, _t, _c, _sc=None: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_chip_advice", lambda _s, _c: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_tool_specific_advice", lambda _s, _t: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_opportunity_advice", lambda _s, **_k: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_surprise_advice", lambda _s, _t, _c: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_skill_advice", lambda _s, _c: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_convo_advice", lambda _s, _t, _c: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_engagement_advice", lambda _s, _t, _c: [])
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_niche_advice", lambda _s, _t, _c: [])
+
+    def _mind(_self, _context):
+        return [_advice("m1", "mind 1", "mind")]
+
+    monkeypatch.setattr(advisor_mod.SparkAdvisor, "_get_mind_advice", _mind)
+    monkeypatch.setattr(advisor_mod, "MAX_ADVICE_ITEMS", 3)
+    monkeypatch.setattr(advisor_mod, "MIN_RANK_SCORE", 0.0)
+    monkeypatch.setattr(advisor_mod, "MIND_RESERVE_SLOTS", 1)
+    monkeypatch.setattr(advisor_mod, "MIND_RESERVE_MIN_RANK", 0.45)
+
+    score_map = {"b1": 0.95, "b2": 0.90, "b3": 0.85, "m1": 0.50}
+    monkeypatch.setattr(
+        advisor_mod.SparkAdvisor,
+        "_rank_score",
+        lambda _s, item: score_map.get(getattr(item, "advice_id", ""), 0.0),
+    )
+    monkeypatch.setattr(
+        advisor_mod.SparkAdvisor,
+        "_rank_advice",
+        lambda _s, items: sorted(items, key=lambda item: score_map.get(getattr(item, "advice_id", ""), 0.0), reverse=True),
+    )
+
+    advisor = advisor_mod.SparkAdvisor()
+    out = advisor.advise("Read", {"file_path": "c.py"}, "mind reserve check", include_mind=True)
+
+    assert len(out) == 3
+    assert any(item.source == "mind" for item in out)
