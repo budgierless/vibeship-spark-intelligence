@@ -1,16 +1,9 @@
 """
+DEPRECATED (2026-02-22): curiosity_engine was never wired into the production
+advisory pipeline. Only imported by spark CLI and one try/except in aggregator.py.
+The concept (active gap-seeking) may be revisited but this implementation is dead.
+
 Curiosity Engine: Tracks what we don't know and actively seeks to fill knowledge gaps.
-
-The Problem:
-- We only learn from what happens to pass by
-- We don't know what we don't know
-- No active seeking of valuable information
-
-The Solution:
-- Track "unknown edges" - things referenced but not understood
-- Generate questions from partial knowledge
-- Surface curiosity prompts during relevant contexts
-- Reward question-asking that leads to valuable answers
 
 Knowledge Gap Types:
 1. WHY gaps: "User prefers X" → "Why does user prefer X?"
@@ -19,6 +12,14 @@ Knowledge Gap Types:
 4. WHAT gaps: "Mentioned Z" → "What is Z?"
 5. WHO gaps: "Works for them" → "Who is 'them'?"
 """
+
+import warnings
+warnings.warn(
+    "curiosity_engine is deprecated and not wired into production. "
+    "See advisory system overhaul (2026-02-22) for context.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import json
 import re

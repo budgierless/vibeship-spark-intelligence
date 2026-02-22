@@ -496,17 +496,18 @@ class PatternAggregator:
             except Exception:
                 pass
 
-            # 2. Identify knowledge gaps (what we don't know)
-            try:
-                from ..curiosity_engine import identify_knowledge_gaps
-                gaps = identify_knowledge_gaps(pattern.suggested_insight)
-                if gaps:
-                    insight_info["knowledge_gaps"] = [
-                        {"type": g.gap_type.value, "question": g.question}
-                        for g in gaps[:2]
-                    ]
-            except Exception:
-                pass
+            # 2. Knowledge gaps (DEPRECATED: curiosity_engine never wired to production)
+            # Kept as no-op for reference; curiosity_engine may be revisited.
+            # try:
+            #     from ..curiosity_engine import identify_knowledge_gaps
+            #     gaps = identify_knowledge_gaps(pattern.suggested_insight)
+            #     if gaps:
+            #         insight_info["knowledge_gaps"] = [
+            #             {"type": g.gap_type.value, "question": g.question}
+            #             for g in gaps[:2]
+            #         ]
+            # except Exception:
+            #     pass
 
             # 3. Feed to hypothesis tracker (pattern -> hypothesis)
             try:

@@ -1462,7 +1462,9 @@ def cmd_importance(args):
 
 
 def cmd_curiosity(args):
-    """Explore knowledge gaps and questions."""
+    """Explore knowledge gaps and questions. (DEPRECATED: not wired into production pipeline)"""
+    import warnings
+    warnings.warn("curiosity_engine is deprecated — not wired into production advisory pipeline", DeprecationWarning)
     from lib.curiosity_engine import get_curiosity_engine
 
     engine = get_curiosity_engine()
