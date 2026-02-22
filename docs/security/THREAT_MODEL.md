@@ -67,6 +67,7 @@ Risk: if services bind to all interfaces, attacker hits endpoints.
 Mitigations:
 - Bind dashboards locally by default (`127.0.0.1`).
 - Require token auth for mutating endpoints by default (`SPARKD_TOKEN` or `~/.spark/sparkd.token`).
+- Treat Origin/Referer + `Sec-Fetch-Site` checks as browser-focused CSRF hardening, not standalone client authentication.
 - Rate limit and bound invalid payload retention.
 
 ### T4: Guardrail Bypass / “Paper Guardrails”

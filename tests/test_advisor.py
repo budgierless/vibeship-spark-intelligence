@@ -75,6 +75,16 @@ class _DummyRalph:
         return 0.5
 
 
+class _DummyFeedbackCache:
+    """Deterministic feedback cache stub for rank-score tests."""
+
+    def get_source_effectiveness(self, *_a, **_kw):
+        return -1.0
+
+    def get_category_boost(self, *_a, **_kw):
+        return 1.0
+
+
 def _patch_advisor(monkeypatch, tmp_path):
     """Redirect all filesystem paths and stub heavy dependencies."""
     monkeypatch.setattr(advisor_mod, "ADVISOR_DIR", tmp_path)
@@ -87,6 +97,7 @@ def _patch_advisor(monkeypatch, tmp_path):
     monkeypatch.setattr(advisor_mod, "get_cognitive_learner", lambda: _DummyCognitive())
     monkeypatch.setattr(advisor_mod, "get_mind_bridge", lambda: _DummyMindBridge())
     monkeypatch.setattr(advisor_mod, "HAS_EIDOS", False)
+    monkeypatch.setattr("lib.feedback_effectiveness_cache.get_feedback_cache", lambda: _DummyFeedbackCache())
     # Stub singleton so tests are isolated
     monkeypatch.setattr(advisor_mod, "_advisor", None)
 
@@ -658,6 +669,7 @@ class TestPublicHelpers:
 
     def test_generate_context_block_empty_when_no_advice(self, monkeypatch, tmp_path):
         _patch_advisor(monkeypatch, tmp_path)
+        monkeypatch.setattr(SparkAdvisor, "advise", lambda *_a, **_kw: [])
         adv = SparkAdvisor()
         block = adv.generate_context_block("RandomTool", "some task")
         assert block == ""

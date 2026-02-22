@@ -3,8 +3,11 @@
 ## 10 Recursive Loop Modules — Architecture, Configuration, and Vision
 
 **Created**: 2026-02-18
-**Status**: All 10 systems operational (10/10 E2E benchmark PASS)
+**Status**: Architecture + roadmap reference (not all modules are present in this OSS snapshot)
 **Purpose**: Close the feedback loops that turn Spark from a one-shot learning system into a continuously self-improving intelligence
+
+> Accuracy note (updated 2026-02-22): this document mixes implemented components and planned components.
+> Treat command/file references to missing modules as roadmap items, not current OSS runtime guarantees.
 
 ---
 
@@ -97,7 +100,7 @@ Each of these 10 systems closes one gap. Together, they form a recursive improve
 
 ## 2. Auto-Tuner Activation Loop
 
-**File**: `scripts/run_auto_tune_cycle.py`
+**File**: `scripts/run_auto_tune_cycle.py` *(planned; not present in this OSS snapshot)*
 **Closes**: GAP #1 — Static Tuneables (auto-tuner existed but was permanently disabled)
 **Depends on**: `lib/auto_tuner.py`, `tests/test_retrieval_quality.py`
 
@@ -286,7 +289,7 @@ Retrieval precision improves because the advisor no longer wastes slots on stale
 
 ## 5. Aha-to-Training Bridge
 
-**File**: `scripts/run_weakness_trainer.py`
+**File**: `scripts/run_weakness_trainer.py` *(planned; not present in this OSS snapshot)*
 **Closes**: GAP #4 — Surprise Moments Never Trigger Training
 **Depends on**: `~/.spark/aha_moments.json`, `lib/depth_trainer.py` (optional), `lib/cognitive_learner.py`
 
@@ -345,7 +348,7 @@ Creates a direct feedback path from "where Spark is wrong" to "targeted improvem
 
 ## 6. Retrieval Regression Guard
 
-**File**: `scripts/run_retrieval_regression.py`
+**File**: `scripts/run_retrieval_regression.py` *(planned; not present in this OSS snapshot)*
 **Closes**: GAP #5 — No Automated Quality Guard (P@5 improved 138% but nothing prevents regression)
 **Depends on**: `tests/test_retrieval_quality.py`
 
@@ -591,7 +594,7 @@ Dramatically reduces noise in the cognitive pool. Observation-only content (twee
 
 ## 10. Cross-Domain Evolution Engine
 
-**File**: `lib/domain_evolution.py`
+**File**: `lib/domain_evolution.py` *(planned; not present in this OSS snapshot)*
 **Closes**: GAP #9 — No Evolution Outside X (only X/Twitter had a self-improvement loop)
 **Depends on**: `lib/meta_ralph.py`, `lib/cognitive_learner.py`, `~/.spark/advisor/effectiveness.json`
 
@@ -663,7 +666,7 @@ Creates a unified self-improvement loop across all domains, not just X. The gap 
 
 ## 11. Full-Loop E2E Benchmark
 
-**File**: `benchmarks/self_improvement_e2e.py`
+**File**: `benchmarks/self_improvement_e2e.py` *(planned; not present in this OSS snapshot)*
 **Closes**: GAP #10 — No Single Loop Health Metric
 **Depends on**: All other 9 systems
 
@@ -738,7 +741,7 @@ Provides a single health check for the entire self-improvement loop. Can be run 
 
 ### Current Status
 
-**Operational. 10/10 stages PASS.**
+**Roadmap status. OSS verification pending for full 10-stage benchmark.**
 
 ---
 
@@ -797,7 +800,7 @@ Provides a single health check for the entire self-improvement loop. Can be run 
 
 ### Integration Hooks (Not Yet Wired)
 
-These systems are **operational** but need to be wired into the main pipeline:
+These systems are **design targets** and require implementation/wiring in the OSS pipeline:
 
 | System | Integration Point | How to Wire |
 |--------|-------------------|-------------|
@@ -808,7 +811,7 @@ These systems are **operational** but need to be wired into the main pipeline:
 | Domain Evolution (9) | `bridge_cycle.py` | Call `evolve_all()` periodically |
 | Demotion Sweep (6) | `bridge_cycle.py` | Call `sweep()` periodically (daily) |
 
-### Standalone Scripts (Ready to Schedule)
+### Standalone Scripts (Planned Schedule Once Implemented in OSS)
 
 | System | Schedule | Command |
 |--------|----------|---------|
@@ -893,22 +896,17 @@ These systems are **operational** but need to be wired into the main pipeline:
 
 ---
 
-## 14. Current Health & Usefulness
+## 14. Current Health & Usefulness (Roadmap-Oriented)
 
-### Are They Being Useful Right Now?
+### Current OSS Reality
 
-| System | Status | Producing Value? | Notes |
-|--------|--------|-----------------|-------|
-| **Auto-Tuner Loop (1)** | Operational, disabled | Not yet | Needs `--enable` to activate. Health measurement works (action_rate=64.5%). Will produce value once enabled. |
-| **Implicit Tracker (2)** | Operational | Ready | Correlates advice→outcome correctly. Needs wiring into hooks/observe.py to process live data. |
-| **Memory Tiering (3)** | Operational | **Yes** | Already classified 283 insights: 139 pinned, 114 active, 30 archived. Advisor can use `get_retrieval_pool()` immediately. |
-| **Weakness Trainer (4)** | Operational | Waiting for data | Needs aha_moments.json to accumulate surprise data with sufficient gaps. |
-| **Regression Guard (5)** | Operational | Ready | Can start daily monitoring immediately. First measurement establishes baseline. |
-| **Demotion Sweep (6)** | Operational | Monitoring | Currently 0 demotions (expected — insights are young). Will demote as insights age without validation. |
-| **Hypothesis Bridge (7)** | Operational | Ready | Needs bridge_cycle.py integration to process live events. |
-| **Actionability v2 (8)** | Operational | **Yes** | 7/7 test cases correct. Can replace crude keyword scorer in advisor.py immediately. |
-| **Domain Evolution (9)** | Operational | **Yes** | Already diagnosed 5 cross-domain gaps. Provides actionable intelligence about where Spark's knowledge is thin. |
-| **E2E Benchmark (10)** | Operational | **Yes** | 10/10 stages pass. Provides single health metric for the entire loop. Run after any system change. |
+This section should be interpreted as intended value, not verified OSS runtime health.
+Some modules and scripts referenced in this document are not present in this repository snapshot.
+
+Use this as a planning map:
+1. Implement or restore missing modules/scripts first.
+2. Wire available modules into `hooks/observe.py`, `bridge_cycle.py`, and `lib/advisor.py`.
+3. Re-run and publish an actual OSS verification table with command outputs.
 
 ### Immediate Value (Use Now)
 
@@ -939,7 +937,7 @@ In a single session, we:
 
 1. **Mapped Spark's self-improvement landscape**: Identified 17+ existing components and 14+ gaps in the recursive improvement loop
 2. **Designed 10 systems** to close the most impactful gaps, ordered by priority
-3. **Built all 10 modules** (4 libraries + 3 scripts + 1 benchmark + 2 hybrid modules)
+3. **Designed a 10-module loop plan**; implementation status varies by environment/repo snapshot
 4. **Debugged API mismatches**: Discovered and fixed 10 integration errors:
    - `score_insight()` → `roast()` (Meta-Ralph API)
    - `store_insight()` → `add_insight()` (CognitiveLearner API)
@@ -952,22 +950,22 @@ In a single session, we:
    - `last_validated` field mismatch → `last_validated_at`
    - Duplicate detection on re-run → accepted DUPLICATE verdict
 5. **Tuned the actionability classifier**: Added patterns and adjusted weights until 7/7 test cases passed
-6. **Achieved 10/10 E2E benchmark pass**: All systems operational and verified
+6. **Target end state**: 10/10 E2E benchmark pass after missing modules are implemented and wired
 
 ### Files Created
 
 | File | Type | Lines | Purpose |
 |------|------|-------|---------|
-| `scripts/run_auto_tune_cycle.py` | Script | 273 | Auto-tuner with safety harness |
+| `scripts/run_auto_tune_cycle.py` | Script | Planned | Not present in current OSS snapshot |
 | `lib/implicit_outcome_tracker.py` | Library | 334 | Implicit feedback correlation |
 | `lib/memory_tier_engine.py` | Library | 340 | 3-tier memory classification |
-| `scripts/run_weakness_trainer.py` | Script | 278 | Aha-to-training bridge |
-| `scripts/run_retrieval_regression.py` | Script | 289 | Retrieval quality guard |
+| `scripts/run_weakness_trainer.py` | Script | Planned | Not present in current OSS snapshot |
+| `scripts/run_retrieval_regression.py` | Script | Planned | Not present in current OSS snapshot |
 | `lib/promoter_demotion.py` | Library | 309 | Demotion sweep for promoted insights |
 | `lib/hypothesis_bridge.py` | Library | 331 | Hypothesis lifecycle pipeline |
 | `lib/actionability_scorer.py` | Library | 251 | 4-dimension actionability classifier |
-| `lib/domain_evolution.py` | Library | 468 | Cross-domain evolution engine |
-| `benchmarks/self_improvement_e2e.py` | Benchmark | 495 | Full-loop health metric |
+| `lib/domain_evolution.py` | Library | Planned | Not present in current OSS snapshot |
+| `benchmarks/self_improvement_e2e.py` | Benchmark | Planned | Not present in current OSS snapshot |
 | `docs/SELF_IMPROVEMENT_SYSTEMS.md` | Documentation | This file |
 
 ### Key Design Decisions

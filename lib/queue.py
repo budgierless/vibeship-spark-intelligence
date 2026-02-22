@@ -496,16 +496,14 @@ def rotate_if_needed() -> bool:
 
 
 def consume_processed(up_to_offset: int) -> int:
-    """Remove events that have been processed (up to offset line number).
+    """Advance the queue head by up to N active events.
 
-    This is the key mechanism that keeps the queue from growing forever.
-    After the bridge worker processes events 0..N, it calls
-    ``consume_processed(N)`` to strip those lines from the file.
+    The queue is consumed by moving a persisted head-byte cursor in
+    ``QUEUE_STATE_FILE`` rather than rewriting the queue file on each call.
+    Periodic compaction rewrites the file only when the consumed head grows
+    large enough to justify reclaiming disk space.
 
-    Uses atomic temp-file + rename to avoid race conditions with
-    concurrent writers (the observe hook appends events while we consume).
-
-    Returns the number of events removed.
+    Returns the number of events consumed from the active head.
     """
     if up_to_offset <= 0 or not EVENTS_FILE.exists():
         return 0

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import lib.advisor as advisor_mod
 import lib.opportunity_scanner as scanner
+import lib.opportunity_scanner_adapter as scanner_adapter
 from lib.queue import EventType
 from lib.soul_upgrade import SoulState
 
@@ -171,7 +172,7 @@ def test_advisor_can_surface_opportunity_source(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(advisor_mod.SparkAdvisor, "_rank_score", lambda _s, _item: 1.0)
 
     monkeypatch.setattr(
-        scanner,
+        scanner_adapter,
         "generate_user_opportunities",
         lambda **_kwargs: [
             {

@@ -70,8 +70,11 @@ class TestScoreBoundaries:
 
     def test_above_whisper(self):
         whisper = AUTHORITY_THRESHOLDS[AuthorityLevel.WHISPER]
+        note = AUTHORITY_THRESHOLDS[AuthorityLevel.NOTE]
         score = whisper + 0.02
-        assert _assign_authority(score, 0.5, "Some reasonable advice text here.", "cognitive") == AuthorityLevel.WHISPER
+        result = _assign_authority(score, 0.5, "Some reasonable advice text here.", "cognitive")
+        expected = AuthorityLevel.NOTE if score >= note else AuthorityLevel.WHISPER
+        assert result == expected
 
     def test_above_whisper_below_note(self):
         whisper = AUTHORITY_THRESHOLDS[AuthorityLevel.WHISPER]
@@ -116,11 +119,14 @@ class TestScoreBoundaries:
         assert result == AuthorityLevel.NOTE, f"Actionable micro-boost should promote to NOTE, got {result}"
 
     def test_no_micro_boost_without_actionable(self):
-        # Score in boost range but NOT actionable → stays WHISPER
+        # Score in boost range but NOT actionable should not promote to NOTE.
         threshold = AUTHORITY_THRESHOLDS[AuthorityLevel.NOTE]
+        whisper = AUTHORITY_THRESHOLDS[AuthorityLevel.WHISPER]
         score = threshold - 0.05
         result = _assign_authority(score, 0.5, "This pattern is commonly seen in codebases.", "bank")
-        assert result == AuthorityLevel.WHISPER, f"Non-actionable should stay WHISPER, got {result}"
+        assert result != AuthorityLevel.NOTE, f"Non-actionable should not promote to NOTE, got {result}"
+        expected = AuthorityLevel.WHISPER if score >= whisper else AuthorityLevel.SILENT
+        assert result == expected
 
 
 # ═══════════════════════════════════════════════════════════════

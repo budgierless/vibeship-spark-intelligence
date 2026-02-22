@@ -302,7 +302,7 @@ if __name__ == "__main__":
 
 Run it:
 ```bash
-python eidos_dashboard.py
+python scripts/eidos_dashboard.py
 ```
 
 ---
