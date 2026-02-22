@@ -17,9 +17,24 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 DEFAULT_SPARKD = os.environ.get("SPARKD_URL") or f"http://127.0.0.1:{os.environ.get('SPARKD_PORT', '8787')}"
+TOKEN_FILE = Path.home() / ".spark" / "sparkd.token"
+
+
+def _resolve_token(cli_token: str | None) -> str | None:
+    if cli_token:
+        return cli_token
+    env_token = os.environ.get("SPARKD_TOKEN")
+    if env_token:
+        return env_token
+    try:
+        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except Exception:
+        return None
+    return token or None
 
 
 def post(url: str, obj: dict, token: str = None):
@@ -34,10 +49,10 @@ def post(url: str, obj: dict, token: str = None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sparkd", default=DEFAULT_SPARKD, help="sparkd base URL")
-    ap.add_argument("--token", default=None, help="sparkd token (or set SPARKD_TOKEN env)")
+    ap.add_argument("--token", default=None, help="sparkd token (or set SPARKD_TOKEN env, or use ~/.spark/sparkd.token)")
     args = ap.parse_args()
 
-    token = args.token or os.environ.get("SPARKD_TOKEN")
+    token = _resolve_token(args.token)
     ingest_url = args.sparkd.rstrip("/") + "/ingest"
 
     ok = 0

@@ -36,6 +36,7 @@ from .ports import MIND_URL
 MIND_API_URL = MIND_URL
 SYNC_STATE_FILE = Path.home() / ".spark" / "mind_sync_state.json"
 OFFLINE_QUEUE_FILE = Path.home() / ".spark" / "mind_offline_queue.jsonl"
+MIND_TOKEN_FILE = Path.home() / ".spark" / "mind_server.token"
 DEFAULT_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
 MAX_CONTENT_CHARS = int(os.environ.get("MIND_MAX_CONTENT_CHARS", "4000"))
 # Increased timeouts to reduce false "offline" status from transient slowness
@@ -91,19 +92,47 @@ def _coerce_advisory_readiness(
         return 0.0
 
 
+def _read_token_file(path: Path) -> Optional[str]:
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return None
+    return raw or None
+
+
+def _resolve_mind_token() -> Optional[str]:
+    env_token = (os.environ.get("MIND_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+    return _read_token_file(MIND_TOKEN_FILE)
+
+
 class MindBridge:
     """
     Bridge between Spark's cognitive learning and Mind's persistent memory.
     """
     
-    def __init__(self, mind_url: str = MIND_API_URL, user_id: str = DEFAULT_USER_ID):
+    def __init__(
+        self,
+        mind_url: str = MIND_API_URL,
+        user_id: str = DEFAULT_USER_ID,
+        mind_token: Optional[str] = None,
+    ):
         self.mind_url = mind_url
         self.user_id = user_id
+        self.mind_token = (mind_token or "").strip() or _resolve_mind_token()
         self.sync_state = self._load_sync_state()
         self._health_cached_ok: Optional[bool] = None
         self._health_cached_at: float = 0.0
         self._health_backoff_until: float = 0.0
         self._health_failures: int = 0
+
+    def _auth_headers(self) -> Dict[str, str]:
+        if not self.mind_token:
+            return {}
+        return {"Authorization": f"Bearer {self.mind_token}"}
 
     def _record_health_result(self, ok: bool) -> None:
         now = time.time()
@@ -299,6 +328,7 @@ class MindBridge:
             response = requests.post(
                 f"{self.mind_url}/v1/memories/",
                 json=memory_data,
+                headers=self._auth_headers(),
                 timeout=MIND_POST_TIMEOUT_S
             )
             
@@ -351,6 +381,7 @@ class MindBridge:
                     response = requests.post(
                         f"{self.mind_url}/v1/memories/",
                         json=entry["memory_data"],
+                        headers=self._auth_headers(),
                         timeout=MIND_POST_TIMEOUT_S
                     )
                     
@@ -389,6 +420,7 @@ class MindBridge:
             response = requests.post(
                 f"{self.mind_url}/v1/memories/retrieve",
                 json={"user_id": self.user_id, "query": query, "limit": limit},
+                headers=self._auth_headers(),
                 timeout=MIND_RETRIEVE_TIMEOUT_S
             )
             

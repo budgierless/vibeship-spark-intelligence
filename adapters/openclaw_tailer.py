@@ -28,6 +28,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 DEFAULT_SPARKD = os.environ.get("SPARKD_URL") or f"http://127.0.0.1:{os.environ.get('SPARKD_PORT', '8787')}"
+TOKEN_FILE = Path.home() / ".spark" / "sparkd.token"
 
 STATE_DIR = Path.home() / ".spark" / "adapters"
 
@@ -78,6 +79,19 @@ def _event(trace_id: str, session_id: str, source: str, kind: str, ts: float, pa
 
 def _hash(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()[:20]
+
+
+def _resolve_token(cli_token: str | None) -> str | None:
+    if cli_token:
+        return cli_token
+    env_token = os.environ.get("SPARKD_TOKEN")
+    if env_token:
+        return env_token
+    try:
+        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except Exception:
+        return None
+    return token or None
 
 
 def _parse_ts(x):
@@ -648,7 +662,7 @@ def main():
     ap.add_argument("--max-per-tick", type=int, default=50, help="Max lines to ingest per tick (default: 50)")
     ap.add_argument("--backfill", action="store_true", help="Backfill from the start of the transcript (default is tail-from-end)")
     ap.add_argument("--verbose", action="store_true", help="Log adapter activity")
-    ap.add_argument("--token", default=None, help="sparkd auth token (or set SPARKD_TOKEN env)")
+    ap.add_argument("--token", default=None, help="sparkd auth token (or set SPARKD_TOKEN env, or use ~/.spark/sparkd.token)")
     ap.add_argument("--include-subagents", action="store_true", default=True,
                      help="Also tail subagent sessions (default: True)")
     ap.add_argument("--no-subagents", action="store_true", default=False,
@@ -664,7 +678,7 @@ def main():
     args = ap.parse_args()
 
     include_subagents = args.include_subagents and not args.no_subagents
-    token = args.token or os.environ.get("SPARKD_TOKEN")
+    token = _resolve_token(args.token)
 
     report_dir = Path(args.report_dir) if args.report_dir else DEFAULT_REPORT_DIR
     hook_events_file = Path(args.hook_events_file) if args.hook_events_file else DEFAULT_HOOK_EVENTS_FILE

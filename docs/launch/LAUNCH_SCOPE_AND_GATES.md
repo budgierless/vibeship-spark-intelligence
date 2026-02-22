@@ -69,7 +69,7 @@ PASS only if:
 
 ### Gate D: Abuse Controls
 PASS only if:
-- Mutating `sparkd` endpoints require auth when `SPARKD_TOKEN` is set.
+- Mutating `sparkd` endpoints require bearer auth by default (`SPARKD_TOKEN` or `~/.spark/sparkd.token`).
 - Rate limiting is enabled (per-IP at minimum).
 - Invalid-event quarantine retention is bounded.
 

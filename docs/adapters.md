@@ -62,7 +62,8 @@ python3 sparkd.py
 python3 adapters/clawdbot_tailer.py --agent main
 ```
 
-If you set `SPARKD_TOKEN`, pass it via `--token` or env.
+`sparkd` enforces bearer auth on mutating `POST` endpoints by default.
+Adapters resolve tokens in this order: `--token`, `SPARKD_TOKEN`, then `~/.spark/sparkd.token`.
 
 ### 2) Claude Code hooks (local)
 

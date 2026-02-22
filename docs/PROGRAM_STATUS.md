@@ -23,7 +23,7 @@ This file consolidates status from older roadmap and integration plan docs.
 - Pipeline queue consumption now skips when pattern detection fails in the same cycle.
 - Promoter now supports stale-promotion demotion (unpromote + doc cleanup).
 - Service startup now checks readiness and can report `started_unhealthy` when process is up but not healthy.
-- `sparkd` now enforces token auth on all mutating `POST` endpoints when `SPARKD_TOKEN` is set.
+- `sparkd` now enforces token auth on all mutating `POST` endpoints by default (token from `SPARKD_TOKEN` or `~/.spark/sparkd.token`).
 - `sparkd` now applies per-IP rate limiting and bounded invalid-event quarantine retention.
 - Meta-Ralph dashboard now binds locally (`127.0.0.1`) by default.
 - Advisor effectiveness counters now enforce invariants (`helpful <= followed <= total`) with deduped outcome counting.

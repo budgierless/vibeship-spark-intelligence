@@ -296,8 +296,14 @@ def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
             else:
                 # Lock busy (consumer/rotator active) -- write to overflow
                 # sidecar so no events are lost. Merged on next consume.
-                with open(OVERFLOW_FILE, "a") as f:
-                    f.write(line)
+                overflow_lock_file = OVERFLOW_FILE.with_suffix(OVERFLOW_FILE.suffix + ".lock")
+                overflow_lock = _queue_lock(timeout_s=0.5, lock_file=overflow_lock_file)
+                with overflow_lock:
+                    if not overflow_lock.acquired:
+                        log_debug("queue", "overflow lock busy; dropping event")
+                        return False
+                    with open(OVERFLOW_FILE, "a") as f:
+                        f.write(line)
 
         # Best-effort rotation so the queue doesn't grow unbounded.
         rotate_if_needed()
@@ -678,17 +684,18 @@ def _tail_lines(path: Path, count: int, start_offset_bytes: int = 0) -> List[str
 class _queue_lock:
     """Best-effort lock using an exclusive lock file."""
 
-    def __init__(self, timeout_s: float = 0.5):
+    def __init__(self, timeout_s: float = 0.5, lock_file: Optional[Path] = None):
         self.timeout_s = timeout_s
+        self.lock_file = lock_file or LOCK_FILE
         self.fd = None
         self.acquired = False
 
     def __enter__(self):
-        QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        self.lock_file.parent.mkdir(parents=True, exist_ok=True)
         start = time.time()
         while True:
             try:
-                self.fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+                self.fd = os.open(str(self.lock_file), os.O_CREAT | os.O_EXCL | os.O_RDWR)
                 self.acquired = True
                 return self
             except FileExistsError:
@@ -705,8 +712,8 @@ class _queue_lock:
                 os.close(self.fd)
                 self.fd = None
             # Only delete the lock file if WE acquired it.
-            if self.acquired and LOCK_FILE.exists():
-                LOCK_FILE.unlink()
+            if self.acquired and self.lock_file.exists():
+                self.lock_file.unlink()
         except Exception as e:
             log_debug("queue", "lock release failed", e)
         self.acquired = False

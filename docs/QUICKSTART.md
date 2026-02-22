@@ -203,7 +203,7 @@ Tip: `spark up --lite` skips Pulse and watchdog to reduce background load.
 
 ### Production Hardening Defaults
 
-- `sparkd` auth: when `SPARKD_TOKEN` is set, all mutating `POST` endpoints require `Authorization: Bearer <token>`.
+- `sparkd` auth: all mutating `POST` endpoints require `Authorization: Bearer <token>` (token auto-resolves from `SPARKD_TOKEN` or `~/.spark/sparkd.token`).
 - Queue safety: queue rotation and processed-event consumption both use temp-file + atomic replace.
 - Validation loop: bridge cycle runs both prompt validation and outcome-linked validation each cycle.
 - Service startup: if Spark Pulse app is unavailable, core services still start and pulse is reported unavailable.

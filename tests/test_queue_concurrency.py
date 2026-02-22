@@ -14,6 +14,8 @@ def _patch_queue_paths(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(queue, "EVENTS_FILE", queue_dir / "events.jsonl")
     monkeypatch.setattr(queue, "LOCK_FILE", queue_dir / ".queue.lock")
     monkeypatch.setattr(queue, "OVERFLOW_FILE", queue_dir / "events.overflow.jsonl")
+    monkeypatch.setattr(queue, "QUEUE_STATE_FILE", queue_dir / "state.json")
+    queue._invalidate_count_cache()
 
 
 def _merge_overflow(queue_mod):
@@ -215,3 +217,53 @@ def test_consume_merges_overflow(tmp_path, monkeypatch):
 
     # Overflow file should be gone
     assert not queue.OVERFLOW_FILE.exists()
+
+
+def test_concurrent_overflow_writes_no_loss(tmp_path, monkeypatch):
+    """Concurrent overflow writes should not lose events."""
+    _patch_queue_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(queue, "MAX_EVENTS", 0)
+    monkeypatch.setattr(queue, "MAX_QUEUE_BYTES", 0)
+    queue.QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Force overflow path by holding the main queue lock.
+    lock_fd = queue.os.open(
+        str(queue.LOCK_FILE), queue.os.O_CREAT | queue.os.O_EXCL | queue.os.O_RDWR
+    )
+    try:
+        n_threads = 5
+        n_events_per_thread = 25
+        ok_flags = []
+        ok_lock = threading.Lock()
+
+        def writer(thread_id: int):
+            local = []
+            for i in range(n_events_per_thread):
+                local.append(
+                    queue.quick_capture(
+                        event_type=queue.EventType.USER_PROMPT,
+                        session_id=f"overflow-{thread_id}",
+                        data={"i": i},
+                    )
+                )
+            with ok_lock:
+                ok_flags.extend(local)
+
+        threads = [threading.Thread(target=writer, args=(t,)) for t in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        queue.os.close(lock_fd)
+        if queue.LOCK_FILE.exists():
+            queue.LOCK_FILE.unlink()
+
+    assert all(ok_flags)
+
+    lines = [ln for ln in queue.OVERFLOW_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(lines) == n_threads * n_events_per_thread
+    decoded = [json.loads(ln) for ln in lines]
+    actual = {(row["session_id"], row["data"]["i"]) for row in decoded}
+    expected = {(f"overflow-{t}", i) for t in range(n_threads) for i in range(n_events_per_thread)}
+    assert actual == expected
