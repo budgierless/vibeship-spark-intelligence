@@ -35,6 +35,7 @@ DEFAULT_MAX_ITEMS = 12
 DEFAULT_MAX_PROMOTED = 6
 DEFAULT_HIGH_VALIDATION_OVERRIDE = 50
 DEFAULT_MAX_CHIP_HIGHLIGHTS = 4
+DEFAULT_MAX_MIND_HIGHLIGHTS = 2
 CHIP_INSIGHTS_DIR = Path.home() / ".spark" / "chip_insights"
 TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
 
@@ -178,7 +179,8 @@ def _build_advisory_payload(
     insights: List[CognitiveInsight],
     promoted: List[str],
     chip_highlights: List[Dict[str, Any]],
-    project_profile: Optional[Dict[str, Any]],
+    project_profile: Optional[Dict[str, Any]] = None,
+    mind_highlights: Optional[List[Dict[str, Any]]] = None,
     key_by_id: Dict[int, str],
     effective_reliability,
     diagnostics: Optional[Dict[str, Any]] = None,
@@ -191,6 +193,7 @@ def _build_advisory_payload(
             "insights": len(insights),
             "promoted": len(promoted),
             "chip_highlights": len(chip_highlights),
+            "mind_highlights": len(mind_highlights or []),
         },
         "insights": [],
         "project": {},
@@ -227,6 +230,16 @@ def _build_advisory_payload(
                 "text": item.get("content"),
             }
             for item in chip_highlights
+        ]
+    if mind_highlights:
+        payload["mind_highlights"] = [
+            {
+                "memory_id": item.get("memory_id"),
+                "content_type": item.get("content_type"),
+                "salience": item.get("salience"),
+                "text": item.get("text"),
+            }
+            for item in mind_highlights
         ]
     if promoted:
         payload["promoted"] = [{"text": p} for p in promoted[:3]]
@@ -455,10 +468,99 @@ def _load_chip_highlights(
     return deduped
 
 
+def _mind_limit_from_env(default: int = DEFAULT_MAX_MIND_HIGHLIGHTS) -> int:
+    try:
+        value = int(os.environ.get("SPARK_SYNC_MIND_LIMIT", str(default)))
+    except Exception:
+        value = int(default)
+    return max(0, min(6, value))
+
+
+def _infer_mind_query(project_context: Optional[Dict[str, Any]]) -> str:
+    snippets: List[str] = []
+    try:
+        from .queue import EventType, read_recent_events
+
+        for ev in reversed(read_recent_events(20)):
+            if ev.event_type != EventType.USER_PROMPT:
+                continue
+            payload = (ev.data or {}).get("payload") or {}
+            text = str(payload.get("text") or "").strip()
+            if not text:
+                continue
+            snippets.append(text)
+            if len(snippets) >= 3:
+                break
+    except Exception:
+        pass
+
+    if snippets:
+        return " ".join(snippets)[:600]
+
+    hints: List[str] = []
+    ctx = project_context or {}
+    langs = [str(x).strip() for x in (ctx.get("languages") or []) if str(x).strip()]
+    frameworks = [str(x).strip() for x in (ctx.get("frameworks") or []) if str(x).strip()]
+    tools = [str(x).strip() for x in (ctx.get("tools") or []) if str(x).strip()]
+    if langs:
+        hints.append("languages: " + ", ".join(langs[:4]))
+    if frameworks:
+        hints.append("frameworks: " + ", ".join(frameworks[:3]))
+    if tools:
+        hints.append("tools: " + ", ".join(tools[:3]))
+    return "; ".join(hints)[:240]
+
+
+def _load_mind_highlights(query: str, *, limit: int) -> List[Dict[str, Any]]:
+    capped = max(0, int(limit or 0))
+    if capped <= 0:
+        return []
+    q = str(query or "").strip()
+    if not q:
+        return []
+
+    try:
+        from .mind_bridge import get_mind_bridge
+
+        bridge = get_mind_bridge()
+        rows = bridge.retrieve_relevant(q, limit=capped)
+    except Exception:
+        return []
+
+    highlights: List[Dict[str, Any]] = []
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("content") or "").strip()
+        if not text:
+            continue
+        line = text.splitlines()[0].strip()
+        if not line:
+            continue
+        key = _normalize_text(line[:200])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        highlights.append(
+            {
+                "memory_id": row.get("memory_id"),
+                "content_type": row.get("content_type") or "memory",
+                "salience": round(float(row.get("salience", 0.0) or 0.0), 3),
+                "text": line[:220],
+            }
+        )
+        if len(highlights) >= capped:
+            break
+
+    return highlights
+
+
 def _format_context(
     insights: List[CognitiveInsight],
     promoted: List[str],
     chip_highlights: Optional[List[Dict[str, Any]]] = None,
+    mind_highlights: Optional[List[Dict[str, Any]]] = None,
     project_profile: Optional[Dict[str, Any]] = None,
 ) -> str:
     lines = [
@@ -468,7 +570,7 @@ def _format_context(
         "",
     ]
 
-    if not insights and not promoted:
+    if not insights and not promoted and not mind_highlights and not chip_highlights:
         lines.append("No validated insights yet.")
         return "\n".join(lines).strip()
 
@@ -527,6 +629,16 @@ def _format_context(
         for s in promoted[:DEFAULT_MAX_PROMOTED]:
             lines.append(f"- {s}")
 
+    if mind_highlights:
+        lines.append("")
+        lines.append("## Mind Memory")
+        for item in mind_highlights:
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            content_type = str(item.get("content_type") or "memory")
+            lines.append(f"- [{content_type}] {text[:220]}")
+
     if chip_highlights:
         lines.append("")
         lines.append("## Chip Intelligence")
@@ -566,7 +678,25 @@ def build_compact_context(
         cognitive=cognitive,
         project_context=project_context,
     )
-    return cognitive.format_for_injection(insights), len(insights)
+    context = cognitive.format_for_injection(insights)
+    mind_limit = _mind_limit_from_env(default=1)
+    mind_query = _infer_mind_query(project_context)
+    mind_highlights = _load_mind_highlights(mind_query, limit=mind_limit)
+
+    if mind_highlights:
+        lines: List[str] = []
+        if context.strip():
+            lines.append(context.strip())
+            lines.append("")
+        lines.append("## Mind Memory")
+        for item in mind_highlights:
+            text = str(item.get("text") or "").strip()
+            if not text:
+                continue
+            lines.append(f"- {text[:220]}")
+        context = "\n".join(lines).strip()
+
+    return context, len(insights) + len(mind_highlights)
 
 
 def sync_context(
@@ -646,8 +776,36 @@ def sync_context(
 
     promoted = _load_promoted_lines(root) if include_promoted else []
     chip_highlights = _load_chip_highlights()
+    mind_query = _infer_mind_query(project_context)
+    if not mind_query and insights:
+        mind_query = " ".join((ins.insight or "") for ins in insights[:2])[:400]
+    mind_highlights = _load_mind_highlights(
+        mind_query,
+        limit=_mind_limit_from_env(),
+    )
+    if mind_highlights:
+        try:
+            session_id = infer_latest_session_id()
+            trace_id = infer_latest_trace_id(session_id)
+            exposures = []
+            for row in mind_highlights:
+                text = str(row.get("text") or "").strip()
+                if not text:
+                    continue
+                exposures.append(
+                    {
+                        "insight_key": f"mind:{row.get('memory_id') or ''}".rstrip(":"),
+                        "category": f"mind:{row.get('content_type') or 'memory'}",
+                        "text": text,
+                    }
+                )
+            if exposures:
+                record_exposures("sync_context", exposures, session_id=session_id, trace_id=trace_id)
+        except Exception:
+            pass
     if diagnostics is not None:
         diagnostics["chip_highlights"] = len(chip_highlights)
+        diagnostics["mind_highlights"] = len(mind_highlights)
     # De-dupe promoted vs selected insights
     seen = {_normalize_text(i.insight) for i in insights}
     promoted = [p for p in promoted if _normalize_text(p) not in seen]
@@ -659,6 +817,7 @@ def sync_context(
         insights=insights,
         promoted=promoted,
         chip_highlights=chip_highlights,
+        mind_highlights=mind_highlights,
         project_profile=project_profile_for_payload,
         key_by_id=key_by_id,
         effective_reliability=cognitive.effective_reliability,
@@ -668,6 +827,7 @@ def sync_context(
         insights,
         promoted,
         chip_highlights=chip_highlights,
+        mind_highlights=mind_highlights,
         project_profile=profile,
     )
     adapter_policy = _load_sync_adapter_policy()
