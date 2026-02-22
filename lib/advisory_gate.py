@@ -697,12 +697,19 @@ def _is_primitive_noise(text: str) -> bool:
         return True
     # Pure tool-name / telemetry patterns
     _NOISE_PATTERNS = [
-        r"^(?:bash|edit|read|write|task|tool)\s*→?\s*(?:bash|edit|read|write|task|tool)$",
+        r"^(?:bash|edit|read|write|task|tool)\s*→?\s*(?:bash|edit|read|write|task|tool)(?:\s*→?\s*(?:bash|edit|read|write|task|tool))*$",
         r"^\d+\s*(?:calls?|invocations?|runs?|times?)\b",
         r"^(?:okay|ok|got it|sure|yes|no|fine|done|thanks)\.?$",
         r"^(?:success|error|failure)\s*(?:rate|count|ratio)\b",
         r"\btool[_\s-]*\d+[_\s-]*error\b",
         r"^for\s+\w+\s+tasks?,?\s*use\s+standard\s+approach",
+        r"^cycle\s+summary:",
+        # Timing observation noise: "took 4.2s", "operation took 350ms"
+        r"\btook\s+\d[\d.]*\s*(?:ms|s|sec|second|minute)",
+        r"^(?:total\s+)?(?:operation|execution|processing|run)\s+t(?:ime|ook)",
+        # Generic platitudes with no actionable specifics
+        r"^always\s+consider\s+the\s+trade",
+        r"^(?:it'?s?\s+)?(?:important|essential|crucial|key|critical)\s+to\s+(?:always\s+)?(?:consider|remember|keep)\b",
     ]
     for pat in _NOISE_PATTERNS:
         if re.search(pat, tl):

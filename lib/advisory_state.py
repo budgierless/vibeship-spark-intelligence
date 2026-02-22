@@ -137,10 +137,13 @@ class SessionState:
     def from_dict(cls, d: dict) -> "SessionState":
         valid_keys = cls.__dataclass_fields__
         filtered = {k: v for k, v in d.items() if k in valid_keys}
-        # Backwards compat: old state files stored shown_advice_ids as a list
+        # Backwards compat: old state files stored shown_advice_ids as a list.
+        # Use time.time() so the TTL check in the gate treats them as "just shown"
+        # (0.0 would fail the `shown_at > 0` guard and never suppress).
         raw_shown = filtered.get("shown_advice_ids")
         if isinstance(raw_shown, list):
-            filtered["shown_advice_ids"] = {str(aid): 0.0 for aid in raw_shown}
+            import time as _time
+            filtered["shown_advice_ids"] = {str(aid): _time.time() for aid in raw_shown}
         return cls(**filtered)
 
 
