@@ -1,0 +1,308 @@
+{
+  "generated_utc": "2026-02-22T22:28:18Z",
+  "cutover_unix": 1771799219.8407648,
+  "rows": {
+    "ledger_total": 6611,
+    "engine_total": 500,
+    "implicit_total": 2976
+  },
+  "windows": {
+    "h1": {
+      "rows": 68,
+      "outcomes": {
+        "blocked": 58,
+        "emitted": 10
+      },
+      "error_codes": {
+        "AE_GATE_SUPPRESSED": 41,
+        "AE_GLOBAL_DEDUPE_SUPPRESSED": 17
+      },
+      "suppression_buckets": {
+        "shown_ttl": 83,
+        "global_dedupe": 21,
+        "budget_exhausted": 1
+      },
+      "suppression_reasons_top20": {
+        "global_dedupe:text_sig": 19,
+        "shown 341s ago (TTL 600s)": 4,
+        "shown 342s ago (TTL 600s)": 4,
+        "shown 399s ago (TTL 600s)": 4,
+        "shown 400s ago (TTL 600s)": 4,
+        "shown 429s ago (TTL 600s)": 4,
+        "shown 458s ago (TTL 600s)": 4,
+        "shown 529s ago (TTL 600s)": 4,
+        "shown 35s ago (TTL 600s)": 4,
+        "shown 129s ago (TTL 600s)": 4,
+        "shown 170s ago (TTL 600s)": 4,
+        "shown 340s ago (TTL 600s)": 2,
+        "shown 373s ago (TTL 600s)": 2,
+        "shown 430s ago (TTL 600s)": 2,
+        "shown 459s ago (TTL 600s)": 2,
+        "shown 487s ago (TTL 600s)": 2,
+        "shown 488s ago (TTL 600s)": 2,
+        "shown 554s ago (TTL 600s)": 2,
+        "shown 558s ago (TTL 600s)": 2,
+        "shown 56s ago (TTL 600s)": 2
+      },
+      "tools_top10": {
+        "Bash": 32,
+        "Grep": 22,
+        "Read": 14
+      },
+      "routes_top10": {
+        "packet_exact": 36,
+        "packet_relaxed": 21,
+        "live": 11
+      },
+      "source_counts_top10": {
+        "eidos": 71,
+        "bank": 22,
+        "cognitive": 16,
+        "baseline": 15
+      },
+      "suppressed_items_total": 105,
+      "budget_items_total": 1
+    },
+    "h24": {
+      "rows": 4212,
+      "outcomes": {
+        "emitted": 781,
+        "blocked": 3395,
+        "error": 36
+      },
+      "error_codes": {
+        "AE_GATE_SUPPRESSED": 2342,
+        "AE_GLOBAL_DEDUPE_SUPPRESSED": 1017,
+        "AE_FALLBACK_RATE_LIMIT": 36
+      },
+      "suppression_buckets": {
+        "shown_ttl": 4009,
+        "budget_exhausted": 468,
+        "tool_cooldown": 513,
+        "other": 158,
+        "global_dedupe": 1368,
+        "context_phase_guard": 37
+      },
+      "suppression_reasons_top20": {
+        "global_dedupe:text_sig": 1333,
+        "budget exhausted (2 max)": 468,
+        "tool Bash on cooldown": 198,
+        "tool Read on cooldown": 168,
+        "tool Edit on cooldown": 72,
+        "test_suppressed": 72,
+        "shown 28s ago (TTL 600s)": 57,
+        "shown 54s ago (TTL 600s)": 41,
+        "shown 32s ago (TTL 600s)": 39,
+        "shown 12s ago (TTL 600s)": 37,
+        "deployment advice during exploration phase": 37,
+        "shown 23s ago (TTL 600s)": 36,
+        "shown 16s ago (TTL 600s)": 35,
+        "global_dedupe:advice_id": 35,
+        "shown 18s ago (TTL 600s)": 34,
+        "shown 20s ago (TTL 600s)": 34,
+        "shown 24s ago (TTL 600s)": 33,
+        "shown 27s ago (TTL 600s)": 33,
+        "shown 34s ago (TTL 600s)": 32,
+        "shown 22s ago (TTL 600s)": 32
+      },
+      "tools_top10": {
+        "Read": 1661,
+        "Bash": 955,
+        "Edit": 594,
+        "Grep": 358,
+        "Glob": 165,
+        "Write": 137,
+        "TaskUpdate": 118,
+        "Task": 66,
+        "TaskCreate": 57,
+        "WebFetch": 52
+      },
+      "routes_top10": {
+        "packet_relaxed": 1785,
+        "live": 1629,
+        "packet_exact": 762,
+        "packet_relaxed_fallback": 36
+      },
+      "source_counts_top10": {
+        "eidos": 5659,
+        "cognitive": 1071,
+        "bank": 389,
+        "baseline": 234,
+        "advisor": 174,
+        "semantic-agentic": 118,
+        "mind": 111,
+        "packet": 106,
+        "trigger": 67,
+        "chip": 47
+      },
+      "suppressed_items_total": 6553,
+      "budget_items_total": 468
+    },
+    "d7": {
+      "rows": 6611,
+      "outcomes": {
+        "error": 647,
+        "emitted": 971,
+        "blocked": 4993
+      },
+      "error_codes": {
+        "AE_GATE_SUPPRESSED": 3554,
+        "AE_GLOBAL_DEDUPE_SUPPRESSED": 1330,
+        "AE_DUPLICATE_SUPPRESSED": 65,
+        "AE_FALLBACK_RATE_LIMIT": 44
+      },
+      "suppression_buckets": {
+        "budget_exhausted": 562,
+        "shown_ttl": 5525,
+        "tool_cooldown": 660,
+        "other": 235,
+        "global_dedupe": 1756,
+        "context_phase_guard": 53
+      },
+      "suppression_reasons_top20": {
+        "global_dedupe:text_sig": 1721,
+        "budget exhausted (2 max)": 562,
+        "tool Bash on cooldown": 231,
+        "tool Read on cooldown": 189,
+        "tool Edit on cooldown": 115,
+        "test_suppressed": 88,
+        "shown 28s ago (TTL 600s)": 72,
+        "shown 32s ago (TTL 600s)": 60,
+        "shown 54s ago (TTL 600s)": 59,
+        "tool Grep on cooldown": 57,
+        "shown 24s ago (TTL 600s)": 55,
+        "deployment advice during exploration phase": 53,
+        "shown 23s ago (TTL 600s)": 51,
+        "shown 4s ago (TTL 600s)": 50,
+        "shown 20s ago (TTL 600s)": 48,
+        "shown 27s ago (TTL 600s)": 47,
+        "shown 22s ago (TTL 600s)": 47,
+        "shown 37s ago (TTL 600s)": 45,
+        "shown 12s ago (TTL 600s)": 44,
+        "shown 18s ago (TTL 600s)": 43
+      },
+      "tools_top10": {
+        "Read": 2384,
+        "Bash": 1587,
+        "Edit": 1113,
+        "Grep": 519,
+        "Write": 288,
+        "Glob": 261,
+        "TaskUpdate": 128,
+        "Task": 91,
+        "WebFetch": 75,
+        "TaskCreate": 62
+      },
+      "routes_top10": {
+        "packet_relaxed": 3117,
+        "live": 2478,
+        "packet_exact": 972,
+        "packet_relaxed_fallback": 44
+      },
+      "source_counts_top10": {
+        "eidos": 6946,
+        "cognitive": 1450,
+        "baseline": 1059,
+        "bank": 414,
+        "advisor": 190,
+        "semantic-agentic": 131,
+        "packet": 122,
+        "trigger": 120,
+        "mind": 111,
+        "chip": 47
+      },
+      "suppressed_items_total": 8791,
+      "budget_items_total": 562
+    }
+  },
+  "post_cutover": {
+    "rows": 6,
+    "outcomes": {
+      "emitted": 1,
+      "blocked": 5
+    },
+    "error_codes": {
+      "AE_GATE_SUPPRESSED": 3,
+      "AE_GLOBAL_DEDUPE_SUPPRESSED": 2
+    },
+    "suppression_buckets": {
+      "shown_ttl": 3,
+      "global_dedupe": 2
+    },
+    "suppression_reasons_top20": {
+      "global_dedupe:text_sig": 2,
+      "shown 1s ago (TTL 378s, category=baseline)": 1,
+      "shown 3s ago (TTL 378s, category=baseline)": 1,
+      "shown 4s ago (TTL 378s, category=baseline)": 1
+    },
+    "tools_top10": {
+      "Bash": 6
+    },
+    "routes_top10": {
+      "packet_relaxed": 6
+    },
+    "source_counts_top10": {
+      "baseline": 6
+    },
+    "suppressed_items_total": 5,
+    "budget_items_total": 0
+  },
+  "post_cutover_h1": {
+    "rows": 6,
+    "outcomes": {
+      "emitted": 1,
+      "blocked": 5
+    },
+    "error_codes": {
+      "AE_GATE_SUPPRESSED": 3,
+      "AE_GLOBAL_DEDUPE_SUPPRESSED": 2
+    },
+    "suppression_buckets": {
+      "shown_ttl": 3,
+      "global_dedupe": 2
+    },
+    "suppression_reasons_top20": {
+      "global_dedupe:text_sig": 2,
+      "shown 1s ago (TTL 378s, category=baseline)": 1,
+      "shown 3s ago (TTL 378s, category=baseline)": 1,
+      "shown 4s ago (TTL 378s, category=baseline)": 1
+    },
+    "tools_top10": {
+      "Bash": 6
+    },
+    "routes_top10": {
+      "packet_relaxed": 6
+    },
+    "source_counts_top10": {
+      "baseline": 6
+    },
+    "suppressed_items_total": 5,
+    "budget_items_total": 0
+  },
+  "global_dedupe_cooldown_distribution": {
+    "h24": {
+      "600.0": 2381,
+      "240.0": 4
+    },
+    "post_cutover": {
+      "240.0": 4
+    },
+    "post_cutover_h1": {
+      "240.0": 4
+    }
+  },
+  "engine_events_h24": {
+    "no_emit": 297,
+    "user_prompt_prefetch": 21,
+    "emitted": 100,
+    "global_dedupe_suppressed": 82
+  },
+  "feedback_h24": {
+    "rows": 2260,
+    "signals": {
+      "followed": 2187,
+      "unhelpful": 73
+    },
+    "follow_rate": 1.0
+  }
+}
