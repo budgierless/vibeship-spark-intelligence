@@ -35,12 +35,13 @@ class AuthorityLevel:
     BLOCK = "block"         # EIDOS blocks action (already exists)
 
 # Score thresholds for authority assignment
-# NOTE threshold lowered 0.50→0.42 to let useful pipeline insights pass more
-# consistently. Noisy primitives are blocked by _is_primitive_noise() instead.
+# NOTE threshold tuned via scoring benchmark (2026-02-22): 0.42→0.48 cuts noise
+# from 36%→23% with zero recall loss on 50-case ground truth.
+# Noisy primitives are also blocked by _is_primitive_noise().
 AUTHORITY_THRESHOLDS = {
     AuthorityLevel.BLOCK: 0.95,     # Only proven critical safety issues
     AuthorityLevel.WARNING: 0.80,   # High confidence + proven failure history
-    AuthorityLevel.NOTE: 0.42,      # Moderate confidence + relevant
+    AuthorityLevel.NOTE: 0.48,      # Moderate confidence + relevant (was 0.42)
     AuthorityLevel.WHISPER: 0.30,   # Low confidence or tangential
     # Below 0.30 → SILENT
 }

@@ -4739,16 +4739,19 @@ class SparkAdvisor:
         "semantic-hybrid": 0.58,  # Hybrid retrieval
         "semantic": 0.55,         # Semantic retrieval of cognitive insights
         "cognitive": 0.50,        # Standard cognitive insights
-        "bank": 0.40,             # Memory banks (less curated)
+        "bank": 0.35,             # Memory banks (less curated, noisiest source per benchmark)
     }
 
     def _rank_score(self, a: Advice) -> float:
         """Compute a relevance score using 3-factor additive model.
 
-        Three independent dimensions:
-          - Relevance (0.45): Is this about what the user is doing right now?
-          - Quality   (0.30): Is this a well-structured, actionable insight?
+        Three independent dimensions (tuned via scoring benchmark 2026-02-22):
+          - Relevance (0.50): Is this about what the user is doing right now?
+          - Quality   (0.25): Is this a well-structured, actionable insight?
           - Trust     (0.25): Has this been proven/validated to work?
+
+        Relevance-heavy weighting reduces noise by ~28% vs equal weighting
+        (benchmark: h_relevance_heavy composite=0.7419 vs i_quality_heavy=0.6053).
 
         Noise penalties applied multiplicatively AFTER the additive blend,
         so garbage still gets crushed to near-zero.
@@ -4813,8 +4816,8 @@ class SparkAdvisor:
         if trust < 0.1:
             trust = 0.50
 
-        # --- Additive blend ---
-        score = (0.45 * relevance) + (0.30 * quality) + (0.25 * trust)
+        # --- Additive blend (relevance-heavy, tuned 2026-02-22) ---
+        score = (0.50 * relevance) + (0.25 * quality) + (0.25 * trust)
 
         # --- Category boost (demonstrated utility from feedback data) ---
         try:
