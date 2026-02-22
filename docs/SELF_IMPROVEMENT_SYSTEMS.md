@@ -1,6 +1,6 @@
-# Spark Intelligence: Self-Improvement Systems
+﻿# Spark Intelligence: Self-Improvement Systems
 
-## 10 Recursive Loop Modules — Architecture, Configuration, and Vision
+## 10 Recursive Loop Modules â€” Architecture, Configuration, and Vision
 
 **Created**: 2026-02-18
 **Status**: Architecture + roadmap reference (not all modules are present in this OSS snapshot)
@@ -35,12 +35,12 @@
 
 ### What Spark Intelligence Is Trying to Achieve
 
-Spark Intelligence is a self-evolving AI learning system. Its core promise is that every interaction makes the next one better — not through brute-force data accumulation, but through **structured recursive improvement loops**.
+Spark Intelligence is a self-evolving AI learning system. Its core promise is that every interaction makes the next one better â€” not through brute-force data accumulation, but through **structured recursive improvement loops**.
 
 The fundamental architecture is:
 
 ```
-Observe → Filter → Store → Retrieve → Advise → Observe outcome → Improve
+Observe â†’ Filter â†’ Store â†’ Retrieve â†’ Advise â†’ Observe outcome â†’ Improve
 ```
 
 Before these 10 systems were built, Spark had most of the individual components (Meta-Ralph quality gate, cognitive learner, advisor, hypothesis tracker, etc.) but **the loops between them were broken**. Specifically:
@@ -61,39 +61,39 @@ Each of these 10 systems closes one gap. Together, they form a recursive improve
 ### The Self-Improvement Recursive Loop
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    RECURSIVE IMPROVEMENT LOOP                    │
-│                                                                  │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐  │
-│  │ OBSERVE  │───→│  FILTER  │───→│  STORE   │───→│ RETRIEVE │  │
-│  │ (hooks)  │    │ (Ralph)  │    │ (cogni.) │    │ (advisor)│  │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
-│       ↑               │               │               │        │
-│       │          Actionability    Memory Tiers    Cross-Encoder │
-│       │          Classifier(8)   Engine(3)       Reranker      │
-│       │               │               │               │        │
-│       │          ┌─────────────────────────────────────┘        │
-│       │          ↓                                              │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐  │
-│  │  TUNE    │←───│ MEASURE  │←───│ CORRELATE│←───│  ADVISE  │  │
-│  │ (tuner1) │    │ (bench10)│    │(tracker2)│    │ (advisor)│  │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
-│       │                                               │        │
-│       │          ┌──────────┐    ┌──────────┐         │        │
-│       └─────────→│  EVOLVE  │───→│  DEMOTE  │←────────┘        │
-│                  │(domain9) │    │(sweep6)  │                   │
-│                  └──────────┘    └──────────┘                   │
-│                       │               │                         │
-│                  ┌──────────┐    ┌──────────┐                   │
-│                  │HYPOTHESIS│    │ WEAKNESS │                   │
-│                  │(bridge7) │    │(trainer4)│                   │
-│                  └──────────┘    └──────────┘                   │
-│                                                                  │
-│              ┌──────────────────────────┐                        │
-│              │  REGRESSION GUARD (5)     │                       │
-│              │  Monitors everything      │                       │
-│              └──────────────────────────┘                        │
-└─────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    RECURSIVE IMPROVEMENT LOOP                    â”‚
+â”‚                                                                  â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚
+â”‚  â”‚ OBSERVE  â”‚â”€â”€â”€â†’â”‚  FILTER  â”‚â”€â”€â”€â†’â”‚  STORE   â”‚â”€â”€â”€â†’â”‚ RETRIEVE â”‚  â”‚
+â”‚  â”‚ (hooks)  â”‚    â”‚ (Ralph)  â”‚    â”‚ (cogni.) â”‚    â”‚ (advisor)â”‚  â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚
+â”‚       â†‘               â”‚               â”‚               â”‚        â”‚
+â”‚       â”‚          Actionability    Memory Tiers    Cross-Encoder â”‚
+â”‚       â”‚          Classifier(8)   Engine(3)       Reranker      â”‚
+â”‚       â”‚               â”‚               â”‚               â”‚        â”‚
+â”‚       â”‚          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜        â”‚
+â”‚       â”‚          â†“                                              â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚
+â”‚  â”‚  TUNE    â”‚â†â”€â”€â”€â”‚ MEASURE  â”‚â†â”€â”€â”€â”‚ CORRELATEâ”‚â†â”€â”€â”€â”‚  ADVISE  â”‚  â”‚
+â”‚  â”‚ (tuner1) â”‚    â”‚ (bench10)â”‚    â”‚(tracker2)â”‚    â”‚ (advisor)â”‚  â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚
+â”‚       â”‚                                               â”‚        â”‚
+â”‚       â”‚          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”         â”‚        â”‚
+â”‚       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â†’â”‚  EVOLVE  â”‚â”€â”€â”€â†’â”‚  DEMOTE  â”‚â†â”€â”€â”€â”€â”€â”€â”€â”€â”˜        â”‚
+â”‚                  â”‚(domain9) â”‚    â”‚(sweep6)  â”‚                   â”‚
+â”‚                  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                   â”‚
+â”‚                       â”‚               â”‚                         â”‚
+â”‚                  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                   â”‚
+â”‚                  â”‚HYPOTHESISâ”‚    â”‚ WEAKNESS â”‚                   â”‚
+â”‚                  â”‚(bridge7) â”‚    â”‚(trainer4)â”‚                   â”‚
+â”‚                  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                   â”‚
+â”‚                                                                  â”‚
+â”‚              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                        â”‚
+â”‚              â”‚  REGRESSION GUARD (5)     â”‚                       â”‚
+â”‚              â”‚  Monitors everything      â”‚                       â”‚
+â”‚              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                        â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
@@ -101,7 +101,7 @@ Each of these 10 systems closes one gap. Together, they form a recursive improve
 ## 2. Auto-Tuner Activation Loop
 
 **File**: `scripts/run_auto_tune_cycle.py` *(planned; not present in this OSS snapshot)*
-**Closes**: GAP #1 — Static Tuneables (auto-tuner existed but was permanently disabled)
+**Closes**: GAP #1 â€” Static Tuneables (auto-tuner existed but was permanently disabled)
 **Depends on**: `lib/auto_tuner.py`, `tests/test_retrieval_quality.py`
 
 ### What It Does
@@ -113,11 +113,11 @@ The `AutoTuner` class in `lib/auto_tuner.py` can measure system health, compute 
 1. **Baseline Measurement**: Runs the retrieval quality benchmark (`test_retrieval_quality.py`) to capture current P@5 and noise count
 2. **Snapshot**: Copies current `tuneables.json` to `~/.spark/tuneable_rollbacks/pre_tune_YYYYMMDDTHHMMSS.json` (keeps last 10)
 3. **System Health**: Calls `AutoTuner.measure_system_health()` which reads:
-   - `advice_action_rate` — what % of advice leads to successful tool outcomes
-   - `distillation_rate` — EIDOS episodes producing distillations
-   - `promotion_throughput` — insights promoted to CLAUDE.md per cycle
-   - `cognitive_growth` — new insights per day
-   - `feedback_loop_closure` — % of advice with outcome tracking
+   - `advice_action_rate` â€” what % of advice leads to successful tool outcomes
+   - `distillation_rate` â€” EIDOS episodes producing distillations
+   - `promotion_throughput` â€” insights promoted to CLAUDE.md per cycle
+   - `cognitive_growth` â€” new insights per day
+   - `feedback_loop_closure` â€” % of advice with outcome tracking
 4. **Recommendations**: Calls `compute_recommendations(health)` which identifies which tuneables should change (e.g., lower quality threshold if growth is too slow, raise it if noise is high)
 5. **Apply Changes**: In moderate mode, applies medium+ confidence recommendations
 6. **Post-Tune Verification**: Runs the retrieval benchmark again
@@ -150,7 +150,7 @@ Script-level safety thresholds:
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `P5_DROP_THRESHOLD` | `0.10` | Rollback if P@5 drops more than 10% |
-| `NOISE_TOLERANCE` | `0` | Zero noise tolerance — any noise triggers rollback |
+| `NOISE_TOLERANCE` | `0` | Zero noise tolerance â€” any noise triggers rollback |
 
 ### CLI
 
@@ -165,16 +165,16 @@ python scripts/run_auto_tune_cycle.py --enable      # Enable auto-tuner first
 
 Turns Spark's parameters from static constants into a self-adjusting system. If advice isn't being followed, the system can lower thresholds to be less strict. If noise is creeping in, it can tighten filters. All changes are verified against retrieval quality and rolled back if harmful.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Health measurement works (action_rate=64.5% measured in validation). Recommendations are computed. The auto-tuner is disabled by default and must be explicitly enabled with `--enable`.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 3. Implicit Outcome Tracker
 
 **File**: `lib/implicit_outcome_tracker.py`
-**Closes**: GAP #2 — 90% Advisory Blind Spot (no implicit feedback from tool outcomes)
+**Closes**: GAP #2 â€” 90% Advisory Blind Spot (no implicit feedback from tool outcomes)
 **Depends on**: `~/.spark/advisor/effectiveness.json`
 
 ### What It Does
@@ -189,9 +189,9 @@ The advisory engine gives advice before every tool call, but previously had no w
    - **File overlap**: Advice mentioned the same file(s) being operated on (threshold: 1+ file match)
    - **Text overlap**: Keyword overlap between advice text and tool context (threshold: 15%)
 3. **Signal determination**:
-   - Success + no correction → `"followed"` (implicit positive signal)
-   - Failure or user correction → `"unhelpful"` (implicit negative signal)
-   - No matching advice → `"no_match"` (no signal)
+   - Success + no correction â†’ `"followed"` (implicit positive signal)
+   - Failure or user correction â†’ `"unhelpful"` (implicit negative signal)
+   - No matching advice â†’ `"no_match"` (no signal)
 4. **Effectiveness update**: Writes to `~/.spark/advisor/effectiveness.json` with per-source follow/unhelpful counts
 5. **Correction detection**: If a user issues the same tool call within 30s of a failure, the prior advice is marked `unhelpful`
 
@@ -215,16 +215,16 @@ The advisory engine gives advice before every tool call, but previously had no w
 
 Transforms 90% of blind advisory interactions into learning signals. The advisor can now know which sources produce helpful advice and which don't, enabling source reweighting over time.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Validated with synthetic advice→outcome cycle (signal=followed, match=True). Ready for integration into the hook/bridge pipeline.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 4. Memory Tiering & Decay Engine
 
 **File**: `lib/memory_tier_engine.py`
-**Closes**: GAP #3 — Flat Memory Pool (all insights compete equally for retrieval)
+**Closes**: GAP #3 â€” Flat Memory Pool (all insights compete equally for retrieval)
 **Depends on**: `~/.spark/cognitive_insights.json`
 
 ### What It Does
@@ -242,11 +242,11 @@ With 283 cognitive insights in a single pool, a 22-time validated production ins
 1. **`sweep()`**: Reads all cognitive insights, classifies each one, writes tier metadata (`_tier` field) back into the insight, saves tier state to `~/.spark/memory_tiers.json`
 2. **`get_retrieval_pool()`**: Returns PINNED insights first, then ACTIVE. ARCHIVE insights are excluded.
 3. **`classify_insight(insight)`**: Pure function that evaluates:
-   - `times_validated >= 10` and net positive → PINNED
-   - `last_validated_at > 30 days` and `validations < 5` → ARCHIVE
-   - `contradictions >= validations` and age > 7 days → ARCHIVE
-   - `confidence < 0.3` and age > 7 days and `validations < 3` → ARCHIVE
-   - Everything else → ACTIVE
+   - `times_validated >= 10` and net positive â†’ PINNED
+   - `last_validated_at > 30 days` and `validations < 5` â†’ ARCHIVE
+   - `contradictions >= validations` and age > 7 days â†’ ARCHIVE
+   - `confidence < 0.3` and age > 7 days and `validations < 3` â†’ ARCHIVE
+   - Everything else â†’ ACTIVE
 4. **Format handling**: Supports both flat dict format (`{key: {insight_data}}`) and nested list format (`{"insights": [...]}`)
 
 ### Key Thresholds
@@ -281,26 +281,26 @@ As of initial sweep:
 
 Retrieval precision improves because the advisor no longer wastes slots on stale/contradicted insights. The 139 pinned insights represent Spark's most reliable knowledge and always get priority.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Sweep runs successfully, correctly identifies all three tiers. The 139/114/30 distribution shows healthy differentiation. Ready for advisor integration.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 5. Aha-to-Training Bridge
 
 **File**: `scripts/run_weakness_trainer.py` *(planned; not present in this OSS snapshot)*
-**Closes**: GAP #4 — Surprise Moments Never Trigger Training
+**Closes**: GAP #4 â€” Surprise Moments Never Trigger Training
 **Depends on**: `~/.spark/aha_moments.json`, `lib/depth_trainer.py` (optional), `lib/cognitive_learner.py`
 
 ### What It Does
 
-The Aha tracker captures "surprise moments" — domains where Spark's predictions were significantly wrong (high confidence_gap). But these surprises were never fed back into training. This bridge:
+The Aha tracker captures "surprise moments" â€” domains where Spark's predictions were significantly wrong (high confidence_gap). But these surprises were never fed back into training. This bridge:
 
 1. Reads aha moments and identifies **weak domains** (average confidence_gap > 0.5)
 2. Maps weak domains to **DEPTH training topics** via `DOMAIN_TOPIC_MAP`
 3. Auto-invokes DEPTH training on weak topics (if available)
-4. Falls back to **aha-derived consolidation** — extracts lessons from surprise moments and stores them as cognitive insights
+4. Falls back to **aha-derived consolidation** â€” extracts lessons from surprise moments and stores them as cognitive insights
 
 ### Domain-to-Topic Mapping
 
@@ -340,16 +340,16 @@ python scripts/run_weakness_trainer.py --top 5       # Train top 5 weakest domai
 
 Creates a direct feedback path from "where Spark is wrong" to "targeted improvement." Instead of training randomly, Spark focuses on its actual weak spots. The consolidated lessons from surprise moments become cognitive insights that improve future advisory.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Script runs, analysis pipeline works. Currently no aha moments with sufficient gap/count to trigger training (the system needs more runtime to accumulate surprise data). Once aha_moments.json has entries with `confidence_gap > 0.5`, training will auto-trigger.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 6. Retrieval Regression Guard
 
 **File**: `scripts/run_retrieval_regression.py` *(planned; not present in this OSS snapshot)*
-**Closes**: GAP #5 — No Automated Quality Guard (P@5 improved 138% but nothing prevents regression)
+**Closes**: GAP #5 â€” No Automated Quality Guard (P@5 improved 138% but nothing prevents regression)
 **Depends on**: `tests/test_retrieval_quality.py`
 
 ### What It Does
@@ -399,27 +399,27 @@ python scripts/run_retrieval_regression.py --rollback    # Auto-rollback on regr
 
 Prevents silent quality degradation. Every change to the system can be verified against an objective quality metric. Combined with the auto-tuner's safety harness, creates a "ratchet" that only allows forward progress.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Benchmark runs successfully. Metrics history tracking works. Ready for daily monitoring deployment.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 7. Promoter Demotion Sweep
 
 **File**: `lib/promoter_demotion.py`
-**Closes**: GAP #6 — No Demotion Path (promoted insights stay forever, even if wrong)
+**Closes**: GAP #6 â€” No Demotion Path (promoted insights stay forever, even if wrong)
 **Depends on**: `~/.spark/cognitive_insights.json`, CLAUDE.md, AGENTS.md, TOOLS.md, SOUL.md
 
 ### What It Does
 
-The promoter (`lib/promoter.py`) pushes high-confidence insights into CLAUDE.md, AGENTS.md, TOOLS.md, and SOUL.md — files that are loaded into every Claude Code session. But there was no reverse path. An insight promoted weeks ago that's since been contradicted 10 times would still be injected into every session. This sweeper:
+The promoter (`lib/promoter.py`) pushes high-confidence insights into CLAUDE.md, AGENTS.md, TOOLS.md, and SOUL.md â€” files that are loaded into every Claude Code session. But there was no reverse path. An insight promoted weeks ago that's since been contradicted 10 times would still be injected into every session. This sweeper:
 
 1. **Scans target files** for `<!-- SPARK_LEARNINGS_START -->` sections
 2. **Matches promoted lines** to cognitive insights by substring + word overlap (>50% match)
 3. **Evaluates demotion criteria**:
-   - Contradictions >= validations → demote
-   - No validation in 60+ days AND validations < 5 → demote
+   - Contradictions >= validations â†’ demote
+   - No validation in 60+ days AND validations < 5 â†’ demote
 4. **Removes demoted lines** from the target file
 5. **Marks insights as archived** in cognitive_insights.json
 6. **Logs all demotions** to `~/.spark/demotion_log.jsonl`
@@ -437,7 +437,7 @@ The promoter (`lib/promoter.py`) pushes high-confidence insights into CLAUDE.md,
 - Lines with no matching cognitive insight are **kept** (might be manually added)
 - Insights younger than 7 days are never demoted (prevents premature removal)
 - All demotions are logged with full audit trail
-- The insight isn't deleted — just archived and removed from promotion targets
+- The insight isn't deleted â€” just archived and removed from promotion targets
 
 ### CLI
 
@@ -447,23 +447,23 @@ python -c "from lib.promoter_demotion import DemotionSweeper; print(DemotionSwee
 
 ### Benefit
 
-Keeps CLAUDE.md and other promoted files clean and current. Stale or disproven insights get removed instead of polluting every future session. Combined with the memory tiering engine, creates a complete lifecycle: promote → use → validate → archive/demote.
+Keeps CLAUDE.md and other promoted files clean and current. Stale or disproven insights get removed instead of polluting every future session. Combined with the memory tiering engine, creates a complete lifecycle: promote â†’ use â†’ validate â†’ archive/demote.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Scans 3 files (CLAUDE.md, AGENTS.md — TOOLS.md and SOUL.md exist but weren't found in the scan). Currently 0 demotions (no insights meet the demotion criteria yet, which is expected for a young system).
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 8. Hypothesis-to-Belief Pipeline
 
 **File**: `lib/hypothesis_bridge.py`
-**Closes**: GAP #7 — Hypothesis Tracker Not in Main Cycle
+**Closes**: GAP #7 â€” Hypothesis Tracker Not in Main Cycle
 **Depends on**: `lib/hypothesis_tracker.py`, `lib/cognitive_learner.py`, `lib/meta_ralph.py`
 
 ### What It Does
 
-The hypothesis tracker implements a full 6-state lifecycle (`EMERGING → HYPOTHESIS → TESTING → VALIDATED → INVALIDATED → BELIEF`) but was never wired into the main `bridge_cycle.py` processing path. This bridge:
+The hypothesis tracker implements a full 6-state lifecycle (`EMERGING â†’ HYPOTHESIS â†’ TESTING â†’ VALIDATED â†’ INVALIDATED â†’ BELIEF`) but was never wired into the main `bridge_cycle.py` processing path. This bridge:
 
 1. **Classifies events** as pattern/validation/outcome
 2. **Feeds patterns** into hypothesis creation (`tracker.observe()`)
@@ -475,9 +475,9 @@ The hypothesis tracker implements a full 6-state lifecycle (`EMERGING → HYPOTH
 ### Hypothesis Lifecycle
 
 ```
-  EMERGING ──→ HYPOTHESIS ──→ TESTING ──→ VALIDATED ──→ BELIEF
-                                  │
-                                  └──→ INVALIDATED (warning generated)
+  EMERGING â”€â”€â†’ HYPOTHESIS â”€â”€â†’ TESTING â”€â”€â†’ VALIDATED â”€â”€â†’ BELIEF
+                                  â”‚
+                                  â””â”€â”€â†’ INVALIDATED (warning generated)
 ```
 
 ### Event Classification
@@ -509,16 +509,16 @@ result = process_hypothesis_cycle(events)
 
 Transforms Spark's pattern detection from passive observation to active hypothesis testing. Instead of just storing observations, the system forms predictions, tests them against reality, and promotes the ones that prove reliable. Invalidated hypotheses generate warnings that prevent the same mistakes.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** Pipeline runs without error. Currently 0 hypotheses created/tested (needs runtime events to feed the pipeline). The infrastructure is ready for integration into bridge_cycle.py.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 9. Actionability Classifier v2
 
 **File**: `lib/actionability_scorer.py`
-**Closes**: GAP #8 — Keyword-Only Actionability (12 patterns with crude +/-0.3 scoring)
+**Closes**: GAP #8 â€” Keyword-Only Actionability (12 patterns with crude +/-0.3 scoring)
 **Depends on**: None (standalone classifier)
 
 ### What It Does
@@ -586,21 +586,21 @@ actionable_insights = filter_actionable(insights, text_key="insight", threshold=
 
 Dramatically reduces noise in the cognitive pool. Observation-only content (tweets, scores, quotes) that previously slipped through now gets correctly filtered. The 4-dimension breakdown also provides diagnostic info about WHY something scored low.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** 7/7 test cases pass. The classifier correctly distinguishes actionable advice from observation-only content. Ready for advisor.py integration.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 10. Cross-Domain Evolution Engine
 
 **File**: `lib/domain_evolution.py` *(planned; not present in this OSS snapshot)*
-**Closes**: GAP #9 — No Evolution Outside X (only X/Twitter had a self-improvement loop)
+**Closes**: GAP #9 â€” No Evolution Outside X (only X/Twitter had a self-improvement loop)
 **Depends on**: `lib/meta_ralph.py`, `lib/cognitive_learner.py`, `~/.spark/advisor/effectiveness.json`
 
 ### What It Does
 
-The X Evolution Engine (`lib/x_evolution.py`) closes the improvement loop for social content — it tracks what tweet strategies work, adjusts trigger/strategy weights, and stores evolution events. But no equivalent existed for code, reasoning, or general advisory quality. This engine **generalizes the evolution pattern across 6 domains**:
+The X Evolution Engine (`lib/x_evolution.py`) closes the improvement loop for social content â€” it tracks what tweet strategies work, adjusts trigger/strategy weights, and stores evolution events. But no equivalent existed for code, reasoning, or general advisory quality. This engine **generalizes the evolution pattern across 6 domains**:
 
 | Domain | Covers |
 |--------|--------|
@@ -617,7 +617,7 @@ For each domain, the engine:
 
 1. **Reads per-domain statistics** from:
    - `effectiveness.json` (source-level follow rates)
-   - `implicit_feedback.jsonl` (tool→domain mapping for follow/unhelpful counts)
+   - `implicit_feedback.jsonl` (toolâ†’domain mapping for follow/unhelpful counts)
    - `cognitive_insights.json` (insight counts and average confidence per domain)
 2. **Detects evolution events**:
    - **Effectiveness shifts**: Follow rate changed >5% from last cycle
@@ -628,9 +628,9 @@ For each domain, the engine:
 4. **Quality-gates events** through Meta-Ralph (`roast()`, score >= 4)
 5. **Stores** quality-gated events as cognitive insights
 6. **Diagnoses gaps**:
-   - Domain with zero insights → `no_insights` (high severity)
-   - Domain with insights but zero advisory data → `unused_knowledge` (medium severity)
-   - Domain with <5% follow rate → `low_effectiveness` (high severity)
+   - Domain with zero insights â†’ `no_insights` (high severity)
+   - Domain with insights but zero advisory data â†’ `unused_knowledge` (medium severity)
+   - Domain with <5% follow rate â†’ `low_effectiveness` (high severity)
 
 ### Current Gap Diagnosis (from validation run)
 
@@ -639,7 +639,7 @@ The engine identified 5 gaps across 6 domains:
 - `depth_training`: no insights (high severity)
 - `user_context`: no insights (high severity)
 - `system`: no insights (high severity)
-- `code`: unused knowledge — has insights but zero advisory data
+- `code`: unused knowledge â€” has insights but zero advisory data
 
 ### Storage Files
 
@@ -658,32 +658,32 @@ python lib/domain_evolution.py    # Run evolution cycle and print report
 
 Creates a unified self-improvement loop across all domains, not just X. The gap diagnosis tells you exactly where Spark's knowledge is thin or ineffective. Cross-domain pattern detection enables transferring successful strategies from one domain to another.
 
-### Current Status
+### Status in OSS Snapshot
 
-**Operational.** 6 domains analyzed, 6 evolution events detected, 5 gaps identified. The gaps are expected — Spark's learning has been concentrated in code/general domains. As the system accumulates more domain-specific data, the evolution engine will detect and act on trends.
+**Status note.** Historical/internal validation claim; verify in current OSS snapshot before relying on it.
 
 ---
 
 ## 11. Full-Loop E2E Benchmark
 
 **File**: `benchmarks/self_improvement_e2e.py` *(planned; not present in this OSS snapshot)*
-**Closes**: GAP #10 — No Single Loop Health Metric
+**Closes**: GAP #10 â€” No Single Loop Health Metric
 **Depends on**: All other 9 systems
 
 ### What It Does
 
 No single benchmark previously measured the full recursive improvement loop end-to-end. This benchmark injects a synthetic "lesson" event and traces it through the entire pipeline:
 
-1. **Meta-Ralph Quality Gate** — Can the quality gate evaluate a learning?
-2. **Cognitive Storage** — Does the insight get stored in the cognitive pool?
-3. **Actionability Classifier** — Does the classifier correctly score actionable vs. observation text?
-4. **Implicit Feedback Tracker** — Can the tracker correlate advice → outcome?
-5. **Auto-Tuner** — Can the tuner measure system health and compute recommendations?
-6. **Advisor Retrieval** — Does the retrieval pipeline execute without error?
-7. **Memory Tiering** — Does the tier engine sweep and classify insights?
-8. **Hypothesis Bridge** — Does the hypothesis pipeline process events?
-9. **Domain Evolution** — Does the evolution engine analyze domains and detect events?
-10. **Promoter Demotion** — Does the demotion sweep run and evaluate promoted insights?
+1. **Meta-Ralph Quality Gate** â€” Can the quality gate evaluate a learning?
+2. **Cognitive Storage** â€” Does the insight get stored in the cognitive pool?
+3. **Actionability Classifier** â€” Does the classifier correctly score actionable vs. observation text?
+4. **Implicit Feedback Tracker** â€” Can the tracker correlate advice â†’ outcome?
+5. **Auto-Tuner** â€” Can the tuner measure system health and compute recommendations?
+6. **Advisor Retrieval** â€” Does the retrieval pipeline execute without error?
+7. **Memory Tiering** â€” Does the tier engine sweep and classify insights?
+8. **Hypothesis Bridge** â€” Does the hypothesis pipeline process events?
+9. **Domain Evolution** â€” Does the evolution engine analyze domains and detect events?
+10. **Promoter Demotion** â€” Does the demotion sweep run and evaluate promoted insights?
 
 ### How It Works
 
@@ -739,7 +739,7 @@ Total latency: 12345ms
 
 Provides a single health check for the entire self-improvement loop. Can be run as a CI check, a cron job, or on-demand after any system change. If any stage fails, the issue is immediately localized.
 
-### Current Status
+### Status in OSS Snapshot
 
 **Roadmap status. OSS verification pending for full 10-stage benchmark.**
 
@@ -750,52 +750,52 @@ Provides a single health check for the entire self-improvement loop. Can be run 
 ### How the 10 Systems Connect to Existing Spark Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         EXISTING SPARK ARCHITECTURE                         │
-│                                                                             │
-│  hooks/observe.py ──→ queue.py ──→ pipeline.py ──→ bridge_cycle.py         │
-│       │                                                │                    │
-│       │  ┌──────────── NEW INTEGRATIONS ────────────┐  │                    │
-│       │  │                                          │  │                    │
-│       ├──┤→ Implicit Tracker (2) record_advice()    │  │                    │
-│       │  │   └→ record_outcome() after tool result  │  │                    │
-│       │  │                                          │  │                    │
-│       │  │→ Hypothesis Bridge (7) process_events()  │──┤                    │
-│       │  │   └→ feeds pattern/outcome events        │  │                    │
-│       │  │                                          │  │                    │
-│       │  └──────────────────────────────────────────┘  │                    │
-│       │                                                │                    │
-│       ↓                                                ↓                    │
-│  lib/meta_ralph.py ←── Actionability v2 (8) pre-filter ──→ cognitive pool  │
-│       │                                                         │           │
-│       │                  Memory Tiering (3) sweep()             │           │
-│       │                     └→ PINNED / ACTIVE / ARCHIVE        │           │
-│       │                                                         ↓           │
-│       │                                                    lib/advisor.py   │
-│       │                                                    get_retrieval_   │
-│       │                                                    pool() from (3)  │
-│       │                                                         │           │
-│       │              ┌──── PERIODIC SCRIPTS ────┐               │           │
-│       │              │                          │               │           │
-│       ├──────────────┤  Auto-Tuner Loop (1)     │               │           │
-│       │              │   └→ every 6h            │               │           │
-│       │              │                          │               │           │
-│       │              │  Regression Guard (5)    │               │           │
-│       │              │   └→ daily               │               │           │
-│       │              │                          │               │           │
-│       │              │  Weakness Trainer (4)    │               │           │
-│       │              │   └→ every 12h           │               │           │
-│       │              │                          │               │           │
-│       │              │  Domain Evolution (9)    │               │           │
-│       │              │   └→ per bridge cycle    │               │           │
-│       │              │                          │               │           │
-│       │              │  Demotion Sweep (6)      │               │           │
-│       │              │   └→ per bridge cycle    │               │           │
-│       │              └──────────────────────────┘               │           │
-│       │                                                         │           │
-│       └─────────────── E2E Benchmark (10) ──────────────────────┘           │
-│                        └→ tests everything                                  │
-└─────────────────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                         EXISTING SPARK ARCHITECTURE                         â”‚
+â”‚                                                                             â”‚
+â”‚  hooks/observe.py â”€â”€â†’ queue.py â”€â”€â†’ pipeline.py â”€â”€â†’ bridge_cycle.py         â”‚
+â”‚       â”‚                                                â”‚                    â”‚
+â”‚       â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ NEW INTEGRATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚                    â”‚
+â”‚       â”‚  â”‚                                          â”‚  â”‚                    â”‚
+â”‚       â”œâ”€â”€â”¤â†’ Implicit Tracker (2) record_advice()    â”‚  â”‚                    â”‚
+â”‚       â”‚  â”‚   â””â†’ record_outcome() after tool result  â”‚  â”‚                    â”‚
+â”‚       â”‚  â”‚                                          â”‚  â”‚                    â”‚
+â”‚       â”‚  â”‚â†’ Hypothesis Bridge (7) process_events()  â”‚â”€â”€â”¤                    â”‚
+â”‚       â”‚  â”‚   â””â†’ feeds pattern/outcome events        â”‚  â”‚                    â”‚
+â”‚       â”‚  â”‚                                          â”‚  â”‚                    â”‚
+â”‚       â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚                    â”‚
+â”‚       â”‚                                                â”‚                    â”‚
+â”‚       â†“                                                â†“                    â”‚
+â”‚  lib/meta_ralph.py â†â”€â”€ Actionability v2 (8) pre-filter â”€â”€â†’ cognitive pool  â”‚
+â”‚       â”‚                                                         â”‚           â”‚
+â”‚       â”‚                  Memory Tiering (3) sweep()             â”‚           â”‚
+â”‚       â”‚                     â””â†’ PINNED / ACTIVE / ARCHIVE        â”‚           â”‚
+â”‚       â”‚                                                         â†“           â”‚
+â”‚       â”‚                                                    lib/advisor.py   â”‚
+â”‚       â”‚                                                    get_retrieval_   â”‚
+â”‚       â”‚                                                    pool() from (3)  â”‚
+â”‚       â”‚                                                         â”‚           â”‚
+â”‚       â”‚              â”Œâ”€â”€â”€â”€ PERIODIC SCRIPTS â”€â”€â”€â”€â”               â”‚           â”‚
+â”‚       â”‚              â”‚                          â”‚               â”‚           â”‚
+â”‚       â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤  Auto-Tuner Loop (1)     â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚   â””â†’ every 6h            â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚                          â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚  Regression Guard (5)    â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚   â””â†’ daily               â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚                          â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚  Weakness Trainer (4)    â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚   â””â†’ every 12h           â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚                          â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚  Domain Evolution (9)    â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚   â””â†’ per bridge cycle    â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚                          â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚  Demotion Sweep (6)      â”‚               â”‚           â”‚
+â”‚       â”‚              â”‚   â””â†’ per bridge cycle    â”‚               â”‚           â”‚
+â”‚       â”‚              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜               â”‚           â”‚
+â”‚       â”‚                                                         â”‚           â”‚
+â”‚       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ E2E Benchmark (10) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜           â”‚
+â”‚                        â””â†’ tests everything                                  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Integration Hooks (Not Yet Wired)
@@ -824,7 +824,7 @@ These systems are **design targets** and require implementation/wiring in the OS
 
 ## 13. New Tunables Reference
 
-### Auto-Tuner (`~/.spark/tuneables.json` → `auto_tuner` section)
+### Auto-Tuner (`~/.spark/tuneables.json` â†’ `auto_tuner` section)
 
 | Key | Default | Range | Description |
 |-----|---------|-------|-------------|
@@ -910,21 +910,21 @@ Use this as a planning map:
 
 ### Immediate Value (Use Now)
 
-1. **Memory Tiering (3)**: Wire `get_retrieval_pool()` into advisor.py — instantly improves retrieval by prioritizing 139 pinned insights
-2. **Actionability v2 (8)**: Replace `_score_actionability()` in advisor.py — filters observation noise
-3. **Domain Evolution (9)**: Run periodically to monitor cross-domain health
-4. **E2E Benchmark (10)**: Run as CI/health check after any change
+1. **Memory Tiering (3)**: Wire `get_retrieval_pool()` into advisor.py â€” instantly improves retrieval by prioritizing 139 pinned insights
+2. **Actionability v2 (8)**: Replace `_score_actionability()` in advisor.py â€” filters observation noise
+3. **Domain Evolution (9)**: implement module first, then schedule periodic monitoring
+4. **E2E Benchmark (10)**: implement benchmark first, then use as CI/health check
 
 ### Near-Term Value (Wire + Schedule)
 
-5. **Implicit Tracker (2)**: Wire into hooks/observe.py — starts generating learning signals
-6. **Regression Guard (5)**: Schedule daily — prevents silent quality degradation
-7. **Hypothesis Bridge (7)**: Wire into bridge_cycle.py — activates hypothesis lifecycle
-8. **Demotion Sweep (6)**: Schedule weekly — keeps promoted files clean
+5. **Implicit Tracker (2)**: Wire into hooks/observe.py â€” starts generating learning signals
+6. **Regression Guard (5)**: Schedule daily â€” prevents silent quality degradation
+7. **Hypothesis Bridge (7)**: Wire into bridge_cycle.py â€” activates hypothesis lifecycle
+8. **Demotion Sweep (6)**: Schedule weekly â€” keeps promoted files clean
 
 ### Medium-Term Value (Needs Data Accumulation)
 
-9. **Auto-Tuner Loop (1)**: Enable after confidence in regression guard — self-adjusts parameters
+9. **Auto-Tuner Loop (1)**: Enable after confidence in regression guard â€” self-adjusts parameters
 10. **Weakness Trainer (4)**: Activates once aha tracker accumulates sufficient surprise data
 
 ---
@@ -939,16 +939,16 @@ In a single session, we:
 2. **Designed 10 systems** to close the most impactful gaps, ordered by priority
 3. **Designed a 10-module loop plan**; implementation status varies by environment/repo snapshot
 4. **Debugged API mismatches**: Discovered and fixed 10 integration errors:
-   - `score_insight()` → `roast()` (Meta-Ralph API)
-   - `store_insight()` → `add_insight()` (CognitiveLearner API)
-   - `get_recent_insights()` → `learner.insights.values()` (CognitiveLearner API)
-   - `get_advice()` → `advise()` (Advisor API)
-   - Bracket prefix `[TAG]` triggered noise filter → moved marker to end
-   - Actionability threshold too aggressive → tuned patterns and weights
-   - `insights` variable unbound → changed to `pairs`
-   - Flat dict format not handled → added format detection
-   - `last_validated` field mismatch → `last_validated_at`
-   - Duplicate detection on re-run → accepted DUPLICATE verdict
+   - `score_insight()` â†’ `roast()` (Meta-Ralph API)
+   - `store_insight()` â†’ `add_insight()` (CognitiveLearner API)
+   - `get_recent_insights()` â†’ `learner.insights.values()` (CognitiveLearner API)
+   - `get_advice()` â†’ `advise()` (Advisor API)
+   - Bracket prefix `[TAG]` triggered noise filter â†’ moved marker to end
+   - Actionability threshold too aggressive â†’ tuned patterns and weights
+   - `insights` variable unbound â†’ changed to `pairs`
+   - Flat dict format not handled â†’ added format detection
+   - `last_validated` field mismatch â†’ `last_validated_at`
+   - Duplicate detection on re-run â†’ accepted DUPLICATE verdict
 5. **Tuned the actionability classifier**: Added patterns and adjusted weights until 7/7 test cases passed
 6. **Target end state**: 10/10 E2E benchmark pass after missing modules are implemented and wired
 
@@ -970,14 +970,15 @@ In a single session, we:
 
 ### Key Design Decisions
 
-1. **Safety-first auto-tuner**: Snapshot → change → verify → rollback. Never applies changes without measuring impact.
+1. **Safety-first auto-tuner**: Snapshot â†’ change â†’ verify â†’ rollback. Never applies changes without measuring impact.
 2. **Zero noise tolerance**: Both the regression guard and auto-tuner roll back on ANY noise appearance.
 3. **Graceful degradation**: Every system handles missing dependencies with try/except. If Meta-Ralph is unavailable, the hypothesis bridge still works (just without quality gating).
 4. **Format tolerance**: Memory tier engine handles both flat dict and nested list cognitive insights formats.
 5. **Audit trails**: Every system logs its actions to JSONL files in `~/.spark/` for inspection.
 6. **Singleton pattern**: Heavy-initialization modules (MetaRalph, CognitiveLearner, MemoryTierEngine, ImplicitOutcomeTracker) use singleton access functions.
-7. **No bracket prefixes in test insights**: The cognitive learner's noise filter catches `[TAG]` patterns — synthetic test insights use end-of-string markers instead.
+7. **No bracket prefixes in test insights**: The cognitive learner's noise filter catches `[TAG]` patterns â€” synthetic test insights use end-of-string markers instead.
 
 ---
 
 *This document is auto-generated from the self-improvement systems session. For individual module documentation, see the docstrings in each file.*
+
