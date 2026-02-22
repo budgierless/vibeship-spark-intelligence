@@ -97,6 +97,7 @@ def _patch_advisor(monkeypatch, tmp_path):
     monkeypatch.setattr(advisor_mod, "get_cognitive_learner", lambda: _DummyCognitive())
     monkeypatch.setattr(advisor_mod, "get_mind_bridge", lambda: _DummyMindBridge())
     monkeypatch.setattr(advisor_mod, "HAS_EIDOS", False)
+    monkeypatch.setattr(advisor_mod, "AUTO_TUNER_SOURCE_BOOSTS", {})
     monkeypatch.setattr("lib.feedback_effectiveness_cache.get_feedback_cache", lambda: _DummyFeedbackCache())
     # Stub singleton so tests are isolated
     monkeypatch.setattr(advisor_mod, "_advisor", None)
@@ -244,6 +245,35 @@ class TestSourceBoostAndRanking:
             score_bank = adv._rank_score(a_bank)
             score_cog = adv._rank_score(a_cognitive)
         assert score_bank < score_cog
+
+    def test_auto_tuner_boost_scales_source_quality_map(self, monkeypatch, tmp_path):
+        _patch_advisor(monkeypatch, tmp_path)
+        monkeypatch.setattr(advisor_mod, "AUTO_TUNER_SOURCE_BOOSTS", {"cognitive": 1.8, "bank": 0.5})
+        adv = SparkAdvisor()
+        assert adv._SOURCE_BOOST["cognitive"] > adv._SOURCE_QUALITY["cognitive"]
+        assert adv._SOURCE_BOOST["bank"] < adv._SOURCE_QUALITY["bank"]
+
+    def test_reload_reads_auto_tuner_source_boosts_and_refreshes_singleton(self, monkeypatch, tmp_path):
+        _patch_advisor(monkeypatch, tmp_path)
+        fake_home = tmp_path / "home"
+        spark_dir = fake_home / ".spark"
+        spark_dir.mkdir(parents=True, exist_ok=True)
+        tuneables_path = spark_dir / "tuneables.json"
+        tuneables_path.write_text(
+            json.dumps(
+                {
+                    "advisor": {"min_rank_score": 0.35},
+                    "auto_tuner": {"source_boosts": {"cognitive": 1.8}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(advisor_mod.Path, "home", staticmethod(lambda: fake_home))
+        monkeypatch.setattr(advisor_mod, "_advisor", SparkAdvisor())
+        baseline = advisor_mod._advisor._SOURCE_BOOST["cognitive"]
+        cfg = advisor_mod.reload_advisor_config()
+        assert cfg["source_boosts"]["cognitive"] == 1.8
+        assert advisor_mod._advisor._SOURCE_BOOST["cognitive"] > baseline
 
     def test_rank_advice_sorts_descending(self, monkeypatch, tmp_path):
         adv = _build_advisor(monkeypatch, tmp_path)

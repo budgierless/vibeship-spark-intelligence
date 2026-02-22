@@ -109,6 +109,7 @@ MIN_RANK_SCORE = 0.35  # Additive 3-factor scoring: avg good insight ~0.50, weak
 CATEGORY_EFFECTIVENESS_MIN_SURFACE = 6
 CATEGORY_EFFECTIVENESS_DECAY_SECONDS = 14 * 24 * 3600
 CATEGORY_EFFECTIVENESS_STALE_SECONDS = 180 * 24 * 3600
+AUTO_TUNER_SOURCE_BOOSTS: Dict[str, float] = {}
 MIND_MAX_STALE_SECONDS = float(os.environ.get("SPARK_ADVISOR_MIND_MAX_STALE_S", "0"))
 MIND_STALE_ALLOW_IF_EMPTY = os.environ.get("SPARK_ADVISOR_MIND_STALE_ALLOW_IF_EMPTY", "1") != "0"
 MIND_MIN_SALIENCE = float(os.environ.get("SPARK_ADVISOR_MIND_MIN_SALIENCE", "0.5"))
@@ -653,11 +654,13 @@ def _load_advisor_config() -> None:
     """
     global MIN_RELIABILITY_FOR_ADVICE, MIN_VALIDATIONS_FOR_STRONG_ADVICE
     global MAX_ADVICE_ITEMS, ADVICE_CACHE_TTL_SECONDS, MIN_RANK_SCORE
+    global AUTO_TUNER_SOURCE_BOOSTS
     global MIND_MAX_STALE_SECONDS, MIND_STALE_ALLOW_IF_EMPTY, MIND_MIN_SALIENCE
     global MIND_RESERVE_SLOTS, MIND_RESERVE_MIN_RANK
     global REPLAY_ADVISORY_ENABLED, REPLAY_MIN_STRICT_SAMPLES, REPLAY_MIN_IMPROVEMENT_DELTA
     global REPLAY_MAX_RECORDS, REPLAY_MAX_AGE_S, REPLAY_STRICT_WINDOW_S, REPLAY_MIN_CONTEXT_MATCH
     global REPLAY_MODE, GUIDANCE_STYLE
+    AUTO_TUNER_SOURCE_BOOSTS = {}
     try:
         # Tests should be deterministic and not depend on user-local ~/.spark state.
         # However, some unit tests *do* validate this loader by monkeypatching Path.home().
@@ -686,6 +689,23 @@ def _load_advisor_config() -> None:
         cfg = data.get("advisor") or {}
         if not isinstance(cfg, dict):
             cfg = {}
+        auto_cfg = data.get("auto_tuner") or {}
+        if isinstance(auto_cfg, dict):
+            raw_boosts = auto_cfg.get("source_boosts")
+            if isinstance(raw_boosts, dict):
+                parsed: Dict[str, float] = {}
+                for raw_source, raw_boost in raw_boosts.items():
+                    source = str(raw_source or "").strip().lower()
+                    if not source:
+                        continue
+                    try:
+                        boost = float(raw_boost)
+                    except Exception:
+                        continue
+                    if not math.isfinite(boost):
+                        continue
+                    parsed[source] = max(0.0, min(2.0, boost))
+                AUTO_TUNER_SOURCE_BOOSTS = parsed
         # Fall back to top-level "values" for advice_cache_ttl (backward compat)
         values = data.get("values") or {}
         if isinstance(values, dict) and "advice_cache_ttl" in values and "cache_ttl" not in cfg:
@@ -755,6 +775,43 @@ def _load_advisor_config() -> None:
 _load_advisor_config()
 
 
+def _compose_source_quality_with_boosts(base_quality: Dict[str, float]) -> Dict[str, float]:
+    merged: Dict[str, float] = {}
+    for source, raw_value in dict(base_quality or {}).items():
+        try:
+            value = float(raw_value)
+        except Exception:
+            continue
+        if not math.isfinite(value):
+            continue
+        merged[str(source)] = max(0.0, min(2.0, value))
+
+    for source, raw_boost in dict(AUTO_TUNER_SOURCE_BOOSTS or {}).items():
+        normalized = str(source or "").strip().lower()
+        if not normalized:
+            continue
+        try:
+            boost = float(raw_boost)
+        except Exception:
+            continue
+        if not math.isfinite(boost):
+            continue
+        base = float(merged.get(normalized, 0.50))
+        merged[normalized] = max(0.0, min(2.0, base * max(0.0, min(2.0, boost))))
+    return merged
+
+
+def _refresh_live_advisor_source_boosts() -> None:
+    instance = globals().get("_advisor")
+    if instance is None:
+        return
+    try:
+        base_quality = getattr(instance, "_SOURCE_QUALITY", {}) or {}
+        instance._SOURCE_BOOST = _compose_source_quality_with_boosts(base_quality)
+    except Exception:
+        pass
+
+
 def _reload_advisor_from(cfg: Dict[str, Any]) -> None:
     """Hot-reload advisor tuneables from coordinator-supplied dict.
 
@@ -762,11 +819,13 @@ def _reload_advisor_from(cfg: Dict[str, Any]) -> None:
     reads multiple sections (advisor, advisory_preferences, retrieval).
     """
     _load_advisor_config()
+    _refresh_live_advisor_source_boosts()
 
 
 try:
     from lib.tuneables_reload import register_reload as _advisor_register
     _advisor_register("advisor", _reload_advisor_from, label="advisor.reload_from")
+    _advisor_register("auto_tuner", _reload_advisor_from, label="advisor.reload_from.auto_tuner")
 except ImportError:
     pass
 
@@ -774,6 +833,7 @@ except ImportError:
 def reload_advisor_config() -> Dict[str, Any]:
     """Reload advisor tuneables and return the effective replay/user preference subset."""
     _load_advisor_config()
+    _refresh_live_advisor_source_boosts()
     return {
         "replay_mode": REPLAY_MODE,
         "guidance_style": GUIDANCE_STYLE,
@@ -786,6 +846,7 @@ def reload_advisor_config() -> Dict[str, Any]:
         "replay_min_context": float(REPLAY_MIN_CONTEXT_MATCH),
         "max_items": int(MAX_ADVICE_ITEMS),
         "min_rank_score": float(MIN_RANK_SCORE),
+        "source_boosts": dict(AUTO_TUNER_SOURCE_BOOSTS),
     }
 
 
@@ -1070,7 +1131,7 @@ class SparkAdvisor:
         self._memory_emotion_cfg_mtime: Optional[float] = None
         self._last_minimax_rerank_ts: float = 0.0
         # Legacy benchmark/profile tooling mutates this map directly.
-        self._SOURCE_BOOST: Dict[str, float] = dict(self._SOURCE_QUALITY)
+        self._SOURCE_BOOST: Dict[str, float] = _compose_source_quality_with_boosts(self._SOURCE_QUALITY)
 
         # Prefilter cache: avoid per-query regex tokenization across large insight sets.
         # key -> (blob_hash, token_set, blob_lower)
