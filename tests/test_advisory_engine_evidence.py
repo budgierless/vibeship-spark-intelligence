@@ -127,6 +127,13 @@ def test_engine_config_exposes_fallback_rate_guard_fields(monkeypatch):
     assert cfg["fallback_rate_window"] == 120
 
 
+def test_engine_config_exposes_global_dedupe_cooldown(monkeypatch):
+    monkeypatch.setattr(advisory_engine, "GLOBAL_DEDUPE_COOLDOWN_S", 600.0)
+    advisory_engine.apply_engine_config({"global_dedupe_cooldown_s": 180.0})
+    cfg = advisory_engine.get_engine_config()
+    assert cfg["global_dedupe_cooldown_s"] == 180.0
+
+
 def test_fallback_rate_guard_blocks_when_recent_ratio_exceeded(monkeypatch, tmp_path):
     log_path = tmp_path / "advisory_engine.jsonl"
     rows = []

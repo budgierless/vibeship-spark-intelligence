@@ -13,8 +13,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .diagnostics import log_debug
 from .advisory_quarantine import record_quarantine_item
+from .diagnostics import log_debug
 from .error_taxonomy import build_error_fields
 
 ENGINE_ENABLED = os.getenv("SPARK_ADVISORY_ENGINE", "1") != "0"
@@ -403,6 +403,7 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global ACTIONABILITY_ENFORCE
     global DELIVERY_STALE_SECONDS
     global ADVISORY_TEXT_REPEAT_COOLDOWN_S
+    global GLOBAL_DEDUPE_COOLDOWN_S
     global FORCE_PROGRAMMATIC_SYNTH
     global SELECTIVE_AI_SYNTH_ENABLED
     global SELECTIVE_AI_MIN_REMAINING_MS
@@ -561,6 +562,16 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             applied.append("advisory_text_repeat_cooldown_s")
         except Exception:
             warnings.append("invalid_advisory_text_repeat_cooldown_s")
+
+    if "global_dedupe_cooldown_s" in cfg:
+        try:
+            GLOBAL_DEDUPE_COOLDOWN_S = max(
+                0.0,
+                min(86400.0, float(cfg.get("global_dedupe_cooldown_s") or 0.0)),
+            )
+            applied.append("global_dedupe_cooldown_s")
+        except Exception:
+            warnings.append("invalid_global_dedupe_cooldown_s")
     return {"applied": applied, "warnings": warnings}
 
 
@@ -584,6 +595,7 @@ def get_engine_config() -> Dict[str, Any]:
         "session_key_include_recent_tools": bool(SESSION_KEY_INCLUDE_RECENT_TOOLS),
         "delivery_stale_s": float(DELIVERY_STALE_SECONDS),
         "advisory_text_repeat_cooldown_s": float(ADVISORY_TEXT_REPEAT_COOLDOWN_S),
+        "global_dedupe_cooldown_s": float(GLOBAL_DEDUPE_COOLDOWN_S),
     }
 
 
@@ -1452,6 +1464,15 @@ def on_pre_tool(
         )
 
     try:
+        from .advisor import advise_on_tool
+        from .advisory_emitter import emit_advisory
+        from .advisory_gate import evaluate, get_tool_cooldown_s
+        from .advisory_packet_store import (
+            build_packet,
+            record_packet_usage,
+            resolve_advisory_packet_for_context,
+            save_packet,
+        )
         from .advisory_state import (
             load_state,
             mark_advice_shown,
@@ -1460,16 +1481,7 @@ def on_pre_tool(
             save_state,
             suppress_tool_advice,
         )
-        from .advisory_packet_store import (
-            build_packet,
-            resolve_advisory_packet_for_context,
-            record_packet_usage,
-            save_packet,
-        )
-        from .advisor import advise_on_tool
-        from .advisory_gate import evaluate, get_tool_cooldown_s
         from .advisory_synthesizer import synthesize
-        from .advisory_emitter import emit_advisory
 
         state = load_state(session_id)
         resolved_trace_id = trace_id or resolve_recent_trace_id(state, tool_name)
@@ -2594,8 +2606,8 @@ def on_user_prompt(
     start_ms = time.time() * 1000.0
 
     try:
-        from .advisory_state import load_state, record_user_intent, save_state
         from .advisory_packet_store import build_packet, enqueue_prefetch_job, save_packet
+        from .advisory_state import load_state, record_user_intent, save_state
 
         state = load_state(session_id)
         record_user_intent(state, prompt_text)

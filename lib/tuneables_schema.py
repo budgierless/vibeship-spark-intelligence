@@ -125,6 +125,7 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "prefetch_inline_max_jobs": TuneableSpec("int", 1, 0, 10, "Max inline prefetch jobs"),
         "delivery_stale_s": TuneableSpec("float", 600, 60, 86400, "Delivery staleness threshold (s)"),
         "advisory_text_repeat_cooldown_s": TuneableSpec("float", 300, 30, 86400, "Text repeat cooldown (s)"),
+        "global_dedupe_cooldown_s": TuneableSpec("float", 600, 0, 86400, "Cross-session global dedupe cooldown (s)"),
         "actionability_enforce": TuneableSpec("bool", True, None, None, "Enforce actionability scoring"),
         "force_programmatic_synth": TuneableSpec("bool", False, None, None, "Force programmatic synthesis"),
         "selective_ai_synth_enabled": TuneableSpec("bool", True, None, None, "Enable selective AI synthesis"),
