@@ -20,13 +20,27 @@ def _patch_queue_paths(tmp_path: Path, monkeypatch) -> None:
 
 def _merge_overflow(queue_mod):
     """Merge any overflow events into the main queue file."""
-    overflow = queue_mod.OVERFLOW_FILE
-    if overflow.exists():
+    for overflow in _overflow_files(queue_mod):
+        if not overflow.exists():
+            continue
         data = overflow.read_text(encoding="utf-8")
         if data.strip():
             with open(queue_mod.EVENTS_FILE, "a", encoding="utf-8") as f:
                 f.write(data)
         overflow.unlink()
+
+
+def _overflow_files(queue_mod):
+    out = []
+    if queue_mod.OVERFLOW_FILE.exists():
+        out.append(queue_mod.OVERFLOW_FILE)
+    pattern = f"{queue_mod.OVERFLOW_FILE.stem}.*{queue_mod.OVERFLOW_FILE.suffix}"
+    out.extend(
+        p
+        for p in sorted(queue_mod.OVERFLOW_FILE.parent.glob(pattern))
+        if p != queue_mod.OVERFLOW_FILE
+    )
+    return out
 
 
 def test_concurrent_writes_no_loss(tmp_path, monkeypatch):
@@ -261,7 +275,9 @@ def test_concurrent_overflow_writes_no_loss(tmp_path, monkeypatch):
 
     assert all(ok_flags)
 
-    lines = [ln for ln in queue.OVERFLOW_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    lines = []
+    for overflow in _overflow_files(queue):
+        lines.extend([ln for ln in overflow.read_text(encoding="utf-8").splitlines() if ln.strip()])
     assert len(lines) == n_threads * n_events_per_thread
     decoded = [json.loads(ln) for ln in lines]
     actual = {(row["session_id"], row["data"]["i"]) for row in decoded}

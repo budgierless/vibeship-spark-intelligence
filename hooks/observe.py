@@ -926,7 +926,15 @@ def main():
         if error:
             kwargs["error"] = str(error)[:500]
     
-    quick_capture(event_type, session_id, data, **kwargs)
+    captured = quick_capture(event_type, session_id, data, **kwargs)
+    if not captured:
+        log_debug(
+            "observe",
+            "quick_capture returned False",
+            None,
+        )
+        # Keep this concise; stderr is operator-facing during live runs.
+        sys.stderr.write("[SPARK] warning: event capture dropped (queue contention)\n")
 
     # Pattern detection is handled by the background pipeline (lib/pipeline.py)
     # to keep the hook fast. Removed synchronous aggregator call.

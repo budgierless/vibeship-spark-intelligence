@@ -14,6 +14,7 @@ import json
 import os
 import time
 import hashlib
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -193,17 +194,67 @@ def _iter_active_lines(path: Path) -> List[str]:
     return list(_iter_active_lines_iter(path) or [])
 
 
+def _overflow_lock_path() -> Path:
+    return OVERFLOW_FILE.with_suffix(OVERFLOW_FILE.suffix + ".lock")
+
+
+def _overflow_shard_path() -> Path:
+    return OVERFLOW_FILE.with_name(
+        f"{OVERFLOW_FILE.stem}.{os.getpid()}.{threading.get_ident()}{OVERFLOW_FILE.suffix}"
+    )
+
+
+def _overflow_sidecar_files() -> List[Path]:
+    out: List[Path] = []
+    if OVERFLOW_FILE.exists():
+        out.append(OVERFLOW_FILE)
+    pattern = f"{OVERFLOW_FILE.stem}.*{OVERFLOW_FILE.suffix}"
+    try:
+        for path in sorted(OVERFLOW_FILE.parent.glob(pattern)):
+            if path == OVERFLOW_FILE:
+                continue
+            out.append(path)
+    except Exception:
+        pass
+    return out
+
+
+def _append_overflow_shard(line: str) -> bool:
+    try:
+        shard_path = _overflow_shard_path()
+        with open(shard_path, "a", encoding="utf-8") as f:
+            f.write(line)
+        return True
+    except Exception as e:
+        log_debug("queue", "overflow shard write failed", e)
+        return False
+
+
 def _merge_overflow_locked() -> None:
     """Merge overflow sidecar into main queue (requires queue lock held)."""
-    if not OVERFLOW_FILE.exists():
+    overflow_files = _overflow_sidecar_files()
+    if not overflow_files:
         return
+    merged_any = False
     try:
-        overflow_data = OVERFLOW_FILE.read_text(encoding="utf-8")
-        if overflow_data.strip():
-            with open(EVENTS_FILE, "a", encoding="utf-8") as f:
-                f.write(overflow_data)
-        OVERFLOW_FILE.unlink()
-        _invalidate_count_cache()
+        with open(EVENTS_FILE, "a", encoding="utf-8") as out:
+            for overflow_path in overflow_files:
+                if not overflow_path.exists():
+                    continue
+                try:
+                    overflow_data = overflow_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    log_debug("queue", f"overflow read failed ({overflow_path})", e)
+                    continue
+                if overflow_data.strip():
+                    out.write(overflow_data)
+                    merged_any = True
+                try:
+                    overflow_path.unlink()
+                except Exception as e:
+                    log_debug("queue", f"overflow unlink failed ({overflow_path})", e)
+        if merged_any:
+            _invalidate_count_cache()
     except Exception as e:
         log_debug("queue", "overflow merge failed", e)
 
@@ -296,13 +347,17 @@ def quick_capture(event_type: EventType, session_id: str, data: Dict[str, Any],
             else:
                 # Lock busy (consumer/rotator active) -- write to overflow
                 # sidecar so no events are lost. Merged on next consume.
-                overflow_lock_file = OVERFLOW_FILE.with_suffix(OVERFLOW_FILE.suffix + ".lock")
+                overflow_lock_file = _overflow_lock_path()
                 overflow_lock = _queue_lock(timeout_s=0.5, lock_file=overflow_lock_file)
                 with overflow_lock:
                     if not overflow_lock.acquired:
-                        log_debug("queue", "overflow lock busy; dropping event")
+                        # Last-resort fallback: shard sidecar by pid/thread to
+                        # avoid cross-thread lock contention drops.
+                        if _append_overflow_shard(line):
+                            return True
+                        log_debug("queue", "overflow lock busy and shard write failed; dropping event")
                         return False
-                    with open(OVERFLOW_FILE, "a") as f:
+                    with open(OVERFLOW_FILE, "a", encoding="utf-8") as f:
                         f.write(line)
 
         # Best-effort rotation so the queue doesn't grow unbounded.
@@ -421,8 +476,12 @@ def clear_events() -> int:
         with _queue_lock():
             if EVENTS_FILE.exists():
                 EVENTS_FILE.unlink()
-            if OVERFLOW_FILE.exists():
-                OVERFLOW_FILE.unlink()
+            for overflow_path in _overflow_sidecar_files():
+                if overflow_path.exists():
+                    overflow_path.unlink()
+            overflow_lock = _overflow_lock_path()
+            if overflow_lock.exists():
+                overflow_lock.unlink()
             _set_queue_head_bytes(0)
             _invalidate_count_cache()
     
