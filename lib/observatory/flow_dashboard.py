@@ -40,6 +40,10 @@ def _health_status(data: dict[int, dict]) -> list[tuple[str, str, str]]:
     # Meta-Ralph
     mr = data.get(5, {})
     rows.append(("Meta-Ralph roasted", fmt_num(mr.get("total_roasted", 0)), "healthy"))
+    pass_rate = mr.get("pass_rate", 0)
+    rows.append(("Meta-Ralph pass rate", f"{pass_rate}%",
+                 "healthy" if pass_rate > 30 else ("warning" if pass_rate > 15 else "critical")))
+    rows.append(("Meta-Ralph avg score", str(mr.get("avg_total_score", 0)), "healthy"))
 
     # Cognitive
     cg = data.get(6, {})
@@ -54,6 +58,12 @@ def _health_status(data: dict[int, dict]) -> list[tuple[str, str, str]]:
     ad = data.get(8, {})
     rows.append(("Advisory given", fmt_num(ad.get("total_advice_given", 0)), "healthy"))
     rows.append(("Advisory followed", f"{ad.get('followed_rate', 0)}%", "healthy"))
+    emit_rate = ad.get("decision_emit_rate", 0)
+    rows.append(("Advisory emit rate", f"{emit_rate}%",
+                 "healthy" if emit_rate > 20 else "warning"))
+    fb_follow = ad.get("feedback_follow_rate", 0)
+    rows.append(("Implicit follow rate", f"{fb_follow}%",
+                 "healthy" if fb_follow > 40 else "warning"))
 
     # Promotion
     pr = data.get(9, {})

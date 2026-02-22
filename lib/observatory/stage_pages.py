@@ -210,9 +210,14 @@ def _gen_memory_capture(d: dict, all_data: dict) -> str:
 
 def _gen_meta_ralph(d: dict, all_data: dict) -> str:
     s = _header(5, "Meta-Ralph", "Quality gate for ALL insights. Multi-dimensional scoring: actionability, novelty, reasoning, specificity, outcome-linkage, ethics. Detects primitives, tautologies, circular reasoning, and noise.", [4, 3], [6])
+
+    pass_rate = d.get("pass_rate", 0)
+    pass_status = "healthy" if pass_rate > 30 else ("warning" if pass_rate > 15 else "critical")
     s += _health_table([
         ("Total roasted", fmt_num(d.get("total_roasted", 0)), "healthy"),
         ("Learnings stored", fmt_num(d.get("learnings_count", 0)), "healthy"),
+        ("Pass rate (quality)", f"{pass_rate}%", pass_status),
+        ("Average total score", str(d.get("avg_total_score", 0)), "healthy"),
     ])
 
     # Verdict distribution
@@ -227,6 +232,51 @@ def _gen_meta_ralph(d: dict, all_data: dict) -> str:
             s += f"| {v} | {count} | {pct}% |\n"
         s += "\n"
 
+    # Dimension score averages
+    dim_avgs = d.get("dimension_averages", {})
+    if dim_avgs:
+        s += "## Dimension Averages (all time)\n\n"
+        s += "*Each dimension scored 0-2, summed to total (0-12). Higher is better.*\n\n"
+        s += "| Dimension | Avg Score | Bar |\n"
+        s += "|-----------|-----------|-----|\n"
+        for dim in ["actionability", "novelty", "reasoning", "specificity", "outcome_linked", "ethics"]:
+            avg = dim_avgs.get(dim, 0)
+            bar = _score_bar(avg, 2.0)
+            s += f"| {dim} | {avg} | {bar} |\n"
+        s += "\n"
+
+    # Outcome effectiveness
+    tracked = d.get("outcomes_total_tracked", 0)
+    if tracked > 0:
+        s += "## Outcome Effectiveness\n\n"
+        s += "*Tracks whether insights that passed Meta-Ralph led to good outcomes.*\n\n"
+        s += "| Metric | Value |\n"
+        s += "|--------|-------|\n"
+        s += f"| Total tracked | {fmt_num(tracked)} |\n"
+        s += f"| Acted on | {fmt_num(d.get('outcomes_acted_on', 0))} |\n"
+        s += f"| Good outcomes | {fmt_num(d.get('outcomes_good', 0))} |\n"
+        s += f"| Bad outcomes | {fmt_num(d.get('outcomes_bad', 0))} |\n"
+        s += f"| Effectiveness | **{d.get('outcomes_effectiveness', 0)}%** |\n"
+        s += "\n"
+
+    # Recommendations for weak dimensions
+    weak = d.get("weak_dimensions", [])
+    if weak:
+        s += "## Recommendations\n\n"
+        s += "*Auto-generated based on dimension averages below 1.5/2.0.*\n\n"
+        recs = {
+            "actionability": "Insights lack clear next-steps. Focus on capturing concrete actions, not observations.",
+            "novelty": "Too many repetitive insights passing the gate. Consider raising the dedupe similarity threshold.",
+            "reasoning": "Insights lack causal reasoning. Look for why/because/leads-to patterns in captures.",
+            "specificity": "Insights are too vague. Include numbers, tool names, file paths, or concrete examples.",
+            "outcome_linked": "Few insights connect to measurable outcomes. Wire up more prediction-outcome pairs.",
+            "ethics": "Low ethics scores may indicate insights about sensitive operations. Review capture filters.",
+        }
+        for dim in weak:
+            rec = recs.get(dim, f"Dimension '{dim}' is underperforming — investigate capture and scoring.")
+            s += f"- **{dim}**: {rec}\n"
+        s += "\n"
+
     # Recent verdicts
     recent = d.get("recent_verdicts", [])
     if recent:
@@ -238,12 +288,21 @@ def _gen_meta_ralph(d: dict, all_data: dict) -> str:
             s += f"| {entry['ts'][:19]} | {entry['source']} | **{entry['verdict']}** | {entry['score']} | {issues} |\n"
         s += "\n"
 
+    s += "## Deep Dive\n\n"
+    s += "- [[../explore/verdicts/_index|Browse Individual Verdicts]] — score breakdowns, input text, issues\n\n"
+
     s += _source_files("lib/meta_ralph.py", [
         "meta_ralph/learnings_store.json",
         "meta_ralph/roast_history.json",
         "meta_ralph/outcome_tracking.json",
     ])
     return s
+
+
+def _score_bar(value: float, max_val: float) -> str:
+    """Generate a simple text bar for a score."""
+    filled = int(round(value / max(max_val, 0.01) * 10))
+    return "`" + "█" * filled + "░" * (10 - filled) + "`"
 
 
 # ── Stage 6: Cognitive Learner ───────────────────────────────────────
@@ -327,13 +386,44 @@ def _gen_advisory(d: dict, all_data: dict) -> str:
     s = _header(8, "Advisory", "Just-in-time advice engine. Retrieves from Cognitive, EIDOS, Chips, and Mind. RRF fusion + cross-encoder reranking. Tracks implicit feedback (tool success/failure after advice).", [6, 7, 10], [9])
 
     followed_status = "healthy" if d.get("followed_rate", 0) > 40 else "warning"
+    emit_rate = d.get("decision_emit_rate", 0)
+    fb_follow = d.get("feedback_follow_rate", 0)
     s += _health_table([
         ("Total advice given", fmt_num(d.get("total_advice_given", 0)), "healthy"),
-        ("Followed", f"{fmt_num(d.get('total_followed', 0))} ({d.get('followed_rate', 0)}%)", followed_status),
+        ("Followed (effectiveness)", f"{fmt_num(d.get('total_followed', 0))} ({d.get('followed_rate', 0)}%)", followed_status),
         ("Helpful", fmt_num(d.get("total_helpful", 0)), "healthy"),
-        ("Cognitive helpful rate", f"{d.get('cognitive_helpful_rate', 0):.1%}", "healthy"),
+        ("Decision emit rate", f"{emit_rate}%", "healthy" if emit_rate > 20 else "warning"),
+        ("Implicit follow rate", f"{fb_follow}%", "healthy" if fb_follow > 40 else "warning"),
         ("Advice log entries", f"~{fmt_num(d.get('advice_log_count', 0))}", "healthy"),
     ])
+
+    # Decision ledger summary
+    d_outcomes = d.get("decision_outcomes", {})
+    if d_outcomes:
+        s += "## Decision Ledger Summary\n\n"
+        s += "*Every advisory event is recorded: emitted (advice given), suppressed (filtered out), or blocked.*\n\n"
+        s += "| Outcome | Count | % |\n"
+        s += "|---------|-------|---|\n"
+        dtotal = d.get("decision_total", 0)
+        for outcome, count in sorted(d_outcomes.items(), key=lambda x: -x[1]):
+            pct = round(count / max(dtotal, 1) * 100, 1)
+            s += f"| **{outcome}** | {count} | {pct}% |\n"
+        s += "\n"
+
+    # Implicit feedback by tool
+    fb_by_tool = d.get("feedback_by_tool", {})
+    if fb_by_tool:
+        s += "## Implicit Feedback by Tool\n\n"
+        s += "*When advice is given before a tool call, the tool's success/failure signals whether advice was followed.*\n\n"
+        s += "| Tool | Followed | Ignored | Total | Follow Rate |\n"
+        s += "|------|----------|---------|-------|-------------|\n"
+        for tool, stats in sorted(fb_by_tool.items(), key=lambda x: -x[1]["total"]):
+            fol = stats["followed"]
+            ign = stats["ignored"]
+            tot = stats["total"]
+            rate = round(fol / max(fol + ign, 1) * 100, 1)
+            s += f"| {tool} | {fol} | {ign} | {tot} | {rate}% |\n"
+        s += "\n"
 
     # By-source breakdown
     by_source = d.get("by_source", {})
@@ -365,13 +455,16 @@ def _gen_advisory(d: dict, all_data: dict) -> str:
         s += "\n"
 
     s += "## Deep Dive\n\n"
-    s += "- [[../../watchtower|Advisory Watchtower]] — full advisory packet analysis\n"
-    s += "- [[../../packets/index|Packet Catalog]] — individual packet inspection\n\n"
+    s += "- [[../explore/decisions/_index|Advisory Decision Ledger]] — emit/suppress/block decisions\n"
+    s += "- [[../explore/feedback/_index|Implicit Feedback Loop]] — per-tool follow rates\n"
+    s += "- [[../explore/advisory/_index|Advisory Effectiveness]] — source breakdown + recent advice\n"
+    s += "- [[../explore/routing/_index|Retrieval Routing]] — route distribution and decisions\n\n"
 
     s += _source_files("lib/advisor.py", [
         "advisor/advice_log.jsonl",
         "advisor/effectiveness.json",
         "advisor/metrics.json",
+        "advisor/implicit_feedback.jsonl",
         "advisor/retrieval_router.jsonl",
         "advisory_decision_ledger.jsonl",
     ])

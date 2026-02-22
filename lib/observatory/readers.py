@@ -198,6 +198,13 @@ def read_meta_ralph(max_recent: int = 15) -> dict[str, Any]:
     # Outcome tracking
     ot = _load_json(_SD / "meta_ralph" / "outcome_tracking.json") or {}
     d["outcome_tracking"] = ot
+    d["outcomes_total_tracked"] = ot.get("total_tracked", 0)
+    d["outcomes_acted_on"] = ot.get("acted_on", 0)
+    d["outcomes_good"] = ot.get("good_outcomes", 0)
+    d["outcomes_bad"] = ot.get("bad_outcomes", 0)
+    d["outcomes_effectiveness"] = round(
+        ot.get("good_outcomes", 0) / max(ot.get("acted_on", 0), 1) * 100, 1
+    )
     # Roast history — recent verdicts
     rh = _load_json(_SD / "meta_ralph" / "roast_history.json") or {}
     history = rh.get("history", []) if isinstance(rh, dict) else []
@@ -205,10 +212,36 @@ def read_meta_ralph(max_recent: int = 15) -> dict[str, Any]:
     recent = history[-max_recent:] if history else []
     d["recent_verdicts"] = []
     verdicts: dict[str, int] = {}
+    # Dimension averages across all history
+    dims = ["actionability", "novelty", "reasoning", "specificity", "outcome_linked", "ethics"]
+    dim_sums: dict[str, float] = {dim: 0.0 for dim in dims}
+    dim_counts: dict[str, int] = {dim: 0 for dim in dims}
+    total_score_sum = 0.0
+    total_score_count = 0
     for entry in history:
-        v = entry.get("result", {}).get("verdict", "unknown")
+        r = entry.get("result", {})
+        v = r.get("verdict", "unknown")
         verdicts[v] = verdicts.get(v, 0) + 1
+        score = r.get("score", {})
+        if isinstance(score, dict):
+            for dim in dims:
+                val = score.get(dim)
+                if isinstance(val, (int, float)):
+                    dim_sums[dim] += val
+                    dim_counts[dim] += 1
+            total = score.get("total")
+            if isinstance(total, (int, float)):
+                total_score_sum += total
+                total_score_count += 1
     d["verdict_distribution"] = verdicts
+    d["dimension_averages"] = {
+        dim: round(dim_sums[dim] / max(dim_counts[dim], 1), 2) for dim in dims
+    }
+    d["avg_total_score"] = round(total_score_sum / max(total_score_count, 1), 2)
+    d["pass_rate"] = round(verdicts.get("quality", 0) / max(len(history), 1) * 100, 1)
+    # Weak dimensions (below 1.0 avg or lowest 2)
+    sorted_dims = sorted(d["dimension_averages"].items(), key=lambda x: x[1])
+    d["weak_dimensions"] = [dim for dim, avg in sorted_dims[:2] if avg < 1.5]
     for entry in recent:
         r = entry.get("result", {})
         d["recent_verdicts"].append({
@@ -329,8 +362,42 @@ def read_advisory(max_recent: int = 15) -> dict[str, Any]:
     d["recent_advice"] = _tail_jsonl(_SD / "advisor" / "advice_log.jsonl", max_recent)
     # Recent decision ledger
     d["recent_decisions"] = _tail_jsonl(_SD / "advisory_decision_ledger.jsonl", max_recent)
+    # Decision ledger aggregates
+    all_decisions = _tail_jsonl(_SD / "advisory_decision_ledger.jsonl", 200)
+    d_outcomes: dict[str, int] = {}
+    for entry in all_decisions:
+        outcome = entry.get("outcome", "?")
+        d_outcomes[outcome] = d_outcomes.get(outcome, 0) + 1
+    d["decision_outcomes"] = d_outcomes
+    d["decision_emit_rate"] = round(
+        d_outcomes.get("emitted", 0) / max(len(all_decisions), 1) * 100, 1
+    )
+    d["decision_total"] = len(all_decisions)
     # Total advice log count
     d["advice_log_count"] = _count_jsonl(_SD / "advisor" / "advice_log.jsonl")
+    # Implicit feedback summary
+    feedback_path = _SD / "advisor" / "implicit_feedback.jsonl"
+    fb_entries = _tail_jsonl(feedback_path, 200)
+    fb_followed = sum(1 for e in fb_entries if e.get("signal") == "followed")
+    fb_ignored = sum(1 for e in fb_entries if e.get("signal") == "ignored")
+    d["feedback_total"] = len(fb_entries)
+    d["feedback_followed"] = fb_followed
+    d["feedback_ignored"] = fb_ignored
+    d["feedback_follow_rate"] = round(
+        fb_followed / max(fb_followed + fb_ignored, 1) * 100, 1
+    )
+    # Per-tool follow rates
+    tool_fb: dict[str, dict[str, int]] = {}
+    for e in fb_entries:
+        tool = e.get("tool", "?")
+        if tool not in tool_fb:
+            tool_fb[tool] = {"followed": 0, "ignored": 0, "total": 0}
+        tool_fb[tool]["total"] += 1
+        if e.get("signal") == "followed":
+            tool_fb[tool]["followed"] += 1
+        elif e.get("signal") == "ignored":
+            tool_fb[tool]["ignored"] += 1
+    d["feedback_by_tool"] = tool_fb
     return d
 
 
