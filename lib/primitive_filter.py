@@ -4,36 +4,12 @@ from __future__ import annotations
 
 import re
 
+from lib.noise_patterns import TOOL_TOKENS, TOOL_TOKEN_RE, PRIMITIVE_KEYWORDS, ARROW_RE
 
-_TOOL_TOKENS = (
-    "read",
-    "edit",
-    "write",
-    "bash",
-    "glob",
-    "grep",
-    "todowrite",
-    "taskoutput",
-    "webfetch",
-    "powershell",
-    "python",
-    "killshell",
-    "cli",
-)
-
-_PRIM_KW = (
-    "struggle",
-    "overconfident",
-    "fails",
-    "failed",
-    "error",
-    "timeout",
-    "usage",
-    "sequence",
-    "pattern",
-)
-
-_TOOL_RE = re.compile(r"\\b(" + "|".join(re.escape(t) for t in _TOOL_TOKENS) + r")\\b", re.I)
+# Backward-compat aliases for any external consumers.
+_TOOL_TOKENS = TOOL_TOKENS
+_PRIM_KW = PRIMITIVE_KEYWORDS
+_TOOL_RE = TOOL_TOKEN_RE
 _TOOL_ERROR_KEY_RE = re.compile(r"\\btool[_\\s-]*\\d+[_\\s-]*error\\b", re.I)
 
 

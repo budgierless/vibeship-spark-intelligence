@@ -1029,27 +1029,13 @@ def _write_llm_advisory(advisory: str) -> None:
         log_debug("bridge_worker", f"Failed to write advisory: {e}", None)
 
 
-_EIDOS_NOISE_PATTERNS = [
-    # API/infra errors
-    "invalid api key",
-    "usage limit reached",
-    "rate limit",
-    "quota exceeded",
-    "authentication failed",
-    "insufficient credits",
-    "service unavailable",
-    # Tautologies and generic advice
-    "try a different approach",
-    "step back and",
-    "try something else",
-    "try another approach",
+# Import shared noise patterns and extend with EIDOS-specific ones.
+from lib.noise_patterns import API_ERROR_STRINGS, GENERIC_ADVICE_STRINGS
+
+_EIDOS_NOISE_PATTERNS = list(API_ERROR_STRINGS | GENERIC_ADVICE_STRINGS) + [
+    # EIDOS-specific tautologies not in shared set
     "when repeated",
     "without progress",
-    "always validate",
-    "always verify",
-    "be careful",
-    "consider alternatives",
-    "consider other options",
 ]
 
 

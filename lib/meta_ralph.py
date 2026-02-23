@@ -324,6 +324,8 @@ class MetaRalph:
 
     # Patterns that indicate primitive/operational learning (auto-reject)
     # NOTE: All patterns are matched case-insensitively via re.IGNORECASE
+    # NOTE: Overlaps with lib.noise_patterns shared patterns (Batch 6).
+    #        Kept in-class for self-contained MetaRalph scoring.
     PRIMITIVE_PATTERNS = [
         r"tasks? succeed with",           # "read tasks succeed with Read"
         r"pattern using \w+\.",           # "Successful write pattern using Write"
