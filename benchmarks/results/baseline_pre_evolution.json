@@ -1,0 +1,34 @@
+{
+  "captured_at": 1771880589.5092978,
+  "captured_at_iso": "2026-02-24T01:03:09",
+  "description": "Baseline telemetry before intelligence flow evolution",
+  "ledger_total_rows": 8685,
+  "ledger_sample_size": 5000,
+  "emit_rate_pct": 20.0,
+  "outcomes": {
+    "blocked": 3962,
+    "emitted": 998,
+    "error": 40
+  },
+  "stages_top10": {
+    "gate_no_emit": 2479,
+    "global_dedupe_suppressed": 1456,
+    "emitted": 998,
+    "engine_error": 40,
+    "fallback_rate_limit": 26,
+    "duplicate_suppressed": 1
+  },
+  "routes": {
+    "packet_relaxed": 2145,
+    "live": 2007,
+    "packet_exact": 822,
+    "packet_relaxed_fallback": 26
+  },
+  "tools_top5": {
+    "Read": 1777,
+    "Bash": 1338,
+    "Edit": 485,
+    "Grep": 405,
+    "Glob": 188
+  }
+}
