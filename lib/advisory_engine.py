@@ -46,6 +46,12 @@ try:
     )
 except Exception:
     FALLBACK_RATE_GUARD_WINDOW = 80
+# Per-window budget cap for fallback emissions (complementary to ratio guard).
+# Max N fallback emits per WINDOW tool calls. Resets when window is exhausted.
+FALLBACK_BUDGET_CAP = int(os.getenv("SPARK_ADVISORY_FALLBACK_BUDGET_CAP", "1"))
+FALLBACK_BUDGET_WINDOW = int(os.getenv("SPARK_ADVISORY_FALLBACK_BUDGET_WINDOW", "5"))
+_fallback_budget: Dict[str, int] = {"calls": 0, "quick_emits": 0, "packet_emits": 0}
+
 MEMORY_SCOPE_DEFAULT = str(os.getenv("SPARK_MEMORY_SCOPE_DEFAULT", "session") or "session").strip() or "session"
 ACTIONABILITY_ENFORCE = os.getenv("SPARK_ADVISORY_REQUIRE_ACTION", "1") != "0"
 
@@ -383,6 +389,8 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
     global FALLBACK_RATE_GUARD_ENABLED
     global FALLBACK_RATE_GUARD_MAX_RATIO
     global FALLBACK_RATE_GUARD_WINDOW
+    global FALLBACK_BUDGET_CAP
+    global FALLBACK_BUDGET_WINDOW
     global INLINE_PREFETCH_MAX_JOBS
     global ACTIONABILITY_ENFORCE
     global DELIVERY_STALE_SECONDS
@@ -473,6 +481,20 @@ def apply_engine_config(cfg: Dict[str, Any]) -> Dict[str, List[str]]:
             applied.append("fallback_rate_window")
         except Exception:
             warnings.append("invalid_fallback_rate_window")
+
+    if "fallback_budget_cap" in cfg:
+        try:
+            FALLBACK_BUDGET_CAP = max(0, int(cfg.get("fallback_budget_cap") or FALLBACK_BUDGET_CAP))
+            applied.append("fallback_budget_cap")
+        except Exception:
+            warnings.append("invalid_fallback_budget_cap")
+
+    if "fallback_budget_window" in cfg:
+        try:
+            FALLBACK_BUDGET_WINDOW = max(1, int(cfg.get("fallback_budget_window") or FALLBACK_BUDGET_WINDOW))
+            applied.append("fallback_budget_window")
+        except Exception:
+            warnings.append("invalid_fallback_budget_window")
 
     if "prefetch_inline_max_jobs" in cfg:
         try:
@@ -570,6 +592,8 @@ def get_engine_config() -> Dict[str, Any]:
         "fallback_rate_guard_enabled": bool(FALLBACK_RATE_GUARD_ENABLED),
         "fallback_rate_max_ratio": float(FALLBACK_RATE_GUARD_MAX_RATIO),
         "fallback_rate_window": int(FALLBACK_RATE_GUARD_WINDOW),
+        "fallback_budget_cap": int(FALLBACK_BUDGET_CAP),
+        "fallback_budget_window": int(FALLBACK_BUDGET_WINDOW),
         "prefetch_inline_max_jobs": int(INLINE_PREFETCH_MAX_JOBS),
         "actionability_enforce": bool(ACTIONABILITY_ENFORCE),
         "force_programmatic_synth": bool(FORCE_PROGRAMMATIC_SYNTH),
@@ -1416,6 +1440,35 @@ def _fallback_guard_allows() -> Dict[str, Any]:
     }
 
 
+def _fallback_budget_allows(kind: str) -> bool:
+    """Check if a fallback emission is allowed under the per-window budget cap.
+
+    Resets counters when FALLBACK_BUDGET_WINDOW tool calls are exhausted.
+    ``kind`` should be ``"quick"`` or ``"packet"``.
+    """
+    if FALLBACK_BUDGET_CAP <= 0:
+        return True  # 0 = unlimited (old behaviour)
+    key = f"{kind}_emits"
+    if _fallback_budget.get(key, 0) < FALLBACK_BUDGET_CAP:
+        return True
+    return False
+
+
+def _fallback_budget_record(kind: str) -> None:
+    """Record a fallback emission against the per-window budget."""
+    key = f"{kind}_emits"
+    _fallback_budget[key] = _fallback_budget.get(key, 0) + 1
+
+
+def _fallback_budget_tick() -> None:
+    """Increment the call counter and reset the window when exhausted."""
+    _fallback_budget["calls"] = _fallback_budget.get("calls", 0) + 1
+    if _fallback_budget["calls"] >= FALLBACK_BUDGET_WINDOW:
+        _fallback_budget["calls"] = 0
+        _fallback_budget["quick_emits"] = 0
+        _fallback_budget["packet_emits"] = 0
+
+
 def on_pre_tool(
     session_id: str,
     tool_name: str,
@@ -1496,6 +1549,8 @@ def on_pre_tool(
         intent_family = state.intent_family or "emergent_other"
         task_plane = state.task_plane or "build_delivery"
 
+        _fallback_budget_tick()
+
         # Early-exit: if same tool+context as last emission and within cooldown,
         # skip the entire retrieval → gate → synthesis path. (Batch 1 optimization.)
         context_fp = _text_fingerprint(f"{tool_name}:{session_context_key}")
@@ -1554,7 +1609,9 @@ def on_pre_tool(
             # delivery (better than returning None due to slow paths).
             elapsed_ms_pre = (time.time() * 1000.0) - start_ms
             remaining_ms_pre = MAX_ENGINE_MS - elapsed_ms_pre
-            if LIVE_QUICK_FALLBACK_ENABLED and remaining_ms_pre < float(LIVE_QUICK_FALLBACK_MIN_REMAINING_MS):
+            if (LIVE_QUICK_FALLBACK_ENABLED
+                    and remaining_ms_pre < float(LIVE_QUICK_FALLBACK_MIN_REMAINING_MS)
+                    and _fallback_budget_allows("quick")):
                 try:
                     from .advisor import Advice, get_quick_advice
 
@@ -1573,6 +1630,7 @@ def on_pre_tool(
                         )
                     ]
                     route = "live_quick"
+                    _fallback_budget_record("quick")
                 except Exception:
                     t_live = time.time() * 1000.0
                 advice_items = advise_on_tool(
@@ -1698,13 +1756,17 @@ def on_pre_tool(
             # If the packet path failed the gate, try a bounded deterministic
             # fallback using baseline text for this intent family, instead of
             # returning None (which wastes the entire advisory opportunity).
+            # Budget-capped (Batch 3): max FALLBACK_BUDGET_CAP per window.
             fallback_text = ""
-            if PACKET_FALLBACK_EMIT_ENABLED and route and route.startswith("packet"):
+            if (PACKET_FALLBACK_EMIT_ENABLED
+                    and route and route.startswith("packet")
+                    and _fallback_budget_allows("packet")):
                 elapsed_fb = (time.time() * 1000.0) - start_ms
                 if elapsed_fb < MAX_ENGINE_MS - 200:  # only if budget remains
                     fallback_text = _baseline_text(intent_family).strip()
                     if fallback_text:
                         route = f"{route}_fallback"
+                        _fallback_budget_record("packet")
 
             if not fallback_text:
                 suppression_meta = _gate_suppression_metadata(gate_result)
@@ -1938,6 +2000,7 @@ def on_pre_tool(
                     "packet_id": packet_id,
                     "stage_ms": stage_ms,
                     "delivery_mode": "fallback" if fallback_emitted else "none",
+                    "route_type": "fallback",
                     "emitted_text_preview": fallback_text[:220],
                     "advice_source_counts": advice_source_counts,
                     "actionability_added": bool(action_meta.get("added")),
