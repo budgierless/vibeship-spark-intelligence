@@ -16,7 +16,24 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 OUTCOMES_FILE = Path.home() / ".spark" / "outcomes.jsonl"
+OUTCOMES_FILE_MAX = 3000
 OUTCOME_LINKS_FILE = Path.home() / ".spark" / "outcome_links.jsonl"
+OUTCOME_LINKS_FILE_MAX = 3000
+
+
+def _rotate_jsonl(path: Path, max_lines: int) -> None:
+    """Trim a JSONL file to its last *max_lines* lines (size-estimated)."""
+    try:
+        if not path.exists():
+            return
+        if path.stat().st_size // 250 <= max_lines:
+            return
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if len(lines) <= max_lines:
+            return
+        path.write_text("\n".join(lines[-max_lines:]) + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _hash_id(*parts: str) -> str:
@@ -60,6 +77,7 @@ def append_outcomes(rows: Iterable[Dict[str, Any]]) -> int:
             _ensure_trace_id(row)
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             written += 1
+    _rotate_jsonl(OUTCOMES_FILE, OUTCOMES_FILE_MAX)
     return written
 
 
@@ -136,6 +154,7 @@ def link_outcome_to_insight(
     OUTCOME_LINKS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with OUTCOME_LINKS_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(link, ensure_ascii=False) + "\n")
+    _rotate_jsonl(OUTCOME_LINKS_FILE, OUTCOME_LINKS_FILE_MAX)
 
     return link
 
