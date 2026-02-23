@@ -658,14 +658,15 @@ def merge_chip_insights(
         context = " | ".join([p for p in context_parts if str(p).strip()])
 
         if not dry_run:
-            # Add distilled statement to cognitive system.
-            added = cog.add_insight(
+            # Add distilled statement through unified validation.
+            from lib.validate_and_store import validate_and_store_insight
+            added = validate_and_store_insight(
+                text=learning_statement,
                 category=category,
-                insight=learning_statement,
                 context=context,
                 confidence=max(float(confidence or 0.0), float(quality_total or 0.0)),
-                record_exposure=False,  # We'll batch record below
                 source=f"chip:{chip_id}:distilled",
+                record_exposure=False,
             )
             if not added:
                 stats["skipped_non_learning"] += 1

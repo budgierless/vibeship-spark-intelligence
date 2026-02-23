@@ -152,13 +152,13 @@ def _process_decision(data: Dict, state: Dict) -> None:
         }
         state["advisory_outcomes"] = advisory_outcomes
 
-    # Feed into cognitive system
+    # Feed into cognitive system via unified validation
     try:
-        from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
-        cog = get_cognitive_learner()
-        cog.add_insight(
+        from lib.cognitive_learner import CognitiveCategory
+        from lib.validate_and_store import validate_and_store_insight
+        validate_and_store_insight(
+            text=f"Agent decided: {intent} (confidence={confidence:.1f})",
             category=CognitiveCategory.WISDOM,
-            insight=f"Agent decided: {intent} (confidence={confidence:.1f})",
             context=reasoning,
             confidence=confidence,
             source="feedback_loop",
@@ -182,15 +182,15 @@ def _process_outcome(data: Dict, state: Dict) -> None:
     else:
         state["total_neutral"] = state.get("total_neutral", 0) + 1
 
-    # Feed lesson into cognitive system
+    # Feed lesson into cognitive system via unified validation
     if lesson:
         try:
-            from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
-            cog = get_cognitive_learner()
+            from lib.cognitive_learner import CognitiveCategory
+            from lib.validate_and_store import validate_and_store_insight
             cat = CognitiveCategory.WISDOM if success else CognitiveCategory.REASONING
-            cog.add_insight(
+            validate_and_store_insight(
+                text=lesson,
                 category=cat,
-                insight=lesson,
                 context=f"Outcome: {result}",
                 confidence=0.9 if success else 0.7,
                 source="feedback_loop",
@@ -219,20 +219,20 @@ def _process_preference(data: Dict, state: Dict) -> None:
     disliked = data.get("disliked", "")
 
     try:
-        from lib.cognitive_learner import get_cognitive_learner, CognitiveCategory
-        cog = get_cognitive_learner()
+        from lib.cognitive_learner import CognitiveCategory
+        from lib.validate_and_store import validate_and_store_insight
         if liked:
-            cog.add_insight(
+            validate_and_store_insight(
+                text=f"Agent prefers: {liked}",
                 category=CognitiveCategory.WISDOM,
-                insight=f"Agent prefers: {liked}",
                 context="self-reported preference",
                 confidence=0.95,
                 source="feedback_loop",
             )
         if disliked:
-            cog.add_insight(
+            validate_and_store_insight(
+                text=f"Agent avoids: {disliked}",
                 category=CognitiveCategory.WISDOM,
-                insight=f"Agent avoids: {disliked}",
                 context="self-reported preference",
                 confidence=0.95,
                 source="feedback_loop",

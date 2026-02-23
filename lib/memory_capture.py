@@ -406,7 +406,6 @@ def commit_learning(
     trace_id: Optional[str] = None,
 ) -> bool:
     try:
-        cog = get_cognitive_learner()
         clean = normalize_memory_text(text)
         if not clean:
             return False
@@ -414,7 +413,12 @@ def commit_learning(
             clean = clean[:MAX_CAPTURE_CHARS].rstrip()
         # Use a short context snippet so retrieval has something relevant.
         ctx = (context or clean)[:100]
-        cog.add_insight(category=category, insight=clean, context=ctx, confidence=0.7, source="memory_capture")
+        # Route through unified validation (Meta-Ralph + noise filter).
+        from lib.validate_and_store import validate_and_store_insight
+        validate_and_store_insight(
+            text=clean, category=category, context=ctx,
+            confidence=0.7, source="memory_capture",
+        )
 
         # Also store into layered memory banks for fast retrieval + future project scoping.
         try:

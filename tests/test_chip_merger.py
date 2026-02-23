@@ -221,6 +221,15 @@ def test_merge_distills_from_structured_fields(tmp_path, monkeypatch):
     monkeypatch.setattr(cm, "get_cognitive_learner", lambda: cog)
     monkeypatch.setattr(cm, "record_exposures", lambda *args, **kwargs: 0)
 
+    # Track calls to validate_and_store_insight (replaces direct cog.add_insight)
+    vas_calls = []
+    def _fake_validate_and_store(**kwargs):
+        vas_calls.append(kwargs)
+        return True
+
+    import lib.validate_and_store as vas_mod
+    monkeypatch.setattr(vas_mod, "validate_and_store_insight", _fake_validate_and_store)
+
     row = {
         "chip_id": "engagement-pulse",
         "content": "",
@@ -236,11 +245,11 @@ def test_merge_distills_from_structured_fields(tmp_path, monkeypatch):
     stats = cm.merge_chip_insights(min_confidence=0.5, min_quality_score=0.5, limit=5, dry_run=False)
     assert stats["merged"] == 1
     assert stats["merged_distilled"] == 1
-    assert len(cog.calls) == 1
-    merged_text = str(cog.calls[0].get("insight") or "").lower()
+    assert len(vas_calls) == 1
+    merged_text = str(vas_calls[0].get("text") or "").lower()
     assert "engagement evidence" in merged_text
     assert "agent payments" in merged_text
-    assert "source" in cog.calls[0]
+    assert "source" in vas_calls[0]
 
 
 def test_distill_skips_telemetry_observer_rows():
