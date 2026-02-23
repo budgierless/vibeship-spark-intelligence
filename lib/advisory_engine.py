@@ -2222,7 +2222,13 @@ def on_pre_tool(
                 tool_name=tool_name,
                 task_phase=state.task_phase,
             )
-        suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s())
+        # Apply tool-family-aware cooldown: exploration tools get shorter suppression.
+        try:
+            from .advisory_gate import _tool_cooldown_scale
+            tool_cd_scale = _tool_cooldown_scale(tool_name)
+        except Exception:
+            tool_cd_scale = 1.0
+        suppress_tool_advice(state, tool_name, duration_s=get_tool_cooldown_s() * tool_cd_scale)
         # Track retrieval only for delivered advice items (strict attribution).
         try:
             from .meta_ralph import get_meta_ralph

@@ -456,14 +456,24 @@ class TestDedup:
         )
         assert len(result.emitted) > 0
 
-    def test_max_emit_limits_to_two(self):
+    def test_max_emit_limits_to_budget(self):
+        # Dynamic budget: base MAX_EMIT_PER_CALL (2) + up to 2 bonus for
+        # high-authority or high-confidence-spread items.  Hard cap = base + 2.
+        from lib.advisory_gate import MAX_EMIT_PER_CALL
+
         items = [
             _MockAdvice(advice_id=f"adv_max_{i}", text=f"Advice item number {i} with enough text.",
                        confidence=0.80, context_match=0.75)
             for i in range(5)
         ]
         result = evaluate(items, None, "Edit")
-        assert len(result.emitted) <= 2, f"MAX_EMIT should cap at 2, got {len(result.emitted)}"
+        hard_cap = MAX_EMIT_PER_CALL + 2
+        assert len(result.emitted) <= hard_cap, (
+            f"Dynamic budget should cap at {hard_cap}, got {len(result.emitted)}"
+        )
+        # At least some items should be budget-suppressed
+        budget_suppressed = [d for d in result.suppressed if "budget" in d.reason]
+        assert len(budget_suppressed) > 0, "Some items should be budget-suppressed"
 
     def test_scope_key_shown_suppresses(self):
         # SessionState defaults to task_phase="exploration", so scope key

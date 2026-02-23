@@ -100,7 +100,28 @@
     "warning_threshold": 0.68,
     "note_threshold": 0.38,
     "whisper_threshold": 0.27,
-    "emit_whispers": true
+    "emit_whispers": true,
+    "source_ttl_multipliers": {
+      "baseline": 0.5,
+      "bank": 0.6,
+      "trigger": 0.7,
+      "mind": 0.75,
+      "cognitive": 1.0,
+      "eidos": 1.0,
+      "semantic": 0.8,
+      "semantic-agentic": 0.8,
+      "default": 1.0
+    },
+    "tool_cooldown_multipliers": {
+      "Read": 0.5,
+      "Grep": 0.5,
+      "Glob": 0.5,
+      "Task": 0.6,
+      "Bash": 0.7,
+      "Edit": 1.2,
+      "Write": 1.2,
+      "default": 1.0
+    }
   },
   "advisory_packet_store": {
     "packet_ttl_s": 600,
