@@ -169,8 +169,9 @@ class AutoTuner:
     TOLERANCE = 0.05
 
     # Boost floor and ceiling (defaults; overridden by tuneable min_boost/max_boost)
-    BOOST_MIN = 0.2
-    BOOST_MAX = 3.0
+    # Tightened in Batch 5: prevent over-dampening (was 0.2) and runaway amplification (was 3.0)
+    BOOST_MIN = 0.8
+    BOOST_MAX = 1.1
 
     def __init__(self, tuneables_path: Path = TUNEABLES_PATH):
         self.tuneables_path = tuneables_path

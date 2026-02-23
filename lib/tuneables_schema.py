@@ -231,7 +231,7 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
                                     ["off", "standard", "replay"]),
         "guidance_style": TuneableSpec("str", "balanced", None, None, "Guidance verbosity",
                                        ["concise", "balanced", "coach"]),
-        "source_weights": TuneableSpec("str", "0.400", None, None, "Source weight override string"),
+        # source_weights: removed (Batch 5) — never read by any code
     },
 
     # ---- retrieval: retrieval routing ----
@@ -257,7 +257,7 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
 
     # ---- eidos: episode/distillation budget ----
     "eidos": {
-        "max_steps": TuneableSpec("int", 40, 5, 200, "Max steps per episode"),
+        # max_steps: removed (Batch 5) — duplicate of values.max_steps
         "max_time_seconds": TuneableSpec("int", 1200, 60, 7200, "Max episode time (s)"),
         "max_retries_per_error": TuneableSpec("int", 3, 1, 20, "Retry limit per error type"),
         "max_file_touches": TuneableSpec("int", 5, 1, 50, "Max times to modify same file"),
@@ -285,9 +285,9 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "run_interval_s": TuneableSpec("int", 43200, 3600, 604800, "Run interval (s, default 12h)"),
         "max_change_per_run": TuneableSpec("float", 0.15, 0.01, 0.5, "Max boost change per run"),
         "source_boosts": TuneableSpec("dict", {}, None, None, "Per-source boost multipliers"),
-        "min_boost": TuneableSpec("float", 0.2, 0.0, 5.0,
+        "min_boost": TuneableSpec("float", 0.8, 0.0, 5.0,
             "Floor for source boost — prevents auto-tuner from dampening proven sources below this value"),
-        "max_boost": TuneableSpec("float", 3.0, 0.5, 10.0,
+        "max_boost": TuneableSpec("float", 1.1, 0.5, 10.0,
             "Ceiling for source boost — prevents runaway amplification of any single source"),
         "source_effectiveness": TuneableSpec("dict", {}, None, None, "Computed effectiveness rates"),
         "tuning_log": TuneableSpec("list", [], None, None, "Recent tuning events (max 50)"),

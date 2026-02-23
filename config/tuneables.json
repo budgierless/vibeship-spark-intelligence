@@ -87,6 +87,7 @@
     "prefetch_inline_max_jobs": 1,
     "delivery_stale_s": 600,
     "advisory_text_repeat_cooldown_s": 300,
+    "global_dedupe_cooldown_s": 600,
     "actionability_enforce": true,
     "force_programmatic_synth": false,
     "selective_ai_synth_enabled": true,
@@ -97,6 +98,7 @@
     "max_emit_per_call": 2,
     "tool_cooldown_s": 15,
     "advice_repeat_cooldown_s": 300,
+    "shown_advice_ttl_s": 600,
     "warning_threshold": 0.68,
     "note_threshold": 0.38,
     "whisper_threshold": 0.27,
@@ -170,8 +172,7 @@
     "replay_min_context": 0.24,
     "replay_max_records": 2500,
     "replay_mode": "standard",
-    "guidance_style": "balanced",
-    "source_weights": "0.400"
+    "guidance_style": "balanced"
   },
   "retrieval": {
     "level": "2",
@@ -241,7 +242,6 @@
     "strict_attribution_require_trace": true
   },
   "eidos": {
-    "max_steps": 40,
     "max_time_seconds": 1200,
     "max_retries_per_error": 3,
     "max_file_touches": 5,
@@ -297,8 +297,8 @@
     "last_run": "2026-02-20T10:25:16+00:00",
     "run_interval_s": 43200,
     "max_change_per_run": 0.15,
-    "min_boost": 0.2,
-    "max_boost": 3.0,
+    "min_boost": 0.8,
+    "max_boost": 1.1,
     "source_boosts": {
       "cognitive": 1.65,
       "semantic": 0.35,
