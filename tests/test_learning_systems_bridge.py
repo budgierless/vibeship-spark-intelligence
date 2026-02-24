@@ -73,3 +73,24 @@ def test_propose_tuneable_change_and_list(monkeypatch, tmp_path):
     assert len(proposals) == 1
     assert proposals[0]["section"] == "advisor"
     assert proposals[0]["key"] == "min_rank_score"
+
+
+def test_store_external_insight_falls_back_when_return_details_unsupported(monkeypatch, tmp_path):
+    monkeypatch.setenv("SPARK_LEARNING_BRIDGE_ENABLED", "1")
+    monkeypatch.setattr(lsb, "INSIGHT_AUDIT_FILE", tmp_path / "insight_ingest_audit.jsonl")
+
+    def _legacy_validate_and_store_insight(**kwargs):
+        if "return_details" in kwargs:
+            raise TypeError("validate_and_store_insight() got an unexpected keyword argument 'return_details'")
+        return True
+
+    import lib.validate_and_store as vas
+    monkeypatch.setattr(vas, "validate_and_store_insight", _legacy_validate_and_store_insight)
+
+    out = lsb.store_external_insight(
+        text="Legacy compatibility insight",
+        category="reasoning",
+        source="system_legacy",
+    )
+
+    assert out["stored"] is True

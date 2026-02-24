@@ -95,18 +95,35 @@ def store_external_insight(
     else:
         from .validate_and_store import validate_and_store_insight
 
-        out = validate_and_store_insight(
-            text=text_s,
-            category=cat,
-            context=context,
-            confidence=float(confidence),
-            source=str(source or "learning_system"),
-            return_details=True,
-        )
+        try:
+            out = validate_and_store_insight(
+                text=text_s,
+                category=cat,
+                context=context,
+                confidence=float(confidence),
+                source=str(source or "learning_system"),
+                return_details=True,
+            )
+        except TypeError as exc:
+            # Compatibility with older validate_and_store versions that only return bool.
+            if "return_details" not in str(exc):
+                raise
+            out = validate_and_store_insight(
+                text=text_s,
+                category=cat,
+                context=context,
+                confidence=float(confidence),
+                source=str(source or "learning_system"),
+            )
         if isinstance(out, dict):
             result = out
         else:
-            result = {"stored": bool(out), "insight_key": "", "stored_text": text_s}
+            result = {
+                "stored": bool(out),
+                "insight_key": "",
+                "stored_text": text_s,
+                "reason": "" if bool(out) else "rejected_or_filtered",
+            }
 
     audit_row = {
         "ts": ts,
