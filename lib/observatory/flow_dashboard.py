@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 from typing import Any
 
 from .linker import stage_link, fmt_ts, fmt_ago, fmt_num, fmt_size, health_badge
+
+_ERA_FILE = Path.home() / ".spark" / "era.json"
+
+
+def _read_era() -> dict | None:
+    """Read ~/.spark/era.json if it exists."""
+    try:
+        if _ERA_FILE.exists():
+            return json.loads(_ERA_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
 
 
 def _frontmatter() -> str:
@@ -188,7 +202,15 @@ def generate_flow_dashboard(data: dict[int, dict[str, Any]]) -> str:
     sections.append(f"# Spark Intelligence Observatory\n")
     sections.append(f"> Last generated: {now}")
     p = data.get(3, {})
-    sections.append(f"> Pipeline: {fmt_num(p.get('total_events_processed', 0))} events processed, {fmt_num(p.get('total_insights_created', 0))} insights created\n")
+    sections.append(f"> Pipeline: {fmt_num(p.get('total_events_processed', 0))} events processed, {fmt_num(p.get('total_insights_created', 0))} insights created")
+
+    # Era indicator
+    era_info = _read_era()
+    if era_info:
+        era_name = era_info.get("current", "unknown")
+        era_started = era_info.get("started_at", "?")[:19]
+        sections.append(f"> **Era: {era_name}** (started {era_started})")
+    sections.append("")
 
     # System Health table
     sections.append("## System Health\n")

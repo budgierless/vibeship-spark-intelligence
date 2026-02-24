@@ -221,6 +221,8 @@ def generate_glossary() -> str:
         ("Fail-Open Quarantine", "On Meta-Ralph exception during validate_and_store: the insight is logged to `~/.spark/insight_quarantine.jsonl` AND still stored in cognitive (true fail-open)."),
         ("Rejection Telemetry", "Per-reason counters at every advisory exit path, flushed to `~/.spark/advisory_rejection_telemetry.json`."),
         ("Source Boosts", "Auto-tuner multipliers per advice source, clamped to [0.8, 1.1] and stored in tuneables `auto_tuner.source_boosts`."),
+        ("Pre-Alpha Era", "Fresh data start after Intelligence Flow Evolution. Legacy data archived to `~/.spark/archive/legacy_*/`. Era marker at `~/.spark/era.json`."),
+        ("Era Marker", "The file `~/.spark/era.json` records when the current era started and where legacy data was archived. Created by `scripts/start_alpha.py`. Current era: pre-alpha."),
     ]
     lines = []
     lines.append(_frontmatter("Glossary", ["observatory", "glossary", "reference"]))
