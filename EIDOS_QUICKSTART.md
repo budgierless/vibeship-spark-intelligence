@@ -233,7 +233,9 @@ for alert in ecp.watcher_engine.alert_history[-10:]:
 
 ### Dashboard Script
 
-Save this as `eidos_dashboard.py`:
+Use the built-in script at `scripts/eidos_dashboard.py`.
+
+If you want to customize a local variant, start from this template:
 
 ```python
 #!/usr/bin/env python3
