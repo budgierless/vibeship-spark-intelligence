@@ -634,14 +634,17 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/agent":
             length = int(self.headers.get("Content-Length", "0") or 0)
+            if length > MAX_BODY_BYTES:
+                return _json(self, 413, {"ok": False, "error": "payload_too_large"})
             body = self.rfile.read(length) if length else b"{}"
             try:
                 data = json.loads(body.decode("utf-8") or "{}")
+                agent_id = data.get("agent_id") or data.get("name", "").lower().replace(" ", "-")
                 ok = register_agent(
-                    agent_id=data.get("agent_id") or data.get("name", "").lower().replace(" ", "-"),
-                    name=data.get("name"),
-                    capabilities=data.get("capabilities", []),
-                    specialization=data.get("specialization", "general"),
+                    agent_id=agent_id[:128],
+                    name=(data.get("name") or "")[:256],
+                    capabilities=data.get("capabilities", [])[:50],
+                    specialization=(data.get("specialization", "general") or "general")[:128],
                 )
                 return _json(self, 201 if ok else 400, {"ok": ok})
             except Exception as e:
@@ -649,12 +652,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/orchestration/recommend":
             length = int(self.headers.get("Content-Length", "0") or 0)
+            if length > MAX_BODY_BYTES:
+                return _json(self, 413, {"ok": False, "error": "payload_too_large"})
             body = self.rfile.read(length) if length else b"{}"
             try:
                 data = json.loads(body.decode("utf-8") or "{}")
                 agent_id, reason = recommend_agent(
-                    query=data.get("query", "") or data.get("task", ""),
-                    task_type=data.get("task_type", ""),
+                    query=(data.get("query", "") or data.get("task", ""))[:1024],
+                    task_type=(data.get("task_type", "") or "")[:256],
                 )
                 return _json(self, 200, {"ok": True, "recommended_agent": agent_id, "reason": reason})
             except Exception as e:
@@ -662,12 +667,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/handoff":
             length = int(self.headers.get("Content-Length", "0") or 0)
+            if length > MAX_BODY_BYTES:
+                return _json(self, 413, {"ok": False, "error": "payload_too_large"})
             body = self.rfile.read(length) if length else b"{}"
             try:
                 data = json.loads(body.decode("utf-8") or "{}")
                 hid = record_handoff(
-                    from_agent=data.get("from_agent"),
-                    to_agent=data.get("to_agent"),
+                    from_agent=(data.get("from_agent") or "")[:128],
+                    to_agent=(data.get("to_agent") or "")[:128],
                     context=data.get("context", {}),
                     success=data.get("success"),
                 )
