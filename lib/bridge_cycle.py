@@ -34,6 +34,7 @@ from lib.runtime_hygiene import cleanup_runtime_artifacts
 
 
 BRIDGE_HEARTBEAT_FILE = Path.home() / ".spark" / "bridge_worker_heartbeat.json"
+_reconcile_done = False
 
 # --- OpenClaw notification integration ---
 SPARK_OPENCLAW_NOTIFY = os.environ.get("SPARK_OPENCLAW_NOTIFY", "1").strip().lower() not in {
@@ -258,10 +259,6 @@ def run_bridge_cycle(
 
     # --- Reconcile stale defaults on first cycle (once per process) ---
     global _reconcile_done
-    try:
-        _reconcile_done
-    except NameError:
-        _reconcile_done = False
     if not _reconcile_done:
         _reconcile_done = True
         try:
