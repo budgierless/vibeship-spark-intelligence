@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import lib.memory_capture as memory_capture
 import lib.queue as queue_module
 import lib.pattern_detection.request_tracker as request_tracker
@@ -61,3 +63,25 @@ def test_queue_apply_updates_limits(monkeypatch):
     assert "tail_chunk_bytes" in result.get("applied", [])
     assert queue_module.MAX_EVENTS == 15000
     assert queue_module.TAIL_CHUNK_BYTES == 131072
+
+
+def test_queue_load_config_uses_runtime_and_env(monkeypatch, tmp_path):
+    tuneables = tmp_path / "tuneables.json"
+    tuneables.write_text(
+        json.dumps(
+            {
+                "queue": {
+                    "max_events": 11111,
+                    "tail_chunk_bytes": 32768,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(queue_module, "TUNEABLES_FILE", tuneables)
+    monkeypatch.setenv("SPARK_QUEUE_MAX_EVENTS", "22222")
+
+    cfg = queue_module._load_queue_config()
+
+    assert cfg["max_events"] == 22222
+    assert cfg["tail_chunk_bytes"] == 32768
