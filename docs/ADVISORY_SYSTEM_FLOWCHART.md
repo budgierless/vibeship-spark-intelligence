@@ -38,10 +38,24 @@
 ║   advisory_engine.py :: on_pre_tool()   (2,874 lines)                       ║
 ║                                                                             ║
 ║   ┌─────────────────────────────────────────────────────────┐               ║
+║   │ 0. SAFETY CHECK                                         │               ║
+║   │    - Abort early if tool is in safety bypass list       │               ║
+║   └─────────────────────┬───────────────────────────────────┘               ║
+║                         │                                                   ║
+║                         ▼                                                   ║
+║   ┌─────────────────────────────────────────────────────────┐               ║
 ║   │ 1. LOAD STATE                                           │               ║
 ║   │    advisory_state.py (427 lines)                        │               ║
 ║   │    - Session history, intent, cooldowns                 │               ║
 ║   │    - Recent tool calls, shown advice                    │               ║
+║   └─────────────────────┬───────────────────────────────────┘               ║
+║                         │                                                   ║
+║                         ▼                                                   ║
+║   ┌─────────────────────────────────────────────────────────┐               ║
+║   │ 1.5 CHEAP CHECKS (before retrieval)                     │               ║
+║   │    - Text repeat guard (same context recently emitted?) │               ║
+║   │    - Emission budget check (budget already exhausted?)  │               ║
+║   │    - ⚡ Skips retrieval entirely if either fires         │               ║
 ║   └─────────────────────┬───────────────────────────────────┘               ║
 ║                         │                                                   ║
 ║                         ▼                                                   ║
@@ -155,6 +169,7 @@
 ║   │      WHISPER → "(spark: text)"                          │               ║
 ║   │                                                         │               ║
 ║   │    Budget: max 500 chars                                │               ║
+║   │    Fallback budget: cap=1 per window=5 calls           │               ║
 ║   │                                                         │               ║
 ║   │    ══════════════════════════════════                    │               ║
 ║   │    ║  sys.stdout.write(text + "\n") ║  ◄── THE OUTPUT   │               ║
@@ -217,6 +232,16 @@
 │  │ trace_id resolution          │                                           │
 │  │ Used by: 8+ files            │                                           │
 │  └──────────────────────────────┘                                           │
+│  ┌──────────────────────────────┐   ┌──────────────────────────────┐        │
+│  │ validate_and_store.py       │   │ noise_patterns.py            │        │
+│  │ (unified write gate)        │   │ (shared noise patterns)      │        │
+│  │                              │   │                              │        │
+│  │ Routes ALL cognitive writes  │   │ Consolidated noise regex     │        │
+│  │ through Meta-Ralph first     │   │ used by 5+ modules           │        │
+│  │ Fail-open quarantine on err │   │ Used by: validate_and_store  │        │
+│  │ Used by: bridge, hyp, agg   │   │ Used by: cognitive, meta_r   │        │
+│  └──────────────────────────────┘   └──────────────────────────────┘        │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
