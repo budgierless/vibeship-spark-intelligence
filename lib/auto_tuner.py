@@ -183,6 +183,31 @@ class AutoTuner:
             self.BOOST_MAX = max(self.BOOST_MIN + 0.1, float(self._config.get("max_boost", self.BOOST_MAX)))
         except (TypeError, ValueError):
             pass
+        # Clamp any legacy out-of-bounds boosts immediately on load
+        self._clamp_existing_boosts()
+
+    def _clamp_existing_boosts(self) -> None:
+        """Clamp all stored boosts to [BOOST_MIN, BOOST_MAX] and persist if changed."""
+        boosts = self._config.get("source_boosts", {})
+        if not boosts:
+            return
+        changed = False
+        for src, val in list(boosts.items()):
+            try:
+                fval = float(val)
+                clamped = max(self.BOOST_MIN, min(self.BOOST_MAX, fval))
+                if clamped != fval:
+                    boosts[src] = round(clamped, 3)
+                    changed = True
+            except (TypeError, ValueError):
+                continue
+        if changed:
+            try:
+                self._config["source_boosts"] = boosts
+                self._tuneables["auto_tuner"] = self._config
+                _write_json_atomic(self.tuneables_path, self._tuneables)
+            except Exception:
+                pass
 
     @property
     def enabled(self) -> bool:
@@ -490,12 +515,7 @@ class AutoTuner:
         # Read effectiveness data
         by_source = self.get_effectiveness_data()
         current_boosts = self._config.get("source_boosts", {})
-
-        # Clamp any out-of-bounds boosts from previous wider ranges
-        for src, val in list(current_boosts.items()):
-            clamped = max(self.BOOST_MIN, min(self.BOOST_MAX, float(val)))
-            if clamped != float(val):
-                current_boosts[src] = clamped
+        # NOTE: Out-of-bounds boosts are already clamped on __init__ load.
 
         # Compute global average effectiveness (weighted by sample count)
         total_helpful = sum(s.get("helpful", 0) for s in by_source.values())

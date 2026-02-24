@@ -106,18 +106,20 @@ class ImplicitOutcomeTracker:
 
     @staticmethod
     def _rotate_if_needed() -> None:
+        """Trim feedback file using open-read-truncate-write (no lost appends)."""
         try:
             if not FEEDBACK_FILE.exists():
                 return
             if FEEDBACK_FILE.stat().st_size // 250 <= FEEDBACK_FILE_MAX:
                 return
-            lines = FEEDBACK_FILE.read_text(encoding="utf-8").splitlines()
-            if len(lines) > FEEDBACK_FILE_MAX:
-                tmp = FEEDBACK_FILE.with_suffix(".tmp")
-                tmp.write_text(
-                    "\n".join(lines[-FEEDBACK_FILE_MAX:]) + "\n", encoding="utf-8"
-                )
-                tmp.replace(FEEDBACK_FILE)
+            with open(FEEDBACK_FILE, "r+", encoding="utf-8") as f:
+                lines = f.read().splitlines()
+                if len(lines) <= FEEDBACK_FILE_MAX:
+                    return
+                keep = "\n".join(lines[-FEEDBACK_FILE_MAX:]) + "\n"
+                f.seek(0)
+                f.write(keep)
+                f.truncate()
         except Exception:
             pass
 
