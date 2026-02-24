@@ -10,7 +10,6 @@ Canonical navigation hub. Start here.
 ## Core launch docs
 - `README.md`
 - `docs/SPARK_ONBOARDING_COMPLETE.md`
-- `docs/SPARK_CLI_SYSTEM_BLUEPRINT.md`
 - `docs/LAUNCH_DOCUMENTATION_MAP.md`
 - `OSS_ONLY_MANIFEST.md`
 - `docs/GLOSSARY.md`
