@@ -89,7 +89,7 @@ def append_outcomes(rows: Iterable[Dict[str, Any]]) -> int:
         written += 1
     if not to_write:
         return 0
-    with file_lock_for(OUTCOMES_FILE):
+    with file_lock_for(OUTCOMES_FILE, fail_open=False):
         with OUTCOMES_FILE.open("a", encoding="utf-8") as f:
             f.writelines(to_write)
         _rotate_jsonl(OUTCOMES_FILE, OUTCOMES_FILE_MAX)
@@ -167,7 +167,7 @@ def link_outcome_to_insight(
     }
 
     OUTCOME_LINKS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with file_lock_for(OUTCOME_LINKS_FILE):
+    with file_lock_for(OUTCOME_LINKS_FILE, fail_open=False):
         with OUTCOME_LINKS_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(link, ensure_ascii=False) + "\n")
         _rotate_jsonl(OUTCOME_LINKS_FILE, OUTCOME_LINKS_FILE_MAX)

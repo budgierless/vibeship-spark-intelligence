@@ -52,7 +52,7 @@ def _append_jsonl_row(path: Path, row: Dict[str, Any], max_lines: int) -> None:
     """Append one JSON row and rotate under a shared lock."""
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(row, ensure_ascii=False) + "\n"
-    with file_lock_for(path):
+    with file_lock_for(path, fail_open=False):
         with path.open("a", encoding="utf-8") as f:
             f.write(line)
         _rotate_jsonl(path, max_lines)

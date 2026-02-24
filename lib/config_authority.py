@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -117,19 +118,19 @@ def resolve_section(
             defaults = get_section_defaults(section_name)
             if isinstance(defaults, dict):
                 for key, value in defaults.items():
-                    merged[key] = value
+                    merged[key] = deepcopy(value)
                     sources[key] = "schema"
         except Exception as exc:
             warnings.append(f"schema_load_failed:{section_name}:{exc!r}")
 
     baseline_section = _section(_read_json(baseline), section_name)
     for key, value in baseline_section.items():
-        merged[key] = value
+        merged[key] = deepcopy(value)
         sources[key] = "baseline"
 
     runtime_section = _section(_read_json(runtime), section_name)
     for key, value in runtime_section.items():
-        merged[key] = value
+        merged[key] = deepcopy(value)
         sources[key] = "runtime"
 
     for key, override in dict(env_overrides or {}).items():
@@ -137,7 +138,7 @@ def resolve_section(
         if raw is None or str(raw).strip() == "":
             continue
         try:
-            merged[key] = override.parser(raw)
+            merged[key] = deepcopy(override.parser(raw))
             sources[key] = f"env:{override.env_name}"
         except Exception:
             warnings.append(f"invalid_env_override:{override.env_name}")

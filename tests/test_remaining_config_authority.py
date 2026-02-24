@@ -8,6 +8,7 @@ import lib.memory_banks as memory_banks
 import lib.memory_capture as memory_capture
 import lib.observatory.config as observatory_config
 import lib.pattern_detection.request_tracker as request_tracker
+from lib.config_authority import resolve_section
 
 
 def test_memory_capture_load_config_reads_runtime(monkeypatch, tmp_path):
@@ -103,3 +104,17 @@ def test_observatory_load_config_uses_runtime_over_baseline(monkeypatch, tmp_pat
 
     assert cfg.enabled is True
     assert cfg.sync_cooldown_s == 45
+
+
+def test_resolve_section_does_not_leak_mutable_schema_defaults(tmp_path):
+    # Use non-existent files so section values come from schema defaults only.
+    baseline = tmp_path / "missing-baseline.json"
+    runtime = tmp_path / "missing-runtime.json"
+
+    first = resolve_section("sync", baseline_path=baseline, runtime_path=runtime).data
+    first["adapters_enabled"].append("codex")
+    first["adapters_disabled"].append("cursor")
+
+    second = resolve_section("sync", baseline_path=baseline, runtime_path=runtime).data
+    assert second["adapters_enabled"] == []
+    assert second["adapters_disabled"] == []

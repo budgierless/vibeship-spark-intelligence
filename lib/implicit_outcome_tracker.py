@@ -100,7 +100,7 @@ class ImplicitOutcomeTracker:
     def _append_feedback(self, entry: Dict) -> None:
         try:
             FEEDBACK_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with file_lock_for(FEEDBACK_FILE):
+            with file_lock_for(FEEDBACK_FILE, fail_open=False):
                 with FEEDBACK_FILE.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 self._rotate_if_needed()
