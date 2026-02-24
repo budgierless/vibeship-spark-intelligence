@@ -104,7 +104,8 @@ def validate_and_store_insight(
     source: str = "unknown",
     *,
     record_exposure: bool = True,
-) -> bool:
+    return_details: bool = False,
+) -> Any:
     """
     Validate an insight through Meta-Ralph and store in cognitive learner.
 
@@ -116,11 +117,28 @@ def validate_and_store_insight(
         3. On Meta-Ralph exception → quarantine (fail-open)
 
     Returns:
-        True if stored, False if rejected by quality gate or noise filter.
+        Default: bool stored flag.
+        If return_details=True: dict with {stored, insight_key, stored_text}.
         On Meta-Ralph exception: quarantines for diagnostics AND stores (fail-open).
     """
+    def _result(stored: bool, *, insight_key: str = "", stored_text: str = "") -> Any:
+        if not return_details:
+            return bool(stored)
+        return {
+            "stored": bool(stored),
+            "insight_key": str(insight_key or ""),
+            "stored_text": str(stored_text or ""),
+        }
+
+    def _derive_key(cog: Any, final_text: str) -> str:
+        try:
+            key_part = str(final_text or "")[:40].replace(" ", "_").lower()
+            return str(cog._generate_key(category, key_part) or "")
+        except Exception:
+            return ""
+
     if not text or not str(text).strip():
-        return False
+        return _result(False)
 
     # Rollback switch: bypass validation, direct write
     if not _is_enabled():
@@ -135,10 +153,13 @@ def validate_and_store_insight(
                 source=source,
                 record_exposure=record_exposure,
             )
-            return result is not None
+            if result is None:
+                return _result(False, stored_text=text)
+            final_text = str(getattr(result, "insight", text) or text)
+            return _result(True, insight_key=_derive_key(cog, final_text), stored_text=final_text)
         except Exception as e:
             log_debug("validate_and_store", "bypass_write_failed", e)
-            return False
+            return _result(False)
 
     _record("total_attempted")
 
@@ -198,14 +219,15 @@ def validate_and_store_insight(
         )
         if result is not None:
             _record("stored")
-            return True
+            final_text = str(getattr(result, "insight", text) or text)
+            return _result(True, insight_key=_derive_key(cog, final_text), stored_text=final_text)
         else:
             _record("noise_filtered")
-            return False
+            return _result(False, stored_text=text)
     except Exception as e:
         _record("storage_failed")
         log_debug("validate_and_store", "cognitive_store_failed", e)
-        return False
+        return _result(False, stored_text=text)
 
 
 # Wire reload: reset cached _ENABLED when flow section changes in tuneables

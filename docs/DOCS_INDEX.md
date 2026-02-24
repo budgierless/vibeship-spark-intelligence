@@ -51,6 +51,7 @@ Canonical navigation hub. Start here.
 - `docs/claude_code.md`
 - `docs/cursor.md`
 - `docs/adapters.md`
+- `docs/LEARNING_SYSTEMS_NEW_SPARK_INTEGRATION_MAP.md`
 - `docs/OPENCLAW_INTEGRATION.md`
 - `docs/OPENCLAW_OPERATIONS.md`
 - `docs/OPENCLAW_PATHS_AND_DATA_BOUNDARIES.md`

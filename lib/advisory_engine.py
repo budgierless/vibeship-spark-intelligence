@@ -2346,10 +2346,13 @@ def on_pre_tool(
         effective_action_meta = _ensure_actionability(effective_text, tool_name, task_plane) if emitted else {"text": effective_text, "added": False, "command": ""}
         effective_text = str(effective_action_meta.get("text") or effective_text)
 
+        # Initialize before conditional paths to avoid stale runtime crashes
+        # when no advisories are emitted in this pass.
+        shown_ids: List[str] = []
+        dedupe_scope = _dedupe_scope_key(session_id)
+        session_lineage = _session_lineage(session_id)
         if emitted:
             shown_ids = [d.advice_id for d in gate_result.emitted]
-            dedupe_scope = _dedupe_scope_key(session_id)
-            session_lineage = _session_lineage(session_id)
             mark_advice_shown(
                 state,
                 shown_ids,

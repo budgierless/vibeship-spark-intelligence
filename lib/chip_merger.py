@@ -660,24 +660,35 @@ def merge_chip_insights(
         if not dry_run:
             # Add distilled statement through unified validation.
             from lib.validate_and_store import validate_and_store_insight
-            added = validate_and_store_insight(
+            store_result = validate_and_store_insight(
                 text=learning_statement,
                 category=category,
                 context=context,
                 confidence=max(float(confidence or 0.0), float(quality_total or 0.0)),
                 source=f"chip:{chip_id}:distilled",
                 record_exposure=False,
+                return_details=True,
             )
+            if isinstance(store_result, dict):
+                added = bool(store_result.get("stored"))
+                stored_statement = str(store_result.get("stored_text") or learning_statement)
+                key = str(store_result.get("insight_key") or "")
+            else:
+                # Backward-compat for test monkeypatches returning bool.
+                added = bool(store_result)
+                stored_statement = learning_statement
+                key = ""
             if not added:
                 stats["skipped_non_learning"] += 1
                 continue
 
             # Track for exposure recording
-            key = cog._generate_key(category, learning_statement[:40].replace(" ", "_").lower())
+            if not key:
+                key = cog._generate_key(category, stored_statement[:40].replace(" ", "_").lower())
             exposures_to_record.append({
                 "insight_key": key,
                 "category": category.value,
-                "text": learning_statement,
+                "text": stored_statement,
             })
 
             # Append distillation audit trail.
@@ -690,6 +701,7 @@ def merge_chip_insights(
                             "chip_id": chip_id,
                             "category": category.value,
                             "learning_statement": learning_statement,
+                            "stored_statement": stored_statement,
                             "source_content": content[:240],
                             "quality_score": quality,
                         }
