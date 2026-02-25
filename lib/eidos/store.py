@@ -513,6 +513,20 @@ class EidosStore:
                 return float(payload.get("unified_score", 0.0) or 0.0)
             return 0.0
 
+        def _quality_dict(payload: Any) -> Dict[str, Any]:
+            if isinstance(payload, dict):
+                return payload
+            if isinstance(payload, str):
+                raw = payload.strip()
+                if not raw:
+                    return {}
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    return {}
+                return parsed if isinstance(parsed, dict) else {}
+            return {}
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             target_norm = _normalize_distillation_statement(distillation.statement)
@@ -563,10 +577,14 @@ class EidosStore:
 
                 existing_q = existing["advisory_quality"] if "advisory_quality" in existing.keys() else None
                 incoming_q = distillation.advisory_quality or {}
-                merged_quality = incoming_q if _quality_score(incoming_q) >= _quality_score(existing_q) else (
-                    json.loads(existing_q) if isinstance(existing_q, str) and existing_q else (
-                        existing_q if isinstance(existing_q, dict) else {}
-                    )
+                incoming_better_or_equal = _quality_score(incoming_q) >= _quality_score(existing_q)
+                merged_quality = (
+                    incoming_q if incoming_better_or_equal else _quality_dict(existing_q)
+                )
+                merged_statement = str(
+                    distillation.statement
+                    if incoming_better_or_equal and (distillation.statement or "").strip()
+                    else (existing["statement"] or distillation.statement)
                 )
                 merged_refined = str(
                     distillation.refined_statement
@@ -582,7 +600,7 @@ class EidosStore:
                            created_at = ?, revalidate_by = ?, refined_statement = ?, advisory_quality = ?
                        WHERE distillation_id = ?""",
                     (
-                        str(existing["statement"] or distillation.statement),
+                        merged_statement,
                         json.dumps(merged_domains),
                         json.dumps(merged_triggers),
                         json.dumps(merged_anti_triggers),
@@ -943,6 +961,20 @@ class EidosStore:
         max_preview: int = 20,
     ) -> Dict[str, Any]:
         """Archive and purge distillations that fail advisory quality gates."""
+        def _parse_quality(raw: Any) -> Dict[str, Any]:
+            if isinstance(raw, dict):
+                return raw
+            if isinstance(raw, str):
+                text = raw.strip()
+                if not text:
+                    return {}
+                try:
+                    parsed = json.loads(text)
+                except Exception:
+                    return {}
+                return parsed if isinstance(parsed, dict) else {}
+            return {}
+
         preview: List[Dict[str, Any]] = []
         purge_ids: List[str] = []
         archive_rows: List[Dict[str, Any]] = []
@@ -953,13 +985,26 @@ class EidosStore:
             scanned = len(rows)
             for row in rows:
                 statement = (row["statement"] or "").strip()
-                aq = transform_for_advisory(statement, source="eidos")
+                refined_statement = ""
+                if "refined_statement" in row.keys():
+                    refined_statement = (row["refined_statement"] or "").strip()
+                candidate_text = refined_statement or statement
+
+                aq_data = _parse_quality(
+                    row["advisory_quality"] if "advisory_quality" in row.keys() else None
+                )
+                if not aq_data or "unified_score" not in aq_data or "suppressed" not in aq_data:
+                    computed = transform_for_advisory(candidate_text, source="eidos").to_dict()
+                    aq_data = {**computed, **(aq_data or {})}
+
                 reason = ""
-                if aq.suppressed:
-                    detail = aq.suppression_reason or "suppressed"
+                suppressed = bool(aq_data.get("suppressed", False))
+                unified = float(aq_data.get("unified_score", 0.0) or 0.0)
+                if suppressed:
+                    detail = str(aq_data.get("suppression_reason") or "suppressed")
                     reason = f"suppressed:{detail}"
-                elif aq.unified_score < unified_floor:
-                    reason = f"unified_score_below_floor:{aq.unified_score:.3f}"
+                elif unified < unified_floor:
+                    reason = f"unified_score_below_floor:{unified:.3f}"
 
                 if not reason:
                     continue
@@ -967,7 +1012,7 @@ class EidosStore:
                 purge_ids.append(row["distillation_id"])
                 archive_row = dict(row)
                 archive_row["archive_reason"] = reason
-                archive_row["advisory_quality"] = json.dumps(aq.to_dict())
+                archive_row["advisory_quality"] = json.dumps(aq_data)
                 archive_rows.append(archive_row)
 
                 if len(preview) < max_preview:
@@ -975,7 +1020,7 @@ class EidosStore:
                         {
                             "distillation_id": row["distillation_id"],
                             "reason": reason,
-                            "statement": statement[:200],
+                            "statement": candidate_text[:200],
                         }
                     )
 

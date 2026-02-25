@@ -122,6 +122,33 @@ def test_archive_and_purge_low_quality_distillations(tmp_path):
     assert active_count >= 1
 
 
+def test_archive_purge_respects_stored_quality_and_refined_statement(tmp_path):
+    db = tmp_path / "eidos.db"
+    store = EidosStore(str(db))
+
+    strong = Distillation(
+        distillation_id="",
+        type=DistillationType.HEURISTIC,
+        statement="Always verify",
+        refined_statement="When validating OAuth callbacks: verify state token before exchange",
+        advisory_quality={
+            "unified_score": 0.82,
+            "suppressed": False,
+            "advisory_text": "When validating OAuth callbacks: verify state token before exchange",
+        },
+    )
+    store.save_distillation(strong)
+
+    result = store.archive_and_purge_low_quality_distillations(unified_floor=0.35, dry_run=False)
+    assert result["archived"] == 0
+
+    with sqlite3.connect(str(db)) as conn:
+        active_count = conn.execute("SELECT COUNT(*) FROM distillations").fetchone()[0]
+        archived_count = conn.execute("SELECT COUNT(*) FROM distillations_archive").fetchone()[0]
+    assert active_count == 1
+    assert archived_count == 0
+
+
 def test_advisor_uses_stored_eidos_quality_without_live_transform(monkeypatch, tmp_path):
     _patch_advisor(monkeypatch, tmp_path)
     monkeypatch.setattr(advisor_mod, "HAS_EIDOS", True)
