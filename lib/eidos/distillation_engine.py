@@ -28,6 +28,7 @@ from .models import (
     Episode, Step, Distillation, DistillationType,
     Outcome, Evaluation, Phase
 )
+from ..distillation_transformer import transform_for_advisory
 
 
 @dataclass
@@ -69,6 +70,7 @@ class DistillationEngine:
 
         # Revalidation tracking
         self.pending_revalidation: List[str] = []  # distillation_ids
+        self._quality_floor = 0.35
 
     def reflect_on_episode(
         self,
@@ -252,10 +254,26 @@ class DistillationEngine:
             "always validate assumptions",
             "always verify",
             "be careful when",
+            "unknown approach",
+            "unknown task",
+            "unknown project",
+            "session in unknown",
+            "request failed for search_query",
+            "request failed for image_query",
+            "for similar requests",
+            "tool is effective",
         ]
         for phrase in _TAUTOLOGY_PHRASES:
             if phrase in low:
                 return False
+
+        # Reject placeholder-heavy statements.
+        if re.search(r"\b(?:when|if|for)\b.{0,40}\bunknown\b", low):
+            return False
+
+        # Reject obvious failure-echo templates.
+        if re.search(r"\b(?:watch out|be careful)\b.{0,80}\bunknown\b.{0,40}\bapproach\b", low):
+            return False
 
         # Reject "When X, try: Y" where X ≈ Y (>60% word overlap)
         if "try:" in low and "when " in low:
@@ -338,8 +356,16 @@ class DistillationEngine:
             if policy:
                 candidates.append(policy)
 
-        # Quality gate: reject tautological or generic distillations
-        return [c for c in candidates if self._is_quality_distillation(c.statement, c.type)]
+        # Quality gate: reject tautological/generic and transformer-suppressed distillations.
+        filtered: List[DistillationCandidate] = []
+        for candidate in candidates:
+            if not self._is_quality_distillation(candidate.statement, candidate.type):
+                continue
+            aq = transform_for_advisory(candidate.statement, source="eidos")
+            if aq.suppressed or aq.unified_score < self._quality_floor:
+                continue
+            filtered.append(candidate)
+        return filtered
 
     _GENERIC_GOALS = {
         "continue", "continue please", "yes", "ok", "go", "do it",

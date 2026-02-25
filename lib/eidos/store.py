@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..distillation_transformer import transform_for_advisory
 from .models import (
     Episode, Step, Distillation, Policy,
     Budget, Phase, Outcome, Evaluation, DistillationType, ActionType
@@ -167,6 +168,29 @@ class EidosStore:
                     revalidate_by REAL
                 );
 
+                -- Archived distillations (reversible purge history)
+                CREATE TABLE IF NOT EXISTS distillations_archive (
+                    archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    distillation_id TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    statement TEXT NOT NULL,
+                    domains TEXT,
+                    triggers TEXT,
+                    anti_triggers TEXT,
+                    source_steps TEXT,
+                    validation_count INTEGER DEFAULT 0,
+                    contradiction_count INTEGER DEFAULT 0,
+                    confidence REAL DEFAULT 0.5,
+                    times_retrieved INTEGER DEFAULT 0,
+                    times_used INTEGER DEFAULT 0,
+                    times_helped INTEGER DEFAULT 0,
+                    created_at REAL,
+                    revalidate_by REAL,
+                    archive_reason TEXT NOT NULL,
+                    advisory_quality TEXT,
+                    archived_at REAL DEFAULT (strftime('%s', 'now'))
+                );
+
                 -- Policies (operating constraints)
                 CREATE TABLE IF NOT EXISTS policies (
                     policy_id TEXT PRIMARY KEY,
@@ -183,6 +207,7 @@ class EidosStore:
                 CREATE INDEX IF NOT EXISTS idx_steps_trace ON steps(trace_id);
                 CREATE INDEX IF NOT EXISTS idx_distillations_type ON distillations(type);
                 CREATE INDEX IF NOT EXISTS idx_distillations_confidence ON distillations(confidence DESC);
+                CREATE INDEX IF NOT EXISTS idx_distillations_archive_dist_id ON distillations_archive(distillation_id);
                 CREATE INDEX IF NOT EXISTS idx_policies_scope ON policies(scope);
                 CREATE INDEX IF NOT EXISTS idx_policies_priority ON policies(priority DESC);
             """)
@@ -844,6 +869,94 @@ class EidosStore:
             conn.commit()
 
         return pruned
+
+    def archive_and_purge_low_quality_distillations(
+        self,
+        unified_floor: float = 0.35,
+        dry_run: bool = False,
+        max_preview: int = 20,
+    ) -> Dict[str, Any]:
+        """Archive and purge distillations that fail advisory quality gates."""
+        preview: List[Dict[str, Any]] = []
+        purge_ids: List[str] = []
+        archive_rows: List[Dict[str, Any]] = []
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM distillations").fetchall()
+            scanned = len(rows)
+            for row in rows:
+                statement = (row["statement"] or "").strip()
+                aq = transform_for_advisory(statement, source="eidos")
+                reason = ""
+                if aq.suppressed:
+                    detail = aq.suppression_reason or "suppressed"
+                    reason = f"suppressed:{detail}"
+                elif aq.unified_score < unified_floor:
+                    reason = f"unified_score_below_floor:{aq.unified_score:.3f}"
+
+                if not reason:
+                    continue
+
+                purge_ids.append(row["distillation_id"])
+                archive_row = dict(row)
+                archive_row["archive_reason"] = reason
+                archive_row["advisory_quality"] = json.dumps(aq.to_dict())
+                archive_rows.append(archive_row)
+
+                if len(preview) < max_preview:
+                    preview.append(
+                        {
+                            "distillation_id": row["distillation_id"],
+                            "reason": reason,
+                            "statement": statement[:200],
+                        }
+                    )
+
+            if not dry_run and archive_rows:
+                for row in archive_rows:
+                    conn.execute(
+                        """
+                        INSERT INTO distillations_archive (
+                            distillation_id, type, statement, domains, triggers, anti_triggers,
+                            source_steps, validation_count, contradiction_count, confidence,
+                            times_retrieved, times_used, times_helped, created_at, revalidate_by,
+                            archive_reason, advisory_quality
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            row["distillation_id"],
+                            row["type"],
+                            row["statement"],
+                            row["domains"],
+                            row["triggers"],
+                            row["anti_triggers"],
+                            row["source_steps"],
+                            row["validation_count"],
+                            row["contradiction_count"],
+                            row["confidence"],
+                            row["times_retrieved"],
+                            row["times_used"],
+                            row["times_helped"],
+                            row["created_at"],
+                            row["revalidate_by"],
+                            row["archive_reason"],
+                            row["advisory_quality"],
+                        ),
+                    )
+                conn.executemany(
+                    "DELETE FROM distillations WHERE distillation_id = ?",
+                    [(did,) for did in purge_ids],
+                )
+                conn.commit()
+
+        return {
+            "scanned": scanned,
+            "archived": len(purge_ids),
+            "dry_run": dry_run,
+            "unified_floor": unified_floor,
+            "preview": preview,
+        }
 
     # ==================== Policy Operations ====================
 

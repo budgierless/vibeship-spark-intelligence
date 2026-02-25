@@ -359,6 +359,12 @@ def _run_distillation(episode: Episode, steps: List[Step]):
         store.save_distillation(distillation)
         saved.append(distillation)
 
+    # Keep retrieval pool clean: archive and purge low-quality legacy distillations.
+    try:
+        store.archive_and_purge_low_quality_distillations(unified_floor=0.35, dry_run=False, max_preview=0)
+    except Exception:
+        pass
+
     # Periodically merge duplicate/similar distillations
     # (the merge function existed but was never called)
     if saved:
