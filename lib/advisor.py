@@ -3906,6 +3906,7 @@ class SparkAdvisor:
             for d in distillations[:5]:
                 # Determine advice type label based on distillation type
                 type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
+                advisory_quality = {}
 
                 # Transform raw statement into advisory-ready text
                 try:
@@ -3914,6 +3915,7 @@ class SparkAdvisor:
                         continue  # Skip distillations that fail advisory quality
                     # Prefer composed advisory text over raw template
                     advice_text = aq.advisory_text or d.statement
+                    advisory_quality = aq.to_dict()
                 except Exception:
                     advice_text = d.statement
 
@@ -3956,6 +3958,7 @@ class SparkAdvisor:
                     context_match=eidos_match,
                     reason=reason,
                     emotional_priority=ep,
+                    advisory_quality=advisory_quality,
                 ))
                 # Usage tracking now handled by meta_ralph outcome feedback loop
                 # (see _apply_outcome_to_cognitive in meta_ralph.py)
