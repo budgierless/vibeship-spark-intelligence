@@ -29,24 +29,48 @@ _FTS_AVAILABLE: Optional[bool] = None
 TUNEABLES_FILE = Path.home() / ".spark" / "tuneables.json"
 
 # Phase 2: patchified (chunked) memory storage
-PATCHIFIED_ENABLED = os.getenv("SPARK_MEMORY_PATCHIFIED", "0") == "1"
+PATCHIFIED_ENABLED = False
 
 # Phase 2: delta memory compaction (store updates as deltas when near-duplicate)
-DELTAS_ENABLED = os.getenv("SPARK_MEMORY_DELTAS", "0") == "1"
-try:
-    DELTA_MIN_SIMILARITY = float(os.getenv("SPARK_MEMORY_DELTA_MIN_SIM", "0.86"))
-except Exception:
-    DELTA_MIN_SIMILARITY = 0.86
+DELTAS_ENABLED = False
+DELTA_MIN_SIMILARITY = 0.86
 DELTAS_WINDOW_DAYS = 30
 
+PATCH_MAX_CHARS = 600
+PATCH_MIN_CHARS = 120
+
+
+def _load_memory_deltas_config() -> None:
+    global PATCHIFIED_ENABLED, DELTAS_ENABLED, DELTA_MIN_SIMILARITY
+    global PATCH_MAX_CHARS, PATCH_MIN_CHARS
+    try:
+        from lib.config_authority import resolve_section, env_bool, env_float, env_int
+        cfg = resolve_section(
+            "memory_deltas",
+            env_overrides={
+                "patchified_enabled": env_bool("SPARK_MEMORY_PATCHIFIED"),
+                "deltas_enabled": env_bool("SPARK_MEMORY_DELTAS"),
+                "delta_min_similarity": env_float("SPARK_MEMORY_DELTA_MIN_SIM"),
+                "patch_max_chars": env_int("SPARK_MEMORY_PATCH_MAX_CHARS"),
+                "patch_min_chars": env_int("SPARK_MEMORY_PATCH_MIN_CHARS"),
+            },
+        ).data
+        PATCHIFIED_ENABLED = bool(cfg.get("patchified_enabled", False))
+        DELTAS_ENABLED = bool(cfg.get("deltas_enabled", False))
+        DELTA_MIN_SIMILARITY = float(cfg.get("delta_min_similarity", 0.86))
+        PATCH_MAX_CHARS = int(cfg.get("patch_max_chars", 600))
+        PATCH_MIN_CHARS = int(cfg.get("patch_min_chars", 120))
+    except Exception:
+        pass
+
+
+_load_memory_deltas_config()
+
 try:
-    PATCH_MAX_CHARS = max(120, min(2000, int(os.getenv("SPARK_MEMORY_PATCH_MAX_CHARS", "600") or 600)))
+    from lib.tuneables_reload import register_reload
+    register_reload("memory_deltas", lambda _s: _load_memory_deltas_config(), "memory_store.reload.deltas")
 except Exception:
-    PATCH_MAX_CHARS = 600
-try:
-    PATCH_MIN_CHARS = max(40, min(400, int(os.getenv("SPARK_MEMORY_PATCH_MIN_CHARS", "120") or 120)))
-except Exception:
-    PATCH_MIN_CHARS = 120
+    pass
 
 MEMORY_EMOTION_DEFAULTS: Dict[str, Any] = {
     "enabled": True,

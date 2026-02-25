@@ -66,22 +66,29 @@ def _is_enabled() -> bool:
     global _ENABLED
     if _ENABLED is not None:
         return _ENABLED
-    # Check env var override first
-    env = os.getenv("SPARK_VALIDATE_AND_STORE", "")
-    if env == "0":
-        _ENABLED = False
-        return False
-    if env == "1":
-        _ENABLED = True
-        return True
-    # Check tuneables
     try:
-        from .tuneables_reload import get_section
-        flow_cfg = get_section("flow")
-        val = flow_cfg.get("validate_and_store_enabled", True)
-        _ENABLED = bool(val)
+        from .config_authority import resolve_section, env_bool
+        cfg = resolve_section(
+            "flow",
+            env_overrides={
+                "validate_and_store_enabled": env_bool("SPARK_VALIDATE_AND_STORE"),
+            },
+        ).data
+        _ENABLED = bool(cfg.get("validate_and_store_enabled", True))
     except Exception:
-        _ENABLED = True
+        # Fallback: check env var, then tuneables_reload
+        env = os.getenv("SPARK_VALIDATE_AND_STORE", "")
+        if env == "0":
+            _ENABLED = False
+        elif env == "1":
+            _ENABLED = True
+        else:
+            try:
+                from .tuneables_reload import get_section
+                flow_cfg = get_section("flow")
+                _ENABLED = bool(flow_cfg.get("validate_and_store_enabled", True))
+            except Exception:
+                _ENABLED = True
     return _ENABLED
 
 

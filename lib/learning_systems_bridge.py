@@ -32,8 +32,16 @@ MAX_PROPOSAL_LINES = 3000
 
 
 def _bridge_enabled() -> bool:
-    raw = str(os.getenv("SPARK_LEARNING_BRIDGE_ENABLED", "1")).strip().lower()
-    return raw not in {"0", "false", "no", "off"}
+    try:
+        from .config_authority import resolve_section, env_bool
+        cfg = resolve_section(
+            "feature_gates",
+            env_overrides={"learning_bridge": env_bool("SPARK_LEARNING_BRIDGE_ENABLED")},
+        ).data
+        return bool(cfg.get("learning_bridge", True))
+    except Exception:
+        raw = str(os.getenv("SPARK_LEARNING_BRIDGE_ENABLED", "1")).strip().lower()
+        return raw not in {"0", "false", "no", "off"}
 
 
 def _append_jsonl_capped(path: Path, row: Dict[str, Any], *, max_lines: int) -> None:

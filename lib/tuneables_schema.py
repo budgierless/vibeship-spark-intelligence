@@ -424,6 +424,8 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "disable_timeouts": TuneableSpec("bool", False, None, None, "Disable all step timeouts"),
         "gc_every": TuneableSpec("int", 3, 1, 100, "Run GC every N bridge cycles"),
         "step_executor_workers": TuneableSpec("int", 4, 1, 16, "Thread pool size for step execution"),
+        "context_mind_reserved_slots": TuneableSpec("int", 1, 0, 10, "Reserved Mind slots in bridge context"),
+        "context_advisor_include_mind": TuneableSpec("bool", True, None, None, "Include Mind in advisor bridge context"),
     },
 
     # ---- sync ----
@@ -558,6 +560,31 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "auto_link_min_sim": TuneableSpec("float", 0.20, 0.05, 0.95, "Auto-link min similarity threshold"),
     },
 
+    # ---- memory_deltas: delta/patchified memory storage ----
+    "memory_deltas": {
+        "patchified_enabled": TuneableSpec("bool", False, None, None, "Enable patchified (chunked) memory storage"),
+        "deltas_enabled": TuneableSpec("bool", False, None, None, "Enable delta memory compaction"),
+        "delta_min_similarity": TuneableSpec("float", 0.86, 0.0, 1.0, "Min similarity for delta compaction"),
+        "patch_max_chars": TuneableSpec("int", 600, 120, 2000, "Max chars per memory patch"),
+        "patch_min_chars": TuneableSpec("int", 120, 40, 400, "Min chars per memory patch"),
+    },
+
+    # ---- orchestration: agent context injection ----
+    "orchestration": {
+        "inject_enabled": TuneableSpec("bool", False, None, None, "Enable Spark context injection into agent prompts"),
+        "context_max_chars": TuneableSpec("int", 1200, 50, 50000, "Max chars for injected context"),
+        "context_item_limit": TuneableSpec("int", 3, 1, 50, "Max context items to inject"),
+    },
+
+    # ---- feature_gates: per-module boolean feature toggles ----
+    "feature_gates": {
+        "personality_evolution": TuneableSpec("bool", False, None, None, "Enable personality evolution v1"),
+        "personality_observer": TuneableSpec("bool", False, None, None, "Enable personality evolution observer mode"),
+        "outcome_predictor": TuneableSpec("bool", False, None, None, "Enable outcome predictor for advisory gate"),
+        "cognitive_emotion_capture": TuneableSpec("bool", True, None, None, "Capture emotion state in cognitive snapshots"),
+        "learning_bridge": TuneableSpec("bool", True, None, None, "Enable learning systems bridge ingress"),
+    },
+
     # ---- production_gates: quality enforcement ----
     "production_gates": {
         "enforce_meta_ralph_quality_band": TuneableSpec("bool", True, None, None, "Enforce quality band check"),
@@ -600,7 +627,7 @@ SECTION_CONSUMERS: Dict[str, List[str]] = {
     "memory_emotion": ["lib/memory_store.py", "lib/memory_banks.py"],
     "memory_learning": ["lib/memory_store.py"],
     "memory_retrieval_guard": ["lib/memory_store.py"],
-    "bridge_worker": ["lib/bridge_cycle.py", "lib/bridge.py"],
+    "bridge_worker": ["lib/bridge_cycle.py", "lib/bridge.py", "lib/bridge.py (context slots)"],
     "sync": ["lib/context_sync.py"],
     "queue": ["lib/queue.py"],
     "memory_capture": ["lib/memory_capture.py"],
@@ -613,6 +640,10 @@ SECTION_CONSUMERS: Dict[str, List[str]] = {
     "chips_runtime": ["lib/chips/runtime.py", "lib/chips/loader.py"],
     "opportunity_scanner": ["lib/opportunity_scanner.py"],
     "prediction": ["lib/prediction_loop.py"],
+    "memory_deltas": ["lib/memory_store.py"],
+    "orchestration": ["lib/orchestration.py"],
+    "feature_gates": ["lib/personality_evolver.py", "lib/outcome_predictor.py",
+                      "lib/cognitive_learner.py", "lib/learning_systems_bridge.py"],
 }
 
 

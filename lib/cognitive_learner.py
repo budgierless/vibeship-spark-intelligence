@@ -181,9 +181,18 @@ def _coerce_int(value: Any, default: int = 0) -> int:
 
 
 def _capture_emotion_state_snapshot() -> Dict[str, Any]:
-    env = os.environ.get("SPARK_COGNITIVE_EMOTION_CAPTURE")
-    if env is not None and str(env).strip().lower() in {"0", "false", "off", "no"}:
-        return {}
+    try:
+        from lib.config_authority import resolve_section, env_bool
+        cfg = resolve_section(
+            "feature_gates",
+            env_overrides={"cognitive_emotion_capture": env_bool("SPARK_COGNITIVE_EMOTION_CAPTURE")},
+        ).data
+        if not cfg.get("cognitive_emotion_capture", True):
+            return {}
+    except Exception:
+        env = os.environ.get("SPARK_COGNITIVE_EMOTION_CAPTURE")
+        if env is not None and str(env).strip().lower() in {"0", "false", "off", "no"}:
+            return {}
     try:
         from lib.spark_emotions import SparkEmotions
 

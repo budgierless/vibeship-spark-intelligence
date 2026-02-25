@@ -534,7 +534,9 @@
     "step_timeout_s": 45.0,
     "disable_timeouts": false,
     "gc_every": 3,
-    "step_executor_workers": 4
+    "step_executor_workers": 4,
+    "context_mind_reserved_slots": 1,
+    "context_advisor_include_mind": true
   },
   "queue": {
     "max_events": 10000,
@@ -608,6 +610,25 @@
     "auto_link_interval_s": 60.0,
     "auto_link_limit": 200,
     "auto_link_min_sim": 0.20
+  },
+  "memory_deltas": {
+    "patchified_enabled": false,
+    "deltas_enabled": false,
+    "delta_min_similarity": 0.86,
+    "patch_max_chars": 600,
+    "patch_min_chars": 120
+  },
+  "orchestration": {
+    "inject_enabled": false,
+    "context_max_chars": 1200,
+    "context_item_limit": 3
+  },
+  "feature_gates": {
+    "personality_evolution": false,
+    "personality_observer": false,
+    "outcome_predictor": false,
+    "cognitive_emotion_capture": true,
+    "learning_bridge": true
   },
   "production_gates": {
     "enforce_meta_ralph_quality_band": true,

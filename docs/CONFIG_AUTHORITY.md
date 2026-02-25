@@ -55,6 +55,14 @@ Notes:
 - `lib/llm.py` (`eidos.llm_provider`)
 - `lib/chips/runtime.py` (`chips_runtime.*`)
 - `lib/chips/loader.py` (`chips_runtime.preferred_format`, `chips_runtime.schema_validation`)
+- `lib/memory_store.py` (`memory_deltas.*`)
+- `lib/orchestration.py` (`orchestration.*`)
+- `lib/personality_evolver.py` (`feature_gates.personality_*`)
+- `lib/outcome_predictor.py` (`feature_gates.outcome_predictor`)
+- `lib/cognitive_learner.py` (`feature_gates.cognitive_emotion_capture`)
+- `lib/learning_systems_bridge.py` (`feature_gates.learning_bridge`)
+- `lib/validate_and_store.py` (`flow.validate_and_store_enabled` via env override)
+- `lib/bridge.py` (`bridge_worker.context_mind_reserved_slots`, `bridge_worker.context_advisor_include_mind`)
 
 Resolver implementation:
 - `lib/config_authority.py`
@@ -98,6 +106,7 @@ cycles) dispatches callbacks for changed sections.
 | `triggers` | semantic_retriever.py | `semantic_retriever.reload.triggers` |
 | `feature_flags` | feature_flags.py | `feature_flags.reload` |
 | `opportunity_scanner` | opportunity_scanner.py | `opportunity_scanner` |
+| `memory_deltas` | memory_store.py | `memory_store.reload.deltas` |
 | `values` | eidos/models.py, pipeline.py | `eidos.models.reload_from_values`, `pipeline.reload_from` |
 
 ## Migration Standard
@@ -308,6 +317,42 @@ Only keys with explicit `env_overrides` mappings respond to env vars. All others
 | `SPARK_CHIP_PREFERRED_FORMAT` | `preferred_format` | str |
 | `SPARK_CHIP_SCHEMA_VALIDATION` | `schema_validation` | str |
 
+### Memory Deltas (`memory_deltas`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_MEMORY_PATCHIFIED` | `patchified_enabled` | bool |
+| `SPARK_MEMORY_DELTAS` | `deltas_enabled` | bool |
+| `SPARK_MEMORY_DELTA_MIN_SIM` | `delta_min_similarity` | float |
+| `SPARK_MEMORY_PATCH_MAX_CHARS` | `patch_max_chars` | int |
+| `SPARK_MEMORY_PATCH_MIN_CHARS` | `patch_min_chars` | int |
+
+### Orchestration (`orchestration`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_AGENT_INJECT` | `inject_enabled` | bool |
+| `SPARK_AGENT_CONTEXT_MAX_CHARS` | `context_max_chars` | int |
+| `SPARK_AGENT_CONTEXT_ITEM_LIMIT` | `context_item_limit` | int |
+
+### Feature Gates (`feature_gates`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_PERSONALITY_EVOLUTION_V1` | `personality_evolution` | bool |
+| `SPARK_PERSONALITY_EVOLUTION_OBSERVER` | `personality_observer` | bool |
+| `SPARK_OUTCOME_PREDICTOR` | `outcome_predictor` | bool |
+| `SPARK_COGNITIVE_EMOTION_CAPTURE` | `cognitive_emotion_capture` | bool |
+| `SPARK_LEARNING_BRIDGE_ENABLED` | `learning_bridge` | bool |
+
+### Flow Extended (`flow`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_VALIDATE_AND_STORE` | `validate_and_store_enabled` | bool |
+
+### Bridge Worker Extended 2 (`bridge_worker`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_CONTEXT_MIND_RESERVED_SLOTS` | `context_mind_reserved_slots` | int |
+| `SPARK_CONTEXT_ADVISOR_INCLUDE_MIND` | `context_advisor_include_mind` | bool |
+
 ## Hot-Reload Status
 
 Modules with `register_reload()` pick up file changes automatically (1-30s). Others require restart.
@@ -353,3 +398,5 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 - `tests/test_runtime_tuneable_sections.py`
 - `tests/test_pr1_config_authority.py`
 - `tests/test_pr2_config_authority.py`
+- `tests/test_pr3_config_authority.py`
+- `tests/test_pr4_config_authority.py`
