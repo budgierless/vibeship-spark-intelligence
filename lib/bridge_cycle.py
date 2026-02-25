@@ -33,61 +33,31 @@ from lib.opportunity_scanner_adapter import scan_runtime_opportunities
 from lib.runtime_hygiene import cleanup_runtime_artifacts
 
 
+from lib.feature_flags import PREMIUM_TOOLS as _FF_PREMIUM, chips_active as _ff_chips_active
+
 BRIDGE_HEARTBEAT_FILE = Path.home() / ".spark" / "bridge_worker_heartbeat.json"
 _reconcile_done = False
 
-# --- OpenClaw notification integration ---
-SPARK_OPENCLAW_NOTIFY = os.environ.get("SPARK_OPENCLAW_NOTIFY", "1").strip().lower() not in {
-    "0", "false", "no", "off"
-}
+# --- Defaults — overridden by config-authority resolution below ---
+SPARK_OPENCLAW_NOTIFY: bool = True
 _NOTIFY_COOLDOWN_S = 300  # 5 minutes
 _last_notify_time: float = 0.0
-BRIDGE_STEP_TIMEOUT_S = float(os.environ.get("SPARK_BRIDGE_STEP_TIMEOUT_S", "45"))
-BRIDGE_DISABLE_TIMEOUTS = os.environ.get("SPARK_BRIDGE_DISABLE_TIMEOUTS", "0").strip().lower() in {
-    "1", "true", "yes", "on"
-}
-
-# GC is a safety valve, but doing a full collection every cycle is often
-# unnecessary overhead once obvious references are cleared.
-# Default: collect every 3 cycles. Set SPARK_BRIDGE_GC_EVERY=1 to restore
-# previous behavior.
-try:
-    _BRIDGE_GC_EVERY = int(os.environ.get("SPARK_BRIDGE_GC_EVERY", "3"))
-except Exception:
-    _BRIDGE_GC_EVERY = 3
-_BRIDGE_GC_EVERY = max(1, min(100, _BRIDGE_GC_EVERY))
+BRIDGE_STEP_TIMEOUT_S: float = 45.0
+BRIDGE_DISABLE_TIMEOUTS: bool = False
+_BRIDGE_GC_EVERY: int = 3
 _BRIDGE_GC_COUNTER = 0
 
 
 def _premium_tools_enabled() -> bool:
-    return str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return _FF_PREMIUM
 
 
 def _chips_disabled() -> bool:
-    return str(os.environ.get("SPARK_ADVISORY_DISABLE_CHIPS", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return not _ff_chips_active()
 
 
 def _chips_enabled() -> bool:
-    if _chips_disabled():
-        return False
-    if not _premium_tools_enabled():
-        return False
-    return str(os.environ.get("SPARK_CHIPS_ENABLED", "")).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return _ff_chips_active()
 
 
 def _env_float(name: str, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -128,23 +98,56 @@ def _parse_bool(value: Any, default: bool) -> bool:
 
 CHIP_MERGE_MIN_CONFIDENCE = _env_float("SPARK_CHIP_MERGE_MIN_CONFIDENCE", 0.55)
 CHIP_MERGE_MIN_QUALITY = _env_float("SPARK_CHIP_MERGE_MIN_QUALITY", 0.55)
-BRIDGE_MIND_SYNC_ENABLED = _env_bool("SPARK_BRIDGE_MIND_SYNC_ENABLED", True)
-BRIDGE_MIND_SYNC_LIMIT = _env_int("SPARK_BRIDGE_MIND_SYNC_LIMIT", 8, 0, 200)
-BRIDGE_MIND_SYNC_MIN_READINESS = _env_float("SPARK_BRIDGE_MIND_SYNC_MIN_READINESS", 0.45, 0.0, 1.0)
-BRIDGE_MIND_SYNC_MIN_RELIABILITY = _env_float("SPARK_BRIDGE_MIND_SYNC_MIN_RELIABILITY", 0.35, 0.0, 1.0)
-BRIDGE_MIND_SYNC_MAX_AGE_S = _env_int("SPARK_BRIDGE_MIND_SYNC_MAX_AGE_S", 14 * 24 * 3600, 0, 365 * 24 * 3600)
-BRIDGE_MIND_SYNC_DRAIN_QUEUE = _env_bool("SPARK_BRIDGE_MIND_SYNC_DRAIN_QUEUE", True)
-BRIDGE_MIND_SYNC_QUEUE_BUDGET = _env_int("SPARK_BRIDGE_MIND_SYNC_QUEUE_BUDGET", 2, 0, 1000)
+BRIDGE_MIND_SYNC_ENABLED = True
+BRIDGE_MIND_SYNC_LIMIT = 8
+BRIDGE_MIND_SYNC_MIN_READINESS = 0.45
+BRIDGE_MIND_SYNC_MIN_RELIABILITY = 0.35
+BRIDGE_MIND_SYNC_MAX_AGE_S = 14 * 24 * 3600
+BRIDGE_MIND_SYNC_DRAIN_QUEUE = True
+BRIDGE_MIND_SYNC_QUEUE_BUDGET = 2
 
 
-def _reload_bridge_worker_config(cfg: Dict[str, Any]) -> None:
+def _load_bridge_worker_config() -> None:
+    """Load bridge_worker tuneables via config-authority."""
+    global SPARK_OPENCLAW_NOTIFY, BRIDGE_STEP_TIMEOUT_S, BRIDGE_DISABLE_TIMEOUTS
+    global _BRIDGE_GC_EVERY
     global BRIDGE_MIND_SYNC_ENABLED, BRIDGE_MIND_SYNC_LIMIT
     global BRIDGE_MIND_SYNC_MIN_READINESS, BRIDGE_MIND_SYNC_MIN_RELIABILITY
     global BRIDGE_MIND_SYNC_MAX_AGE_S, BRIDGE_MIND_SYNC_DRAIN_QUEUE, BRIDGE_MIND_SYNC_QUEUE_BUDGET
+    try:
+        from lib.config_authority import resolve_section, env_bool, env_int, env_float
 
+        cfg = resolve_section(
+            "bridge_worker",
+            env_overrides={
+                "mind_sync_enabled": env_bool("SPARK_BRIDGE_MIND_SYNC_ENABLED"),
+                "mind_sync_limit": env_int("SPARK_BRIDGE_MIND_SYNC_LIMIT"),
+                "mind_sync_min_readiness": env_float("SPARK_BRIDGE_MIND_SYNC_MIN_READINESS"),
+                "mind_sync_min_reliability": env_float("SPARK_BRIDGE_MIND_SYNC_MIN_RELIABILITY"),
+                "mind_sync_max_age_s": env_int("SPARK_BRIDGE_MIND_SYNC_MAX_AGE_S"),
+                "mind_sync_drain_queue": env_bool("SPARK_BRIDGE_MIND_SYNC_DRAIN_QUEUE"),
+                "mind_sync_queue_budget": env_int("SPARK_BRIDGE_MIND_SYNC_QUEUE_BUDGET"),
+                "openclaw_notify": env_bool("SPARK_OPENCLAW_NOTIFY"),
+                "step_timeout_s": env_float("SPARK_BRIDGE_STEP_TIMEOUT_S"),
+                "disable_timeouts": env_bool("SPARK_BRIDGE_DISABLE_TIMEOUTS"),
+                "gc_every": env_int("SPARK_BRIDGE_GC_EVERY"),
+                "step_executor_workers": env_int("SPARK_BRIDGE_STEP_EXECUTOR_WORKERS"),
+            },
+        ).data
+        _apply_bridge_worker_cfg(cfg)
+    except Exception:
+        pass
+
+
+def _apply_bridge_worker_cfg(cfg: Dict[str, Any]) -> None:
+    """Apply resolved bridge_worker config dict to module globals."""
+    global SPARK_OPENCLAW_NOTIFY, BRIDGE_STEP_TIMEOUT_S, BRIDGE_DISABLE_TIMEOUTS
+    global _BRIDGE_GC_EVERY
+    global BRIDGE_MIND_SYNC_ENABLED, BRIDGE_MIND_SYNC_LIMIT
+    global BRIDGE_MIND_SYNC_MIN_READINESS, BRIDGE_MIND_SYNC_MIN_RELIABILITY
+    global BRIDGE_MIND_SYNC_MAX_AGE_S, BRIDGE_MIND_SYNC_DRAIN_QUEUE, BRIDGE_MIND_SYNC_QUEUE_BUDGET
     if not isinstance(cfg, dict):
         return
-
     if "mind_sync_enabled" in cfg:
         BRIDGE_MIND_SYNC_ENABLED = _parse_bool(cfg.get("mind_sync_enabled"), BRIDGE_MIND_SYNC_ENABLED)
     if "mind_sync_limit" in cfg:
@@ -168,6 +171,21 @@ def _reload_bridge_worker_config(cfg: Dict[str, Any]) -> None:
         BRIDGE_MIND_SYNC_QUEUE_BUDGET = max(
             0, min(1000, int(cfg.get("mind_sync_queue_budget") or BRIDGE_MIND_SYNC_QUEUE_BUDGET))
         )
+    if "openclaw_notify" in cfg:
+        SPARK_OPENCLAW_NOTIFY = _parse_bool(cfg.get("openclaw_notify"), SPARK_OPENCLAW_NOTIFY)
+    if "step_timeout_s" in cfg:
+        BRIDGE_STEP_TIMEOUT_S = max(5.0, min(300.0, float(cfg.get("step_timeout_s") or BRIDGE_STEP_TIMEOUT_S)))
+    if "disable_timeouts" in cfg:
+        BRIDGE_DISABLE_TIMEOUTS = _parse_bool(cfg.get("disable_timeouts"), BRIDGE_DISABLE_TIMEOUTS)
+    if "gc_every" in cfg:
+        _BRIDGE_GC_EVERY = max(1, min(100, int(cfg.get("gc_every") or _BRIDGE_GC_EVERY)))
+
+
+_load_bridge_worker_config()
+
+
+def _reload_bridge_worker_config(cfg: Dict[str, Any]) -> None:
+    _load_bridge_worker_config()
 
 
 try:
@@ -183,7 +201,16 @@ except Exception:
 # remain busy. We use a small pool to allow subsequent steps to proceed.
 _STEP_EXECUTOR: Optional[ThreadPoolExecutor] = None
 _STEP_EXECUTOR_LOCK = Lock()
-_STEP_EXECUTOR_WORKERS = max(2, int(os.environ.get("SPARK_BRIDGE_STEP_EXECUTOR_WORKERS", "4")))
+# Read once at import; not hot-reloadable (ThreadPoolExecutor size is fixed).
+try:
+    from lib.config_authority import resolve_section as _bw_resolve, env_int as _bw_env_int
+    _STEP_EXECUTOR_WORKERS = max(2, int(
+        _bw_resolve("bridge_worker", env_overrides={
+            "step_executor_workers": _bw_env_int("SPARK_BRIDGE_STEP_EXECUTOR_WORKERS"),
+        }).data.get("step_executor_workers", 4)
+    ))
+except Exception:
+    _STEP_EXECUTOR_WORKERS = max(2, int(os.environ.get("SPARK_BRIDGE_STEP_EXECUTOR_WORKERS", "4")))
 
 
 def _shutdown_step_executor() -> None:

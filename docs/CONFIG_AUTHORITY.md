@@ -20,7 +20,8 @@ Notes:
 ## Current Adoption
 - `lib/bridge_cycle.py` (`bridge_worker.*`)
 - `lib/advisory_engine.py` (`advisory_engine.*`)
-- `lib/advisor.py` (`advisor.*`, `auto_tuner.*`, `values.advice_cache_ttl`)
+- `lib/advisory_emitter.py` (`advisory_engine.emit_*`)
+- `lib/advisor.py` (`advisor.*`, `auto_tuner.*`, `retrieval.*`, `memory_emotion.*`, `values.advice_cache_ttl`)
 - `lib/advisory_gate.py` (`advisory_gate.*`, including agreement gate knobs)
 - `lib/advisory_state.py` (`advisory_gate.shown_advice_ttl_s`)
 - `lib/meta_ralph.py` (`meta_ralph.*`)
@@ -41,6 +42,9 @@ Notes:
 - `lib/pattern_detection/request_tracker.py` (`request_tracker.*`)
 - `lib/advisory_preferences.py` (read path for `advisor.*`)
 - `lib/observatory/config.py` (`observatory.*`)
+- `lib/feature_flags.py` (`feature_flags.*`)
+- `lib/cognitive_learner.py` (via `feature_flags`)
+- `lib/chips/runtime.py` (via `feature_flags`)
 
 Resolver implementation:
 - `lib/config_authority.py`
@@ -62,7 +66,7 @@ cycles) dispatches callbacks for changed sections.
 | Section | Module(s) | Reload Label |
 |---------|-----------|-------------|
 | `advisor` | advisor.py, advisory_preferences.py | `advisor.reload_from`, `advisory_preferences.reload` |
-| `advisory_engine` | advisory_engine.py | `advisory_engine.apply_config` |
+| `advisory_engine` | advisory_engine.py, advisory_emitter.py | `advisory_engine.apply_config`, `advisory_emitter.reload` |
 | `advisory_gate` | advisory_gate.py, advisory_state.py | `advisory_gate.reload_from`, `advisory_state.reload_gate_from` |
 | `advisory_quality` | advisory_preferences.py | `advisory_preferences.reload.quality` |
 | `auto_tuner` | advisor.py | `advisor.reload_from.auto_tuner` |
@@ -82,6 +86,7 @@ cycles) dispatches callbacks for changed sections.
 | `sync` | context_sync.py | `context_sync.reload` |
 | `synthesizer` | advisory_synthesizer.py | `advisory_synthesizer.reload` |
 | `triggers` | semantic_retriever.py | `semantic_retriever.reload.triggers` |
+| `feature_flags` | feature_flags.py | `feature_flags.reload` |
 | `values` | eidos/models.py, pipeline.py | `eidos.models.reload_from_values`, `pipeline.reload_from` |
 
 ## Migration Standard
@@ -160,6 +165,63 @@ Only keys with explicit `env_overrides` mappings respond to env vars. All others
 | Env Var | Key | Type |
 |---------|-----|------|
 | `SPARK_MEMORY_EMOTION_WRITE_CAPTURE` | `write_capture_enabled` | bool |
+| `SPARK_ADVISORY_MEMORY_EMOTION_ENABLED` | `enabled` | bool |
+| `SPARK_ADVISORY_MEMORY_EMOTION_WEIGHT` | `retrieval_state_match_weight` | float |
+| `SPARK_ADVISORY_MEMORY_EMOTION_MIN_SIM` | `retrieval_min_state_similarity` | float |
+
+### Feature Flags (`feature_flags`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_PREMIUM_TOOLS` | `premium_tools` | bool |
+| `SPARK_CHIPS_ENABLED` | `chips_enabled` | bool |
+| `SPARK_ADVISORY_DISABLE_CHIPS` | `advisory_disable_chips` | bool |
+
+### Advisor (`advisor`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_ADVISORY_REPLAY_ENABLED` | `replay_enabled` | bool |
+| `SPARK_ADVISORY_REPLAY_MIN_STRICT` | `replay_min_strict` | int |
+| `SPARK_ADVISORY_REPLAY_MIN_DELTA` | `replay_min_delta` | float |
+| `SPARK_ADVISORY_REPLAY_MAX_RECORDS` | `replay_max_records` | int |
+| `SPARK_ADVISORY_REPLAY_MAX_AGE_S` | `replay_max_age_s` | int |
+| `SPARK_ADVISORY_REPLAY_STRICT_WINDOW_S` | `replay_strict_window_s` | int |
+| `SPARK_ADVISORY_REPLAY_MIN_CONTEXT` | `replay_min_context` | float |
+| `SPARK_ADVISOR_MIND_MAX_STALE_S` | `mind_max_stale_s` | float |
+| `SPARK_ADVISOR_MIND_STALE_ALLOW_IF_EMPTY` | `mind_stale_allow_if_empty` | bool |
+| `SPARK_ADVISOR_MIND_MIN_SALIENCE` | `mind_min_salience` | float |
+| `SPARK_ADVISOR_MIND_RESERVE_SLOTS` | `mind_reserve_slots` | int |
+| `SPARK_ADVISOR_MIND_RESERVE_MIN_RANK` | `mind_reserve_min_rank` | float |
+
+### Retrieval (`retrieval`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_RETRIEVAL_LEVEL` | `level` | str |
+| `SPARK_RETRIEVAL_MODE` | `mode` | str |
+| `SPARK_ADVISORY_MINIMAX_FAST_RERANK` | `minimax_fast_rerank` | bool |
+| `SPARK_ADVISORY_MINIMAX_TOP_K` | `minimax_fast_rerank_top_k` | int |
+| `SPARK_ADVISORY_MINIMAX_MIN_ITEMS` | `minimax_fast_rerank_min_items` | int |
+| `SPARK_ADVISORY_MINIMAX_MIN_COMPLEXITY` | `minimax_fast_rerank_min_complexity` | int |
+| `SPARK_ADVISORY_MINIMAX_HIGH_VOLUME_ITEMS` | `minimax_fast_rerank_high_volume_min_items` | int |
+| `SPARK_ADVISORY_MINIMAX_REQUIRE_AGENTIC` | `minimax_fast_rerank_require_agentic` | bool |
+| `SPARK_ADVISORY_MINIMAX_MODEL` | `minimax_fast_rerank_model` | str |
+| `SPARK_ADVISORY_MINIMAX_TIMEOUT_S` | `minimax_fast_rerank_timeout_s` | float |
+| `SPARK_ADVISORY_MINIMAX_COOLDOWN_S` | `minimax_fast_rerank_cooldown_s` | float |
+
+### Emitter (via `advisory_engine`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_ADVISORY_EMIT` | `emit_enabled` | bool |
+| `SPARK_ADVISORY_MAX_CHARS` | `emit_max_chars` | int |
+| `SPARK_ADVISORY_FORMAT` | `emit_format` | str |
+
+### Bridge Worker Extended (`bridge_worker`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_OPENCLAW_NOTIFY` | `openclaw_notify` | bool |
+| `SPARK_BRIDGE_STEP_TIMEOUT_S` | `step_timeout_s` | float |
+| `SPARK_BRIDGE_DISABLE_TIMEOUTS` | `disable_timeouts` | bool |
+| `SPARK_BRIDGE_GC_EVERY` | `gc_every` | int |
+| `SPARK_BRIDGE_STEP_EXECUTOR_WORKERS` | `step_executor_workers` | int |
 
 ## Hot-Reload Status
 
@@ -167,7 +229,7 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 
 | Section | Hot-Reload | Module |
 |---------|-----------|--------|
-| `advisory_engine` | Yes | `advisory_engine.py` |
+| `advisory_engine` | Yes | `advisory_engine.py`, `advisory_emitter.py` |
 | `advisory_gate` | Yes | `advisory_gate.py`, `advisory_state.py` |
 | `advisor` | Yes | `advisor.py` |
 | `meta_ralph` | Yes | `meta_ralph.py` |
@@ -184,6 +246,7 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 | `semantic` | Yes | `semantic_retriever.py` |
 | `triggers` | Yes | `semantic_retriever.py` |
 | `sync` | Yes | `context_sync.py` |
+| `feature_flags` | Yes | `feature_flags.py` |
 
 ## Verification
 - `tests/test_config_authority.py`

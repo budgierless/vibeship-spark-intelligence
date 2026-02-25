@@ -429,12 +429,11 @@ def classify_action_domain(insight_text: str, category: str = "", source: str = 
     cat = str(category or "").lower()
 
     def _premium_tools_enabled() -> bool:
-        return str(os.environ.get("SPARK_PREMIUM_TOOLS", "")).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        try:
+            from .feature_flags import PREMIUM_TOOLS
+            return PREMIUM_TOOLS
+        except ImportError:
+            return False
 
     # No dedicated social/X/Twitter advisory domain in OSS launch.
 

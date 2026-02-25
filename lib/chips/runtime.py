@@ -136,12 +136,13 @@ class ChipRuntime:
             for token in raw_blocked.split(",")
             if token.strip()
         }
-        self.premium_tools_enabled = os.getenv("SPARK_PREMIUM_TOOLS", "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        try:
+            from lib.feature_flags import PREMIUM_TOOLS
+            self.premium_tools_enabled = PREMIUM_TOOLS
+        except ImportError:
+            self.premium_tools_enabled = os.getenv("SPARK_PREMIUM_TOOLS", "").strip().lower() in {
+                "1", "true", "yes", "on",
+            }
         if not self.premium_tools_enabled:
             self.blocked_chip_ids.update(PREMIUM_ONLY_CHIP_IDS)
         raw_observer_blocklist = str(os.getenv("SPARK_CHIP_TELEMETRY_OBSERVERS", "")).strip()

@@ -173,6 +173,10 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
             "Max fallback emissions per budget window. 0 = unlimited (old behavior)"),
         "fallback_budget_window": TuneableSpec("int", 5, 1, 100,
             "Number of tool calls per fallback budget window"),
+        "emit_enabled": TuneableSpec("bool", True, None, None, "Enable stdout advisory emission"),
+        "emit_max_chars": TuneableSpec("int", 500, 50, 5000, "Max characters per emission"),
+        "emit_format": TuneableSpec("str", "inline", None, None, "Emission format style",
+                                     ["inline", "block"]),
     },
 
     # ---- advisory_gate: emission gating ----
@@ -283,6 +287,17 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "overrides": TuneableSpec("dict", {}, None, None, "Retrieval parameter overrides"),
         "domain_profile_enabled": TuneableSpec("bool", True, None, None, "Enable domain-specific profiles"),
         "domain_profiles": TuneableSpec("dict", {}, None, None, "Per-domain retrieval profiles"),
+        "mode": TuneableSpec("str", "auto", None, None, "Retrieval mode",
+                             ["auto", "embeddings_only", "hybrid_agentic"]),
+        "minimax_fast_rerank": TuneableSpec("bool", False, None, None, "Enable MiniMax fast reranking"),
+        "minimax_fast_rerank_top_k": TuneableSpec("int", 8, 4, 50, "Top K items for MiniMax reranking"),
+        "minimax_fast_rerank_min_items": TuneableSpec("int", 6, 1, 50, "Min items before triggering rerank"),
+        "minimax_fast_rerank_min_complexity": TuneableSpec("int", 3, 0, 20, "Min complexity for rerank"),
+        "minimax_fast_rerank_high_volume_min_items": TuneableSpec("int", 0, 0, 100, "Min items for high-volume rerank"),
+        "minimax_fast_rerank_require_agentic": TuneableSpec("bool", False, None, None, "Require agentic mode for rerank"),
+        "minimax_fast_rerank_model": TuneableSpec("str", "MiniMax-M2.5", None, None, "MiniMax model for reranking"),
+        "minimax_fast_rerank_timeout_s": TuneableSpec("float", 5.0, 2.0, 30.0, "MiniMax rerank timeout (s)"),
+        "minimax_fast_rerank_cooldown_s": TuneableSpec("float", 0.0, 0.0, 300.0, "MiniMax rerank cooldown (s)"),
     },
 
     # ---- meta_ralph: quality gate ----
@@ -398,6 +413,11 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "mind_sync_max_age_s": TuneableSpec("int", 1209600, 0, 31536000, "Max insight age for Mind sync (s)"),
         "mind_sync_drain_queue": TuneableSpec("bool", True, None, None, "Drain bounded Mind offline queue each cycle"),
         "mind_sync_queue_budget": TuneableSpec("int", 25, 0, 1000, "Max offline queue entries drained per cycle"),
+        "openclaw_notify": TuneableSpec("bool", True, None, None, "Enable OpenClaw workspace notifications"),
+        "step_timeout_s": TuneableSpec("float", 45.0, 5.0, 300.0, "Per-step execution timeout (s)"),
+        "disable_timeouts": TuneableSpec("bool", False, None, None, "Disable all step timeouts"),
+        "gc_every": TuneableSpec("int", 3, 1, 100, "Run GC every N bridge cycles"),
+        "step_executor_workers": TuneableSpec("int", 4, 1, 16, "Thread pool size for step execution"),
     },
 
     # ---- sync ----
@@ -457,6 +477,13 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "explore_feedback_max": TuneableSpec("int", 200, 1, 5000, "Max implicit feedback entries to export"),
     },
 
+    # ---- feature_flags: cross-module boolean toggles ----
+    "feature_flags": {
+        "premium_tools": TuneableSpec("bool", False, None, None, "Enable premium/paid features"),
+        "chips_enabled": TuneableSpec("bool", False, None, None, "Enable chip insight system"),
+        "advisory_disable_chips": TuneableSpec("bool", False, None, None, "Disable chips for advisory only"),
+    },
+
     # ---- production_gates: quality enforcement ----
     "production_gates": {
         "enforce_meta_ralph_quality_band": TuneableSpec("bool", True, None, None, "Enforce quality band check"),
@@ -483,7 +510,7 @@ SECTION_CONSUMERS: Dict[str, List[str]] = {
     "triggers": ["lib/advisor.py"],
     "promotion": ["lib/promoter.py", "lib/auto_promote.py"],
     "synthesizer": ["lib/advisory_synthesizer.py"],
-    "advisory_engine": ["lib/advisory_engine.py"],
+    "advisory_engine": ["lib/advisory_engine.py", "lib/advisory_emitter.py"],
     "advisory_gate": ["lib/advisory_gate.py", "lib/advisory_state.py"],
     "advisory_packet_store": ["lib/advisory_packet_store.py"],
     "advisory_prefetch": ["lib/advisory_prefetch_worker.py"],
@@ -498,12 +525,14 @@ SECTION_CONSUMERS: Dict[str, List[str]] = {
     "memory_emotion": ["lib/memory_store.py", "lib/memory_banks.py"],
     "memory_learning": ["lib/memory_store.py"],
     "memory_retrieval_guard": ["lib/memory_store.py"],
-    "bridge_worker": ["lib/bridge_cycle.py"],
+    "bridge_worker": ["lib/bridge_cycle.py", "lib/bridge.py"],
     "sync": ["lib/context_sync.py"],
     "queue": ["lib/queue.py"],
     "memory_capture": ["lib/memory_capture.py"],
     "request_tracker": ["lib/pattern_detection/request_tracker.py"],
     "observatory": ["lib/observatory/config.py"],
+    "feature_flags": ["lib/feature_flags.py", "lib/advisor.py", "lib/bridge_cycle.py",
+                      "lib/cognitive_learner.py", "lib/chips/runtime.py"],
     "production_gates": ["lib/production_gates.py"],
 }
 

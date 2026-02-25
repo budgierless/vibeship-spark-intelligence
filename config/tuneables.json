@@ -106,7 +106,10 @@
     "selective_ai_min_remaining_ms": 1800,
     "selective_ai_min_authority": "whisper",
     "fallback_budget_cap": 1,
-    "fallback_budget_window": 5
+    "fallback_budget_window": 5,
+    "emit_enabled": true,
+    "emit_max_chars": 500,
+    "emit_format": "inline"
   },
   "advisory_gate": {
     "max_emit_per_call": 2,
@@ -222,6 +225,16 @@
       "reliability_weight": 0.04,
       "semantic_intent_min": 0.02
     },
+    "mode": "auto",
+    "minimax_fast_rerank": false,
+    "minimax_fast_rerank_top_k": 8,
+    "minimax_fast_rerank_min_items": 6,
+    "minimax_fast_rerank_min_complexity": 3,
+    "minimax_fast_rerank_high_volume_min_items": 0,
+    "minimax_fast_rerank_require_agentic": false,
+    "minimax_fast_rerank_model": "MiniMax-M2.5",
+    "minimax_fast_rerank_timeout_s": 5.0,
+    "minimax_fast_rerank_cooldown_s": 0.0,
     "domain_profile_enabled": true,
     "domain_profiles": {
       "memory": {
@@ -487,7 +500,12 @@
     "mind_sync_min_reliability": 0.35,
     "mind_sync_max_age_s": 1209600,
     "mind_sync_drain_queue": true,
-    "mind_sync_queue_budget": 25
+    "mind_sync_queue_budget": 25,
+    "openclaw_notify": true,
+    "step_timeout_s": 45.0,
+    "disable_timeouts": false,
+    "gc_every": 3,
+    "step_executor_workers": 4
   },
   "queue": {
     "max_events": 10000,
@@ -523,6 +541,11 @@
     "explore_tuning_max": 200,
     "explore_decisions_max": 200,
     "explore_feedback_max": 200
+  },
+  "feature_flags": {
+    "premium_tools": false,
+    "chips_enabled": false,
+    "advisory_disable_chips": false
   },
   "production_gates": {
     "enforce_meta_ralph_quality_band": true,
