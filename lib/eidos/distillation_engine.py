@@ -28,6 +28,7 @@ from .models import (
     Episode, Step, Distillation, DistillationType,
     Outcome, Evaluation, Phase
 )
+from ..elevation import elevate
 from ..distillation_transformer import transform_for_advisory
 
 
@@ -356,11 +357,25 @@ class DistillationEngine:
             if policy:
                 candidates.append(policy)
 
-        # Quality gate: reject tautological/generic and transformer-suppressed distillations.
+        # Elevation + quality gate: tighten language, then reject weak candidates.
+        last_step = steps[-1] if steps else None
+        context = {
+            "goal": episode.goal,
+            "domain": ", ".join(self._extract_domains(episode, steps)),
+            "tool": ((last_step.action_details or {}).get("tool", "") if last_step else ""),
+            "file_path": ((last_step.action_details or {}).get("file_path", "") if last_step else ""),
+            "timestamp": int(episode.end_ts or time.time()),
+        }
+
         filtered: List[DistillationCandidate] = []
         for candidate in candidates:
             if not self._is_quality_distillation(candidate.statement, candidate.type):
                 continue
+
+            elevated = elevate(candidate.statement, context)
+            if elevated and elevated.strip():
+                candidate.statement = elevated.strip()
+
             aq = transform_for_advisory(candidate.statement, source="eidos")
             if aq.suppressed or aq.unified_score < self._quality_floor:
                 continue
