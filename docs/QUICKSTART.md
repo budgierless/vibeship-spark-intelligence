@@ -380,7 +380,7 @@ Semantic retrieval logs and metrics:
 ## Configuring Tuneables
 
 Tuneables control every runtime behavior — quality thresholds, advisory timing, gate limits, retrieval weights, and more.
-231 keys across 31 sections, all configurable without code changes.
+317 keys across 37 sections, all configurable without code changes.
 
 For the full key reference, see [`docs/TUNEABLES_REFERENCE.md`](TUNEABLES_REFERENCE.md).
 For the architectural contract, see [`docs/CONFIG_AUTHORITY.md`](CONFIG_AUTHORITY.md).
@@ -417,7 +417,7 @@ export SPARK_ADVISORY_EMIT_WHISPERS=false
 ```
 
 Env vars override everything — they win over both files. Must be set **before** starting Spark.
-Only ~43 keys have env overrides wired. See [`docs/CONFIG_AUTHORITY.md`](CONFIG_AUTHORITY.md) for the full list.
+~148 keys have env overrides wired. See [`docs/CONFIG_AUTHORITY.md`](CONFIG_AUTHORITY.md) for the full list.
 
 ### Precedence (Highest Wins Last)
 
@@ -436,22 +436,30 @@ Most modules pick up changes automatically — no restart needed:
 
 | Modules with hot-reload | Section |
 |-------------------------|---------|
-| `advisory_engine.py` | `advisory_engine` |
+| `advisory_engine.py`, `advisory_emitter.py` | `advisory_engine` |
 | `advisory_gate.py`, `advisory_state.py` | `advisory_gate` |
-| `advisor.py` | `advisor` |
+| `advisor.py`, `advisory_preferences.py` | `advisor`, `auto_tuner` |
 | `meta_ralph.py` | `meta_ralph` |
-| `pipeline.py` | `pipeline` |
+| `pipeline.py` | `pipeline`, `values` |
 | `bridge_cycle.py` | `bridge_worker` |
 | `queue.py` | `queue` |
-| `eidos/models.py` | `eidos` |
+| `eidos/models.py` | `eidos`, `values` |
 | `advisory_synthesizer.py` | `synthesizer` |
 | `advisory_packet_store.py` | `advisory_packet_store` |
 | `advisory_prefetch_worker.py` | `advisory_prefetch` |
 | `memory_capture.py` | `memory_capture` |
+| `memory_store.py` | `memory_deltas`, `memory_emotion`, `memory_learning`, `memory_retrieval_guard` |
+| `memory_banks.py` | `memory_emotion` |
+| `promoter.py`, `auto_promote.py` | `promotion` |
+| `chip_merger.py` | `chip_merge` |
+| `feature_flags.py` | `feature_flags` |
+| `opportunity_scanner.py` | `opportunity_scanner` |
+| `semantic_retriever.py` | `semantic`, `triggers` |
+| `context_sync.py` | `sync` |
 | `request_tracker.py` | `request_tracker` |
 | `validate_and_store.py` | `flow` |
 
-**Restart required** for: `semantic_retriever.py` (`semantic`, `triggers`), `context_sync.py` (`sync`).
+All sections listed above support hot-reload via `register_reload()`. No restart is required for these.
 
 ### Reconciliation
 

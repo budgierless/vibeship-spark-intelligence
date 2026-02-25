@@ -359,25 +359,34 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 
 | Section | Hot-Reload | Module |
 |---------|-----------|--------|
+| `advisor` | Yes | `advisor.py`, `advisory_preferences.py` |
 | `advisory_engine` | Yes | `advisory_engine.py`, `advisory_emitter.py` |
 | `advisory_gate` | Yes | `advisory_gate.py`, `advisory_state.py` |
-| `advisor` | Yes | `advisor.py` |
-| `meta_ralph` | Yes | `meta_ralph.py` |
-| `pipeline` | Yes | `pipeline.py` |
-| `bridge_worker` | Yes | `bridge_cycle.py` |
-| `queue` | Yes | `queue.py` |
-| `eidos` | Yes | `eidos/models.py` |
-| `synthesizer` | Yes | `advisory_synthesizer.py` |
 | `advisory_packet_store` | Yes | `advisory_packet_store.py` |
 | `advisory_prefetch` | Yes | `advisory_prefetch_worker.py` |
-| `memory_capture` | Yes | `memory_capture.py` |
-| `request_tracker` | Yes | `request_tracker.py` |
-| `flow` | Yes | `validate_and_store.py` |
-| `semantic` | Yes | `semantic_retriever.py` |
-| `triggers` | Yes | `semantic_retriever.py` |
-| `sync` | Yes | `context_sync.py` |
+| `advisory_quality` | Yes | `advisory_preferences.py` |
+| `auto_tuner` | Yes | `advisor.py` |
+| `bridge_worker` | Yes | `bridge_cycle.py` |
+| `chip_merge` | Yes | `chip_merger.py` |
+| `eidos` | Yes | `eidos/models.py` |
 | `feature_flags` | Yes | `feature_flags.py` |
+| `flow` | Yes | `validate_and_store.py` |
+| `memory_capture` | Yes | `memory_capture.py` |
+| `memory_deltas` | Yes | `memory_store.py` |
+| `memory_emotion` | Yes | `memory_banks.py`, `memory_store.py` |
+| `memory_learning` | Yes | `memory_store.py` |
+| `memory_retrieval_guard` | Yes | `memory_store.py` |
+| `meta_ralph` | Yes | `meta_ralph.py` |
 | `opportunity_scanner` | Yes | `opportunity_scanner.py` |
+| `pipeline` | Yes | `pipeline.py` |
+| `promotion` | Yes | `promoter.py`, `auto_promote.py` |
+| `queue` | Yes | `queue.py` |
+| `request_tracker` | Yes | `request_tracker.py` |
+| `semantic` | Yes | `semantic_retriever.py` |
+| `sync` | Yes | `context_sync.py` |
+| `synthesizer` | Yes | `advisory_synthesizer.py` |
+| `triggers` | Yes | `semantic_retriever.py` |
+| `values` | Yes | `eidos/models.py`, `pipeline.py` |
 
 ## Verification
 - `tests/test_config_authority.py`

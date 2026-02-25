@@ -2,8 +2,8 @@
 
 Auto-generated from `lib/tuneables_schema.py`. Do not edit manually.
 
-**Sections:** 31
-**Total keys:** 231
+**Sections:** 37
+**Total keys:** 317
 
 ## Overview
 
@@ -66,16 +66,14 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 - [`promotion`](#promotion) (5 keys) — `lib/promoter.py`, `lib/auto_promote.py`
 - [`synthesizer`](#synthesizer) (6 keys) — `lib/advisory_synthesizer.py`
 - [`flow`](#flow) (1 keys) — —
-- [`advisory_engine`](#advisory_engine) (16 keys) — `lib/advisory_engine.py`
+- [`advisory_engine`](#advisory_engine) (19 keys) — `lib/advisory_engine.py`, `lib/advisory_emitter.py`
 - [`advisory_gate`](#advisory_gate) (13 keys) — `lib/advisory_gate.py`, `lib/advisory_state.py`
 - [`advisory_packet_store`](#advisory_packet_store) (19 keys) — `lib/advisory_packet_store.py`
 - [`advisory_prefetch`](#advisory_prefetch) (4 keys) — `lib/advisory_prefetch_worker.py`
 - [`advisor`](#advisor) (20 keys) — `lib/advisor.py`
-- [`retrieval`](#retrieval) (4 keys) — `lib/advisor.py`, `lib/semantic_retriever.py`
+- [`retrieval`](#retrieval) (14 keys) — `lib/advisor.py`, `lib/semantic_retriever.py`
 - [`meta_ralph`](#meta_ralph) (9 keys) — `lib/meta_ralph.py`
-- [`eidos`](#eidos) (4 keys) — `lib/eidos/models.py`
-- [`scheduler`](#scheduler) (1 keys) — `lib/bridge_cycle.py`
-- [`source_roles`](#source_roles) (3 keys) — `lib/advisory_engine.py`, `lib/auto_tuner.py`
+- [`eidos`](#eidos) (9 keys) — `lib/eidos/models.py`, `lib/eidos/guardrails.py`, `lib/eidos/control_plane.py`, `lib/eidos/elevated_control.py`, `lib/pattern_detection/distiller.py`, `lib/llm.py`
 - [`auto_tuner`](#auto_tuner) (13 keys) — `lib/auto_tuner.py`
 - [`chip_merge`](#chip_merge) (7 keys) — `lib/chips/runtime.py`, `lib/chip_merger.py`
 - [`advisory_quality`](#advisory_quality) (6 keys) — `lib/advisory_synthesizer.py`
@@ -83,12 +81,20 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 - [`memory_emotion`](#memory_emotion) (4 keys) — `lib/memory_store.py`, `lib/memory_banks.py`
 - [`memory_learning`](#memory_learning) (4 keys) — `lib/memory_store.py`
 - [`memory_retrieval_guard`](#memory_retrieval_guard) (3 keys) — `lib/memory_store.py`
-- [`bridge_worker`](#bridge_worker) (8 keys) — `lib/bridge_cycle.py`
+- [`bridge_worker`](#bridge_worker) (15 keys) — `lib/bridge_cycle.py`, `lib/bridge.py`, `lib/bridge.py (context slots)`
 - [`sync`](#sync) (4 keys) — `lib/context_sync.py`
 - [`queue`](#queue) (4 keys) — `lib/queue.py`
 - [`memory_capture`](#memory_capture) (4 keys) — `lib/memory_capture.py`
 - [`request_tracker`](#request_tracker) (3 keys) — `lib/pattern_detection/request_tracker.py`
 - [`observatory`](#observatory) (16 keys) — `lib/observatory/config.py`
+- [`feature_flags`](#feature_flags) (3 keys) — `lib/feature_flags.py`, `lib/advisor.py`, `lib/bridge_cycle.py`, `lib/cognitive_learner.py`, `lib/chips/runtime.py`
+- [`observe_hook`](#observe_hook) (10 keys) — `hooks/observe.py`
+- [`chips_runtime`](#chips_runtime) (10 keys) — `lib/chips/runtime.py`, `lib/chips/loader.py`
+- [`opportunity_scanner`](#opportunity_scanner) (22 keys) — `lib/opportunity_scanner.py`
+- [`prediction`](#prediction) (7 keys) — `lib/prediction_loop.py`
+- [`memory_deltas`](#memory_deltas) (5 keys) — `lib/memory_store.py`
+- [`orchestration`](#orchestration) (3 keys) — `lib/orchestration.py`
+- [`feature_gates`](#feature_gates) (5 keys) — `lib/personality_evolver.py`, `lib/outcome_predictor.py`, `lib/cognitive_learner.py`, `lib/learning_systems_bridge.py`
 - [`production_gates`](#production_gates) (10 keys) — `lib/production_gates.py`
 
 ## `values`
@@ -190,7 +196,7 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 
 ## `advisory_engine`
 
-**Consumed by:** `lib/advisory_engine.py`
+**Consumed by:** `lib/advisory_engine.py`, `lib/advisory_emitter.py`
 
 | Key | Type | Default | Min | Max | Description |
 |-----|------|---------|-----|-----|-------------|
@@ -210,6 +216,9 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `selective_ai_min_authority` | str | `whisper` | — | — | Min authority for AI synth (silent, whisper, note, warning, block) |
 | `fallback_budget_cap` | int | `1` | 0 | 10 | Max fallback emissions per budget window. 0 = unlimited (old behavior) |
 | `fallback_budget_window` | int | `5` | 1 | 100 | Number of tool calls per fallback budget window |
+| `emit_enabled` | bool | `True` | — | — | Enable stdout advisory emission |
+| `emit_max_chars` | int | `500` | 50 | 5000 | Max characters per emission |
+| `emit_format` | str | `inline` | — | — | Emission format style (inline, block) |
 
 ## `advisory_gate`
 
@@ -255,7 +264,7 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `obsidian_enabled` | bool | `False` | — | — | Enable advisory packet export to Obsidian |
 | `obsidian_auto_export` | bool | `False` | — | — | Auto-export packet payloads to Obsidian |
 | `obsidian_export_max_packets` | int | `300` | 1 | 5000 | Max Obsidian packet exports to retain |
-| `obsidian_export_dir` | str | `` | — | — | Override Obsidian export directory (empty = ~/.spark/advice_packets/obsidian) |
+| `obsidian_export_dir` | str | `""` | — | — | Override Obsidian export directory (empty = ~/.spark/advice_packets/obsidian) |
 
 ## `advisory_prefetch`
 
@@ -305,6 +314,16 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `overrides` | dict | `{}` | — | — | Retrieval parameter overrides |
 | `domain_profile_enabled` | bool | `True` | — | — | Enable domain-specific profiles |
 | `domain_profiles` | dict | `{}` | — | — | Per-domain retrieval profiles |
+| `mode` | str | `auto` | — | — | Retrieval mode (auto, embeddings_only, hybrid_agentic) |
+| `minimax_fast_rerank` | bool | `False` | — | — | Enable MiniMax fast reranking |
+| `minimax_fast_rerank_top_k` | int | `8` | 4 | 50 | Top K items for MiniMax reranking |
+| `minimax_fast_rerank_min_items` | int | `6` | 1 | 50 | Min items before triggering rerank |
+| `minimax_fast_rerank_min_complexity` | int | `3` | 0 | 20 | Min complexity for rerank |
+| `minimax_fast_rerank_high_volume_min_items` | int | `0` | 0 | 100 | Min items for high-volume rerank |
+| `minimax_fast_rerank_require_agentic` | bool | `False` | — | — | Require agentic mode for rerank |
+| `minimax_fast_rerank_model` | str | `MiniMax-M2.5` | — | — | MiniMax model for reranking |
+| `minimax_fast_rerank_timeout_s` | float | `5.0` | 2.0 | 30.0 | MiniMax rerank timeout (s) |
+| `minimax_fast_rerank_cooldown_s` | float | `0.0` | 0.0 | 300.0 | MiniMax rerank cooldown (s) |
 
 ## `meta_ralph`
 
@@ -324,7 +343,7 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 
 ## `eidos`
 
-**Consumed by:** `lib/eidos/models.py`
+**Consumed by:** `lib/eidos/models.py`, `lib/eidos/guardrails.py`, `lib/eidos/control_plane.py`, `lib/eidos/elevated_control.py`, `lib/pattern_detection/distiller.py`, `lib/llm.py`
 
 | Key | Type | Default | Min | Max | Description |
 |-----|------|---------|-----|-----|-------------|
@@ -332,24 +351,11 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `max_retries_per_error` | int | `3` | 1 | 20 | Retry limit per error type |
 | `max_file_touches` | int | `5` | 1 | 50 | Max times to modify same file |
 | `no_evidence_limit` | int | `6` | 1 | 30 | Force DIAGNOSE after N steps without evidence |
-
-## `scheduler`
-
-**Consumed by:** `lib/bridge_cycle.py`
-
-| Key | Type | Default | Min | Max | Description |
-|-----|------|---------|-----|-----|-------------|
-| `enabled` | bool | `True` | — | — | Enable the scheduler |
-
-## `source_roles`
-
-**Consumed by:** `lib/advisory_engine.py`, `lib/auto_tuner.py`
-
-| Key | Type | Default | Min | Max | Description |
-|-----|------|---------|-----|-----|-------------|
-| `distillers` | dict | `{}` | — | — | Sources that distill/learn (not advisory) |
-| `direct_advisory` | dict | `{}` | — | — | Sources that advise directly |
-| `disabled_from_advisory` | dict | `{}` | — | — | Sources removed from advisory |
+| `safety_guardrails_enabled` | bool | `True` | — | — | Enable safety guardrails for tool use |
+| `safety_allow_secrets` | bool | `False` | — | — | Allow reading secret/credential files |
+| `trace_strict` | bool | `False` | — | — | Make missing trace_id blocking (vs warning) |
+| `tool_distillation_enabled` | bool | `True` | — | — | Enable tool-pattern distillation |
+| `llm_provider` | str | `minimax` | — | — | LLM provider for distillation (minimax, ollama, gemini, openai, anthropic) |
 
 ## `auto_tuner`
 
@@ -443,7 +449,7 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 
 ## `bridge_worker`
 
-**Consumed by:** `lib/bridge_cycle.py`
+**Consumed by:** `lib/bridge_cycle.py`, `lib/bridge.py`, `lib/bridge.py (context slots)`
 
 | Key | Type | Default | Min | Max | Description |
 |-----|------|---------|-----|-----|-------------|
@@ -455,6 +461,13 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `mind_sync_max_age_s` | int | `1209600` | 0 | 31536000 | Max insight age for Mind sync (s) |
 | `mind_sync_drain_queue` | bool | `True` | — | — | Drain bounded Mind offline queue each cycle |
 | `mind_sync_queue_budget` | int | `25` | 0 | 1000 | Max offline queue entries drained per cycle |
+| `openclaw_notify` | bool | `True` | — | — | Enable OpenClaw workspace notifications |
+| `step_timeout_s` | float | `45.0` | 5.0 | 300.0 | Per-step execution timeout (s) |
+| `disable_timeouts` | bool | `False` | — | — | Disable all step timeouts |
+| `gc_every` | int | `3` | 1 | 100 | Run GC every N bridge cycles |
+| `step_executor_workers` | int | `4` | 1 | 16 | Thread pool size for step execution |
+| `context_mind_reserved_slots` | int | `1` | 0 | 10 | Reserved Mind slots in bridge context |
+| `context_advisor_include_mind` | bool | `True` | — | — | Include Mind in advisor bridge context |
 
 ## `sync`
 
@@ -522,6 +535,127 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `explore_decisions_max` | int | `200` | 1 | 5000 | Max advisory decision ledger entries to export |
 | `explore_feedback_max` | int | `200` | 1 | 5000 | Max implicit feedback entries to export |
 
+## `feature_flags`
+
+**Consumed by:** `lib/feature_flags.py`, `lib/advisor.py`, `lib/bridge_cycle.py`, `lib/cognitive_learner.py`, `lib/chips/runtime.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `premium_tools` | bool | `False` | — | — | Enable premium/paid features |
+| `chips_enabled` | bool | `False` | — | — | Enable chip insight system |
+| `advisory_disable_chips` | bool | `False` | — | — | Disable chips for advisory only |
+
+## `observe_hook`
+
+**Consumed by:** `hooks/observe.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `eidos_enabled` | bool | `True` | — | — | Enable EIDOS episode tracking |
+| `outcome_checkin_min_s` | int | `1800` | 60 | 86400 | Min seconds between outcome check-ins |
+| `advice_feedback_enabled` | bool | `True` | — | — | Enable advice feedback collection |
+| `advice_feedback_prompt` | bool | `True` | — | — | Prompt user for advice feedback at session end |
+| `advice_feedback_min_s` | int | `600` | 60 | 86400 | Min seconds between feedback prompts |
+| `pretool_budget_ms` | float | `2500.0` | 100.0 | 10000.0 | Pre-tool advisory time budget (ms) |
+| `eidos_enforce_block` | bool | `False` | — | — | Enforce EIDOS blocking on risky actions |
+| `hook_payload_text_limit` | int | `3000` | 500 | 50000 | Max text chars in hook payload |
+| `outcome_checkin_enabled` | bool | `False` | — | — | Enable outcome check-in at session end |
+| `outcome_checkin_prompt` | bool | `False` | — | — | Prompt user for outcome check-in |
+
+## `chips_runtime`
+
+**Consumed by:** `lib/chips/runtime.py`, `lib/chips/loader.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `observer_only` | bool | `True` | — | — | Run chips in observer-only mode |
+| `min_score` | float | `0.35` | 0.0 | 1.0 | Min insight score for chip output |
+| `min_confidence` | float | `0.7` | 0.0 | 1.0 | Min confidence for chip output |
+| `gate_mode` | str | `balanced` | — | — | Chip gate mode (balanced, strict, permissive) |
+| `min_learning_evidence` | int | `1` | 1 | 50 | Min learning evidence count |
+| `blocked_ids` | str | `""` | — | — | Comma-separated blocked chip IDs |
+| `telemetry_observer_blocklist` | str | `""` | — | — | Comma-separated telemetry observer blocklist |
+| `max_active_per_event` | int | `6` | 1 | 20 | Max active chips per event |
+| `preferred_format` | str | `multifile` | — | — | Chip file format (single, multifile, hybrid) |
+| `schema_validation` | str | `warn` | — | — | Schema validation mode (warn, block, strict, error, off) |
+
+## `opportunity_scanner`
+
+**Consumed by:** `lib/opportunity_scanner.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `enabled` | bool | `True` | — | — | Enable opportunity scanner |
+| `self_max_items` | int | `3` | 1 | 20 | Max self-scan items per cycle |
+| `user_max_items` | int | `2` | 1 | 20 | Max user-facing items per cycle |
+| `max_history_lines` | int | `500` | 50 | 10000 | Max history lines to scan |
+| `self_dedup_window_s` | float | `14400.0` | 0.0 | 604800.0 | Self dedup window (s) |
+| `self_recent_lookback` | int | `240` | 20 | 5000 | Self recent lookback count |
+| `self_category_cap` | int | `1` | 1 | 10 | Max items per self category |
+| `user_scan_enabled` | bool | `False` | — | — | Enable user-facing scan |
+| `scan_event_limit` | int | `120` | 0 | 10000 | Max events per scan |
+| `outcome_window_s` | float | `21600.0` | 300.0 | 604800.0 | Outcome observation window (s) |
+| `outcome_lookback` | int | `200` | 20 | 10000 | Outcome lookback count |
+| `promotion_min_successes` | int | `2` | 1 | 50 | Min successes for promotion |
+| `promotion_min_effectiveness` | float | `0.66` | 0.0 | 1.0 | Min effectiveness for promotion |
+| `promotion_lookback` | int | `400` | 20 | 10000 | Promotion lookback count |
+| `llm_enabled` | bool | `True` | — | — | Enable LLM-assisted scanning |
+| `llm_provider` | str | `""` | — | — | LLM provider override |
+| `llm_timeout_s` | float | `2.5` | 0.3 | 30.0 | LLM call timeout (s) |
+| `llm_max_items` | int | `3` | 1 | 20 | Max LLM items per call |
+| `llm_min_context_chars` | int | `140` | 0 | 5000 | Min context chars for LLM |
+| `llm_cooldown_s` | float | `300.0` | 0.0 | 86400.0 | LLM call cooldown (s) |
+| `decision_lookback` | int | `500` | 50 | 10000 | Decision lookback count |
+| `dismiss_ttl_s` | float | `604800.0` | 0.0 | 2592000.0 | Dismiss TTL (s, default 7d) |
+
+## `prediction`
+
+**Consumed by:** `lib/prediction_loop.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `total_budget` | int | `50` | 20 | 2000 | Total prediction budget |
+| `default_source_budget` | int | `30` | 1 | 2000 | Default per-source budget |
+| `source_budgets` | str | `""` | — | — | CSV source=budget overrides (e.g. chip_merge=80,spark_inject=60) |
+| `auto_link_enabled` | bool | `True` | — | — | Enable auto-linking predictions to outcomes |
+| `auto_link_interval_s` | float | `60.0` | 30.0 | 86400.0 | Auto-link interval (s) |
+| `auto_link_limit` | int | `200` | 10 | 1000 | Auto-link max items per run |
+| `auto_link_min_sim` | float | `0.2` | 0.05 | 0.95 | Auto-link min similarity threshold |
+
+## `memory_deltas`
+
+**Consumed by:** `lib/memory_store.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `patchified_enabled` | bool | `False` | — | — | Enable patchified (chunked) memory storage |
+| `deltas_enabled` | bool | `False` | — | — | Enable delta memory compaction |
+| `delta_min_similarity` | float | `0.86` | 0.0 | 1.0 | Min similarity for delta compaction |
+| `patch_max_chars` | int | `600` | 120 | 2000 | Max chars per memory patch |
+| `patch_min_chars` | int | `120` | 40 | 400 | Min chars per memory patch |
+
+## `orchestration`
+
+**Consumed by:** `lib/orchestration.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `inject_enabled` | bool | `False` | — | — | Enable Spark context injection into agent prompts |
+| `context_max_chars` | int | `1200` | 50 | 50000 | Max chars for injected context |
+| `context_item_limit` | int | `3` | 1 | 50 | Max context items to inject |
+
+## `feature_gates`
+
+**Consumed by:** `lib/personality_evolver.py`, `lib/outcome_predictor.py`, `lib/cognitive_learner.py`, `lib/learning_systems_bridge.py`
+
+| Key | Type | Default | Min | Max | Description |
+|-----|------|---------|-----|-----|-------------|
+| `personality_evolution` | bool | `False` | — | — | Enable personality evolution v1 |
+| `personality_observer` | bool | `False` | — | — | Enable personality evolution observer mode |
+| `outcome_predictor` | bool | `False` | — | — | Enable outcome predictor for advisory gate |
+| `cognitive_emotion_capture` | bool | `True` | — | — | Capture emotion state in cognitive snapshots |
+| `learning_bridge` | bool | `True` | — | — | Enable learning systems bridge ingress |
+
 ## `production_gates`
 
 **Consumed by:** `lib/production_gates.py`
@@ -538,4 +672,3 @@ vault_dir = str(section.data.get("vault_dir", DEFAULT_PATH))
 | `min_advisory_avg_effectiveness` | float | `0.35` | 0.0 | 1.0 | Min advisory avg effectiveness |
 | `max_advisory_store_queue_depth` | int | `1200` | 0 | 100000 | Max advisory prefetch queue depth |
 | `max_advisory_top_category_concentration` | float | `0.85` | 0.0 | 1.0 | Max top category concentration |
-

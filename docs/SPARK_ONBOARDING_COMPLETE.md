@@ -371,7 +371,7 @@ Project File Promotion (CLAUDE.md, AGENTS.md, etc.)
 | **Specificity** | Generic | Domain-specific | Context-specific |
 | **Outcome-Linked** | No outcome | Implied | Validated outcome |
 
-Total range: 0-12. Threshold: 4 (tunable).
+Total range: 0-12. Threshold: 4.5 (tunable via `meta_ralph.quality_threshold` in `~/.spark/tuneables.json`).
 
 ---
 
