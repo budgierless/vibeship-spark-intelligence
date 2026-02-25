@@ -3907,17 +3907,28 @@ class SparkAdvisor:
                 # Determine advice type label based on distillation type
                 type_label = d.type.value.upper() if hasattr(d.type, 'value') else str(d.type)
                 advisory_quality = {}
+                base_statement = (getattr(d, "refined_statement", "") or d.statement or "").strip()
+                stored_quality = getattr(d, "advisory_quality", None) or {}
+                advice_text = base_statement or d.statement
 
-                # Transform raw statement into advisory-ready text
-                try:
-                    aq = _transform_distillation(d.statement, source="eidos")
-                    if aq.suppressed:
-                        continue  # Skip distillations that fail advisory quality
-                    # Prefer composed advisory text over raw template
-                    advice_text = aq.advisory_text or d.statement
-                    advisory_quality = aq.to_dict()
-                except Exception:
-                    advice_text = d.statement
+                # Prefer persisted advisory quality from EIDOS store.
+                if isinstance(stored_quality, dict) and stored_quality:
+                    if stored_quality.get("suppressed"):
+                        continue
+                    if float(stored_quality.get("unified_score", 0.0) or 0.0) < 0.35:
+                        continue
+                    advisory_quality = stored_quality
+                    advice_text = str(stored_quality.get("advisory_text") or advice_text or d.statement)
+                else:
+                    # Fallback for legacy rows without persisted quality metadata.
+                    try:
+                        aq = _transform_distillation(advice_text or d.statement, source="eidos")
+                        if aq.suppressed:
+                            continue  # Skip distillations that fail advisory quality
+                        advice_text = aq.advisory_text or advice_text or d.statement
+                        advisory_quality = aq.to_dict()
+                    except Exception:
+                        advice_text = advice_text or d.statement
 
                 # Add reason from distillation confidence and proven effectiveness
                 reason = f"Confidence: {d.confidence:.0%}"
@@ -3932,7 +3943,7 @@ class SparkAdvisor:
                 # Bridge emotional priority: try exact match on action text,
                 # else try substring match on statement
                 ep = 0.0
-                stmt_lower = (d.statement or "").strip().lower()
+                stmt_lower = (advice_text or d.statement or "").strip().lower()
                 if stmt_lower in priority_map:
                     ep = priority_map[stmt_lower]
                 else:

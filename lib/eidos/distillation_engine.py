@@ -30,6 +30,7 @@ from .models import (
 )
 from ..elevation import elevate
 from ..distillation_transformer import transform_for_advisory
+from ..distillation_refiner import refine_distillation
 
 
 @dataclass
@@ -562,10 +563,24 @@ class DistillationEngine:
         """
         Convert a validated candidate into a permanent distillation.
         """
+        refine_context = {
+            "domain": ", ".join(candidate.domains),
+            "tool": candidate.triggers[0] if candidate.triggers else "",
+            "reason": candidate.rationale,
+            "timestamp": int(time.time()),
+        }
+        refined_statement, advisory_quality = refine_distillation(
+            candidate.statement,
+            source="eidos",
+            context=refine_context,
+            min_unified_score=0.60,
+        )
         return Distillation(
             distillation_id="",  # Will be auto-generated
             type=candidate.type,
             statement=candidate.statement,
+            refined_statement=refined_statement if refined_statement != candidate.statement else "",
+            advisory_quality=advisory_quality,
             domains=candidate.domains,
             triggers=candidate.triggers,
             source_steps=candidate.source_steps,

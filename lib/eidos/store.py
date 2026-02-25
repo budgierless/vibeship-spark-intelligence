@@ -165,7 +165,9 @@ class EidosStore:
                     times_helped INTEGER DEFAULT 0,
 
                     created_at REAL DEFAULT (strftime('%s', 'now')),
-                    revalidate_by REAL
+                    revalidate_by REAL,
+                    refined_statement TEXT,
+                    advisory_quality TEXT
                 );
 
                 -- Archived distillations (reversible purge history)
@@ -186,6 +188,7 @@ class EidosStore:
                     times_helped INTEGER DEFAULT 0,
                     created_at REAL,
                     revalidate_by REAL,
+                    refined_statement TEXT,
                     archive_reason TEXT NOT NULL,
                     advisory_quality TEXT,
                     archived_at REAL DEFAULT (strftime('%s', 'now'))
@@ -215,6 +218,14 @@ class EidosStore:
             try:
                 if not self._column_exists(conn, "steps", "trace_id"):
                     conn.execute("ALTER TABLE steps ADD COLUMN trace_id TEXT")
+                if not self._column_exists(conn, "distillations", "refined_statement"):
+                    conn.execute("ALTER TABLE distillations ADD COLUMN refined_statement TEXT")
+                if not self._column_exists(conn, "distillations", "advisory_quality"):
+                    conn.execute("ALTER TABLE distillations ADD COLUMN advisory_quality TEXT")
+                if not self._column_exists(conn, "distillations_archive", "refined_statement"):
+                    conn.execute("ALTER TABLE distillations_archive ADD COLUMN refined_statement TEXT")
+                if not self._column_exists(conn, "distillations_archive", "advisory_quality"):
+                    conn.execute("ALTER TABLE distillations_archive ADD COLUMN advisory_quality TEXT")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_steps_trace ON steps(trace_id)")
             except Exception:
                 pass
@@ -492,6 +503,16 @@ class EidosStore:
 
     def save_distillation(self, distillation: Distillation) -> str:
         """Save a distillation to the database with duplicate-statement collapsing."""
+        def _quality_score(payload: Any) -> float:
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            if isinstance(payload, dict):
+                return float(payload.get("unified_score", 0.0) or 0.0)
+            return 0.0
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             target_norm = _normalize_distillation_statement(distillation.statement)
@@ -540,12 +561,25 @@ class EidosStore:
                 else:
                     merged_revalidate = max(float(existing_revalidate), float(distillation.revalidate_by))
 
+                existing_q = existing["advisory_quality"] if "advisory_quality" in existing.keys() else None
+                incoming_q = distillation.advisory_quality or {}
+                merged_quality = incoming_q if _quality_score(incoming_q) >= _quality_score(existing_q) else (
+                    json.loads(existing_q) if isinstance(existing_q, str) and existing_q else (
+                        existing_q if isinstance(existing_q, dict) else {}
+                    )
+                )
+                merged_refined = str(
+                    distillation.refined_statement
+                    or (existing["refined_statement"] if "refined_statement" in existing.keys() else "")
+                    or ""
+                )
+
                 conn.execute(
                     """UPDATE distillations
                        SET statement = ?, domains = ?, triggers = ?, anti_triggers = ?,
                            source_steps = ?, validation_count = ?, contradiction_count = ?,
                            confidence = ?, times_retrieved = ?, times_used = ?, times_helped = ?,
-                           created_at = ?, revalidate_by = ?
+                           created_at = ?, revalidate_by = ?, refined_statement = ?, advisory_quality = ?
                        WHERE distillation_id = ?""",
                     (
                         str(existing["statement"] or distillation.statement),
@@ -561,6 +595,8 @@ class EidosStore:
                         merged_helped,
                         merged_created,
                         merged_revalidate,
+                        merged_refined,
+                        json.dumps(merged_quality),
                         str(existing["distillation_id"]),
                     ),
                 )
@@ -572,8 +608,9 @@ class EidosStore:
                 INSERT OR REPLACE INTO distillations (
                     distillation_id, type, statement, domains, triggers, anti_triggers,
                     source_steps, validation_count, contradiction_count, confidence,
-                    times_retrieved, times_used, times_helped, created_at, revalidate_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    times_retrieved, times_used, times_helped, created_at, revalidate_by,
+                    refined_statement, advisory_quality
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     distillation.distillation_id,
@@ -591,6 +628,8 @@ class EidosStore:
                     distillation.times_helped,
                     distillation.created_at,
                     distillation.revalidate_by,
+                    distillation.refined_statement,
+                    json.dumps(distillation.advisory_quality or {}),
                 ),
             )
             conn.commit()
@@ -801,6 +840,21 @@ class EidosStore:
 
     def _row_to_distillation(self, row: sqlite3.Row) -> Distillation:
         """Convert a database row to Distillation object."""
+        advisory_quality = {}
+        if "advisory_quality" in row.keys():
+            raw_quality = row["advisory_quality"]
+            if isinstance(raw_quality, str) and raw_quality:
+                try:
+                    advisory_quality = json.loads(raw_quality)
+                except Exception:
+                    advisory_quality = {}
+            elif isinstance(raw_quality, dict):
+                advisory_quality = raw_quality
+
+        refined_statement = ""
+        if "refined_statement" in row.keys():
+            refined_statement = row["refined_statement"] or ""
+
         return Distillation(
             distillation_id=row["distillation_id"],
             type=DistillationType(row["type"]),
@@ -816,7 +870,9 @@ class EidosStore:
             times_used=row["times_used"],
             times_helped=row["times_helped"],
             created_at=row["created_at"],
-            revalidate_by=row["revalidate_by"]
+            revalidate_by=row["revalidate_by"],
+            refined_statement=refined_statement,
+            advisory_quality=advisory_quality,
         )
 
     def prune_distillations(self) -> dict:
@@ -931,8 +987,8 @@ class EidosStore:
                             distillation_id, type, statement, domains, triggers, anti_triggers,
                             source_steps, validation_count, contradiction_count, confidence,
                             times_retrieved, times_used, times_helped, created_at, revalidate_by,
-                            archive_reason, advisory_quality
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            refined_statement, archive_reason, advisory_quality
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             row["distillation_id"],
@@ -950,6 +1006,7 @@ class EidosStore:
                             row["times_helped"],
                             row["created_at"],
                             row["revalidate_by"],
+                            row.get("refined_statement", ""),
                             row["archive_reason"],
                             row["advisory_quality"],
                         ),

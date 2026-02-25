@@ -1192,6 +1192,7 @@ def _append_eidos_update(update: str) -> None:
                 "schema": structured.get("schema") or "spark.eidos.v1",
                 "insights": kept[:3],
                 "distillation_summary": " | ".join(summary_parts)[:1200],
+                "refined_statement": adv_quality_dict.get("advisory_text") or " | ".join(summary_parts)[:1200],
                 "advisory_quality": adv_quality_dict,
                 "advisory_readiness": round(min(max(advisory_readiness, 0.0), 1.0), 4),
             }
@@ -1199,6 +1200,7 @@ def _append_eidos_update(update: str) -> None:
             entry = {
                 "timestamp": datetime.now().isoformat(),
                 "distillation": update,
+                "refined_statement": adv_quality_dict.get("advisory_text") or update,
                 "advisory_quality": adv_quality_dict,
                 "advisory_readiness": round(min(max(advisory_readiness, 0.0), 1.0), 4),
             }

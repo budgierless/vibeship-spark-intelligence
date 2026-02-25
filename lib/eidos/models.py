@@ -580,6 +580,8 @@ class Distillation:
     # Metadata
     created_at: float = field(default_factory=time.time)
     revalidate_by: Optional[float] = None
+    refined_statement: str = ""
+    advisory_quality: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.distillation_id:
@@ -634,6 +636,8 @@ class Distillation:
             "times_helped": self.times_helped,
             "created_at": self.created_at,
             "revalidate_by": self.revalidate_by,
+            "refined_statement": self.refined_statement,
+            "advisory_quality": self.advisory_quality,
         }
 
     @classmethod
@@ -654,6 +658,8 @@ class Distillation:
             times_helped=data.get("times_helped", 0),
             created_at=data.get("created_at", time.time()),
             revalidate_by=data.get("revalidate_by"),
+            refined_statement=data.get("refined_statement", ""),
+            advisory_quality=data.get("advisory_quality", {}),
         )
 
 
