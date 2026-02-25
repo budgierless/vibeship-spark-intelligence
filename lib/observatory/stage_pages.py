@@ -332,7 +332,40 @@ def _gen_meta_ralph(d: dict, all_data: dict) -> str:
     except Exception:
         pass
 
-    s += _source_files("lib/meta_ralph.py", [
+    # Elevation Transforms sub-system
+    elev = all_data.get("elevation", {})
+    needs_work = elev.get("needs_work_verdicts", 0)
+    total_v = elev.get("total_verdicts", 0)
+    elev_attempted = elev.get("elevation_attempted", 0)
+    elev_improved = elev.get("elevation_improved", 0)
+
+    s += "## Elevation Transforms\n\n"
+    s += "*When Meta-Ralph scores an insight as NEEDS_WORK, the Elevation system applies "
+    s += "12 deterministic text transforms to improve it before re-scoring. Trained on "
+    s += "137 Claude refinement pairs (95.7% pass rate on benchmarks).*\n\n"
+
+    s += "**Transforms available:** hedge removal, passive restructure, reasoning injection, "
+    s += "specificity boost, tautology splitting, filler stripping, abstract-to-concrete, "
+    s += "action extraction, quantifier grounding, causal linking, context enrichment, "
+    s += "redundancy compression\n\n"
+
+    if total_v > 0 or elev_attempted > 0:
+        s += "| Metric | Value |\n"
+        s += "|--------|-------|\n"
+        if total_v > 0:
+            nw_pct = round(needs_work / max(total_v, 1) * 100, 1)
+            s += f"| NEEDS_WORK verdicts | {fmt_num(needs_work)} / {fmt_num(total_v)} ({nw_pct}%) |\n"
+        if elev_attempted > 0:
+            imp_pct = round(elev_improved / max(elev_attempted, 1) * 100, 1)
+            s += f"| Elevation attempted | {fmt_num(elev_attempted)} |\n"
+            s += f"| Elevation improved | {fmt_num(elev_improved)} ({imp_pct}%) |\n"
+        s += "\n"
+    else:
+        s += "> No elevation telemetry yet. Counters populate when NEEDS_WORK verdicts trigger elevation.\n\n"
+
+    s += "**Flow:** `validate_and_store()` → Meta-Ralph scores → NEEDS_WORK → `elevation.elevate()` → re-score → accept or discard\n\n"
+
+    s += _source_files("lib/meta_ralph.py + lib/elevation.py", [
         "meta_ralph/learnings_store.json",
         "meta_ralph/roast_history.json",
         "validate_and_store_telemetry.json",
@@ -449,11 +482,40 @@ def _gen_eidos(d: dict, all_data: dict) -> str:
     elif not d.get("db_exists"):
         s += "## Status\n\neidos.db not found. EIDOS episodic learning is not active.\n\n"
 
-    s += _source_files("lib/eidos/ (aggregator.py, distiller.py, store.py, models.py)", [
+    # Distillation Refiner pipeline
+    s += "## Distillation Refiner Pipeline\n\n"
+    s += "*When EIDOS produces a raw distillation, the refiner runs a multi-stage candidate ranking "
+    s += "loop to maximize advisory quality before persisting.*\n\n"
+    s += "**5 refinement stages:**\n\n"
+    s += "1. **Raw candidate** — original distillation text\n"
+    s += "2. **Elevation** — 12 deterministic text transforms (hedge removal, reasoning injection, etc.)\n"
+    s += "3. **Structure-driven rewrite** — extracts condition/action/reasoning/outcome structure\n"
+    s += "4. **Component composition** — assembles `When X: do Y because Z` advisory format\n"
+    s += "5. **LLM refinement** (optional) — runtime-configurable Claude/Ollama polish\n\n"
+    s += "The best-scoring candidate across all stages wins and gets persisted with `advisory_quality` metadata.\n\n"
+    s += "**Config** (`tuneables.json [eidos]`):\n"
+    s += "- `runtime_refiner_llm_enabled` — toggle LLM stage (default: off)\n"
+    s += "- `runtime_refiner_llm_min_unified_score` — floor for LLM eligibility (default: 0.45)\n"
+    s += "- `runtime_refiner_llm_timeout_s` — LLM call timeout (default: 6s)\n"
+    s += "- `runtime_refiner_llm_provider` — auto/claude/ollama\n\n"
+
+    # Show quality histogram context
+    total_pass = suppression.get("pass_transformer", 0) if suppression else 0
+    total_fail = (suppression.get("fail_suppressed", 0) + suppression.get("fail_score_floor", 0)) if suppression else 0
+    total_all = total_pass + total_fail
+    if total_all > 0:
+        s += f"**Current refiner yield:** {total_pass} distillations passed transformer out of {total_all} scored "
+        s += f"({round(total_pass / max(total_all, 1) * 100, 1)}% pass rate)\n\n"
+
+    s += _source_files(
+        "lib/eidos/ (integration.py, distillation_engine.py, store.py, models.py, control_plane.py) + "
+        "lib/distillation_refiner.py + lib/distillation_transformer.py + lib/elevation.py",
+        [
         "eidos.db",
         "eidos_active_episodes.json",
         "eidos_active_steps.json",
-    ])
+    ],
+    )
     return s
 
 
