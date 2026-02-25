@@ -344,16 +344,25 @@ def _run_distillation(episode: Episode, steps: List[Step]):
     """Run distillation on a completed episode, filtering low-value outputs."""
     store = get_store()
     engine = get_distillation_engine()
-    reflection = engine.reflect_on_episode(episode, steps)
-    candidates = engine.generate_distillations(episode, steps, reflection)
+
+    # Prefer evaluated steps with actual outcomes to avoid unknown/pending noise.
+    signal_steps = [
+        s for s in steps
+        if s.evaluation in (Evaluation.PASS, Evaluation.FAIL, Evaluation.PARTIAL)
+        and ((s.result or "").strip() or (s.lesson or "").strip())
+    ]
+    effective_steps = signal_steps or steps
+
+    reflection = engine.reflect_on_episode(episode, effective_steps)
+    candidates = engine.generate_distillations(episode, effective_steps, reflection)
 
     saved = []
     for candidate in candidates:
         # Filter out primitive/low-value distillations before saving
         if _is_primitive_distillation(candidate.statement):
             continue
-        # Require minimum confidence
-        if candidate.confidence < 0.4:
+        # Allow low-start distillations (0.3-0.4) to earn trust via outcomes.
+        if candidate.confidence < 0.3:
             continue
         distillation = engine.finalize_distillation(candidate)
         store.save_distillation(distillation)
