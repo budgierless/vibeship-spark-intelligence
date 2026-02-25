@@ -742,7 +742,7 @@ def read_config_authority() -> dict[str, Any]:
 
 # ── Aggregate reader ─────────────────────────────────────────────────
 
-def read_all_stages(max_recent: int = 20) -> dict[int, dict[str, Any]]:
+def read_all_stages(max_recent: int = 20) -> dict[int | str, dict[str, Any]]:
     """Read all 12 stages plus supplementary system data.
 
     Returns a dict keyed by stage number (1-12) plus string keys
