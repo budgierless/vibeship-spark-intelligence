@@ -797,11 +797,48 @@ def _gen_tuneables(d: dict, all_data: dict) -> str:
     s += f"- `observatory` — Observatory auto-sync\n"
     s += "\n"
 
+    # Config Authority system
+    ca = all_data.get("config_authority", {})
+    s += "## Config Authority (`lib/config_authority.py`)\n\n"
+    s += "*All pipeline modules now resolve config through the centralized Config Authority "
+    s += "with deterministic 4-layer precedence (migration completed across PRs #109-#112).*\n\n"
+    s += "**Precedence layers** (highest wins):\n\n"
+    s += "1. **Environment variables** — `SPARK_*` overrides (opt-in per key)\n"
+    s += "2. **Runtime** — `~/.spark/tuneables.json` (user + auto-tuner edits)\n"
+    s += "3. **Baseline** — `config/tuneables.json` (version-controlled defaults)\n"
+    s += "4. **Schema defaults** — `lib/tuneables_schema.py` (fallback values)\n\n"
+
+    shared = ca.get("shared_sections", [])
+    rt_only = ca.get("runtime_only_sections", [])
+    bl_only = ca.get("baseline_only_sections", [])
+    s += "| Layer | Sections | Status |\n"
+    s += "|-------|----------|--------|\n"
+    s += f"| Shared (both layers) | {len(shared)} | {health_badge('healthy')} |\n"
+    if rt_only:
+        s += f"| Runtime-only | {len(rt_only)} (`{'`, `'.join(rt_only[:3])}`) | {health_badge('warning')} |\n"
+    if bl_only:
+        s += f"| Baseline-only | {len(bl_only)} (`{'`, `'.join(bl_only[:3])}`) | {health_badge('warning')} |\n"
+    s += "\n"
+
+    drift = ca.get("key_drift", [])
+    if drift:
+        s += f"### Key Drift ({len(drift)} sections with diverging keys)\n\n"
+        s += "| Section | Runtime-only Keys | Baseline-only Keys |\n"
+        s += "|---------|-------------------|--------------------|\n"
+        for dd in drift[:8]:
+            rt_k = ", ".join(f"`{k}`" for k in dd.get("runtime_only_keys", []))
+            bl_k = ", ".join(f"`{k}`" for k in dd.get("baseline_only_keys", []))
+            s += f"| {dd['section']} | {rt_k or '—'} | {bl_k or '—'} |\n"
+        s += "\n"
+
+    s += "**Hot-reload:** `tuneables_reload.py` watches mtime changes, dispatches only changed sections "
+    s += "to 27 registered callbacks. Reconciliation prevents stale config defaults from persisting.\n\n"
+
     s += "\n## Deep Dive\n\n"
     s += "For comprehensive analysis including config drift, hot-reload coverage, cooldown redundancy, "
     s += "auto-tuner activity, and recommendations, see [[Tuneables Deep Dive]].\n\n"
 
-    s += _source_files("lib/tuneables_schema.py + lib/tuneables_reload.py", [
+    s += _source_files("lib/config_authority.py + lib/tuneables_schema.py + lib/tuneables_reload.py", [
         "tuneables.json",
     ])
     s += f"\nVersion-controlled: `config/tuneables.json`\n"
