@@ -484,6 +484,43 @@ SCHEMA: Dict[str, Dict[str, TuneableSpec]] = {
         "advisory_disable_chips": TuneableSpec("bool", False, None, None, "Disable chips for advisory only"),
     },
 
+    # ---- opportunity_scanner: self-evolution scanner ----
+    "opportunity_scanner": {
+        "enabled": TuneableSpec("bool", True, None, None, "Enable opportunity scanner"),
+        "self_max_items": TuneableSpec("int", 3, 1, 20, "Max self-scan items per cycle"),
+        "user_max_items": TuneableSpec("int", 2, 1, 20, "Max user-facing items per cycle"),
+        "max_history_lines": TuneableSpec("int", 500, 50, 10000, "Max history lines to scan"),
+        "self_dedup_window_s": TuneableSpec("float", 14400.0, 0.0, 604800.0, "Self dedup window (s)"),
+        "self_recent_lookback": TuneableSpec("int", 240, 20, 5000, "Self recent lookback count"),
+        "self_category_cap": TuneableSpec("int", 1, 1, 10, "Max items per self category"),
+        "user_scan_enabled": TuneableSpec("bool", False, None, None, "Enable user-facing scan"),
+        "scan_event_limit": TuneableSpec("int", 120, 0, 10000, "Max events per scan"),
+        "outcome_window_s": TuneableSpec("float", 21600.0, 300.0, 604800.0, "Outcome observation window (s)"),
+        "outcome_lookback": TuneableSpec("int", 200, 20, 10000, "Outcome lookback count"),
+        "promotion_min_successes": TuneableSpec("int", 2, 1, 50, "Min successes for promotion"),
+        "promotion_min_effectiveness": TuneableSpec("float", 0.66, 0.0, 1.0, "Min effectiveness for promotion"),
+        "promotion_lookback": TuneableSpec("int", 400, 20, 10000, "Promotion lookback count"),
+        "llm_enabled": TuneableSpec("bool", True, None, None, "Enable LLM-assisted scanning"),
+        "llm_provider": TuneableSpec("str", "", None, None, "LLM provider override"),
+        "llm_timeout_s": TuneableSpec("float", 2.5, 0.3, 30.0, "LLM call timeout (s)"),
+        "llm_max_items": TuneableSpec("int", 3, 1, 20, "Max LLM items per call"),
+        "llm_min_context_chars": TuneableSpec("int", 140, 0, 5000, "Min context chars for LLM"),
+        "llm_cooldown_s": TuneableSpec("float", 300.0, 0.0, 86400.0, "LLM call cooldown (s)"),
+        "decision_lookback": TuneableSpec("int", 500, 50, 10000, "Decision lookback count"),
+        "dismiss_ttl_s": TuneableSpec("float", 604800.0, 0.0, 2592000.0, "Dismiss TTL (s, default 7d)"),
+    },
+
+    # ---- prediction: prediction loop budget + auto-link ----
+    "prediction": {
+        "total_budget": TuneableSpec("int", 50, 20, 2000, "Total prediction budget"),
+        "default_source_budget": TuneableSpec("int", 30, 1, 2000, "Default per-source budget"),
+        "source_budgets": TuneableSpec("str", "", None, None, "CSV source=budget overrides (e.g. chip_merge=80,spark_inject=60)"),
+        "auto_link_enabled": TuneableSpec("bool", True, None, None, "Enable auto-linking predictions to outcomes"),
+        "auto_link_interval_s": TuneableSpec("float", 60.0, 30.0, 86400.0, "Auto-link interval (s)"),
+        "auto_link_limit": TuneableSpec("int", 200, 10, 1000, "Auto-link max items per run"),
+        "auto_link_min_sim": TuneableSpec("float", 0.20, 0.05, 0.95, "Auto-link min similarity threshold"),
+    },
+
     # ---- production_gates: quality enforcement ----
     "production_gates": {
         "enforce_meta_ralph_quality_band": TuneableSpec("bool", True, None, None, "Enforce quality band check"),
@@ -534,6 +571,8 @@ SECTION_CONSUMERS: Dict[str, List[str]] = {
     "feature_flags": ["lib/feature_flags.py", "lib/advisor.py", "lib/bridge_cycle.py",
                       "lib/cognitive_learner.py", "lib/chips/runtime.py"],
     "production_gates": ["lib/production_gates.py"],
+    "opportunity_scanner": ["lib/opportunity_scanner.py"],
+    "prediction": ["lib/prediction_loop.py"],
 }
 
 

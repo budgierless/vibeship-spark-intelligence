@@ -45,6 +45,8 @@ Notes:
 - `lib/feature_flags.py` (`feature_flags.*`)
 - `lib/cognitive_learner.py` (via `feature_flags`)
 - `lib/chips/runtime.py` (via `feature_flags`)
+- `lib/opportunity_scanner.py` (`opportunity_scanner.*`)
+- `lib/prediction_loop.py` (`prediction.*`)
 
 Resolver implementation:
 - `lib/config_authority.py`
@@ -87,6 +89,7 @@ cycles) dispatches callbacks for changed sections.
 | `synthesizer` | advisory_synthesizer.py | `advisory_synthesizer.reload` |
 | `triggers` | semantic_retriever.py | `semantic_retriever.reload.triggers` |
 | `feature_flags` | feature_flags.py | `feature_flags.reload` |
+| `opportunity_scanner` | opportunity_scanner.py | `opportunity_scanner` |
 | `values` | eidos/models.py, pipeline.py | `eidos.models.reload_from_values`, `pipeline.reload_from` |
 
 ## Migration Standard
@@ -223,6 +226,43 @@ Only keys with explicit `env_overrides` mappings respond to env vars. All others
 | `SPARK_BRIDGE_GC_EVERY` | `gc_every` | int |
 | `SPARK_BRIDGE_STEP_EXECUTOR_WORKERS` | `step_executor_workers` | int |
 
+### Opportunity Scanner (`opportunity_scanner`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_OPPORTUNITY_SCANNER` | `enabled` | bool |
+| `SPARK_OPPORTUNITY_SELF_MAX` | `self_max_items` | int |
+| `SPARK_OPPORTUNITY_USER_MAX` | `user_max_items` | int |
+| `SPARK_OPPORTUNITY_HISTORY_MAX` | `max_history_lines` | int |
+| `SPARK_OPPORTUNITY_SELF_DEDUP_WINDOW_S` | `self_dedup_window_s` | float |
+| `SPARK_OPPORTUNITY_SELF_RECENT_LOOKBACK` | `self_recent_lookback` | int |
+| `SPARK_OPPORTUNITY_SELF_CATEGORY_CAP` | `self_category_cap` | int |
+| `SPARK_OPPORTUNITY_USER_SCAN` | `user_scan_enabled` | bool |
+| `SPARK_OPPORTUNITY_SCAN_EVENT_LIMIT` | `scan_event_limit` | int |
+| `SPARK_OPPORTUNITY_OUTCOME_WINDOW_S` | `outcome_window_s` | float |
+| `SPARK_OPPORTUNITY_OUTCOME_LOOKBACK` | `outcome_lookback` | int |
+| `SPARK_OPPORTUNITY_PROMOTION_MIN_SUCCESSES` | `promotion_min_successes` | int |
+| `SPARK_OPPORTUNITY_PROMOTION_MIN_EFFECTIVENESS` | `promotion_min_effectiveness` | float |
+| `SPARK_OPPORTUNITY_PROMOTION_LOOKBACK` | `promotion_lookback` | int |
+| `SPARK_OPPORTUNITY_LLM_ENABLED` | `llm_enabled` | bool |
+| `SPARK_OPPORTUNITY_LLM_PROVIDER` | `llm_provider` | str |
+| `SPARK_OPPORTUNITY_LLM_TIMEOUT_S` | `llm_timeout_s` | float |
+| `SPARK_OPPORTUNITY_LLM_MAX_ITEMS` | `llm_max_items` | int |
+| `SPARK_OPPORTUNITY_LLM_MIN_CONTEXT_CHARS` | `llm_min_context_chars` | int |
+| `SPARK_OPPORTUNITY_LLM_COOLDOWN_S` | `llm_cooldown_s` | float |
+| `SPARK_OPPORTUNITY_DECISION_LOOKBACK` | `decision_lookback` | int |
+| `SPARK_OPPORTUNITY_DISMISS_TTL_S` | `dismiss_ttl_s` | float |
+
+### Prediction (`prediction`)
+| Env Var | Key | Type |
+|---------|-----|------|
+| `SPARK_PREDICTION_TOTAL_BUDGET` | `total_budget` | int |
+| `SPARK_PREDICTION_DEFAULT_SOURCE_BUDGET` | `default_source_budget` | int |
+| `SPARK_PREDICTION_SOURCE_BUDGETS` | `source_budgets` | str |
+| `SPARK_PREDICTION_AUTO_LINK` | `auto_link_enabled` | bool |
+| `SPARK_PREDICTION_AUTO_LINK_INTERVAL_S` | `auto_link_interval_s` | float |
+| `SPARK_PREDICTION_AUTO_LINK_LIMIT` | `auto_link_limit` | int |
+| `SPARK_PREDICTION_AUTO_LINK_MIN_SIM` | `auto_link_min_sim` | float |
+
 ## Hot-Reload Status
 
 Modules with `register_reload()` pick up file changes automatically (1-30s). Others require restart.
@@ -247,6 +287,7 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 | `triggers` | Yes | `semantic_retriever.py` |
 | `sync` | Yes | `context_sync.py` |
 | `feature_flags` | Yes | `feature_flags.py` |
+| `opportunity_scanner` | Yes | `opportunity_scanner.py` |
 
 ## Verification
 - `tests/test_config_authority.py`
@@ -265,3 +306,5 @@ Modules with `register_reload()` pick up file changes automatically (1-30s). Oth
 - `tests/test_production_gates_config_authority.py`
 - `tests/test_remaining_config_authority.py`
 - `tests/test_runtime_tuneable_sections.py`
+- `tests/test_pr1_config_authority.py`
+- `tests/test_pr2_config_authority.py`
