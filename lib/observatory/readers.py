@@ -106,6 +106,15 @@ def _file_size(path: Path) -> int:
         return 0
 
 
+def _safe_non_negative_int(value: Any, default: int = 0) -> int:
+    """Best-effort parse for counters loaded from JSON."""
+    try:
+        parsed = int(value)
+    except Exception:
+        return max(default, 0)
+    return max(parsed, 0)
+
+
 # ── Stage 1: Event Capture ──────────────────────────────────────────
 
 def read_event_capture() -> dict[str, Any]:
@@ -208,7 +217,13 @@ def read_meta_ralph(max_recent: int = 15) -> dict[str, Any]:
     # Roast history — recent verdicts
     rh = _load_json(_SD / "meta_ralph" / "roast_history.json") or {}
     history = rh.get("history", []) if isinstance(rh, dict) else []
-    d["total_roasted"] = len(history)
+    history_count = len(history)
+    total_roasted = _safe_non_negative_int(
+        rh.get("total_roasted", history_count) if isinstance(rh, dict) else history_count,
+        history_count,
+    )
+    total_roasted = max(total_roasted, history_count)
+    d["total_roasted"] = total_roasted
     recent = history[-max_recent:] if history else []
     d["recent_verdicts"] = []
     verdicts: dict[str, int] = {}
@@ -238,7 +253,14 @@ def read_meta_ralph(max_recent: int = 15) -> dict[str, Any]:
         dim: round(dim_sums[dim] / max(dim_counts[dim], 1), 2) for dim in dims
     }
     d["avg_total_score"] = round(total_score_sum / max(total_score_count, 1), 2)
-    d["pass_rate"] = round(verdicts.get("quality", 0) / max(len(history), 1) * 100, 1)
+    quality_default = verdicts.get("quality", 0)
+    quality_passed = _safe_non_negative_int(
+        rh.get("quality_passed", quality_default) if isinstance(rh, dict) else quality_default,
+        quality_default,
+    )
+    quality_passed = max(quality_passed, quality_default)
+    d["quality_passed"] = quality_passed
+    d["pass_rate"] = round(quality_passed / max(total_roasted, 1) * 100, 1)
     # Weak dimensions (below 1.0 avg or lowest 2)
     sorted_dims = sorted(d["dimension_averages"].items(), key=lambda x: x[1])
     d["weak_dimensions"] = [dim for dim, avg in sorted_dims[:2] if avg < 1.5]

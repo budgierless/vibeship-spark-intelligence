@@ -25,12 +25,14 @@ import hashlib
 import os
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-DEFAULT_SPARKD = os.environ.get("SPARKD_URL") or f"http://127.0.0.1:{os.environ.get('SPARKD_PORT', '8787')}"
-TOKEN_FILE = Path.home() / ".spark" / "sparkd.token"
-_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+from adapters._common import (
+    DEFAULT_SPARKD,
+    TOKEN_FILE,
+    resolve_token as _resolve_token,
+    normalize_sparkd_base_url as _normalize_sparkd_base_url,
+)
 
 STATE_DIR = Path.home() / ".spark" / "adapters"
 
@@ -81,36 +83,6 @@ def _event(trace_id: str, session_id: str, source: str, kind: str, ts: float, pa
 
 def _hash(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()[:20]
-
-
-def _resolve_token(cli_token: str | None) -> str | None:
-    if cli_token:
-        return cli_token
-    env_token = os.environ.get("SPARKD_TOKEN")
-    if env_token:
-        return env_token
-    try:
-        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
-    except Exception:
-        return None
-    return token or None
-
-
-def _normalize_sparkd_base_url(raw_url: str, *, allow_remote: bool = False) -> str:
-    text = str(raw_url or "").strip()
-    if not text:
-        raise ValueError("missing sparkd URL")
-    if "://" not in text:
-        text = f"http://{text}"
-    parsed = urlparse(text)
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError("sparkd URL must use http/https")
-    host = (parsed.hostname or "").strip().lower()
-    if not host:
-        raise ValueError("sparkd URL must include host")
-    if not allow_remote and host not in _LOCAL_HOSTS:
-        raise ValueError("remote sparkd host blocked by default; pass --allow-remote to override")
-    return text.rstrip("/")
 
 
 def _parse_ts(x):
